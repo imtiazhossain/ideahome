@@ -1,6 +1,5 @@
 import { Controller, Get, Query, Req, Res } from "@nestjs/common";
 import { Request, Response } from "express";
-import { Issuer, generators } from "openid-client";
 import { PrismaService } from "../prisma.service";
 import { AuthService } from "./auth.service";
 import * as jwt from "jsonwebtoken";
@@ -16,6 +15,7 @@ export class AuthController {
 
   @Get("login")
   async login(@Res() res: Response) {
+    const { Issuer, generators } = await import("openid-client");
     const issuer = await Issuer.discover(
       process.env.OIDC_ISSUER ?? /* istanbul ignore next */ ""
     );
@@ -50,6 +50,7 @@ export class AuthController {
     @Res() res: Response,
     @Query() query: any
   ) {
+    const { Issuer, generators } = await import("openid-client");
     const { code, state } = query;
     const issuer = await Issuer.discover(
       process.env.OIDC_ISSUER ?? /* istanbul ignore next */ ""
