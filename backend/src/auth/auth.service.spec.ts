@@ -78,11 +78,15 @@ describe("AuthService", () => {
       expect(state).toBeTruthy();
       expect(service.consumeState(state)).toBe("apple");
     });
-    it("returns null when state already consumed or unknown", () => {
-      const state = service.createState("google");
-      service.consumeState(state);
-      expect(service.consumeState(state)).toBeNull();
+    it("returns null for unknown or invalid state", () => {
       expect(service.consumeState("unknown-state")).toBeNull();
+      expect(service.consumeState("")).toBeNull();
+      expect(service.consumeState("no-dot")).toBeNull();
+    });
+    it("returns null for tampered state", () => {
+      const state = service.createState("google");
+      const tampered = state.slice(0, -2) + "xx";
+      expect(service.consumeState(tampered)).toBeNull();
     });
   });
 

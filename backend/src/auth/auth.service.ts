@@ -1,11 +1,13 @@
 import { Injectable } from "@nestjs/common";
-import { PrismaService } from "../prisma.service";
+import * as crypto from "crypto";
 import * as jwt from "jsonwebtoken";
+import { PrismaService } from "../prisma.service";
 
-const stateStore = new Map<
-  string,
-  { provider: "google" | "github" | "apple" }
->();
+const STATE_TTL_MS = 10 * 60 * 1000; // 10 minutes
+
+function getStateSecret(): string {
+  return process.env.JWT_SECRET ?? "dev-secret";
+}
 
 export type SsoProfile = {
   providerId: string;
@@ -52,15 +54,55 @@ export class AuthService {
   }
 
   createState(provider: "google" | "github" | "apple"): string {
-    const state = crypto.randomUUID();
-    stateStore.set(state, { provider });
-    return state;
+    const payload = {
+      p: provider,
+      iat: Date.now(),
+      n: crypto.randomBytes(8).toString("hex"),
+    };
+    const payloadStr = JSON.stringify(payload);
+    const b64 = Buffer.from(payloadStr, "utf8").toString("base64url");
+    const sig = crypto
+      .createHmac("sha256", getStateSecret())
+      .update(payloadStr)
+      .digest("base64url");
+    return `${b64}.${sig}`;
   }
 
   consumeState(state: string): "google" | "github" | "apple" | null {
-    const entry = stateStore.get(state);
-    stateStore.delete(state);
-    return entry?.provider ?? null;
+    if (!state || typeof state !== "string") return null;
+    const dot = state.lastIndexOf(".");
+    if (dot === -1) return null;
+    const b64 = state.slice(0, dot);
+    const sig = state.slice(dot + 1);
+    let payloadStr: string;
+    try {
+      payloadStr = Buffer.from(b64, "base64url").toString("utf8");
+    } catch {
+      return null;
+    }
+    const expectedSig = crypto
+      .createHmac("sha256", getStateSecret())
+      .update(payloadStr)
+      .digest("base64url");
+    if (sig !== expectedSig) return null;
+    let payload: { p?: string; iat?: number };
+    try {
+      payload = JSON.parse(payloadStr);
+    } catch {
+      return null;
+    }
+    if (
+      payload.p !== "google" &&
+      payload.p !== "github" &&
+      payload.p !== "apple"
+    )
+      return null;
+    if (
+      typeof payload.iat !== "number" ||
+      Date.now() - payload.iat > STATE_TTL_MS
+    )
+      return null;
+    return payload.p;
   }
 
   /** Ensures the user has a personal organization (for user-scoped projects). Returns the user with organizationId set. */
