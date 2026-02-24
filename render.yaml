@@ -17,8 +17,7 @@ services:
     autoDeployTrigger: commit
     # Avoid installing Playwright/Jest (saves ~1GB+); only add build-time deps.
     buildCommand: "npm install --omit=dev && npm install prisma typescript --no-save && npx prisma generate && npm run build"
-    preDeployCommand: "sh scripts/migrate-deploy.sh"
-    startCommand: "npm start"
+    startCommand: "sh scripts/migrate-deploy.sh && npm start"
     healthCheckPath: /
     envVars:
       - key: NODE_OPTIONS
