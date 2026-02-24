@@ -10,8 +10,9 @@ async function bootstrap() {
   app.use(urlencoded({ extended: true, limit: "500mb" }));
   app.enableCors();
   app.use("/uploads", express.static(join(__dirname, "..", "uploads")));
-  await app.listen(3001);
-  console.log("Backend listening on http://localhost:3001");
+  const port = process.env.PORT ?? 3001;
+  await app.listen(port);
+  console.log(`Backend listening on port ${port}`);
 }
 
 bootstrap();

@@ -32,6 +32,7 @@ describe("IssuesService", () => {
       create: jest.fn(),
       update: jest.fn(),
       delete: jest.fn(),
+      deleteMany: jest.fn(),
     },
     issueRecording: {
       findFirst: jest.fn(),

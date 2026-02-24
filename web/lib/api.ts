@@ -281,7 +281,8 @@ export type CommentAttachmentType =
   | "screenshot"
   | "video"
   | "screen_recording"
-  | "camera_recording";
+  | "camera_recording"
+  | "audio_recording";
 
 export type CommentAttachment = {
   id: string;
