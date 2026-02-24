@@ -1,0 +1,82 @@
+# Dependencies
+node_modules
+.pnp
+.pnp.*
+.pnpm-store
+
+# Build / output
+dist
+build
+out
+*.tsbuildinfo
+.next
+**/.next
+
+# Environment and secrets
+.env
+.env.local
+.env.*.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Logs and temp
+*.log
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.turbo
+.tmp
+temp
+tmp
+
+# Testing
+coverage
+**/coverage
+.nyc_output
+test-results
+playwright-report
+playwright/.cache
+**/test-results
+**/playwright-report
+**/playwright/.cache
+
+# Backend (NestJS / Prisma)
+backend/dist
+*.sqlite
+*.sqlite-journal
+
+# Mobile (Expo / React Native)
+android
+ios
+.expo
+.expo-shared
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.orig.*
+web-build
+
+# IDE / editor
+.idea
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+.DS_Store?
+._*
+Thumbs.db
+ehthumbs.db
+
+# Optional: keep lockfiles (uncomment to ignore)
+# pnpm-lock.yaml
+# package-lock.json
+# yarn.lock

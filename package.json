@@ -1,0 +1,28 @@
+{
+  "name": "ideahome-monorepo",
+  "private": true,
+  "workspaces": [
+    "backend",
+    "web",
+    "mobile"
+  ],
+  "scripts": {
+    "install": "pnpm install",
+    "dev:backend": "pnpm --filter backend dev",
+    "dev:web": "pnpm --filter web dev",
+    "dev:mobile": "pnpm --filter mobile start",
+    "db:up": "docker compose up -d || docker-compose up -d",
+    "db:down": "docker compose down -v || docker-compose down -v",
+    "db:reset": "pnpm db:down; pnpm db:up; sleep 4; pnpm db:migrate",
+    "db:migrate": "pnpm --filter backend exec prisma migrate deploy",
+    "test:e2e": "pnpm --filter backend test:e2e",
+    "test:e2e:web": "pnpm --filter web run test:e2e",
+    "test:e2e:one": "pnpm --filter web run test:e2e:one",
+    "coverage:copy": "node scripts/copy-coverage.js",
+    "format": "prettier --write \"backend/src/**/*.ts\" \"backend/test/**/*.ts\" \"web/**/*.{ts,tsx,js,jsx,json}\" \"mobile/**/*.{ts,tsx,js,jsx,json}\"",
+    "format:check": "prettier --check \"backend/src/**/*.ts\" \"backend/test/**/*.ts\" \"web/**/*.{ts,tsx,js,jsx,json}\" \"mobile/**/*.{ts,tsx,js,jsx,json}\""
+  },
+  "devDependencies": {
+    "prettier": "^3.2.0"
+  }
+}

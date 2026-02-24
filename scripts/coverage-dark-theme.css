@@ -1,0 +1,99 @@
+/* Dark theme for coverage report – appended by scripts/copy-coverage.js */
+body {
+  background: #111827 !important;
+  color: #ffffff !important;
+}
+h1 { color: #ffffff !important; }
+.strong {
+  color: #ffffff !important;
+  font-weight: bold;
+}
+.quiet {
+  color: #e5e7eb !important;
+}
+.quiet a { opacity: 0.9; color: #93c5fd !important; }
+.fraction {
+  color: #ffffff !important;
+  background: #374151 !important;
+}
+div.path a:link, div.path a:visited { color: #93c5fd !important; }
+a { color: #60a5fa !important; }
+table.coverage td.line-count { color: #e5e7eb !important; }
+table.coverage td.line-coverage { color: #e5e7eb !important; }
+
+.coverage-summary thead th {
+  background: #1f2937 !important;
+  color: #ffffff !important;
+  border-right: 1px solid #374151 !important;
+  font-weight: 600;
+}
+.coverage-summary tbody td {
+  background: #1f2937 !important;
+  color: #ffffff !important;
+  border-right: 1px solid #374151 !important;
+}
+.coverage-summary tbody td.high {
+  background: #064e3b !important;
+  color: #ffffff !important;
+}
+.coverage-summary tbody td.medium {
+  background: #422006 !important;
+  color: #fef3c7 !important;
+}
+.coverage-summary tbody td.low {
+  background: #450a0a !important;
+  color: #fecaca !important;
+}
+.coverage-summary td.file a,
+.coverage-summary td.pct,
+.coverage-summary td.abs {
+  color: #ffffff !important;
+}
+.coverage-summary td.file a:hover {
+  color: #93c5fd !important;
+}
+.coverage-summary td.empty { color: #9ca3af !important; }
+
+.coverage-summary tr { border-bottom: 1px solid #374151; }
+.keyline-all { border: 1px solid #374151; }
+.coverage-summary tbody { border: 1px solid #374151; }
+.cover-empty { background: #1f2937 !important; }
+
+.status-line.high, .high .cover-fill { background: #34d399 !important; }
+.high .chart { border: 1px solid #34d399; }
+.status-line.medium, .medium .cover-fill { background: #fbbf24 !important; }
+.medium .chart { border: 1px solid #fbbf24; }
+.status-line.low, .low .cover-fill { background: #f87171 !important; }
+.low .chart { border: 1px solid #f87171; }
+.high, .cline-yes { background: #064e3b !important; color: #ffffff !important; }
+.cstat-yes { background: #047857 !important; color: #ffffff !important; }
+.low, .cline-no { background: #450a0a !important; color: #fecaca !important; }
+.cstat-no, .fstat-no, .cbranch-no { background: #b91c1c !important; color: #ffffff !important; }
+.cbranch-no { background: #b91c1c !important; color: #fef3c7 !important; }
+.highlighted, .highlighted .cstat-no, .highlighted .fstat-no, .highlighted .cbranch-no { background: #dc2626 !important; color: #ffffff !important; }
+.missing-if-branch { background: #374151 !important; color: #fcd34d !important; }
+.skip-if-branch { background: #4b5563 !important; color: #e5e7eb !important; }
+.cstat-skip, .fstat-skip { background: #4b5563 !important; color: #e5e7eb !important; }
+.cbranch-skip { background: #4b5563 !important; color: #e5e7eb !important; }
+span.cline-neutral { background: #374151 !important; color: #d1d5db !important; }
+.com { color: #9ca3af !important; }
+.ignore-none { color: #d1d5db !important; }
+
+pre.prettyprint .pln { color: #e5e7eb; }
+pre.prettyprint .str { color: #86efac; }
+pre.prettyprint .kwd { color: #93c5fd; }
+pre.prettyprint .com { color: #9ca3af; }
+pre.prettyprint .typ { color: #fcd34d; }
+pre.prettyprint .lit { color: #f9a8d4; }
+pre.prettyprint .pun, pre.prettyprint .opn, pre.prettyprint .clo { color: #d1d5db; }
+pre.prettyprint .tag { color: #93c5fd; }
+pre.prettyprint .atn { color: #fcd34d; }
+pre.prettyprint .atv { color: #86efac; }
+pre.prettyprint .dec, pre.prettyprint .var { color: #fcd34d; }
+pre.prettyprint .fun { color: #f87171; }
+pre.prettyprint { border-color: #374151 !important; }
+
+.footer { color: #e5e7eb !important; }
+.footer a { color: #60a5fa !important; }
+table.coverage td a { color: #e5e7eb !important; }
+table.coverage td a:hover { color: #ffffff !important; }

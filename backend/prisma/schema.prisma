@@ -1,0 +1,114 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Organization {
+  id        String   @id @default(cuid())
+  name      String
+  users     User[]
+  projects  Project[]
+  createdAt DateTime @default(now())
+}
+
+model User {
+  id              String   @id @default(cuid())
+  email           String   @unique
+  name            String?
+  organization    Organization? @relation(fields: [organizationId], references: [id])
+  organizationId  String?
+  assignedIssues  Issue[]
+  createdAt       DateTime @default(now())
+}
+
+model Project {
+  id             String   @id @default(cuid())
+  name           String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  organizationId String
+  issues         Issue[]
+  createdAt      DateTime @default(now())
+}
+
+model Issue {
+  id                  String        @id @default(cuid())
+  key                 String?       // project acronym + number, e.g. IHL-1 (Idea Home Launch)
+  title               String
+  description         String?
+  acceptanceCriteria  String?
+  database            String?
+  api                 String?
+  testCases           String?
+  automatedTest       String?       // selected UI e2e test spec (e.g. home.spec.ts)
+  status              String        @default("backlog")
+  qualityScore        Int           @default(0) // 0-100, shown in circle on card
+  assignee            User?         @relation(fields: [assigneeId], references: [id])
+  assigneeId          String?
+  project             Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectId           String
+  comments            IssueComment[]
+  recordings          IssueRecording[]
+  screenshots        IssueScreenshot[]
+  files              IssueFile[]
+  createdAt           DateTime      @default(now())
+}
+
+model IssueFile {
+  id        String   @id @default(cuid())
+  fileUrl   String   // relative path: uploads/files/...
+  fileName  String   // original filename for display/download
+  issue     Issue    @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  issueId   String
+  createdAt DateTime @default(now())
+}
+
+model IssueScreenshot {
+  id        String   @id @default(cuid())
+  imageUrl  String
+  name      String?  // optional display name (e.g. original filename)
+  issue     Issue    @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  issueId   String
+  createdAt DateTime @default(now())
+}
+
+model IssueRecording {
+  id            String   @id @default(cuid())
+  videoUrl      String   // path to file (video or audio .webm)
+  mediaType     String   @default("video") // "video" | "audio"
+  recordingType String   @default("screen") // "screen" | "camera" | "audio" (for display)
+  name          String?  // optional user-editable label
+  issue         Issue    @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  issueId      String
+  createdAt     DateTime @default(now())
+}
+
+model IssueComment {
+  id          String              @id @default(cuid())
+  body        String
+  issue       Issue               @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  issueId     String
+  createdAt   DateTime            @default(now())
+  editHistory IssueCommentEdit[]
+  attachments CommentAttachment[]
+}
+
+model CommentAttachment {
+  id        String       @id @default(cuid())
+  type      String       // "screenshot" | "video" | "screen_recording" | "camera_recording"
+  mediaUrl  String       // relative path: uploads/screenshots/... or uploads/recordings/...
+  comment   IssueComment @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  commentId String
+  createdAt DateTime     @default(now())
+}
+
+model IssueCommentEdit {
+  id        String       @id @default(cuid())
+  body      String       // previous body at time of edit
+  editedAt  DateTime     @default(now())
+  comment   IssueComment @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  commentId String
+}

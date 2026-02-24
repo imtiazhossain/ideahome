@@ -1,0 +1,62 @@
+# IdeaHome Project Rules
+
+## Project overview
+- **Monorepo**: pnpm workspaces — `backend`, `web`, `mobile`
+- **Backend**: NestJS 9, Prisma 4, PostgreSQL, TypeScript 5, Jest (unit + e2e)
+- **Web**: Next.js 13, React 18
+- **Mobile**: Expo 48, React Native 0.71
+
+## Commands (from repo root)
+- `pnpm install` — install all workspaces
+- `pnpm dev:backend` — backend on http://localhost:3001
+- `pnpm dev:web` — Next.js dev
+- `pnpm dev:mobile` — Expo start
+- `pnpm db:up` / `pnpm db:down` — Docker Postgres
+- `pnpm db:reset` — restart DB (down + up + migrate); use when schema changed, DB stuck, or e2e needs clean state
+- `pnpm db:migrate` — deploy Prisma migrations only (DB must already be up)
+- `pnpm test:e2e` — backend e2e (run with DB up)
+- `pnpm test:e2e:web` — web UI e2e (Playwright). For full flows ensure backend + DB are running (`pnpm db:up`, `pnpm dev:backend`). Web app must be reachable at http://localhost:3000 (start with `pnpm dev:web` or let Playwright reuse an existing server).
+- `pnpm test:e2e:one` — run one Playwright UI test with video and verify recording is captured (web app must be at http://localhost:3000).
+
+- **Database**: Restart the database when needed — e.g. after Prisma schema changes, when the DB is in a bad or unknown state, or before running e2e tests. Use `pnpm db:reset` (full restart + migrate) or `pnpm db:down` then `pnpm db:up` then `pnpm db:migrate` as appropriate.
+- **Backend restart**: When the backend needs to be restarted (e.g. after code or env changes, or when it’s stuck), automatically kill any running backend process (e.g. on port 3001 or the dev:backend process) and start it again with `pnpm dev:backend`. Do not ask or prompt the user — just perform the kill and restart.
+
+## Backend (NestJS) conventions
+- **Feature modules**: one folder per feature (e.g. `issues/`, `organizations/`), each with:
+  - `*.module.ts` — imports controller, service, PrismaService
+  - `*.controller.ts` — HTTP layer; thin, delegates to service
+  - `*.service.ts` — business logic and Prisma calls
+- **Data access**: inject `PrismaService`; use `include` for relations (e.g. `assignee`, `project`). Schema lives in `backend/prisma/schema.prisma`.
+- **Auth**: protected routes use `@UseGuards(JwtAuthGuard)`; JWT in `Authorization: Bearer <token>`. Use `JWT_SECRET` env (fallback `dev-secret` in dev).
+- **Errors**: use Nest built-ins (e.g. `NotFoundException`) for 4xx responses.
+- **Port**: backend listens on **3001**.
+
+## Backend testing
+- **Cleanup**: All tests must clean up after themselves. Any new data created during a test (e.g. records created via API or Prisma) must be deleted when the test finishes — use `afterAll` or `afterEach` so the database and test environment are left clean.
+- **When adding or changing backend code**: create API tests (e2e) and unit tests when possible. Prefer both for new endpoints and services.
+- **Unit**: Jest; specs next to source (e.g. `issues.service.spec.ts`). Use `Test.createTestingModule` and mock `PrismaService` where needed.
+- **E2E**: `backend/test/*.e2e-spec.ts`; use `test/jest-e2e.json`. Boot full `AppModule`, use `supertest` against `app.getHttpServer()`. Use `test/helpers.ts` (e.g. `createTestToken()`) for auth. Clean up in `afterAll` (e.g. delete any entities created during the test, then `prisma.$disconnect()`, `app.close()`). Mock external deps via `moduleNameMapper` in jest-e2e config (e.g. `openid-client`).
+
+## Web / UI testing
+- **Cleanup**: Same as backend — tests must clean up any data they create (e.g. entities created via API or forms). Remove or revert test data in `afterEach`/`afterAll` so runs don’t leave side effects.
+- **When adding or changing web UI**: create automated UI tests when possible. Use Playwright; specs live in `web/e2e/` (e.g. `web/e2e/home.spec.ts`). Cover key user flows (navigation, forms, modals, critical paths). Run with `pnpm test:e2e:web` (ensure backend and web app are running for full flows).
+- **Single test**: `pnpm test:e2e:one` runs one Playwright test with video and verifies recording; or `pnpm exec playwright test -g "test name" --project=chromium` from `web/` for Chromium-only (avoids needing Firefox/WebKit installed).
+- **Tests page (in-app)**: From the web app Tests page, running an automated UI test (inline or "Run with live view") records video when the backend runs Playwright with `--output` and `video: 'on'`. When a test fails, a "View run" button appears; it opens a modal with the recording (WebM) and **test output** (stdout/stderr from the run).
+- **Playwright conventions**: Associate form labels with controls (`htmlFor` / `id`) so `getByRole('combobox', { name: '...' })` and similar work. If a role matches multiple elements, use a unique locator (e.g. `.drawer-nav-item.is-selected`, or `exact: true`, or `.first()`). Wait for dynamic content (e.g. `waitFor({ state: 'visible', timeout: 15000 })`) before interacting with selects that depend on fetched data.
+
+## TypeScript
+- Backend: `backend/tsconfig.json` — strict mode, CommonJS, ES2019, decorators on. Source in `src/`, output in `dist/`.
+- Prefer explicit types for DTOs and service method params; keep controllers thin.
+
+## Code style
+- Double quotes for strings in TS/JSON unless existing file uses single.
+- 2-space indent. No trailing commas required but allowed.
+- Prefer `async/await` over raw Promises in backend.
+
+## UI (Web / Mobile)
+- **Scrollbars**: Never show scrollbars. Hide them via CSS (e.g. `overflow: auto` or `overflow: scroll` with `scrollbar-width: none` and `::-webkit-scrollbar { display: none }` on web; use non-scrollbar overflow behavior on mobile). Content may still scroll; only the scrollbar track/thumb must not be visible.
+
+## Adding features
+- New API: add/update Prisma schema → `pnpm db:migrate` (or migrate dev in backend) → generate module/controller/service, register in `AppModule`. Add unit tests (controller + service specs) and e2e API tests when possible.
+- New backend e2e: add `*.e2e-spec.ts` under `backend/test/`; follow existing pattern (beforeAll setup, afterAll teardown, shared token via helpers).
+- New UI flows (web): add or extend Playwright specs in `web/e2e/` when possible (e.g. new pages, modals, or critical user journeys). Use `htmlFor`/`id` on form labels and controls so Playwright’s role-based selectors work.

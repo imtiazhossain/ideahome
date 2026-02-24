@@ -1,0 +1,36 @@
+{
+  "moduleFileExtensions": [
+    "js",
+    "json",
+    "ts"
+  ],
+  "rootDir": "src",
+  "testEnvironment": "node",
+  "testRegex": "\\.spec\\.ts$",
+  "transform": {
+    "^.+\\.(t|j)s$": "ts-jest"
+  },
+  "moduleNameMapper": {
+    "^openid-client$": "<rootDir>/../test/__mocks__/openid-client.ts"
+  },
+  "collectCoverageFrom": [
+    "**/*.ts",
+    "!**/*.spec.ts",
+    "!**/main.ts",
+    "!**/openid-client.d.ts"
+  ],
+  "coverageDirectory": "coverage",
+  "coverageReporters": [
+    "text",
+    "lcov",
+    "html"
+  ],
+  "coverageThreshold": {
+    "global": {
+      "statements": 99,
+      "branches": 84,
+      "functions": 90,
+      "lines": 100
+    }
+  }
+}
