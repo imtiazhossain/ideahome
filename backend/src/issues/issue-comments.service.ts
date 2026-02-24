@@ -5,9 +5,7 @@ import {
 } from "@nestjs/common";
 import { IssuesService } from "./issues.service";
 import { PrismaService } from "../prisma.service";
-import { writeFile, mkdir, unlink } from "fs/promises";
-import { existsSync } from "fs";
-import { join } from "path";
+import { StorageService } from "../storage.service";
 
 const COMMENT_INCLUDE = {
   editHistory: { orderBy: { editedAt: "asc" as const } },
@@ -18,16 +16,9 @@ const COMMENT_INCLUDE = {
 export class IssueCommentsService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly issuesService: IssuesService
+    private readonly issuesService: IssuesService,
+    private readonly storage: StorageService
   ) {}
-
-  private get recordingsDir(): string {
-    return join(__dirname, "..", "..", "uploads", "recordings");
-  }
-
-  private get screenshotsDir(): string {
-    return join(__dirname, "..", "..", "uploads", "screenshots");
-  }
 
   async list(issueId: string, userId: string) {
     await this.issuesService.verifyIssueAccess(issueId, userId);
@@ -119,24 +110,28 @@ export class IssueCommentsService {
     }
 
     if (isImage) {
-      await mkdir(this.screenshotsDir, { recursive: true });
       const filename = `comment-${commentId}-${Date.now()}.png`;
-      const filePath = join(this.screenshotsDir, filename);
       const buffer = Buffer.from(imageB64, "base64");
-      await writeFile(filePath, buffer);
-      const mediaUrl = `uploads/screenshots/${filename}`;
-      const attachment = await this.prisma.commentAttachment.create({
+      const { url: mediaUrl } = await this.storage.upload(
+        "screenshots",
+        filename,
+        buffer,
+        "image/png"
+      );
+      await this.prisma.commentAttachment.create({
         data: { commentId, type, mediaUrl },
       });
       return this.getOne(commentId);
     }
 
-    await mkdir(this.recordingsDir, { recursive: true });
     const filename = `comment-${commentId}-${Date.now()}.webm`;
-    const filePath = join(this.recordingsDir, filename);
     const buffer = Buffer.from(videoB64!, "base64");
-    await writeFile(filePath, buffer);
-    const mediaUrl = `uploads/recordings/${filename}`;
+    const { url: mediaUrl } = await this.storage.upload(
+      "recordings",
+      filename,
+      buffer,
+      "video/webm"
+    );
     await this.prisma.commentAttachment.create({
       data: { commentId, type, mediaUrl },
     });
@@ -155,8 +150,7 @@ export class IssueCommentsService {
     });
     if (!attachment) throw new NotFoundException("Attachment not found");
 
-    const filePath = join(__dirname, "..", "..", attachment.mediaUrl);
-    if (existsSync(filePath)) await unlink(filePath).catch(() => {});
+    await this.storage.delete(attachment.mediaUrl);
 
     await this.prisma.commentAttachment.delete({ where: { id: attachmentId } });
     return this.getOne(commentId);
@@ -171,8 +165,7 @@ export class IssueCommentsService {
     if (!comment) throw new NotFoundException("Comment not found");
 
     for (const att of comment.attachments) {
-      const filePath = join(__dirname, "..", "..", att.mediaUrl);
-      if (existsSync(filePath)) await unlink(filePath).catch(() => {});
+      await this.storage.delete(att.mediaUrl);
     }
     await this.prisma.issueComment.delete({ where: { id: commentId } });
   }

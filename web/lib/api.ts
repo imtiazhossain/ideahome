@@ -613,6 +613,7 @@ export async function deleteIssueRecording(
 
 /** Full URL to stream a recording file from the backend (uses stream endpoint with correct Content-Type). */
 export function getRecordingUrl(videoUrl: string): string {
+  if (videoUrl.startsWith("http")) return videoUrl;
   const filename = videoUrl.replace(/^.*\//, "");
   return `${getApiBase()}/issues/recordings/stream/${encodeURIComponent(filename)}`;
 }
@@ -682,6 +683,7 @@ export async function deleteIssueScreenshot(
 
 /** Full URL to load a screenshot image from the backend. */
 export function getScreenshotUrl(imageUrl: string): string {
+  if (imageUrl.startsWith("http")) return imageUrl;
   return `${getApiBase()}/${imageUrl}`;
 }
 

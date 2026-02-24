@@ -10,6 +10,7 @@
     "test:e2e:one": "node scripts/verify-record.js"
   },
   "dependencies": {
+    "backend": "workspace:*",
     "next": "^13.0.0",
     "react": "^18.0.0",
     "react-dom": "^18.0.0"

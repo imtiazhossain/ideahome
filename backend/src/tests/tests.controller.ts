@@ -18,6 +18,15 @@ export class TestsController {
         errorOutput: "Missing grep",
       };
     }
+    if (process.env.VERCEL || process.env.USE_BUILTIN_API) {
+      return {
+        success: false,
+        exitCode: 1,
+        output: "",
+        errorOutput:
+          "UI tests (Playwright) are not available on Vercel. Run them locally with pnpm dev:backend.",
+      };
+    }
     return this.testsService.runUiTest(grep);
   }
 
@@ -27,6 +36,17 @@ export class TestsController {
    */
   @Sse("run-ui-stream")
   runUiStream(@Query("grep") grep: string): Observable<MessageEvent> {
+    if (process.env.VERCEL || process.env.USE_BUILTIN_API) {
+      return new Observable((sub) => {
+        sub.next({
+          data: JSON.stringify({
+            type: "error",
+            data: "UI tests (Playwright) are not available on Vercel. Run them locally.",
+          }),
+        } as MessageEvent);
+        sub.complete();
+      });
+    }
     return this.testsService.runUiTestStream(grep ?? "");
   }
 
@@ -36,6 +56,15 @@ export class TestsController {
       typeof body?.testNamePattern === "string"
         ? body.testNamePattern.trim()
         : "";
+    if (process.env.VERCEL || process.env.USE_BUILTIN_API) {
+      return {
+        success: false,
+        exitCode: 1,
+        output: "",
+        errorOutput:
+          "API tests are not available on Vercel. Run them locally with pnpm test:e2e.",
+      };
+    }
     return this.testsService.runApiTest(pattern);
   }
 }

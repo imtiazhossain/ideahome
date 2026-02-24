@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException } from "@nestjs/common";
 import { Prisma } from "@prisma/client";
 import { PrismaService } from "../prisma.service";
-import { writeFile, mkdir, unlink } from "fs/promises";
+import { StorageService } from "../storage.service";
 import { existsSync } from "fs";
 import { join } from "path";
 import { createReadStream } from "fs";
@@ -28,7 +28,10 @@ function projectNameToAcronym(name: string): string {
 
 @Injectable()
 export class IssuesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly storage: StorageService
+  ) {}
 
   private async getOrgIdForUser(userId: string): Promise<string> {
     const user = await this.prisma.user.findUnique({
@@ -184,7 +187,7 @@ export class IssuesService {
       include: { recordings: true, screenshots: true, files: true },
     });
     if (issue) {
-      this.deleteIssueFiles(issue);
+      await this.deleteIssueFiles(issue);
     }
     return this.prisma.issue.delete({ where: { id } });
   }
@@ -201,32 +204,25 @@ export class IssuesService {
       include: { recordings: true, screenshots: true, files: true },
     });
     for (const issue of issues) {
-      this.deleteIssueFiles(issue);
+      await this.deleteIssueFiles(issue);
     }
     await this.prisma.issue.deleteMany({ where });
   }
 
-  private deleteIssueFiles(issue: {
+  private async deleteIssueFiles(issue: {
     recordings: { videoUrl: string }[];
     screenshots: { imageUrl: string }[];
     files: { fileUrl: string }[];
   }) {
     for (const rec of issue.recordings) {
-      const filePath = join(__dirname, "..", "..", rec.videoUrl);
-      if (existsSync(filePath)) unlink(filePath).catch(() => {});
+      await this.storage.delete(rec.videoUrl);
     }
     for (const shot of issue.screenshots) {
-      const filePath = join(__dirname, "..", "..", shot.imageUrl);
-      if (existsSync(filePath)) unlink(filePath).catch(() => {});
+      await this.storage.delete(shot.imageUrl);
     }
     for (const f of issue.files) {
-      const filePath = join(__dirname, "..", "..", f.fileUrl);
-      if (existsSync(filePath)) unlink(filePath).catch(() => {});
+      await this.storage.delete(f.fileUrl);
     }
-  }
-
-  private get uploadsDir(): string {
-    return join(__dirname, "..", "..", "uploads", "recordings");
   }
 
   private static RECORDING_CONTENT_TYPES: Record<string, string> = {
@@ -245,21 +241,26 @@ export class IssuesService {
     res: Response,
     userId?: string
   ): Promise<void> {
-    if (!/^[a-zA-Z0-9_.-]+\.(webm|mp4|mov|mp3|m4a|ogg|wav)$/i.test(filename)) {
-      throw new NotFoundException("Invalid recording filename");
-    }
+    const recording = await this.prisma.issueRecording.findFirst({
+      where: { videoUrl: { endsWith: filename } },
+      include: { issue: { include: { project: true } } },
+    });
+    if (!recording) throw new NotFoundException("Recording not found");
     if (userId) {
-      const recording = await this.prisma.issueRecording.findFirst({
-        where: { videoUrl: { endsWith: filename } },
-        include: { issue: { include: { project: true } } },
-      });
-      if (!recording) throw new NotFoundException("Recording not found");
       const orgId = await this.getOrgIdForUser(userId);
       if (recording.issue.project.organizationId !== orgId) {
         throw new NotFoundException("Recording not found");
       }
     }
-    const filePath = join(this.uploadsDir, filename);
+    if (this.storage.isFullUrl(recording.videoUrl)) {
+      res.redirect(recording.videoUrl);
+      return;
+    }
+    if (!/^[a-zA-Z0-9_.-]+\.(webm|mp4|mov|mp3|m4a|ogg|wav)$/i.test(filename)) {
+      throw new NotFoundException("Invalid recording filename");
+    }
+    const uploadsDir = join(process.cwd(), "uploads", "recordings");
+    const filePath = join(uploadsDir, filename);
     if (!existsSync(filePath)) {
       throw new NotFoundException("Recording not found");
     }
@@ -287,8 +288,6 @@ export class IssuesService {
     });
     if (!issue) throw new NotFoundException("Issue not found");
 
-    await mkdir(this.uploadsDir, { recursive: true });
-
     let filename: string;
     let displayName: string | undefined;
     if (fileName && /\.(webm|mp4|mov|mp3|m4a|ogg|wav)$/i.test(fileName)) {
@@ -304,11 +303,16 @@ export class IssuesService {
       const suffix = `-${recordingType}.webm`;
       filename = `${issueId}-${Date.now()}${suffix}`;
     }
-    const filePath = join(this.uploadsDir, filename);
     const buffer = Buffer.from(videoBase64, "base64");
-    await writeFile(filePath, buffer);
-
-    const videoUrl = `uploads/recordings/${filename}`;
+    const ext = filename.match(/\.[a-z0-9]+$/i)?.[0]?.toLowerCase() ?? ".webm";
+    const contentType =
+      IssuesService.RECORDING_CONTENT_TYPES[ext] ?? "video/webm";
+    const { url: videoUrl } = await this.storage.upload(
+      "recordings",
+      filename,
+      buffer,
+      contentType
+    );
     await this.prisma.issueRecording.create({
       data: {
         videoUrl,
@@ -364,15 +368,10 @@ export class IssuesService {
     });
     if (!recording) throw new NotFoundException("Recording not found");
 
-    const filePath = join(__dirname, "..", "..", recording.videoUrl);
-    if (existsSync(filePath)) await unlink(filePath).catch(() => {});
+    await this.storage.delete(recording.videoUrl);
 
     await this.prisma.issueRecording.delete({ where: { id: recordingId } });
     return this.get(issueId);
-  }
-
-  private get screenshotsDir(): string {
-    return join(__dirname, "..", "..", "uploads", "screenshots");
   }
 
   async addScreenshot(
@@ -387,14 +386,14 @@ export class IssuesService {
     });
     if (!issue) throw new NotFoundException("Issue not found");
 
-    await mkdir(this.screenshotsDir, { recursive: true });
-
     const filename = `${issueId}-${Date.now()}.png`;
-    const filePath = join(this.screenshotsDir, filename);
     const buffer = Buffer.from(imageBase64, "base64");
-    await writeFile(filePath, buffer);
-
-    const imageUrl = `uploads/screenshots/${filename}`;
+    const { url: imageUrl } = await this.storage.upload(
+      "screenshots",
+      filename,
+      buffer,
+      "image/png"
+    );
     const name = fileName?.trim() || null;
     await this.prisma.issueScreenshot.create({
       data: { imageUrl, issueId, name },
@@ -440,15 +439,10 @@ export class IssuesService {
     });
     if (!screenshot) throw new NotFoundException("Screenshot not found");
 
-    const filePath = join(__dirname, "..", "..", screenshot.imageUrl);
-    if (existsSync(filePath)) await unlink(filePath).catch(() => {});
+    await this.storage.delete(screenshot.imageUrl);
 
     await this.prisma.issueScreenshot.delete({ where: { id: screenshotId } });
     return this.get(issueId);
-  }
-
-  private get filesDir(): string {
-    return join(__dirname, "..", "..", "uploads", "files");
   }
 
   async addFile(
@@ -463,16 +457,16 @@ export class IssuesService {
     });
     if (!issue) throw new NotFoundException("Issue not found");
 
-    await mkdir(this.filesDir, { recursive: true });
-
     const ext = fileName.includes(".") ? fileName.replace(/^.*\./, "") : "bin";
     const safeExt = ext.replace(/[^a-zA-Z0-9]/g, "") || "bin";
     const filename = `${issueId}-${Date.now()}-${safeExt}`;
-    const filePath = join(this.filesDir, filename);
     const buffer = Buffer.from(fileBase64, "base64");
-    await writeFile(filePath, buffer);
-
-    const fileUrl = `uploads/files/${filename}`;
+    const { url: fileUrl } = await this.storage.upload(
+      "files",
+      filename,
+      buffer,
+      "application/octet-stream"
+    );
     await this.prisma.issueFile.create({
       data: { fileUrl, fileName, issueId },
     });
@@ -507,8 +501,7 @@ export class IssuesService {
     });
     if (!file) throw new NotFoundException("File not found");
 
-    const filePath = join(__dirname, "..", "..", file.fileUrl);
-    if (existsSync(filePath)) await unlink(filePath).catch(() => {});
+    await this.storage.delete(file.fileUrl);
 
     await this.prisma.issueFile.delete({ where: { id: fileId } });
     return this.get(issueId);
@@ -525,7 +518,11 @@ export class IssuesService {
       where: { id: fileId, issueId },
     });
     if (!file) throw new NotFoundException("File not found");
-    const filePath = join(__dirname, "..", "..", file.fileUrl);
+    if (this.storage.isFullUrl(file.fileUrl)) {
+      res.redirect(file.fileUrl);
+      return;
+    }
+    const filePath = join(process.cwd(), file.fileUrl);
     if (!existsSync(filePath)) throw new NotFoundException("File not found");
     const safeName = file.fileName.replace(/[^\w.-]/g, "_");
     const isPdf = /\.pdf$/i.test(file.fileName);

@@ -1,6 +1,27 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   async rewrites() {
+    const useBuiltinApi = process.env.USE_BUILTIN_API === "true";
+    if (useBuiltinApi) {
+      return [
+        { source: "/issues", destination: "/api/issues" },
+        { source: "/issues/:path*", destination: "/api/issues/:path*" },
+        { source: "/organizations", destination: "/api/organizations" },
+        {
+          source: "/organizations/:path*",
+          destination: "/api/organizations/:path*",
+        },
+        { source: "/projects", destination: "/api/projects" },
+        { source: "/projects/:path*", destination: "/api/projects/:path*" },
+        { source: "/users", destination: "/api/users" },
+        { source: "/users/:path*", destination: "/api/users/:path*" },
+        { source: "/uploads/:path*", destination: "/api/uploads/:path*" },
+        { source: "/tests", destination: "/api/tests" },
+        { source: "/tests/:path*", destination: "/api/tests/:path*" },
+        { source: "/auth", destination: "/api/auth" },
+        { source: "/auth/:path*", destination: "/api/auth/:path*" },
+      ];
+    }
     const backend = process.env.BACKEND_URL || "http://localhost:3001";
     return [
       { source: "/issues", destination: `${backend}/issues` },
@@ -15,6 +36,17 @@ const nextConfig = {
       { source: "/tests/:path*", destination: `${backend}/tests/:path*` },
       { source: "/auth/:path*", destination: `${backend}/auth/:path*` },
     ];
+  },
+  transpilePackages: ["backend"],
+  experimental: {
+    serverComponentsExternalPackages: ["backend"],
+  },
+  webpack: (config, { isServer }) => {
+    if (isServer) {
+      config.externals = config.externals || [];
+      config.externals.push("backend", "backend/serverless");
+    }
+    return config;
   },
 };
 

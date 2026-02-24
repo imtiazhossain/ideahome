@@ -31,6 +31,9 @@ Sign-in and registration use OAuth. Add credentials to `backend/.env` (see **`ba
 **Dev: skip login**  
 To work without signing in locally, set in `backend/.env`: `SKIP_AUTH_DEV=true`. Optionally set `DEV_USER_ID` to a user id; otherwise the first user in the DB is used. In `web/.env.local` set `NEXT_PUBLIC_SKIP_LOGIN_DEV=true` so the app doesn’t redirect to `/login`. Restart backend and web after changing env.
 
+**Vercel deployment (single app)**  
+Deploy web + backend together. See **`docs/VERCEL-MIGRATION.md`** for setup. Root Directory: `web`, set `USE_BUILTIN_API=true` and add `DATABASE_URL`, `JWT_SECRET`, etc.
+
 Packages:
 - backend: NestJS API + Prisma schema
 - web: Next.js frontend
