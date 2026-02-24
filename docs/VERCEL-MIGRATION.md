@@ -74,6 +74,13 @@ Update your OAuth app settings:
 3. Enable **Include source files outside of the Root Directory** if Root Directory is `web`
 4. Deploy
 
+## Build memory
+
+If the build fails with "exceeded the amount of memory available":
+
+1. **Enable Enhanced Builds** (Pro plan): Project → Settings → Build and Deployment → Build Machine → Enhanced (16 GB) or Turbo (60 GB).
+2. **Hobby plan**: The build is optimized to skip the mobile package (`--filter backend --filter web`) and use `NODE_OPTIONS=--max-old-space-size=6144`. If it still fails, upgrade to Pro for Enhanced Builds.
+
 ## Limitations
 
 - **UI tests (Playwright)**: Not available on Vercel. Run locally with `pnpm dev:backend`.
