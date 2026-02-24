@@ -81,6 +81,10 @@ If the build fails with "exceeded the amount of memory available":
 1. **Enable Enhanced Builds** (Pro plan): Project → Settings → Build and Deployment → Build Machine → Enhanced (16 GB) or Turbo (60 GB).
 2. **Hobby plan**: The build is optimized to skip the mobile package (`--filter backend --filter web`) and use `NODE_OPTIONS=--max-old-space-size=6144`. If it still fails, upgrade to Pro for Enhanced Builds.
 
+## Root dependencies for built-in API
+
+When using the built-in API, the Nest backend runs inside the Next.js serverless function and is loaded via `import("backend/serverless")`. At runtime, `backend/dist/serverless.js` resolves its dependencies (e.g. `express`) from the monorepo root `node_modules`. The root `package.json` therefore lists the backend’s runtime dependencies so they are installed at the root and available when the function runs on Vercel.
+
 ## Limitations
 
 - **UI tests (Playwright)**: Not available on Vercel. Run locally with `pnpm dev:backend`.

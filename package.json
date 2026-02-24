@@ -6,6 +6,18 @@
     "web",
     "mobile"
   ],
+  "dependencies": {
+    "@nestjs/common": "^9.0.0",
+    "@nestjs/core": "^9.0.0",
+    "@nestjs/platform-express": "^9.0.0",
+    "@prisma/client": "^4.0.0",
+    "@vercel/blob": "^0.25.0",
+    "express": "^4.21.0",
+    "jsonwebtoken": "^9.0.0",
+    "openid-client": "^6.8.2",
+    "reflect-metadata": "^0.1.13",
+    "rxjs": "^7.0.0"
+  },
   "scripts": {
     "install": "node -e \"process.exit(0)\"",
     "build": "pnpm build:backend && pnpm build:web",
