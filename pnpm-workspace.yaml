@@ -2,3 +2,10 @@ packages:
   - 'backend'
   - 'web'
   - 'mobile'
+
+# Allow these dependencies to run lifecycle scripts (pnpm v10+)
+onlyBuiltDependencies:
+  - '@nestjs/core'
+  - '@prisma/client'
+  - '@prisma/engines'
+  - prisma
