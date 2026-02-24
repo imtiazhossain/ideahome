@@ -35,6 +35,7 @@ services:
     name: ideahome-web
     rootDir: web
     plan: free
+    region: oregon
     autoDeployTrigger: commit
     buildCommand: "npm install && npm run build"
     startCommand: "npm start"
