@@ -12,6 +12,7 @@ services:
     name: ideahome-api
     rootDir: backend
     plan: free
+    autoDeployTrigger: commit
     # Avoid installing Playwright/Jest (saves ~1GB+); only add build-time deps.
     buildCommand: "npm install --omit=dev && npm install prisma typescript --no-save && npx prisma generate && npm run build"
     startCommand: "npx prisma migrate deploy && npm start"
@@ -31,6 +32,7 @@ services:
     name: ideahome-web
     rootDir: web
     plan: free
+    autoDeployTrigger: commit
     buildCommand: "npm install && npm run build"
     startCommand: "npm start"
     envVars:
