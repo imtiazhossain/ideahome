@@ -2,6 +2,7 @@
   "name": "backend",
   "version": "0.1.0",
   "private": true,
+  "engines": { "node": ">=18" },
   "scripts": {
     "postinstall": "prisma generate",
     "dev": "ts-node-dev --respawn --transpile-only src/main.ts",
