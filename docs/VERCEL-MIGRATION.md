@@ -48,12 +48,14 @@ For `NEXT_PUBLIC_API_URL`, set it to your Vercel URL (e.g. `https://your-app.ver
 
 ### 4. Database Migrations
 
-Run migrations against your Vercel Postgres **before** deploying:
+Run migrations against your Vercel Postgres **before** deploying (and again whenever you add or change migrations):
 
 ```bash
 cd backend
 DATABASE_URL="your-vercel-postgres-url" npx prisma migrate deploy
 ```
+
+Get the real URL from **Vercel** → **Project** → **Storage** → your **Postgres** database → **.env** tab or **Connection string**. Use that value for `DATABASE_URL`; do not use the placeholder from `.env.vercel.example`.
 
 ### 5. OAuth Redirect URIs
 
@@ -69,12 +71,16 @@ Update your OAuth app settings:
 2. In Vercel Dashboard → **Settings**:
    - **Root Directory**: `web` (or leave empty and use root)
    - **Install Command**: `pnpm install` (run from repo root if root dir is empty)
-   - **Build Command**: `cd .. && pnpm install && pnpm build` (when root is `web`) or `pnpm build` (when root is repo)
+   - **Build Command**: Use the command from `web/vercel.json` (includes `PRISMA_SKIP_POSTINSTALL_GENERATE=true` so Prisma does not warn about a missing schema at repo root; the backend still runs `prisma generate` in its own directory). If overriding, keep that env var for the install step.
    - **Output Directory**: `web/.next` (when root is repo) or `.next` (when root is `web`)
 3. Enable **Include source files outside of the Root Directory** if Root Directory is `web`
 4. Deploy
 
 ## Troubleshooting
+
+### "We could not find your Prisma schema at `prisma/schema.prisma`" (postinstall warn)
+
+The repo root has `@prisma/client` for the serverless build, but the schema lives in `backend/prisma/schema.prisma`. Prisma’s postinstall runs from root and warns. The build in `web/vercel.json` sets `PRISMA_SKIP_POSTINSTALL_GENERATE=true` for the install step so that warning is suppressed; the backend’s own `prisma generate` still runs from `backend/`. If you override the build command, include that env var for the install (e.g. `PRISMA_SKIP_POSTINSTALL_GENERATE=true pnpm install ...`).
 
 ### "Can't reach database server at `ep-xxx.region.postgres.vercel-storage.com`" (P1001)
 
