@@ -2,6 +2,7 @@
  * Catch-all API route that forwards to the NestJS backend when USE_BUILTIN_API is set.
  * Used for full Vercel deployment (Option C) where backend runs as serverless.
  */
+import type { IncomingMessage } from "http";
 import type { NextApiRequest, NextApiResponse } from "next";
 
 const USE_BUILTIN_API = process.env.USE_BUILTIN_API === "true";
@@ -29,7 +30,7 @@ export default async function handler(
   const { default: nestHandler } = await import("backend/serverless");
 
   // Mutate req so NestJS/Express receives the path without /api prefix
-  const nodeReq = req as NodeJS.IncomingMessage & { url?: string; originalUrl?: string };
+  const nodeReq = req as IncomingMessage & { url?: string; originalUrl?: string };
   const savedUrl = nodeReq.url;
   const savedOriginalUrl = nodeReq.originalUrl;
   nodeReq.url = pathForNest;
