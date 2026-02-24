@@ -117,7 +117,9 @@ test.describe("Navigation", () => {
           .getByPlaceholder("e.g. Engineering, Marketing")
           .fill("Nav Project");
         await modal.getByRole("button", { name: "Create" }).click();
-        await expect(page.locator(".modal")).not.toBeVisible({ timeout: 10000 });
+        await expect(page.locator(".modal")).not.toBeVisible({
+          timeout: 10000,
+        });
       }
     });
     await test.step("Click Nav Project in sidebar", async () => {

@@ -762,6 +762,34 @@ textarea {
   background: #262626;
 }
 
+.project-nav-auth {
+  flex-shrink: 0;
+}
+
+.project-nav-auth-link,
+.project-nav-auth-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  color: var(--text-muted);
+  background: none;
+  border: none;
+  padding: 6px 10px;
+  cursor: pointer;
+  text-decoration: none;
+  border-radius: 6px;
+}
+
+.project-nav-auth-link:hover,
+.project-nav-auth-btn:hover {
+  color: var(--accent);
+}
+
+.project-nav-auth-btn {
+  font-family: inherit;
+}
+
 .project-nav-project-icon {
   display: flex;
   align-items: center;

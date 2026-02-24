@@ -7,6 +7,9 @@ import {
   fetchIssue,
   fetchUsers,
   fetchOrganizations,
+  getStoredToken,
+  isAuthenticated,
+  isSkipLoginDev,
   createIssue,
   createOrganization,
   createProject,
@@ -515,9 +518,7 @@ function projectNameToAcronym(name: string): string {
   if (!trimmed) return "PRJ";
   const words = trimmed.split(/\s+/).filter(Boolean);
   if (words.length >= 2) {
-    return words
-      .map((w) => (w[0] ?? "").toUpperCase())
-      .join("");
+    return words.map((w) => (w[0] ?? "").toUpperCase()).join("");
   }
   return trimmed.slice(0, 3).toUpperCase() || "PRJ";
 }
@@ -631,6 +632,7 @@ function IssueCard({
 
 export default function Home() {
   const router = useRouter();
+  const [authResolved, setAuthResolved] = useState(false);
   const [projects, setProjects] = useState<Project[]>([]);
   const [selectedProjectId, setSelectedProjectId] = useState<string>("");
   const [issues, setIssues] = useState<Issue[]>([]);
@@ -1918,8 +1920,32 @@ export default function Home() {
   };
 
   useEffect(() => {
+    if (isSkipLoginDev()) {
+      setAuthResolved(true);
+      loadProjects();
+      return;
+    }
+    if (!getStoredToken()) {
+      router.replace("/login");
+      return;
+    }
+    setAuthResolved(true);
     loadProjects();
-  }, []);
+  }, [router]);
+
+  // When token is cleared (e.g. logout in another tab), redirect to login
+  useEffect(() => {
+    if (!authResolved) return;
+    const check = () => {
+      if (!isAuthenticated()) router.replace("/login");
+    };
+    window.addEventListener("storage", check);
+    const interval = setInterval(check, 1000);
+    return () => {
+      window.removeEventListener("storage", check);
+      clearInterval(interval);
+    };
+  }, [authResolved, router]);
 
   useEffect(() => {
     if (editingProjectId) {
@@ -2219,21 +2245,7 @@ export default function Home() {
     }
     setProjectSubmitting(true);
     try {
-      let orgId = newProjectOrgId;
-      if (organizations.length === 0) {
-        const orgName = newOrgName.trim() || "My Organization";
-        const org = await createOrganization({ name: orgName });
-        orgId = org.id;
-        setOrganizations((prev) => [...prev, org]);
-      } else if (!orgId) {
-        setProjectCreateError("Please select an organization.");
-        setProjectSubmitting(false);
-        return;
-      }
-      const project = await createProject({
-        name: projectName,
-        organizationId: orgId,
-      });
+      const project = await createProject({ name: projectName });
       setProjects((prev) => [...prev, project]);
       setSelectedProjectId(project.id);
       setCreateProjectOpen(false);
@@ -3048,6 +3060,10 @@ export default function Home() {
     result[dragOverColumnId] = [...(result[dragOverColumnId] ?? []), dragged];
     return result;
   }, [issuesByStatus, draggingIssueId, dragOverColumnId, issues]);
+
+  if (!authResolved || !isAuthenticated()) {
+    return null;
+  }
 
   return (
     <>
@@ -3917,382 +3933,1804 @@ export default function Home() {
               </div>
             </div>
             <div className="modal-body modal-body--scrollable">
-            <div className="form-group">
-              <label>Project</label>
-              <input
-                type="text"
-                value={selectedIssue.project?.name ?? ""}
-                readOnly
-                disabled
-                style={{ background: "var(--bg-muted)", cursor: "not-allowed" }}
-              />
-            </div>
-            <div className="form-group">
-              <label>Title</label>
-              <input
-                value={selectedIssue.title ?? ""}
-                onChange={(e) =>
-                  setSelectedIssue({ ...selectedIssue, title: e.target.value })
-                }
-                placeholder="Summary"
-              />
-            </div>
-            <div className="form-group">
-              <label>Description</label>
-              <textarea
-                value={selectedIssue.description ?? ""}
-                onChange={(e) =>
-                  setSelectedIssue({
-                    ...selectedIssue,
-                    description: e.target.value || null,
-                  })
-                }
-                placeholder="Add more details…"
-                rows={3}
-              />
-            </div>
-            <div className="form-group">
-              <label>Acceptance Criteria</label>
-              <textarea
-                value={selectedIssue.acceptanceCriteria ?? ""}
-                onChange={(e) =>
-                  setSelectedIssue({
-                    ...selectedIssue,
-                    acceptanceCriteria: e.target.value || null,
-                  })
-                }
-                placeholder="e.g. User can log in, Form validates input…"
-                rows={3}
-              />
-            </div>
-            <div className="form-group">
-              <label>Database</label>
-              <input
-                value={selectedIssue.database ?? ""}
-                onChange={(e) => {
-                  const value = e.target.value;
-                  setSelectedIssue({
-                    ...selectedIssue,
-                    database: value || null,
-                  });
-                }}
-                placeholder="Input Database Information..."
-              />
-            </div>
-            <div className="form-group">
-              <label>API</label>
-              <input
-                value={selectedIssue.api ?? ""}
-                onChange={(e) => {
-                  const value = e.target.value;
-                  setSelectedIssue({ ...selectedIssue, api: value || null });
-                }}
-                placeholder="API"
-              />
-            </div>
-            <div className="form-group">
-              <label>Test Cases</label>
-              {(() => {
-                const lines = parseTestCases(selectedIssue.testCases);
-                const updateCases = (nextLines: string[]) => {
-                  setSelectedIssue({
-                    ...selectedIssue,
-                    testCases: serializeTestCases(nextLines),
-                  });
-                };
-                return (
-                  <div className="test-cases-list">
-                    {lines.map((line, idx) => (
-                      <div key={idx} className="test-case-row">
-                        <div className="test-case-field">
-                          <AutoResizeTextarea
-                            value={line}
-                            onChange={(e) => {
-                              const next = [...lines];
-                              next[idx] = e.target.value;
-                              updateCases(next);
-                            }}
-                            placeholder="e.g. Given X when Y then Z"
-                            className={
-                              idx > 0 ? "test-case-input-with-action" : ""
-                            }
-                          />
-                          {idx > 0 && (
-                            <button
-                              type="button"
-                              className="btn btn-icon test-case-remove"
-                              onClick={() => {
-                                const next = lines.filter((_, i) => i !== idx);
+              <div className="form-group">
+                <label>Project</label>
+                <input
+                  type="text"
+                  value={selectedIssue.project?.name ?? ""}
+                  readOnly
+                  disabled
+                  style={{
+                    background: "var(--bg-muted)",
+                    cursor: "not-allowed",
+                  }}
+                />
+              </div>
+              <div className="form-group">
+                <label>Title</label>
+                <input
+                  value={selectedIssue.title ?? ""}
+                  onChange={(e) =>
+                    setSelectedIssue({
+                      ...selectedIssue,
+                      title: e.target.value,
+                    })
+                  }
+                  placeholder="Summary"
+                />
+              </div>
+              <div className="form-group">
+                <label>Description</label>
+                <textarea
+                  value={selectedIssue.description ?? ""}
+                  onChange={(e) =>
+                    setSelectedIssue({
+                      ...selectedIssue,
+                      description: e.target.value || null,
+                    })
+                  }
+                  placeholder="Add more details…"
+                  rows={3}
+                />
+              </div>
+              <div className="form-group">
+                <label>Acceptance Criteria</label>
+                <textarea
+                  value={selectedIssue.acceptanceCriteria ?? ""}
+                  onChange={(e) =>
+                    setSelectedIssue({
+                      ...selectedIssue,
+                      acceptanceCriteria: e.target.value || null,
+                    })
+                  }
+                  placeholder="e.g. User can log in, Form validates input…"
+                  rows={3}
+                />
+              </div>
+              <div className="form-group">
+                <label>Database</label>
+                <input
+                  value={selectedIssue.database ?? ""}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    setSelectedIssue({
+                      ...selectedIssue,
+                      database: value || null,
+                    });
+                  }}
+                  placeholder="Input Database Information..."
+                />
+              </div>
+              <div className="form-group">
+                <label>API</label>
+                <input
+                  value={selectedIssue.api ?? ""}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    setSelectedIssue({ ...selectedIssue, api: value || null });
+                  }}
+                  placeholder="API"
+                />
+              </div>
+              <div className="form-group">
+                <label>Test Cases</label>
+                {(() => {
+                  const lines = parseTestCases(selectedIssue.testCases);
+                  const updateCases = (nextLines: string[]) => {
+                    setSelectedIssue({
+                      ...selectedIssue,
+                      testCases: serializeTestCases(nextLines),
+                    });
+                  };
+                  return (
+                    <div className="test-cases-list">
+                      {lines.map((line, idx) => (
+                        <div key={idx} className="test-case-row">
+                          <div className="test-case-field">
+                            <AutoResizeTextarea
+                              value={line}
+                              onChange={(e) => {
+                                const next = [...lines];
+                                next[idx] = e.target.value;
                                 updateCases(next);
                               }}
-                              aria-label="Remove test case"
-                              title="Remove test case"
-                            >
-                              ×
-                            </button>
-                          )}
-                        </div>
-                        <button
-                          type="button"
-                          className="btn btn-icon test-case-add"
-                          onClick={() =>
-                            updateCases([
-                              ...lines.slice(0, idx + 1),
-                              "",
-                              ...lines.slice(idx + 1),
-                            ])
-                          }
-                          aria-label="Add test case"
-                          title="Add test case"
-                        >
-                          +
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                );
-              })()}
-            </div>
-            <div className="form-group">
-              <label>Assigned To</label>
-              <select
-                className="form-select"
-                value={selectedIssue.assigneeId ?? ""}
-                onChange={(e) =>
-                  setSelectedIssue({
-                    ...selectedIssue,
-                    assigneeId: e.target.value || null,
-                  })
-                }
-              >
-                <option value="">Unassigned</option>
-                {users.map((u) => (
-                  <option key={u.id} value={u.id}>
-                    {u.name || u.email}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="form-group">
-              <label>Automated Tests</label>
-              {(() => {
-                const selectedTests = parseAutomatedTests(
-                  selectedIssue.automatedTest
-                );
-                const allTests = uiTests.flatMap((f) =>
-                  f.suites.flatMap((s) =>
-                    s.tests.map((t) => ({
-                      file: f.file,
-                      suite: s.name,
-                      test: t,
-                    }))
-                  )
-                );
-                const toggleTest = (testName: string) => {
-                  const next = selectedTests.includes(testName)
-                    ? selectedTests.filter((t) => t !== testName)
-                    : [...selectedTests, testName];
-                  setSelectedIssue({
-                    ...selectedIssue,
-                    automatedTest: serializeAutomatedTests(next),
-                  });
-                };
-                const removeTest = (testName: string) => {
-                  const next = selectedTests.filter((t) => t !== testName);
-                  setSelectedIssue({
-                    ...selectedIssue,
-                    automatedTest: serializeAutomatedTests(next),
-                  });
-                };
-                const runTest = async (testName: string) => {
-                  setAutomatedTestRunResults((prev) => ({
-                    ...prev,
-                    [testName]: "running",
-                  }));
-                  try {
-                    const result = await runUiTest(testName);
-                    setAutomatedTestRunResults((prev) => ({
-                      ...prev,
-                      [testName]: result,
-                    }));
-                  } catch (err) {
-                    setAutomatedTestRunResults((prev) => ({
-                      ...prev,
-                      [testName]: {
-                        success: false,
-                        exitCode: null,
-                        output: "",
-                        errorOutput:
-                          err instanceof Error
-                            ? err.message
-                            : "Failed to run test",
-                      },
-                    }));
-                  }
-                };
-                return (
-                  <div className="automated-tests-select">
-                    <div ref={automatedTestDropdownRef}>
-                      <button
-                        type="button"
-                        className="automated-tests-trigger"
-                        onClick={() => setAutomatedTestDropdownOpen((o) => !o)}
-                      >
-                        <span className="automated-tests-trigger-text">
-                          {selectedTests.length === 0
-                            ? "Select automated tests…"
-                            : `${selectedTests.length} test${selectedTests.length === 1 ? "" : "s"} selected`}
-                        </span>
-                        <span className="automated-tests-trigger-arrow">
-                          {automatedTestDropdownOpen ? "▲" : "▼"}
-                        </span>
-                      </button>
-                      {automatedTestDropdownOpen && (
-                        <div className="automated-tests-dropdown">
-                          {uiTests.map((f) =>
-                            f.suites.map((suite) => (
-                              <div key={`${f.file}::${suite.name}`}>
-                                <div className="automated-tests-suite-header">
-                                  {suite.name}
-                                </div>
-                                {suite.tests.map((test) => {
-                                  const isChecked =
-                                    selectedTests.includes(test);
-                                  return (
-                                    <button
-                                      key={test}
-                                      type="button"
-                                      className={`automated-tests-option${isChecked ? " is-selected" : ""}`}
-                                      onClick={() => toggleTest(test)}
-                                    >
-                                      <span className="automated-tests-check">
-                                        {isChecked ? "✓" : ""}
-                                      </span>
-                                      <span>{test}</span>
-                                    </button>
-                                  );
-                                })}
-                              </div>
-                            ))
-                          )}
-                        </div>
-                      )}
-                    </div>
-                    {selectedTests.length > 0 && (
-                      <div className="automated-tests-chips">
-                        {selectedTests.map((t) => {
-                          const status = automatedTestRunResults[t];
-                          const isRunning = status === "running";
-                          const result =
-                            typeof status === "object" ? status : null;
-                          return (
-                            <span key={t} className="automated-tests-chip">
-                              <div className="test-run-control-wrap">
-                                {isRunning ? (
-                                  <span
-                                    className="test-run-control test-run-control--spinner"
-                                    aria-label="Running"
-                                  />
-                                ) : result ? (
-                                  <button
-                                    type="button"
-                                    className={`test-run-control test-run-control--${result.success ? "pass" : "fail"}`}
-                                    title={
-                                      result.success
-                                        ? "Passed (click to run again)"
-                                        : "Failed (click to run again)"
-                                    }
-                                    aria-label={
-                                      result.success ? "Passed" : "Failed"
-                                    }
-                                    onClick={() => runTest(t)}
-                                  />
-                                ) : (
-                                  <button
-                                    type="button"
-                                    className="test-run-control test-run-control--play"
-                                    onClick={() => runTest(t)}
-                                    title="Run this test"
-                                    aria-label={`Run ${t}`}
-                                  />
-                                )}
-                              </div>
-                              <span className="automated-tests-chip-run">
-                                <Link
-                                  href={`/tests#test-${testNameToSlug(t)}`}
-                                  className="automated-tests-chip-text"
-                                  title="Open this test on Tests page"
-                                >
-                                  {t}
-                                </Link>
-                                {isRunning && (
-                                  <span
-                                    className="automated-tests-chip-status"
-                                    aria-live="polite"
-                                  >
-                                    Running…
-                                  </span>
-                                )}
-                              </span>
+                              placeholder="e.g. Given X when Y then Z"
+                              className={
+                                idx > 0 ? "test-case-input-with-action" : ""
+                              }
+                            />
+                            {idx > 0 && (
                               <button
                                 type="button"
-                                className="automated-tests-chip-remove"
-                                onClick={() => removeTest(t)}
-                                aria-label={`Remove ${t}`}
+                                className="btn btn-icon test-case-remove"
+                                onClick={() => {
+                                  const next = lines.filter(
+                                    (_, i) => i !== idx
+                                  );
+                                  updateCases(next);
+                                }}
+                                aria-label="Remove test case"
+                                title="Remove test case"
                               >
                                 ×
                               </button>
-                            </span>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-                );
-              })()}
-            </div>
-            {!isRecording && (
+                            )}
+                          </div>
+                          <button
+                            type="button"
+                            className="btn btn-icon test-case-add"
+                            onClick={() =>
+                              updateCases([
+                                ...lines.slice(0, idx + 1),
+                                "",
+                                ...lines.slice(idx + 1),
+                              ])
+                            }
+                            aria-label="Add test case"
+                            title="Add test case"
+                          >
+                            +
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })()}
+              </div>
               <div className="form-group">
+                <label>Assigned To</label>
+                <select
+                  className="form-select"
+                  value={selectedIssue.assigneeId ?? ""}
+                  onChange={(e) =>
+                    setSelectedIssue({
+                      ...selectedIssue,
+                      assigneeId: e.target.value || null,
+                    })
+                  }
+                >
+                  <option value="">Unassigned</option>
+                  {users.map((u) => (
+                    <option key={u.id} value={u.id}>
+                      {u.name || u.email}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="form-group">
+                <label>Automated Tests</label>
+                {(() => {
+                  const selectedTests = parseAutomatedTests(
+                    selectedIssue.automatedTest
+                  );
+                  const allTests = uiTests.flatMap((f) =>
+                    f.suites.flatMap((s) =>
+                      s.tests.map((t) => ({
+                        file: f.file,
+                        suite: s.name,
+                        test: t,
+                      }))
+                    )
+                  );
+                  const toggleTest = (testName: string) => {
+                    const next = selectedTests.includes(testName)
+                      ? selectedTests.filter((t) => t !== testName)
+                      : [...selectedTests, testName];
+                    setSelectedIssue({
+                      ...selectedIssue,
+                      automatedTest: serializeAutomatedTests(next),
+                    });
+                  };
+                  const removeTest = (testName: string) => {
+                    const next = selectedTests.filter((t) => t !== testName);
+                    setSelectedIssue({
+                      ...selectedIssue,
+                      automatedTest: serializeAutomatedTests(next),
+                    });
+                  };
+                  const runTest = async (testName: string) => {
+                    setAutomatedTestRunResults((prev) => ({
+                      ...prev,
+                      [testName]: "running",
+                    }));
+                    try {
+                      const result = await runUiTest(testName);
+                      setAutomatedTestRunResults((prev) => ({
+                        ...prev,
+                        [testName]: result,
+                      }));
+                    } catch (err) {
+                      setAutomatedTestRunResults((prev) => ({
+                        ...prev,
+                        [testName]: {
+                          success: false,
+                          exitCode: null,
+                          output: "",
+                          errorOutput:
+                            err instanceof Error
+                              ? err.message
+                              : "Failed to run test",
+                        },
+                      }));
+                    }
+                  };
+                  return (
+                    <div className="automated-tests-select">
+                      <div ref={automatedTestDropdownRef}>
+                        <button
+                          type="button"
+                          className="automated-tests-trigger"
+                          onClick={() =>
+                            setAutomatedTestDropdownOpen((o) => !o)
+                          }
+                        >
+                          <span className="automated-tests-trigger-text">
+                            {selectedTests.length === 0
+                              ? "Select automated tests…"
+                              : `${selectedTests.length} test${selectedTests.length === 1 ? "" : "s"} selected`}
+                          </span>
+                          <span className="automated-tests-trigger-arrow">
+                            {automatedTestDropdownOpen ? "▲" : "▼"}
+                          </span>
+                        </button>
+                        {automatedTestDropdownOpen && (
+                          <div className="automated-tests-dropdown">
+                            {uiTests.map((f) =>
+                              f.suites.map((suite) => (
+                                <div key={`${f.file}::${suite.name}`}>
+                                  <div className="automated-tests-suite-header">
+                                    {suite.name}
+                                  </div>
+                                  {suite.tests.map((test) => {
+                                    const isChecked =
+                                      selectedTests.includes(test);
+                                    return (
+                                      <button
+                                        key={test}
+                                        type="button"
+                                        className={`automated-tests-option${isChecked ? " is-selected" : ""}`}
+                                        onClick={() => toggleTest(test)}
+                                      >
+                                        <span className="automated-tests-check">
+                                          {isChecked ? "✓" : ""}
+                                        </span>
+                                        <span>{test}</span>
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              ))
+                            )}
+                          </div>
+                        )}
+                      </div>
+                      {selectedTests.length > 0 && (
+                        <div className="automated-tests-chips">
+                          {selectedTests.map((t) => {
+                            const status = automatedTestRunResults[t];
+                            const isRunning = status === "running";
+                            const result =
+                              typeof status === "object" ? status : null;
+                            return (
+                              <span key={t} className="automated-tests-chip">
+                                <div className="test-run-control-wrap">
+                                  {isRunning ? (
+                                    <span
+                                      className="test-run-control test-run-control--spinner"
+                                      aria-label="Running"
+                                    />
+                                  ) : result ? (
+                                    <button
+                                      type="button"
+                                      className={`test-run-control test-run-control--${result.success ? "pass" : "fail"}`}
+                                      title={
+                                        result.success
+                                          ? "Passed (click to run again)"
+                                          : "Failed (click to run again)"
+                                      }
+                                      aria-label={
+                                        result.success ? "Passed" : "Failed"
+                                      }
+                                      onClick={() => runTest(t)}
+                                    />
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      className="test-run-control test-run-control--play"
+                                      onClick={() => runTest(t)}
+                                      title="Run this test"
+                                      aria-label={`Run ${t}`}
+                                    />
+                                  )}
+                                </div>
+                                <span className="automated-tests-chip-run">
+                                  <Link
+                                    href={`/tests#test-${testNameToSlug(t)}`}
+                                    className="automated-tests-chip-text"
+                                    title="Open this test on Tests page"
+                                  >
+                                    {t}
+                                  </Link>
+                                  {isRunning && (
+                                    <span
+                                      className="automated-tests-chip-status"
+                                      aria-live="polite"
+                                    >
+                                      Running…
+                                    </span>
+                                  )}
+                                </span>
+                                <button
+                                  type="button"
+                                  className="automated-tests-chip-remove"
+                                  onClick={() => removeTest(t)}
+                                  aria-label={`Remove ${t}`}
+                                >
+                                  ×
+                                </button>
+                              </span>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
+              </div>
+              {!isRecording && (
+                <div className="form-group">
+                  <div className="recording-section">
+                    <div className="recording-action-section">
+                      <div className="recording-action-section-label">
+                        Upload
+                      </div>
+                      <div className="recording-actions">
+                        <button
+                          type="button"
+                          className="btn btn-secondary"
+                          onClick={() => fileInputRef.current?.click()}
+                          disabled={
+                            uploadButtonBusy ||
+                            recordingUploading ||
+                            screenshotUploading ||
+                            fileUploading
+                          }
+                          aria-label={
+                            uploadButtonBusy ||
+                            fileUploading ||
+                            recordingUploading ||
+                            screenshotUploading
+                              ? "Uploading…"
+                              : "Upload file (image, video, audio, PDF, or any file)"
+                          }
+                          title={
+                            uploadButtonBusy ||
+                            fileUploading ||
+                            recordingUploading ||
+                            screenshotUploading
+                              ? "Uploading…"
+                              : "Upload file (image, video, audio, PDF, or any file)"
+                          }
+                        >
+                          {uploadButtonBusy ||
+                          fileUploading ||
+                          recordingUploading ||
+                          screenshotUploading ? (
+                            <span
+                              className="upload-spinner upload-spinner--btn"
+                              aria-hidden="true"
+                            />
+                          ) : (
+                            <svg
+                              width="14"
+                              height="14"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="2"
+                            >
+                              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                              <polyline points="17 8 12 3 7 8" />
+                              <line x1="12" y1="3" x2="12" y2="15" />
+                            </svg>
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+              <div className="form-group" ref={screenshotsSectionRef}>
+                <label>
+                  Screenshots
+                  {(selectedIssue.screenshots ?? []).length > 0
+                    ? ` (${(selectedIssue.screenshots ?? []).length})`
+                    : ""}
+                </label>
                 <div className="recording-section">
-                  <div className="recording-action-section">
-                    <div className="recording-action-section-label">Upload</div>
-                    <div className="recording-actions">
+                  {(selectedIssue.screenshots ?? []).length > 0 && (
+                    <div
+                      className="screenshots-list"
+                      style={{
+                        display: "flex",
+                        flexWrap: "wrap",
+                        gap: 12,
+                        marginBottom: 8,
+                      }}
+                    >
+                      {(selectedIssue.screenshots ?? []).map(
+                        (shot, shotIdx) => {
+                          const displayName =
+                            shot.name ??
+                            screenshotNameFromComments.get(shot.id) ??
+                            `Screenshot ${shotIdx + 1}`;
+                          const isEditingScreenshotName =
+                            editingScreenshotId === shot.id;
+                          return (
+                            <div
+                              key={shot.id}
+                              className="screenshot-item"
+                              data-screenshot-id={shot.id}
+                              style={{ position: "relative" }}
+                            >
+                              <a
+                                href={getScreenshotUrl(shot.imageUrl)}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                style={{ display: "block" }}
+                              >
+                                <img
+                                  src={getScreenshotUrl(shot.imageUrl)}
+                                  alt={
+                                    isEditingScreenshotName
+                                      ? editingScreenshotName
+                                      : displayName
+                                  }
+                                  style={{
+                                    maxWidth: 160,
+                                    maxHeight: 120,
+                                    objectFit: "contain",
+                                    borderRadius: 6,
+                                    border: "1px solid var(--border)",
+                                  }}
+                                />
+                              </a>
+                              <div
+                                style={{
+                                  fontSize: 12,
+                                  color: "var(--text-muted)",
+                                  marginTop: 4,
+                                  maxWidth: isEditingScreenshotName ? 400 : 160,
+                                  minWidth: isEditingScreenshotName
+                                    ? 160
+                                    : undefined,
+                                }}
+                              >
+                                {isEditingScreenshotName ? (
+                                  <input
+                                    type="text"
+                                    value={editingScreenshotName}
+                                    onChange={(e) =>
+                                      setEditingScreenshotName(e.target.value)
+                                    }
+                                    onFocus={(e) => {
+                                      const input = e.currentTarget;
+                                      requestAnimationFrame(() => {
+                                        requestAnimationFrame(() =>
+                                          input.setSelectionRange(0, 0)
+                                        );
+                                      });
+                                    }}
+                                    onBlur={() =>
+                                      handleSaveScreenshotName(
+                                        shot.id,
+                                        editingScreenshotName
+                                      )
+                                    }
+                                    onKeyDown={(e) => {
+                                      if (e.key === "Enter")
+                                        e.currentTarget.blur();
+                                      else if (e.key === "Escape") {
+                                        setEditingScreenshotId(null);
+                                        setEditingScreenshotName("");
+                                      }
+                                    }}
+                                    autoFocus
+                                    aria-label="Screenshot name"
+                                    style={{
+                                      width: `${Math.min(400, Math.max(160, editingScreenshotName.length * 8 + 24))}px`,
+                                      padding: "2px 6px",
+                                      fontSize: 12,
+                                      border: "1px solid var(--border)",
+                                      borderRadius: 4,
+                                      boxSizing: "border-box",
+                                    }}
+                                  />
+                                ) : (
+                                  <span
+                                    style={{
+                                      display: "block",
+                                      overflow: "hidden",
+                                      textOverflow: "ellipsis",
+                                      whiteSpace: "nowrap",
+                                      cursor: "pointer",
+                                    }}
+                                    onClick={() => {
+                                      setEditingScreenshotId(shot.id);
+                                      setEditingScreenshotName(displayName);
+                                    }}
+                                    title="Click to edit name"
+                                    role="button"
+                                    tabIndex={0}
+                                    onKeyDown={(e) => {
+                                      if (e.key === "Enter" || e.key === " ") {
+                                        e.preventDefault();
+                                        setEditingScreenshotId(shot.id);
+                                        setEditingScreenshotName(displayName);
+                                      }
+                                    }}
+                                  >
+                                    {displayName}
+                                  </span>
+                                )}
+                              </div>
+                              <button
+                                type="button"
+                                className="btn btn-secondary btn-icon screenshot-item-delete"
+                                style={{
+                                  position: "absolute",
+                                  top: 4,
+                                  right: 4,
+                                  minWidth: 28,
+                                  padding: "4px 6px",
+                                }}
+                                onClick={() => handleDeleteScreenshot(shot.id)}
+                                aria-label="Delete screenshot"
+                                title="Delete screenshot"
+                              >
+                                <svg
+                                  width="14"
+                                  height="14"
+                                  viewBox="0 0 24 24"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  strokeWidth="2"
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  aria-hidden="true"
+                                >
+                                  <polyline points="3 6 5 6 21 6" />
+                                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                                  <line x1="10" y1="11" x2="10" y2="17" />
+                                  <line x1="14" y1="11" x2="14" y2="17" />
+                                </svg>
+                              </button>
+                            </div>
+                          );
+                        }
+                      )}
+                    </div>
+                  )}
+                  {!screenshotUploading && !screenshotTaking && (
+                    <>
                       <button
                         type="button"
                         className="btn btn-secondary"
-                        onClick={() => fileInputRef.current?.click()}
-                        disabled={
-                          uploadButtonBusy ||
-                          recordingUploading ||
-                          screenshotUploading ||
-                          fileUploading
-                        }
-                        aria-label={
-                          uploadButtonBusy ||
-                          fileUploading ||
-                          recordingUploading ||
-                          screenshotUploading
-                            ? "Uploading…"
-                            : "Upload file (image, video, audio, PDF, or any file)"
-                        }
-                        title={
-                          uploadButtonBusy ||
-                          fileUploading ||
-                          recordingUploading ||
-                          screenshotUploading
-                            ? "Uploading…"
-                            : "Upload file (image, video, audio, PDF, or any file)"
-                        }
+                        onClick={handleTakeScreenshot}
+                        disabled={!canScreenRecord}
                       >
-                        {uploadButtonBusy ||
-                        fileUploading ||
-                        recordingUploading ||
-                        screenshotUploading ? (
-                          <span
-                            className="upload-spinner upload-spinner--btn"
-                            aria-hidden="true"
+                        <svg
+                          width="14"
+                          height="14"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                        >
+                          <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
+                          <circle cx="12" cy="13" r="4" />
+                        </svg>{" "}
+                        Take Screenshot
+                      </button>
+                      <input
+                        ref={screenshotFileInputRef}
+                        type="file"
+                        accept="image/*"
+                        style={{ display: "none" }}
+                        onChange={handleScreenshotUpload}
+                        aria-label="Choose screenshot image"
+                      />
+                    </>
+                  )}
+                  {(screenshotUploading || screenshotTaking) && (
+                    <div className="recording-uploading">
+                      {screenshotTaking
+                        ? "Capturing screen…"
+                        : "Uploading screenshot…"}
+                    </div>
+                  )}
+                  {screenshotError && (
+                    <div
+                      className="error-banner"
+                      style={{
+                        marginTop: 8,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        gap: 8,
+                      }}
+                    >
+                      <span>{screenshotError}</span>
+                      <button
+                        type="button"
+                        onClick={() => setScreenshotError(null)}
+                        aria-label="Dismiss"
+                        title="Dismiss"
+                        style={{
+                          background: "none",
+                          border: "none",
+                          padding: "0 4px",
+                          cursor: "pointer",
+                          fontSize: 18,
+                          lineHeight: 1,
+                          opacity: 0.8,
+                        }}
+                      >
+                        ×
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+              <div className="form-group" ref={recordingsSectionRef}>
+                <div className="recording-section">
+                  {!isRecording && !recordingUploading && (
+                    <div
+                      className="recording-actions-wrap"
+                      style={{
+                        marginTop: selectedIssue.recordings?.length > 0 ? 8 : 0,
+                      }}
+                    >
+                      {(canScreenRecord ||
+                        canCameraRecord ||
+                        canAudioRecord) && (
+                        <div className="recording-action-section">
+                          <div className="recording-action-section-label">
+                            Recording
+                          </div>
+                          {selectedIssue.recordings?.length > 0 && (
+                            <div
+                              className="recordings-list"
+                              style={{ marginTop: 8, marginBottom: 8 }}
+                            >
+                              {selectedIssue.recordings.map((rec, idx) => {
+                                // Derive kind: prefer DB recordingType, fall back to filename suffix for legacy recordings
+                                const url = rec.videoUrl ?? "";
+                                const kindFromFilename = url.includes(
+                                  "-audio.webm"
+                                )
+                                  ? "audio"
+                                  : url.includes("-camera.webm")
+                                    ? "camera"
+                                    : url.includes("-screen.webm")
+                                      ? "screen"
+                                      : null;
+                                const isAudio =
+                                  rec.mediaType === "audio" ||
+                                  kindFromFilename === "audio";
+                                const kind: "audio" | "screen" | "camera" =
+                                  isAudio
+                                    ? "audio"
+                                    : ((kindFromFilename as
+                                        | "screen"
+                                        | "camera"
+                                        | null) ??
+                                      rec.recordingType ??
+                                      "screen");
+                                const label =
+                                  kind === "audio"
+                                    ? `Audio Recording ${idx + 1}`
+                                    : kind === "camera"
+                                      ? `Camera Recording ${idx + 1}`
+                                      : `Screen Recording ${idx + 1}`;
+                                const displayLabel = rec.name ?? label;
+                                const isEditingName =
+                                  editingRecordingId === rec.id;
+                                return (
+                                  <div
+                                    key={rec.id}
+                                    className="recording-item"
+                                    data-recording-id={rec.id}
+                                  >
+                                    <div className="recording-item-header">
+                                      {isEditingName ? (
+                                        <input
+                                          type="text"
+                                          value={editingRecordingName}
+                                          onChange={(e) =>
+                                            setEditingRecordingName(
+                                              e.target.value
+                                            )
+                                          }
+                                          onFocus={(e) => {
+                                            const input = e.currentTarget;
+                                            requestAnimationFrame(() => {
+                                              requestAnimationFrame(() =>
+                                                input.setSelectionRange(0, 0)
+                                              );
+                                            });
+                                          }}
+                                          onBlur={() =>
+                                            handleSaveRecordingName(
+                                              rec.id,
+                                              editingRecordingName
+                                            )
+                                          }
+                                          onKeyDown={(e) => {
+                                            if (e.key === "Enter")
+                                              e.currentTarget.blur();
+                                            else if (e.key === "Escape") {
+                                              setEditingRecordingId(null);
+                                              setEditingRecordingName("");
+                                            }
+                                          }}
+                                          autoFocus
+                                          aria-label="Recording name"
+                                          style={{
+                                            width: `${Math.min(400, Math.max(160, editingRecordingName.length * 8 + 24))}px`,
+                                            padding: "2px 6px",
+                                            fontSize: 12,
+                                            border: "1px solid var(--border)",
+                                            borderRadius: 4,
+                                            boxSizing: "border-box",
+                                          }}
+                                        />
+                                      ) : (
+                                        <span
+                                          className="recording-item-header-name"
+                                          style={{
+                                            display: "block",
+                                            overflow: "hidden",
+                                            textOverflow: "ellipsis",
+                                            whiteSpace: "nowrap",
+                                            cursor: "pointer",
+                                          }}
+                                          onClick={() => {
+                                            setEditingRecordingId(rec.id);
+                                            setEditingRecordingName(
+                                              displayLabel
+                                            );
+                                          }}
+                                          title="Click to edit name"
+                                          role="button"
+                                          tabIndex={0}
+                                          onKeyDown={(e) => {
+                                            if (
+                                              e.key === "Enter" ||
+                                              e.key === " "
+                                            ) {
+                                              e.preventDefault();
+                                              setEditingRecordingId(rec.id);
+                                              setEditingRecordingName(
+                                                displayLabel
+                                              );
+                                            }
+                                          }}
+                                        >
+                                          {displayLabel}
+                                        </span>
+                                      )}
+                                      <span className="recording-item-date">
+                                        {new Date(
+                                          rec.createdAt
+                                        ).toLocaleString()}
+                                      </span>
+                                      <div className="recording-item-actions">
+                                        <button
+                                          type="button"
+                                          className="btn btn-secondary btn-sm"
+                                          onClick={() => {
+                                            setPlayingRecordingId(
+                                              playingRecordingId === rec.id
+                                                ? null
+                                                : rec.id
+                                            );
+                                            setRecordingPlaybackError(null);
+                                          }}
+                                        >
+                                          {playingRecordingId === rec.id
+                                            ? "Hide"
+                                            : isAudio
+                                              ? "Listen"
+                                              : "Watch"}
+                                        </button>
+                                        <button
+                                          type="button"
+                                          className="btn btn-danger-outline btn-sm btn-icon"
+                                          onClick={() =>
+                                            handleDeleteRecording(rec.id)
+                                          }
+                                          aria-label={
+                                            isAudio
+                                              ? "Delete audio recording"
+                                              : "Delete recording"
+                                          }
+                                          title={
+                                            isAudio
+                                              ? "Delete audio recording"
+                                              : "Delete recording"
+                                          }
+                                        >
+                                          <svg
+                                            width="14"
+                                            height="14"
+                                            viewBox="0 0 24 24"
+                                            fill="none"
+                                            stroke="currentColor"
+                                            strokeWidth="2"
+                                            strokeLinecap="round"
+                                            strokeLinejoin="round"
+                                            aria-hidden="true"
+                                          >
+                                            <polyline points="3 6 5 6 21 6" />
+                                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                                            <line
+                                              x1="10"
+                                              y1="11"
+                                              x2="10"
+                                              y2="17"
+                                            />
+                                            <line
+                                              x1="14"
+                                              y1="11"
+                                              x2="14"
+                                              y2="17"
+                                            />
+                                          </svg>
+                                        </button>
+                                      </div>
+                                    </div>
+                                    {playingRecordingId === rec.id && (
+                                      <div
+                                        className="recording-player-wrap"
+                                        ref={recordingPlayerWrapRef}
+                                      >
+                                        {isAudio ? (
+                                          <audio
+                                            key={rec.id}
+                                            src={getRecordingUrl(rec.videoUrl)}
+                                            controls
+                                            className="recording-player"
+                                            onError={(e) => {
+                                              const code =
+                                                e.currentTarget?.error?.code;
+                                              setRecordingPlaybackError(
+                                                code === 4
+                                                  ? "Audio could not be loaded."
+                                                  : "Audio could not be loaded. Try refreshing or re-recording."
+                                              );
+                                            }}
+                                            onLoadedData={() =>
+                                              setRecordingPlaybackError(null)
+                                            }
+                                          />
+                                        ) : (
+                                          <video
+                                            key={rec.id}
+                                            src={getRecordingUrl(rec.videoUrl)}
+                                            controls
+                                            playsInline
+                                            className="recording-player"
+                                            onError={(e) => {
+                                              const code =
+                                                e.currentTarget?.error?.code;
+                                              const isSafari =
+                                                typeof navigator !==
+                                                  "undefined" &&
+                                                /^((?!chrome|android).)*safari/i.test(
+                                                  navigator.userAgent
+                                                );
+                                              const msg =
+                                                code === 4 || isSafari
+                                                  ? "Video could not be loaded. WebM may not be supported in this browser (e.g. Safari). Try Chrome/Firefox or upload an MP4."
+                                                  : "Video could not be loaded. Try refreshing the page or re-recording.";
+                                              setRecordingPlaybackError(msg);
+                                            }}
+                                            onLoadedData={() =>
+                                              setRecordingPlaybackError(null)
+                                            }
+                                          >
+                                            Your browser does not support the
+                                            video tag.
+                                          </video>
+                                        )}
+                                        {recordingPlaybackError && (
+                                          <div
+                                            className="error-banner"
+                                            style={{
+                                              marginTop: 8,
+                                              display: "flex",
+                                              alignItems: "center",
+                                              justifyContent: "space-between",
+                                              gap: 8,
+                                            }}
+                                          >
+                                            <span>
+                                              {recordingPlaybackError}
+                                            </span>
+                                            <button
+                                              type="button"
+                                              onClick={() =>
+                                                setRecordingPlaybackError(null)
+                                              }
+                                              aria-label="Dismiss"
+                                              title="Dismiss"
+                                              style={{
+                                                background: "none",
+                                                border: "none",
+                                                padding: "0 4px",
+                                                cursor: "pointer",
+                                                fontSize: 18,
+                                                lineHeight: 1,
+                                                opacity: 0.8,
+                                              }}
+                                            >
+                                              ×
+                                            </button>
+                                          </div>
+                                        )}
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                          <div className="recording-actions">
+                            {recordingFor === "issue" ? (
+                              <button
+                                type="button"
+                                className="btn btn-danger-outline"
+                                onMouseDown={(e) => {
+                                  e.preventDefault();
+                                  stopRecording();
+                                }}
+                                aria-label="Stop"
+                                title="Stop"
+                              >
+                                <svg
+                                  width="14"
+                                  height="14"
+                                  viewBox="0 0 24 24"
+                                  fill="currentColor"
+                                  aria-hidden="true"
+                                >
+                                  <rect
+                                    x="6"
+                                    y="6"
+                                    width="12"
+                                    height="12"
+                                    rx="1"
+                                    ry="1"
+                                  />
+                                </svg>
+                              </button>
+                            ) : (
+                              <>
+                                {canAudioRecord && (
+                                  <button
+                                    type="button"
+                                    className="btn btn-secondary"
+                                    onClick={() => startAudioRecording()}
+                                    aria-label="Record Audio"
+                                    title="Record Audio"
+                                  >
+                                    <svg
+                                      width="14"
+                                      height="14"
+                                      viewBox="0 0 24 24"
+                                      fill="none"
+                                      stroke="currentColor"
+                                      strokeWidth="2"
+                                    >
+                                      <path d="M12 2a3 3 0 0 1 3 3v6a3 3 0 0 1-6 0V5a3 3 0 0 1 3-3z" />
+                                      <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+                                      <line x1="12" y1="19" x2="12" y2="23" />
+                                      <line x1="8" y1="23" x2="16" y2="23" />
+                                    </svg>{" "}
+                                    Record Audio
+                                  </button>
+                                )}
+                                {canScreenRecord && (
+                                  <button
+                                    type="button"
+                                    className="btn btn-secondary"
+                                    onClick={() => startRecording()}
+                                  >
+                                    <svg
+                                      width="14"
+                                      height="14"
+                                      viewBox="0 0 24 24"
+                                      fill="none"
+                                      stroke="currentColor"
+                                      strokeWidth="2"
+                                    >
+                                      <rect
+                                        x="2"
+                                        y="3"
+                                        width="20"
+                                        height="14"
+                                        rx="2"
+                                        ry="2"
+                                      />
+                                      <line x1="8" y1="21" x2="16" y2="21" />
+                                      <line x1="12" y1="17" x2="12" y2="21" />
+                                      <circle
+                                        cx="12"
+                                        cy="9"
+                                        r="2.5"
+                                        fill="currentColor"
+                                      />
+                                    </svg>{" "}
+                                    Record Screen
+                                  </button>
+                                )}
+                                {canCameraRecord && (
+                                  <button
+                                    type="button"
+                                    className="btn btn-secondary"
+                                    onClick={() => startCameraRecording()}
+                                  >
+                                    <svg
+                                      width="14"
+                                      height="14"
+                                      viewBox="0 0 24 24"
+                                      fill="none"
+                                      stroke="currentColor"
+                                      strokeWidth="2"
+                                    >
+                                      <path d="M23 7l-7 5 7 5V7z" />
+                                      <rect
+                                        x="1"
+                                        y="5"
+                                        width="15"
+                                        height="14"
+                                        rx="2"
+                                        ry="2"
+                                      />
+                                      <circle
+                                        cx="8"
+                                        cy="12"
+                                        r="2.5"
+                                        fill="currentColor"
+                                      />
+                                    </svg>{" "}
+                                    Record with Camera
+                                  </button>
+                                )}
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept="*/*"
+                        multiple
+                        style={{ display: "none" }}
+                        onChange={handleUnifiedFileUpload}
+                      />
+                    </div>
+                  )}
+                  {isRecording && (
+                    <div className="recording-active">
+                      <span className="recording-indicator" />
+                      <span className="recording-label">
+                        {recordingMode === "audio"
+                          ? "Recording audio…"
+                          : recordingMode === "camera"
+                            ? "Recording camera…"
+                            : "Recording screen…"}
+                      </span>
+                      <button
+                        type="button"
+                        className="btn btn-danger-outline"
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                          stopRecording();
+                        }}
+                        aria-label="Stop"
+                        title="Stop"
+                      >
+                        <svg
+                          width="14"
+                          height="14"
+                          viewBox="0 0 24 24"
+                          fill="currentColor"
+                          aria-hidden="true"
+                        >
+                          <rect
+                            x="6"
+                            y="6"
+                            width="12"
+                            height="12"
+                            rx="1"
+                            ry="1"
                           />
-                        ) : (
+                        </svg>
+                      </button>
+                    </div>
+                  )}
+                  {recordingUploading && (
+                    <div className="recording-uploading">
+                      Uploading recording…
+                    </div>
+                  )}
+                  {recordingError && (
+                    <div
+                      className="error-banner"
+                      style={{
+                        marginTop: 8,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        gap: 8,
+                      }}
+                    >
+                      <span>{recordingError}</span>
+                      <button
+                        type="button"
+                        onClick={() => setRecordingError(null)}
+                        aria-label="Dismiss"
+                        title="Dismiss"
+                        style={{
+                          background: "none",
+                          border: "none",
+                          padding: "0 4px",
+                          cursor: "pointer",
+                          fontSize: 18,
+                          lineHeight: 1,
+                          opacity: 0.8,
+                        }}
+                      >
+                        ×
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+              <div className="form-group" ref={filesSectionRef}>
+                <label>
+                  Files
+                  {(selectedIssue.files ?? []).length > 0
+                    ? ` (${(selectedIssue.files ?? []).length})`
+                    : ""}
+                </label>
+                <div className="recording-section">
+                  {(selectedIssue.files ?? []).length > 0 && (
+                    <ul
+                      style={{ listStyle: "none", margin: 0, padding: 0 }}
+                      className="issue-file-list"
+                    >
+                      {(selectedIssue.files ?? []).map((f) => {
+                        const displayName = f.fileName;
+                        return (
+                          <li
+                            key={f.id}
+                            className="issue-file-row"
+                            data-file-id={f.id}
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 8,
+                              marginBottom: 6,
+                            }}
+                          >
+                            <span
+                              style={{
+                                flex: 1,
+                                minWidth: 0,
+                                display: "block",
+                                overflow: "hidden",
+                                textOverflow: "ellipsis",
+                                whiteSpace: "nowrap",
+                              }}
+                              title={displayName}
+                            >
+                              {displayName}
+                            </span>
+                            <a
+                              href={getIssueFileUrl(selectedIssue.id, f.id)}
+                              download={f.fileName}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="issue-file-link"
+                              style={{ flexShrink: 0, fontSize: 12 }}
+                              aria-label={`Download ${displayName}`}
+                            >
+                              <svg
+                                width="14"
+                                height="14"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="2"
+                              >
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                                <polyline points="7 10 12 15 17 10" />
+                                <line x1="12" y1="15" x2="12" y2="3" />
+                              </svg>
+                            </a>
+                            <button
+                              type="button"
+                              className="btn btn-danger-outline btn-sm btn-icon"
+                              onClick={() => handleDeleteFile(f.id)}
+                              aria-label={`Delete ${displayName}`}
+                              title={`Delete ${displayName}`}
+                            >
+                              <svg
+                                width="14"
+                                height="14"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="2"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                aria-hidden="true"
+                              >
+                                <polyline points="3 6 5 6 21 6" />
+                                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                                <line x1="10" y1="11" x2="10" y2="17" />
+                                <line x1="14" y1="11" x2="14" y2="17" />
+                              </svg>
+                            </button>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
+                  {(uploadButtonBusy || fileUploading) && (
+                    <div
+                      className="recording-uploading file-uploading-with-spinner"
+                      role="status"
+                      aria-live="polite"
+                    >
+                      <span className="upload-spinner" aria-hidden="true" />
+                      <span>Uploading file…</span>
+                    </div>
+                  )}
+                  {fileError && (
+                    <div
+                      className="error-banner"
+                      style={{
+                        marginTop: 8,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        gap: 8,
+                      }}
+                    >
+                      <span>{fileError}</span>
+                      <button
+                        type="button"
+                        onClick={() => setFileError(null)}
+                        aria-label="Dismiss"
+                        title="Dismiss"
+                        style={{
+                          background: "none",
+                          border: "none",
+                          padding: "0 4px",
+                          cursor: "pointer",
+                          fontSize: 18,
+                          lineHeight: 1,
+                          opacity: 0.8,
+                        }}
+                      >
+                        ×
+                      </button>
+                    </div>
+                  )}
+                  {dragOverCount > 0 && (
+                    <p
+                      style={{
+                        marginTop: 8,
+                        fontSize: 13,
+                        color: "var(--text-muted)",
+                      }}
+                    >
+                      Drop files here — images go to Screenshots, video/audio to
+                      Recordings, others (e.g. PDF) to Files.
+                    </p>
+                  )}
+                </div>
+              </div>
+              <div className="form-group" ref={commentsSectionRef}>
+                <label>Comments</label>
+                {issueCommentsLoading ? (
+                  <div style={{ fontSize: 13, color: "var(--text-muted)" }}>
+                    Loading comments…
+                  </div>
+                ) : (
+                  <>
+                    <div
+                      style={{ display: editingCommentId ? "none" : undefined }}
+                    >
+                      <div
+                        className="form-control"
+                        style={{
+                          padding: 10,
+                          border: commentBoxError
+                            ? "2px solid var(--danger, #c53030)"
+                            : "1px solid var(--border-input)",
+                          borderRadius: 6,
+                          background: "var(--input-bg)",
+                          cursor: "text",
+                          minHeight: 80,
+                          maxHeight: 480,
+                          resize: "vertical",
+                          overflowY: "auto",
+                          overflowX: "hidden",
+                          display: "block",
+                        }}
+                        onClick={(e) => {
+                          if (e.target === e.currentTarget) {
+                            const last = commentBlocks.length - 1;
+                            if (commentBlocks[last]?.kind === "text")
+                              activeCommentBlockRef.current = last;
+                          }
+                        }}
+                      >
+                        {commentBlocks.map((block, bi) => {
+                          if (block.kind === "text") {
+                            return (
+                              <textarea
+                                key={`text-${bi}`}
+                                ref={
+                                  bi === 0 ? issueCommentTextareaRef : undefined
+                                }
+                                value={block.value}
+                                onFocus={() => {
+                                  activeCommentBlockRef.current = bi;
+                                }}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  setCommentBlocks((prev) =>
+                                    prev.map((b, i) =>
+                                      i === bi
+                                        ? ({ ...b, value: val } as CommentBlock)
+                                        : b
+                                    )
+                                  );
+                                  setCommentBoxError(false);
+                                }}
+                                placeholder={bi === 0 ? "Add a comment…" : ""}
+                                rows={3}
+                                style={{
+                                  width: "100%",
+                                  resize: "none",
+                                  minHeight: 60,
+                                  border: "none",
+                                  padding: 0,
+                                  background: "transparent",
+                                  outline: "none",
+                                  display: "block",
+                                  boxSizing: "border-box",
+                                }}
+                              />
+                            );
+                          }
+                          if (block.kind === "attachment") {
+                            const label =
+                              block.name ??
+                              (block.attType === "screenshot"
+                                ? "Screenshot"
+                                : block.attType === "screen_recording"
+                                  ? "Screen recording"
+                                  : block.attType === "camera_recording"
+                                    ? "Camera recording"
+                                    : "Video");
+                            return (
+                              <div
+                                key={`att-${bi}`}
+                                data-comment-block-index={bi}
+                                style={{
+                                  display: "flex",
+                                  alignItems: "center",
+                                  gap: 4,
+                                  margin: "4px 0",
+                                }}
+                              >
+                                <button
+                                  type="button"
+                                  className="btn btn-secondary"
+                                  style={{ fontSize: 12 }}
+                                  onClick={() => {
+                                    setViewingBlockIndex(bi);
+                                    setTimeout(
+                                      () =>
+                                        document
+                                          .querySelector(
+                                            `[data-comment-block-index="${bi}"]`
+                                          )
+                                          ?.scrollIntoView({
+                                            behavior: "smooth",
+                                            block: "nearest",
+                                          }),
+                                      0
+                                    );
+                                  }}
+                                  aria-label={`Open ${label}`}
+                                  title={`Open ${label}`}
+                                >
+                                  <svg
+                                    width="14"
+                                    height="14"
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeWidth="2"
+                                    aria-hidden="true"
+                                  >
+                                    {block.attType === "screenshot" ? (
+                                      <>
+                                        <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
+                                        <circle cx="12" cy="13" r="4" />
+                                      </>
+                                    ) : (
+                                      <>
+                                        <path d="M23 7l-7 5 7 5V7z" />
+                                        <rect
+                                          x="1"
+                                          y="5"
+                                          width="15"
+                                          height="14"
+                                          rx="2"
+                                          ry="2"
+                                        />
+                                        <circle
+                                          cx="8"
+                                          cy="12"
+                                          r="2.5"
+                                          fill="currentColor"
+                                        />
+                                      </>
+                                    )}
+                                  </svg>{" "}
+                                  {label}
+                                </button>
+                                <button
+                                  type="button"
+                                  className="btn btn-icon"
+                                  style={{
+                                    padding: "2px 4px",
+                                    minWidth: 20,
+                                    fontSize: 10,
+                                  }}
+                                  onClick={() => removeCommentBlock(bi)}
+                                  aria-label="Remove"
+                                  title="Remove"
+                                >
+                                  <svg
+                                    width="10"
+                                    height="10"
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeWidth="2"
+                                  >
+                                    <line x1="18" y1="6" x2="6" y2="18" />
+                                    <line x1="6" y1="6" x2="18" y2="18" />
+                                  </svg>
+                                </button>
+                              </div>
+                            );
+                          }
+                          if (block.kind === "recording") {
+                            const rec = selectedIssue?.recordings?.find(
+                              (r) => r.id === block.recordingId
+                            );
+                            if (!rec) return null;
+                            const url = rec.videoUrl ?? "";
+                            const kindFromFilename = url.includes("-audio.webm")
+                              ? "audio"
+                              : url.includes("-camera.webm")
+                                ? "camera"
+                                : url.includes("-screen.webm")
+                                  ? "screen"
+                                  : null;
+                            const isAudio =
+                              rec.mediaType === "audio" ||
+                              kindFromFilename === "audio";
+                            const kind: "audio" | "screen" | "camera" = isAudio
+                              ? "audio"
+                              : ((kindFromFilename as
+                                  | "screen"
+                                  | "camera"
+                                  | null) ??
+                                rec.recordingType ??
+                                "screen");
+                            const rIdx =
+                              selectedIssue!.recordings!.indexOf(rec) + 1;
+                            const defaultLabel =
+                              kind === "audio"
+                                ? `Audio Recording ${rIdx}`
+                                : kind === "camera"
+                                  ? `Camera Recording ${rIdx}`
+                                  : `Screen Recording ${rIdx}`;
+                            const displayLabel = rec.name ?? defaultLabel;
+                            return (
+                              <div
+                                key={`rec-${bi}`}
+                                style={{
+                                  display: "flex",
+                                  alignItems: "center",
+                                  gap: 8,
+                                  margin: "4px 0",
+                                  flexWrap: "wrap",
+                                }}
+                              >
+                                <button
+                                  type="button"
+                                  className="btn btn-secondary"
+                                  style={{ fontSize: 12 }}
+                                  aria-label={`Go to ${displayLabel}`}
+                                  title={`Go to ${displayLabel}`}
+                                >
+                                  <svg
+                                    width="14"
+                                    height="14"
+                                    viewBox="0 0 24 24"
+                                    fill="currentColor"
+                                    aria-hidden="true"
+                                  >
+                                    <polygon points="5 3 19 12 5 21 5 3" />
+                                  </svg>{" "}
+                                  {displayLabel}
+                                </button>
+                                <button
+                                  type="button"
+                                  className="btn btn-icon"
+                                  style={{
+                                    padding: "2px 4px",
+                                    minWidth: 20,
+                                    fontSize: 10,
+                                  }}
+                                  onClick={() => removeCommentBlock(bi)}
+                                  aria-label="Remove"
+                                  title="Remove"
+                                >
+                                  <svg
+                                    width="10"
+                                    height="10"
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeWidth="2"
+                                  >
+                                    <line x1="18" y1="6" x2="6" y2="18" />
+                                    <line x1="6" y1="6" x2="18" y2="18" />
+                                  </svg>
+                                </button>
+                              </div>
+                            );
+                          }
+                          if (block.kind === "screenshot") {
+                            const shot = selectedIssue?.screenshots?.find(
+                              (s) => s.id === block.screenshotId
+                            );
+                            if (!shot) return null;
+                            const sIdx =
+                              selectedIssue!.screenshots!.indexOf(shot) + 1;
+                            const displayLabel =
+                              block.name ?? shot.name ?? `Screenshot ${sIdx}`;
+                            return (
+                              <div
+                                key={`shot-${bi}`}
+                                style={{
+                                  display: "flex",
+                                  alignItems: "center",
+                                  gap: 8,
+                                  margin: "4px 0",
+                                  flexWrap: "wrap",
+                                }}
+                              >
+                                <button
+                                  type="button"
+                                  className="btn btn-secondary"
+                                  style={{ fontSize: 12 }}
+                                  aria-label={`Go to ${displayLabel}`}
+                                  title={`Go to ${displayLabel}`}
+                                >
+                                  <svg
+                                    width="14"
+                                    height="14"
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeWidth="2"
+                                  >
+                                    <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
+                                    <circle cx="12" cy="13" r="4" />
+                                  </svg>{" "}
+                                  {displayLabel}
+                                </button>
+                                <button
+                                  type="button"
+                                  className="btn btn-icon"
+                                  style={{
+                                    padding: "2px 4px",
+                                    minWidth: 20,
+                                    fontSize: 10,
+                                  }}
+                                  onClick={() => removeCommentBlock(bi)}
+                                  aria-label="Remove"
+                                  title="Remove"
+                                >
+                                  <svg
+                                    width="10"
+                                    height="10"
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeWidth="2"
+                                  >
+                                    <line x1="18" y1="6" x2="6" y2="18" />
+                                    <line x1="6" y1="6" x2="18" y2="18" />
+                                  </svg>
+                                </button>
+                              </div>
+                            );
+                          }
+                          if (block.kind === "file") {
+                            const f = selectedIssue?.files?.find(
+                              (x) => x.id === block.fileId
+                            );
+                            if (!f) return null;
+                            return (
+                              <div
+                                key={`file-${bi}`}
+                                style={{
+                                  display: "flex",
+                                  alignItems: "center",
+                                  gap: 8,
+                                  margin: "4px 0",
+                                  flexWrap: "wrap",
+                                }}
+                              >
+                                <button
+                                  type="button"
+                                  className="btn btn-secondary"
+                                  style={{ fontSize: 12 }}
+                                  aria-label={`Go to file ${f.fileName}`}
+                                  title={`Go to file ${f.fileName}`}
+                                >
+                                  <svg
+                                    width="14"
+                                    height="14"
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeWidth="2"
+                                  >
+                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                                    <polyline points="17 8 12 3 7 8" />
+                                    <line x1="12" y1="3" x2="12" y2="15" />
+                                  </svg>{" "}
+                                  {f.fileName}
+                                </button>
+                                <button
+                                  type="button"
+                                  className="btn btn-icon"
+                                  style={{
+                                    padding: "2px 4px",
+                                    minWidth: 20,
+                                    fontSize: 10,
+                                  }}
+                                  onClick={() => removeCommentBlock(bi)}
+                                  aria-label="Remove"
+                                  title="Remove"
+                                >
+                                  <svg
+                                    width="10"
+                                    height="10"
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeWidth="2"
+                                  >
+                                    <line x1="18" y1="6" x2="6" y2="18" />
+                                    <line x1="6" y1="6" x2="18" y2="18" />
+                                  </svg>
+                                </button>
+                              </div>
+                            );
+                          }
+                          return null;
+                        })}
+                      </div>
+                      {viewingBlockIndex !== null &&
+                        commentBlocks[viewingBlockIndex]?.kind ===
+                          "attachment" &&
+                        (() => {
+                          const block = commentBlocks[
+                            viewingBlockIndex
+                          ] as CommentBlockAttachment;
+                          const isImage =
+                            block.attType === "screenshot" && block.imageBase64;
+                          const isVideo = !!block.videoBase64;
+                          return (
+                            <div
+                              className="modal-overlay"
+                              style={{ zIndex: 10001 }}
+                              onClick={() => setViewingBlockIndex(null)}
+                            >
+                              <div
+                                className="modal"
+                                style={{ maxWidth: "90vw", maxHeight: "90vh" }}
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <div
+                                  style={{
+                                    display: "flex",
+                                    justifyContent: "flex-end",
+                                    marginBottom: 8,
+                                  }}
+                                >
+                                  <button
+                                    type="button"
+                                    className="btn btn-secondary"
+                                    onClick={() => setViewingBlockIndex(null)}
+                                    aria-label="Close"
+                                  >
+                                    Close
+                                  </button>
+                                </div>
+                                {isImage && (
+                                  <img
+                                    src={`data:image/png;base64,${block.imageBase64}`}
+                                    alt="Attachment"
+                                    style={{
+                                      maxWidth: "100%",
+                                      maxHeight: "80vh",
+                                      objectFit: "contain",
+                                      display: "block",
+                                    }}
+                                  />
+                                )}
+                                {isVideo && block.videoBase64 && (
+                                  <PendingAttachmentVideoPlayer
+                                    base64={block.videoBase64}
+                                    onClose={() => setViewingBlockIndex(null)}
+                                  />
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })()}
+                      <div
+                        style={{
+                          display: "flex",
+                          flexWrap: "wrap",
+                          gap: 8,
+                          alignItems: "center",
+                          marginBottom: 8,
+                        }}
+                      >
+                        <button
+                          type="button"
+                          className="btn btn-secondary"
+                          style={{ fontSize: 12 }}
+                          onClick={() =>
+                            commentVideoFileInputRef.current?.click()
+                          }
+                          disabled={
+                            issueCommentSubmitting || commentAttachmentUploading
+                          }
+                          aria-label="Upload file (image, video, audio, PDF, or any file)"
+                          title="Upload file (image, video, audio, PDF, or any file)"
+                        >
                           <svg
                             width="14"
                             height="14"
@@ -4305,158 +5743,21 @@ export default function Home() {
                             <polyline points="17 8 12 3 7 8" />
                             <line x1="12" y1="3" x2="12" y2="15" />
                           </svg>
-                        )}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-            <div className="form-group" ref={screenshotsSectionRef}>
-              <label>
-                Screenshots
-                {(selectedIssue.screenshots ?? []).length > 0
-                  ? ` (${(selectedIssue.screenshots ?? []).length})`
-                  : ""}
-              </label>
-              <div className="recording-section">
-                {(selectedIssue.screenshots ?? []).length > 0 && (
-                  <div
-                    className="screenshots-list"
-                    style={{
-                      display: "flex",
-                      flexWrap: "wrap",
-                      gap: 12,
-                      marginBottom: 8,
-                    }}
-                  >
-                    {(selectedIssue.screenshots ?? []).map((shot, shotIdx) => {
-                      const displayName =
-                        shot.name ??
-                        screenshotNameFromComments.get(shot.id) ??
-                        `Screenshot ${shotIdx + 1}`;
-                      const isEditingScreenshotName =
-                        editingScreenshotId === shot.id;
-                      return (
-                        <div
-                          key={shot.id}
-                          className="screenshot-item"
-                          data-screenshot-id={shot.id}
-                          style={{ position: "relative" }}
-                        >
-                          <a
-                            href={getScreenshotUrl(shot.imageUrl)}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            style={{ display: "block" }}
-                          >
-                            <img
-                              src={getScreenshotUrl(shot.imageUrl)}
-                              alt={
-                                isEditingScreenshotName
-                                  ? editingScreenshotName
-                                  : displayName
-                              }
-                              style={{
-                                maxWidth: 160,
-                                maxHeight: 120,
-                                objectFit: "contain",
-                                borderRadius: 6,
-                                border: "1px solid var(--border)",
-                              }}
-                            />
-                          </a>
-                          <div
-                            style={{
-                              fontSize: 12,
-                              color: "var(--text-muted)",
-                              marginTop: 4,
-                              maxWidth: isEditingScreenshotName ? 400 : 160,
-                              minWidth: isEditingScreenshotName
-                                ? 160
-                                : undefined,
-                            }}
-                          >
-                            {isEditingScreenshotName ? (
-                              <input
-                                type="text"
-                                value={editingScreenshotName}
-                                onChange={(e) =>
-                                  setEditingScreenshotName(e.target.value)
-                                }
-                                onFocus={(e) => {
-                                  const input = e.currentTarget;
-                                  requestAnimationFrame(() => {
-                                    requestAnimationFrame(() =>
-                                      input.setSelectionRange(0, 0)
-                                    );
-                                  });
-                                }}
-                                onBlur={() =>
-                                  handleSaveScreenshotName(
-                                    shot.id,
-                                    editingScreenshotName
-                                  )
-                                }
-                                onKeyDown={(e) => {
-                                  if (e.key === "Enter") e.currentTarget.blur();
-                                  else if (e.key === "Escape") {
-                                    setEditingScreenshotId(null);
-                                    setEditingScreenshotName("");
-                                  }
-                                }}
-                                autoFocus
-                                aria-label="Screenshot name"
-                                style={{
-                                  width: `${Math.min(400, Math.max(160, editingScreenshotName.length * 8 + 24))}px`,
-                                  padding: "2px 6px",
-                                  fontSize: 12,
-                                  border: "1px solid var(--border)",
-                                  borderRadius: 4,
-                                  boxSizing: "border-box",
-                                }}
-                              />
-                            ) : (
-                              <span
-                                style={{
-                                  display: "block",
-                                  overflow: "hidden",
-                                  textOverflow: "ellipsis",
-                                  whiteSpace: "nowrap",
-                                  cursor: "pointer",
-                                }}
-                                onClick={() => {
-                                  setEditingScreenshotId(shot.id);
-                                  setEditingScreenshotName(displayName);
-                                }}
-                                title="Click to edit name"
-                                role="button"
-                                tabIndex={0}
-                                onKeyDown={(e) => {
-                                  if (e.key === "Enter" || e.key === " ") {
-                                    e.preventDefault();
-                                    setEditingScreenshotId(shot.id);
-                                    setEditingScreenshotName(displayName);
-                                  }
-                                }}
-                              >
-                                {displayName}
-                              </span>
-                            )}
-                          </div>
+                        </button>
+                        {canScreenRecord && (
                           <button
                             type="button"
-                            className="btn btn-secondary btn-icon screenshot-item-delete"
-                            style={{
-                              position: "absolute",
-                              top: 4,
-                              right: 4,
-                              minWidth: 28,
-                              padding: "4px 6px",
-                            }}
-                            onClick={() => handleDeleteScreenshot(shot.id)}
-                            aria-label="Delete screenshot"
-                            title="Delete screenshot"
+                            className="btn btn-secondary"
+                            style={{ fontSize: 12 }}
+                            onClick={handleTakeScreenshotAndAddToComment}
+                            disabled={
+                              issueCommentSubmitting ||
+                              commentAttachmentUploading ||
+                              screenshotUploading ||
+                              screenshotTaking
+                            }
+                            aria-label="Take Screenshot"
+                            title="Take Screenshot"
                           >
                             <svg
                               width="14"
@@ -4465,393 +5766,18 @@ export default function Home() {
                               fill="none"
                               stroke="currentColor"
                               strokeWidth="2"
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              aria-hidden="true"
                             >
-                              <polyline points="3 6 5 6 21 6" />
-                              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-                              <line x1="10" y1="11" x2="10" y2="17" />
-                              <line x1="14" y1="11" x2="14" y2="17" />
+                              <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
+                              <circle cx="12" cy="13" r="4" />
                             </svg>
                           </button>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-                {!screenshotUploading && !screenshotTaking && (
-                  <>
-                    <button
-                      type="button"
-                      className="btn btn-secondary"
-                      onClick={handleTakeScreenshot}
-                      disabled={!canScreenRecord}
-                    >
-                      <svg
-                        width="14"
-                        height="14"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                      >
-                        <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
-                        <circle cx="12" cy="13" r="4" />
-                      </svg>{" "}
-                      Take Screenshot
-                    </button>
-                    <input
-                      ref={screenshotFileInputRef}
-                      type="file"
-                      accept="image/*"
-                      style={{ display: "none" }}
-                      onChange={handleScreenshotUpload}
-                      aria-label="Choose screenshot image"
-                    />
-                  </>
-                )}
-                {(screenshotUploading || screenshotTaking) && (
-                  <div className="recording-uploading">
-                    {screenshotTaking
-                      ? "Capturing screen…"
-                      : "Uploading screenshot…"}
-                  </div>
-                )}
-                {screenshotError && (
-                  <div
-                    className="error-banner"
-                    style={{
-                      marginTop: 8,
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      gap: 8,
-                    }}
-                  >
-                    <span>{screenshotError}</span>
-                    <button
-                      type="button"
-                      onClick={() => setScreenshotError(null)}
-                      aria-label="Dismiss"
-                      title="Dismiss"
-                      style={{
-                        background: "none",
-                        border: "none",
-                        padding: "0 4px",
-                        cursor: "pointer",
-                        fontSize: 18,
-                        lineHeight: 1,
-                        opacity: 0.8,
-                      }}
-                    >
-                      ×
-                    </button>
-                  </div>
-                )}
-              </div>
-            </div>
-            <div className="form-group" ref={recordingsSectionRef}>
-              <div className="recording-section">
-                {!isRecording && !recordingUploading && (
-                  <div
-                    className="recording-actions-wrap"
-                    style={{
-                      marginTop: selectedIssue.recordings?.length > 0 ? 8 : 0,
-                    }}
-                  >
-                    {(canScreenRecord || canCameraRecord || canAudioRecord) && (
-                      <div className="recording-action-section">
-                        <div className="recording-action-section-label">
-                          Recording
-                        </div>
-                        {selectedIssue.recordings?.length > 0 && (
-                          <div
-                            className="recordings-list"
-                            style={{ marginTop: 8, marginBottom: 8 }}
-                          >
-                            {selectedIssue.recordings.map((rec, idx) => {
-                              // Derive kind: prefer DB recordingType, fall back to filename suffix for legacy recordings
-                              const url = rec.videoUrl ?? "";
-                              const kindFromFilename = url.includes(
-                                "-audio.webm"
-                              )
-                                ? "audio"
-                                : url.includes("-camera.webm")
-                                  ? "camera"
-                                  : url.includes("-screen.webm")
-                                    ? "screen"
-                                    : null;
-                              const isAudio =
-                                rec.mediaType === "audio" ||
-                                kindFromFilename === "audio";
-                              const kind: "audio" | "screen" | "camera" =
-                                isAudio
-                                  ? "audio"
-                                  : ((kindFromFilename as
-                                      | "screen"
-                                      | "camera"
-                                      | null) ??
-                                    rec.recordingType ??
-                                    "screen");
-                              const label =
-                                kind === "audio"
-                                  ? `Audio Recording ${idx + 1}`
-                                  : kind === "camera"
-                                    ? `Camera Recording ${idx + 1}`
-                                    : `Screen Recording ${idx + 1}`;
-                              const displayLabel = rec.name ?? label;
-                              const isEditingName =
-                                editingRecordingId === rec.id;
-                              return (
-                                <div
-                                  key={rec.id}
-                                  className="recording-item"
-                                  data-recording-id={rec.id}
-                                >
-                                  <div className="recording-item-header">
-                                    {isEditingName ? (
-                                      <input
-                                        type="text"
-                                        value={editingRecordingName}
-                                        onChange={(e) =>
-                                          setEditingRecordingName(
-                                            e.target.value
-                                          )
-                                        }
-                                        onFocus={(e) => {
-                                          const input = e.currentTarget;
-                                          requestAnimationFrame(() => {
-                                            requestAnimationFrame(() =>
-                                              input.setSelectionRange(0, 0)
-                                            );
-                                          });
-                                        }}
-                                        onBlur={() =>
-                                          handleSaveRecordingName(
-                                            rec.id,
-                                            editingRecordingName
-                                          )
-                                        }
-                                        onKeyDown={(e) => {
-                                          if (e.key === "Enter")
-                                            e.currentTarget.blur();
-                                          else if (e.key === "Escape") {
-                                            setEditingRecordingId(null);
-                                            setEditingRecordingName("");
-                                          }
-                                        }}
-                                        autoFocus
-                                        aria-label="Recording name"
-                                        style={{
-                                          width: `${Math.min(400, Math.max(160, editingRecordingName.length * 8 + 24))}px`,
-                                          padding: "2px 6px",
-                                          fontSize: 12,
-                                          border: "1px solid var(--border)",
-                                          borderRadius: 4,
-                                          boxSizing: "border-box",
-                                        }}
-                                      />
-                                    ) : (
-                                      <span
-                                        className="recording-item-header-name"
-                                        style={{
-                                          display: "block",
-                                          overflow: "hidden",
-                                          textOverflow: "ellipsis",
-                                          whiteSpace: "nowrap",
-                                          cursor: "pointer",
-                                        }}
-                                        onClick={() => {
-                                          setEditingRecordingId(rec.id);
-                                          setEditingRecordingName(displayLabel);
-                                        }}
-                                        title="Click to edit name"
-                                        role="button"
-                                        tabIndex={0}
-                                        onKeyDown={(e) => {
-                                          if (
-                                            e.key === "Enter" ||
-                                            e.key === " "
-                                          ) {
-                                            e.preventDefault();
-                                            setEditingRecordingId(rec.id);
-                                            setEditingRecordingName(
-                                              displayLabel
-                                            );
-                                          }
-                                        }}
-                                      >
-                                        {displayLabel}
-                                      </span>
-                                    )}
-                                    <span className="recording-item-date">
-                                      {new Date(rec.createdAt).toLocaleString()}
-                                    </span>
-                                    <div className="recording-item-actions">
-                                      <button
-                                        type="button"
-                                        className="btn btn-secondary btn-sm"
-                                        onClick={() => {
-                                          setPlayingRecordingId(
-                                            playingRecordingId === rec.id
-                                              ? null
-                                              : rec.id
-                                          );
-                                          setRecordingPlaybackError(null);
-                                        }}
-                                      >
-                                        {playingRecordingId === rec.id
-                                          ? "Hide"
-                                          : isAudio
-                                            ? "Listen"
-                                            : "Watch"}
-                                      </button>
-                                      <button
-                                        type="button"
-                                        className="btn btn-danger-outline btn-sm btn-icon"
-                                        onClick={() =>
-                                          handleDeleteRecording(rec.id)
-                                        }
-                                        aria-label={
-                                          isAudio
-                                            ? "Delete audio recording"
-                                            : "Delete recording"
-                                        }
-                                        title={
-                                          isAudio
-                                            ? "Delete audio recording"
-                                            : "Delete recording"
-                                        }
-                                      >
-                                        <svg
-                                          width="14"
-                                          height="14"
-                                          viewBox="0 0 24 24"
-                                          fill="none"
-                                          stroke="currentColor"
-                                          strokeWidth="2"
-                                          strokeLinecap="round"
-                                          strokeLinejoin="round"
-                                          aria-hidden="true"
-                                        >
-                                          <polyline points="3 6 5 6 21 6" />
-                                          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-                                          <line
-                                            x1="10"
-                                            y1="11"
-                                            x2="10"
-                                            y2="17"
-                                          />
-                                          <line
-                                            x1="14"
-                                            y1="11"
-                                            x2="14"
-                                            y2="17"
-                                          />
-                                        </svg>
-                                      </button>
-                                    </div>
-                                  </div>
-                                  {playingRecordingId === rec.id && (
-                                    <div
-                                      className="recording-player-wrap"
-                                      ref={recordingPlayerWrapRef}
-                                    >
-                                      {isAudio ? (
-                                        <audio
-                                          key={rec.id}
-                                          src={getRecordingUrl(rec.videoUrl)}
-                                          controls
-                                          className="recording-player"
-                                          onError={(e) => {
-                                            const code =
-                                              e.currentTarget?.error?.code;
-                                            setRecordingPlaybackError(
-                                              code === 4
-                                                ? "Audio could not be loaded."
-                                                : "Audio could not be loaded. Try refreshing or re-recording."
-                                            );
-                                          }}
-                                          onLoadedData={() =>
-                                            setRecordingPlaybackError(null)
-                                          }
-                                        />
-                                      ) : (
-                                        <video
-                                          key={rec.id}
-                                          src={getRecordingUrl(rec.videoUrl)}
-                                          controls
-                                          playsInline
-                                          className="recording-player"
-                                          onError={(e) => {
-                                            const code =
-                                              e.currentTarget?.error?.code;
-                                            const isSafari =
-                                              typeof navigator !==
-                                                "undefined" &&
-                                              /^((?!chrome|android).)*safari/i.test(
-                                                navigator.userAgent
-                                              );
-                                            const msg =
-                                              code === 4 || isSafari
-                                                ? "Video could not be loaded. WebM may not be supported in this browser (e.g. Safari). Try Chrome/Firefox or upload an MP4."
-                                                : "Video could not be loaded. Try refreshing the page or re-recording.";
-                                            setRecordingPlaybackError(msg);
-                                          }}
-                                          onLoadedData={() =>
-                                            setRecordingPlaybackError(null)
-                                          }
-                                        >
-                                          Your browser does not support the
-                                          video tag.
-                                        </video>
-                                      )}
-                                      {recordingPlaybackError && (
-                                        <div
-                                          className="error-banner"
-                                          style={{
-                                            marginTop: 8,
-                                            display: "flex",
-                                            alignItems: "center",
-                                            justifyContent: "space-between",
-                                            gap: 8,
-                                          }}
-                                        >
-                                          <span>{recordingPlaybackError}</span>
-                                          <button
-                                            type="button"
-                                            onClick={() =>
-                                              setRecordingPlaybackError(null)
-                                            }
-                                            aria-label="Dismiss"
-                                            title="Dismiss"
-                                            style={{
-                                              background: "none",
-                                              border: "none",
-                                              padding: "0 4px",
-                                              cursor: "pointer",
-                                              fontSize: 18,
-                                              lineHeight: 1,
-                                              opacity: 0.8,
-                                            }}
-                                          >
-                                            ×
-                                          </button>
-                                        </div>
-                                      )}
-                                    </div>
-                                  )}
-                                </div>
-                              );
-                            })}
-                          </div>
                         )}
-                        <div className="recording-actions">
-                          {recordingFor === "issue" ? (
+                        {canAudioRecord &&
+                          (isRecording && recordingMode === "audio" ? (
                             <button
                               type="button"
                               className="btn btn-danger-outline"
+                              style={{ fontSize: 12 }}
                               onMouseDown={(e) => {
                                 e.preventDefault();
                                 stopRecording();
@@ -4877,1253 +5803,1101 @@ export default function Home() {
                               </svg>
                             </button>
                           ) : (
-                            <>
-                              {canAudioRecord && (
-                                <button
-                                  type="button"
-                                  className="btn btn-secondary"
-                                  onClick={() => startAudioRecording()}
-                                  aria-label="Record Audio"
-                                  title="Record Audio"
-                                >
-                                  <svg
-                                    width="14"
-                                    height="14"
-                                    viewBox="0 0 24 24"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    strokeWidth="2"
-                                  >
-                                    <path d="M12 2a3 3 0 0 1 3 3v6a3 3 0 0 1-6 0V5a3 3 0 0 1 3-3z" />
-                                    <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
-                                    <line x1="12" y1="19" x2="12" y2="23" />
-                                    <line x1="8" y1="23" x2="16" y2="23" />
-                                  </svg>{" "}
-                                  Record Audio
-                                </button>
-                              )}
-                              {canScreenRecord && (
-                                <button
-                                  type="button"
-                                  className="btn btn-secondary"
-                                  onClick={() => startRecording()}
-                                >
-                                  <svg
-                                    width="14"
-                                    height="14"
-                                    viewBox="0 0 24 24"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    strokeWidth="2"
-                                  >
-                                    <rect
-                                      x="2"
-                                      y="3"
-                                      width="20"
-                                      height="14"
-                                      rx="2"
-                                      ry="2"
-                                    />
-                                    <line x1="8" y1="21" x2="16" y2="21" />
-                                    <line x1="12" y1="17" x2="12" y2="21" />
-                                    <circle
-                                      cx="12"
-                                      cy="9"
-                                      r="2.5"
-                                      fill="currentColor"
-                                    />
-                                  </svg>{" "}
-                                  Record Screen
-                                </button>
-                              )}
-                              {canCameraRecord && (
-                                <button
-                                  type="button"
-                                  className="btn btn-secondary"
-                                  onClick={() => startCameraRecording()}
-                                >
-                                  <svg
-                                    width="14"
-                                    height="14"
-                                    viewBox="0 0 24 24"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    strokeWidth="2"
-                                  >
-                                    <path d="M23 7l-7 5 7 5V7z" />
-                                    <rect
-                                      x="1"
-                                      y="5"
-                                      width="15"
-                                      height="14"
-                                      rx="2"
-                                      ry="2"
-                                    />
-                                    <circle
-                                      cx="8"
-                                      cy="12"
-                                      r="2.5"
-                                      fill="currentColor"
-                                    />
-                                  </svg>{" "}
-                                  Record with Camera
-                                </button>
-                              )}
-                            </>
-                          )}
-                        </div>
-                      </div>
-                    )}
-                    <input
-                      ref={fileInputRef}
-                      type="file"
-                      accept="*/*"
-                      multiple
-                      style={{ display: "none" }}
-                      onChange={handleUnifiedFileUpload}
-                    />
-                  </div>
-                )}
-                {isRecording && (
-                  <div className="recording-active">
-                    <span className="recording-indicator" />
-                    <span className="recording-label">
-                      {recordingMode === "audio"
-                        ? "Recording audio…"
-                        : recordingMode === "camera"
-                          ? "Recording camera…"
-                          : "Recording screen…"}
-                    </span>
-                    <button
-                      type="button"
-                      className="btn btn-danger-outline"
-                      onMouseDown={(e) => {
-                        e.preventDefault();
-                        stopRecording();
-                      }}
-                      aria-label="Stop"
-                      title="Stop"
-                    >
-                      <svg
-                        width="14"
-                        height="14"
-                        viewBox="0 0 24 24"
-                        fill="currentColor"
-                        aria-hidden="true"
-                      >
-                        <rect
-                          x="6"
-                          y="6"
-                          width="12"
-                          height="12"
-                          rx="1"
-                          ry="1"
-                        />
-                      </svg>
-                    </button>
-                  </div>
-                )}
-                {recordingUploading && (
-                  <div className="recording-uploading">
-                    Uploading recording…
-                  </div>
-                )}
-                {recordingError && (
-                  <div
-                    className="error-banner"
-                    style={{
-                      marginTop: 8,
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      gap: 8,
-                    }}
-                  >
-                    <span>{recordingError}</span>
-                    <button
-                      type="button"
-                      onClick={() => setRecordingError(null)}
-                      aria-label="Dismiss"
-                      title="Dismiss"
-                      style={{
-                        background: "none",
-                        border: "none",
-                        padding: "0 4px",
-                        cursor: "pointer",
-                        fontSize: 18,
-                        lineHeight: 1,
-                        opacity: 0.8,
-                      }}
-                    >
-                      ×
-                    </button>
-                  </div>
-                )}
-              </div>
-            </div>
-            <div className="form-group" ref={filesSectionRef}>
-              <label>
-                Files
-                {(selectedIssue.files ?? []).length > 0
-                  ? ` (${(selectedIssue.files ?? []).length})`
-                  : ""}
-              </label>
-              <div className="recording-section">
-                {(selectedIssue.files ?? []).length > 0 && (
-                  <ul
-                    style={{ listStyle: "none", margin: 0, padding: 0 }}
-                    className="issue-file-list"
-                  >
-                    {(selectedIssue.files ?? []).map((f) => {
-                      const displayName = f.fileName;
-                      return (
-                        <li
-                          key={f.id}
-                          className="issue-file-row"
-                          data-file-id={f.id}
-                          style={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: 8,
-                            marginBottom: 6,
-                          }}
-                        >
-                          <span
-                            style={{
-                              flex: 1,
-                              minWidth: 0,
-                              display: "block",
-                              overflow: "hidden",
-                              textOverflow: "ellipsis",
-                              whiteSpace: "nowrap",
-                            }}
-                            title={displayName}
-                          >
-                            {displayName}
-                          </span>
-                          <a
-                            href={getIssueFileUrl(selectedIssue.id, f.id)}
-                            download={f.fileName}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="issue-file-link"
-                            style={{ flexShrink: 0, fontSize: 12 }}
-                            aria-label={`Download ${displayName}`}
-                          >
-                            <svg
-                              width="14"
-                              height="14"
-                              viewBox="0 0 24 24"
-                              fill="none"
-                              stroke="currentColor"
-                              strokeWidth="2"
+                            <button
+                              type="button"
+                              className="btn btn-secondary"
+                              style={{ fontSize: 12 }}
+                              onClick={() =>
+                                startAudioRecording({ forCommentPending: true })
+                              }
+                              disabled={
+                                issueCommentSubmitting ||
+                                isRecording ||
+                                recordingUploading
+                              }
+                              aria-label="Record Audio"
+                              title="Record Audio"
                             >
-                              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                              <polyline points="7 10 12 15 17 10" />
-                              <line x1="12" y1="15" x2="12" y2="3" />
-                            </svg>
-                          </a>
+                              <svg
+                                width="14"
+                                height="14"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="2"
+                              >
+                                <path d="M12 2a3 3 0 0 1 3 3v6a3 3 0 0 1-6 0V5a3 3 0 0 1 3-3z" />
+                                <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+                                <line x1="12" y1="19" x2="12" y2="23" />
+                                <line x1="8" y1="23" x2="16" y2="23" />
+                              </svg>
+                            </button>
+                          ))}
+                        {canScreenRecord &&
+                          (recordingFor === "comment-pending" &&
+                          recordingMode === "screen" ? (
+                            <button
+                              type="button"
+                              className="btn btn-danger-outline"
+                              style={{ fontSize: 12 }}
+                              onMouseDown={(e) => {
+                                e.preventDefault();
+                                stopRecording();
+                              }}
+                              aria-label="Stop"
+                              title="Stop"
+                            >
+                              <svg
+                                width="14"
+                                height="14"
+                                viewBox="0 0 24 24"
+                                fill="currentColor"
+                                aria-hidden="true"
+                              >
+                                <rect
+                                  x="6"
+                                  y="6"
+                                  width="12"
+                                  height="12"
+                                  rx="1"
+                                  ry="1"
+                                />
+                              </svg>
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              className="btn btn-secondary"
+                              style={{ fontSize: 12 }}
+                              onClick={() =>
+                                startRecording({ forCommentPending: true })
+                              }
+                              disabled={
+                                issueCommentSubmitting ||
+                                isRecording ||
+                                recordingUploading
+                              }
+                              aria-label="Record Screen"
+                              title="Record Screen"
+                            >
+                              <svg
+                                width="14"
+                                height="14"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="2"
+                              >
+                                <rect
+                                  x="2"
+                                  y="3"
+                                  width="20"
+                                  height="14"
+                                  rx="2"
+                                  ry="2"
+                                />
+                                <line x1="8" y1="21" x2="16" y2="21" />
+                                <line x1="12" y1="17" x2="12" y2="21" />
+                                <circle
+                                  cx="12"
+                                  cy="9"
+                                  r="2.5"
+                                  fill="currentColor"
+                                />
+                              </svg>
+                            </button>
+                          ))}
+                        {canCameraRecord &&
+                          (recordingFor === "comment-pending" &&
+                          recordingMode === "camera" ? (
+                            <button
+                              type="button"
+                              className="btn btn-danger-outline"
+                              style={{ fontSize: 12 }}
+                              onMouseDown={(e) => {
+                                e.preventDefault();
+                                stopRecording();
+                              }}
+                              aria-label="Stop"
+                              title="Stop"
+                            >
+                              <svg
+                                width="14"
+                                height="14"
+                                viewBox="0 0 24 24"
+                                fill="currentColor"
+                                aria-hidden="true"
+                              >
+                                <rect
+                                  x="6"
+                                  y="6"
+                                  width="12"
+                                  height="12"
+                                  rx="1"
+                                  ry="1"
+                                />
+                              </svg>
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              className="btn btn-secondary"
+                              style={{ fontSize: 12 }}
+                              onClick={() =>
+                                startCameraRecording({
+                                  forCommentPending: true,
+                                })
+                              }
+                              disabled={
+                                issueCommentSubmitting ||
+                                isRecording ||
+                                recordingUploading
+                              }
+                              aria-label="Record with Camera"
+                              title="Record with Camera"
+                            >
+                              <svg
+                                width="14"
+                                height="14"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="2"
+                              >
+                                <path d="M23 7l-7 5 7 5V7z" />
+                                <rect
+                                  x="1"
+                                  y="5"
+                                  width="15"
+                                  height="14"
+                                  rx="2"
+                                  ry="2"
+                                />
+                                <circle
+                                  cx="8"
+                                  cy="12"
+                                  r="2.5"
+                                  fill="currentColor"
+                                />
+                              </svg>
+                            </button>
+                          ))}
+                      </div>
+                      <input
+                        ref={commentScreenshotFileInputRef}
+                        type="file"
+                        accept="image/*"
+                        aria-label="Comment screenshot"
+                        style={{ display: "none" }}
+                        onChange={handleCommentScreenshotFile}
+                      />
+                      <input
+                        ref={commentVideoFileInputRef}
+                        type="file"
+                        accept="*/*"
+                        aria-label="Upload file (image, video, audio, PDF, or any file)"
+                        style={{ display: "none" }}
+                        onChange={handleCommentVideoFile}
+                      />
+                      <div
+                        style={{ display: "flex", justifyContent: "flex-end" }}
+                      >
+                        {commentBlocks.some((b) => {
+                          if (b.kind === "text")
+                            return (b as CommentBlockText).value.trim() !== "";
+                          if (b.kind === "attachment") return true;
+                          if (b.kind === "recording")
+                            return selectedIssue?.recordings?.some(
+                              (r) =>
+                                r.id ===
+                                (b as CommentBlockRecording).recordingId
+                            );
+                          if (b.kind === "screenshot")
+                            return selectedIssue?.screenshots?.some(
+                              (s) =>
+                                s.id ===
+                                (b as CommentBlockScreenshot).screenshotId
+                            );
+                          if (b.kind === "file")
+                            return selectedIssue?.files?.some(
+                              (f) => f.id === (b as CommentBlockFile).fileId
+                            );
+                          return false;
+                        }) && (
                           <button
                             type="button"
-                            className="btn btn-danger-outline btn-sm btn-icon"
-                            onClick={() => handleDeleteFile(f.id)}
-                            aria-label={`Delete ${displayName}`}
-                            title={`Delete ${displayName}`}
+                            className="btn btn-primary"
+                            onClick={handleAddComment}
+                            disabled={issueCommentSubmitting}
                           >
-                            <svg
-                              width="14"
-                              height="14"
-                              viewBox="0 0 24 24"
-                              fill="none"
-                              stroke="currentColor"
-                              strokeWidth="2"
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              aria-hidden="true"
-                            >
-                              <polyline points="3 6 5 6 21 6" />
-                              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-                              <line x1="10" y1="11" x2="10" y2="17" />
-                              <line x1="14" y1="11" x2="14" y2="17" />
-                            </svg>
+                            {issueCommentSubmitting ? "Adding…" : "Add"}
                           </button>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                )}
-                {(uploadButtonBusy || fileUploading) && (
-                  <div
-                    className="recording-uploading file-uploading-with-spinner"
-                    role="status"
-                    aria-live="polite"
-                  >
-                    <span className="upload-spinner" aria-hidden="true" />
-                    <span>Uploading file…</span>
-                  </div>
-                )}
-                {fileError && (
-                  <div
-                    className="error-banner"
-                    style={{
-                      marginTop: 8,
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      gap: 8,
-                    }}
-                  >
-                    <span>{fileError}</span>
-                    <button
-                      type="button"
-                      onClick={() => setFileError(null)}
-                      aria-label="Dismiss"
-                      title="Dismiss"
-                      style={{
-                        background: "none",
-                        border: "none",
-                        padding: "0 4px",
-                        cursor: "pointer",
-                        fontSize: 18,
-                        lineHeight: 1,
-                        opacity: 0.8,
-                      }}
-                    >
-                      ×
-                    </button>
-                  </div>
-                )}
-                {dragOverCount > 0 && (
-                  <p
-                    style={{
-                      marginTop: 8,
-                      fontSize: 13,
-                      color: "var(--text-muted)",
-                    }}
-                  >
-                    Drop files here — images go to Screenshots, video/audio to
-                    Recordings, others (e.g. PDF) to Files.
-                  </p>
-                )}
-              </div>
-            </div>
-            <div className="form-group" ref={commentsSectionRef}>
-              <label>Comments</label>
-              {issueCommentsLoading ? (
-                <div style={{ fontSize: 13, color: "var(--text-muted)" }}>
-                  Loading comments…
-                </div>
-              ) : (
-                <>
-                  <div
-                    style={{ display: editingCommentId ? "none" : undefined }}
-                  >
-                    <div
-                      className="form-control"
-                      style={{
-                        padding: 10,
-                        border: commentBoxError
-                          ? "2px solid var(--danger, #c53030)"
-                          : "1px solid var(--border-input)",
-                        borderRadius: 6,
-                        background: "var(--input-bg)",
-                        cursor: "text",
-                        minHeight: 80,
-                        maxHeight: 480,
-                        resize: "vertical",
-                        overflowY: "auto",
-                        overflowX: "hidden",
-                        display: "block",
-                      }}
-                      onClick={(e) => {
-                        if (e.target === e.currentTarget) {
-                          const last = commentBlocks.length - 1;
-                          if (commentBlocks[last]?.kind === "text")
-                            activeCommentBlockRef.current = last;
-                        }
-                      }}
-                    >
-                      {commentBlocks.map((block, bi) => {
-                        if (block.kind === "text") {
-                          return (
-                            <textarea
-                              key={`text-${bi}`}
-                              ref={
-                                bi === 0 ? issueCommentTextareaRef : undefined
-                              }
-                              value={block.value}
-                              onFocus={() => {
-                                activeCommentBlockRef.current = bi;
-                              }}
-                              onChange={(e) => {
-                                const val = e.target.value;
-                                setCommentBlocks((prev) =>
-                                  prev.map((b, i) =>
-                                    i === bi
-                                      ? ({ ...b, value: val } as CommentBlock)
-                                      : b
-                                  )
-                                );
-                                setCommentBoxError(false);
-                              }}
-                              placeholder={bi === 0 ? "Add a comment…" : ""}
-                              rows={3}
-                              style={{
-                                width: "100%",
-                                resize: "none",
-                                minHeight: 60,
-                                border: "none",
-                                padding: 0,
-                                background: "transparent",
-                                outline: "none",
-                                display: "block",
-                                boxSizing: "border-box",
-                              }}
-                            />
-                          );
-                        }
-                        if (block.kind === "attachment") {
-                          const label =
-                            block.name ??
-                            (block.attType === "screenshot"
-                              ? "Screenshot"
-                              : block.attType === "screen_recording"
-                                ? "Screen recording"
-                                : block.attType === "camera_recording"
-                                  ? "Camera recording"
-                                  : "Video");
-                          return (
-                            <div
-                              key={`att-${bi}`}
-                              data-comment-block-index={bi}
-                              style={{
-                                display: "flex",
-                                alignItems: "center",
-                                gap: 4,
-                                margin: "4px 0",
-                              }}
-                            >
-                              <button
-                                type="button"
-                                className="btn btn-secondary"
-                                style={{ fontSize: 12 }}
-                                onClick={() => {
-                                  setViewingBlockIndex(bi);
-                                  setTimeout(
-                                    () =>
-                                      document
-                                        .querySelector(
-                                          `[data-comment-block-index="${bi}"]`
-                                        )
-                                        ?.scrollIntoView({
-                                          behavior: "smooth",
-                                          block: "nearest",
-                                        }),
-                                    0
-                                  );
-                                }}
-                                aria-label={`Open ${label}`}
-                                title={`Open ${label}`}
-                              >
-                                <svg
-                                  width="14"
-                                  height="14"
-                                  viewBox="0 0 24 24"
-                                  fill="none"
-                                  stroke="currentColor"
-                                  strokeWidth="2"
-                                  aria-hidden="true"
-                                >
-                                  {block.attType === "screenshot" ? (
-                                    <>
-                                      <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
-                                      <circle cx="12" cy="13" r="4" />
-                                    </>
-                                  ) : (
-                                    <>
-                                      <path d="M23 7l-7 5 7 5V7z" />
-                                      <rect
-                                        x="1"
-                                        y="5"
-                                        width="15"
-                                        height="14"
-                                        rx="2"
-                                        ry="2"
-                                      />
-                                      <circle
-                                        cx="8"
-                                        cy="12"
-                                        r="2.5"
-                                        fill="currentColor"
-                                      />
-                                    </>
-                                  )}
-                                </svg>{" "}
-                                {label}
-                              </button>
-                              <button
-                                type="button"
-                                className="btn btn-icon"
-                                style={{
-                                  padding: "2px 4px",
-                                  minWidth: 20,
-                                  fontSize: 10,
-                                }}
-                                onClick={() => removeCommentBlock(bi)}
-                                aria-label="Remove"
-                                title="Remove"
-                              >
-                                <svg
-                                  width="10"
-                                  height="10"
-                                  viewBox="0 0 24 24"
-                                  fill="none"
-                                  stroke="currentColor"
-                                  strokeWidth="2"
-                                >
-                                  <line x1="18" y1="6" x2="6" y2="18" />
-                                  <line x1="6" y1="6" x2="18" y2="18" />
-                                </svg>
-                              </button>
-                            </div>
-                          );
-                        }
-                        if (block.kind === "recording") {
-                          const rec = selectedIssue?.recordings?.find(
-                            (r) => r.id === block.recordingId
-                          );
-                          if (!rec) return null;
-                          const url = rec.videoUrl ?? "";
-                          const kindFromFilename = url.includes("-audio.webm")
-                            ? "audio"
-                            : url.includes("-camera.webm")
-                              ? "camera"
-                              : url.includes("-screen.webm")
-                                ? "screen"
-                                : null;
-                          const isAudio =
-                            rec.mediaType === "audio" ||
-                            kindFromFilename === "audio";
-                          const kind: "audio" | "screen" | "camera" = isAudio
-                            ? "audio"
-                            : ((kindFromFilename as
-                                | "screen"
-                                | "camera"
-                                | null) ??
-                              rec.recordingType ??
-                              "screen");
-                          const rIdx =
-                            selectedIssue!.recordings!.indexOf(rec) + 1;
-                          const defaultLabel =
-                            kind === "audio"
-                              ? `Audio Recording ${rIdx}`
-                              : kind === "camera"
-                                ? `Camera Recording ${rIdx}`
-                                : `Screen Recording ${rIdx}`;
-                          const displayLabel = rec.name ?? defaultLabel;
-                          return (
-                            <div
-                              key={`rec-${bi}`}
-                              style={{
-                                display: "flex",
-                                alignItems: "center",
-                                gap: 8,
-                                margin: "4px 0",
-                                flexWrap: "wrap",
-                              }}
-                            >
-                              <button
-                                type="button"
-                                className="btn btn-secondary"
-                                style={{ fontSize: 12 }}
-                                aria-label={`Go to ${displayLabel}`}
-                                title={`Go to ${displayLabel}`}
-                              >
-                                <svg
-                                  width="14"
-                                  height="14"
-                                  viewBox="0 0 24 24"
-                                  fill="currentColor"
-                                  aria-hidden="true"
-                                >
-                                  <polygon points="5 3 19 12 5 21 5 3" />
-                                </svg>{" "}
-                                {displayLabel}
-                              </button>
-                              <button
-                                type="button"
-                                className="btn btn-icon"
-                                style={{
-                                  padding: "2px 4px",
-                                  minWidth: 20,
-                                  fontSize: 10,
-                                }}
-                                onClick={() => removeCommentBlock(bi)}
-                                aria-label="Remove"
-                                title="Remove"
-                              >
-                                <svg
-                                  width="10"
-                                  height="10"
-                                  viewBox="0 0 24 24"
-                                  fill="none"
-                                  stroke="currentColor"
-                                  strokeWidth="2"
-                                >
-                                  <line x1="18" y1="6" x2="6" y2="18" />
-                                  <line x1="6" y1="6" x2="18" y2="18" />
-                                </svg>
-                              </button>
-                            </div>
-                          );
-                        }
-                        if (block.kind === "screenshot") {
-                          const shot = selectedIssue?.screenshots?.find(
-                            (s) => s.id === block.screenshotId
-                          );
-                          if (!shot) return null;
-                          const sIdx =
-                            selectedIssue!.screenshots!.indexOf(shot) + 1;
-                          const displayLabel =
-                            block.name ?? shot.name ?? `Screenshot ${sIdx}`;
-                          return (
-                            <div
-                              key={`shot-${bi}`}
-                              style={{
-                                display: "flex",
-                                alignItems: "center",
-                                gap: 8,
-                                margin: "4px 0",
-                                flexWrap: "wrap",
-                              }}
-                            >
-                              <button
-                                type="button"
-                                className="btn btn-secondary"
-                                style={{ fontSize: 12 }}
-                                aria-label={`Go to ${displayLabel}`}
-                                title={`Go to ${displayLabel}`}
-                              >
-                                <svg
-                                  width="14"
-                                  height="14"
-                                  viewBox="0 0 24 24"
-                                  fill="none"
-                                  stroke="currentColor"
-                                  strokeWidth="2"
-                                >
-                                  <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
-                                  <circle cx="12" cy="13" r="4" />
-                                </svg>{" "}
-                                {displayLabel}
-                              </button>
-                              <button
-                                type="button"
-                                className="btn btn-icon"
-                                style={{
-                                  padding: "2px 4px",
-                                  minWidth: 20,
-                                  fontSize: 10,
-                                }}
-                                onClick={() => removeCommentBlock(bi)}
-                                aria-label="Remove"
-                                title="Remove"
-                              >
-                                <svg
-                                  width="10"
-                                  height="10"
-                                  viewBox="0 0 24 24"
-                                  fill="none"
-                                  stroke="currentColor"
-                                  strokeWidth="2"
-                                >
-                                  <line x1="18" y1="6" x2="6" y2="18" />
-                                  <line x1="6" y1="6" x2="18" y2="18" />
-                                </svg>
-                              </button>
-                            </div>
-                          );
-                        }
-                        if (block.kind === "file") {
-                          const f = selectedIssue?.files?.find(
-                            (x) => x.id === block.fileId
-                          );
-                          if (!f) return null;
-                          return (
-                            <div
-                              key={`file-${bi}`}
-                              style={{
-                                display: "flex",
-                                alignItems: "center",
-                                gap: 8,
-                                margin: "4px 0",
-                                flexWrap: "wrap",
-                              }}
-                            >
-                              <button
-                                type="button"
-                                className="btn btn-secondary"
-                                style={{ fontSize: 12 }}
-                                aria-label={`Go to file ${f.fileName}`}
-                                title={`Go to file ${f.fileName}`}
-                              >
-                                <svg
-                                  width="14"
-                                  height="14"
-                                  viewBox="0 0 24 24"
-                                  fill="none"
-                                  stroke="currentColor"
-                                  strokeWidth="2"
-                                >
-                                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                                  <polyline points="17 8 12 3 7 8" />
-                                  <line x1="12" y1="3" x2="12" y2="15" />
-                                </svg>{" "}
-                                {f.fileName}
-                              </button>
-                              <button
-                                type="button"
-                                className="btn btn-icon"
-                                style={{
-                                  padding: "2px 4px",
-                                  minWidth: 20,
-                                  fontSize: 10,
-                                }}
-                                onClick={() => removeCommentBlock(bi)}
-                                aria-label="Remove"
-                                title="Remove"
-                              >
-                                <svg
-                                  width="10"
-                                  height="10"
-                                  viewBox="0 0 24 24"
-                                  fill="none"
-                                  stroke="currentColor"
-                                  strokeWidth="2"
-                                >
-                                  <line x1="18" y1="6" x2="6" y2="18" />
-                                  <line x1="6" y1="6" x2="18" y2="18" />
-                                </svg>
-                              </button>
-                            </div>
-                          );
-                        }
-                        return null;
-                      })}
+                        )}
+                      </div>
                     </div>
-                    {viewingBlockIndex !== null &&
-                      commentBlocks[viewingBlockIndex]?.kind === "attachment" &&
-                      (() => {
-                        const block = commentBlocks[
-                          viewingBlockIndex
-                        ] as CommentBlockAttachment;
-                        const isImage =
-                          block.attType === "screenshot" && block.imageBase64;
-                        const isVideo = !!block.videoBase64;
-                        return (
-                          <div
-                            className="modal-overlay"
-                            style={{ zIndex: 10001 }}
-                            onClick={() => setViewingBlockIndex(null)}
+                    {issueComments.length > 0 && (
+                      <ul
+                        className="issue-comments-list"
+                        style={{
+                          listStyle: "none",
+                          margin: "0 0 12px 0",
+                          padding: 0,
+                        }}
+                      >
+                        {issueComments.map((c) => (
+                          <li
+                            key={c.id}
+                            className="issue-comment"
+                            style={{
+                              marginBottom: 10,
+                              padding:
+                                editingCommentId === c.id ? 10 : "8px 10px",
+                              background:
+                                editingCommentId === c.id
+                                  ? "var(--input-bg)"
+                                  : "var(--bg-muted)",
+                              border:
+                                editingCommentId === c.id
+                                  ? "1px solid var(--border-input)"
+                                  : undefined,
+                              borderRadius: 6,
+                              fontSize: 13,
+                            }}
                           >
                             <div
-                              className="modal"
-                              style={{ maxWidth: "90vw", maxHeight: "90vh" }}
-                              onClick={(e) => e.stopPropagation()}
+                              style={{
+                                display: "flex",
+                                justifyContent: "space-between",
+                                alignItems: "flex-start",
+                                gap: 8,
+                              }}
                             >
                               <div
-                                style={{
-                                  display: "flex",
-                                  justifyContent: "flex-end",
-                                  marginBottom: 8,
-                                }}
+                                style={{ flex: 1, minWidth: 0, minHeight: 0 }}
                               >
-                                <button
-                                  type="button"
-                                  className="btn btn-secondary"
-                                  onClick={() => setViewingBlockIndex(null)}
-                                  aria-label="Close"
-                                >
-                                  Close
-                                </button>
-                              </div>
-                              {isImage && (
-                                <img
-                                  src={`data:image/png;base64,${block.imageBase64}`}
-                                  alt="Attachment"
-                                  style={{
-                                    maxWidth: "100%",
-                                    maxHeight: "80vh",
-                                    objectFit: "contain",
-                                    display: "block",
-                                  }}
-                                />
-                              )}
-                              {isVideo && block.videoBase64 && (
-                                <PendingAttachmentVideoPlayer
-                                  base64={block.videoBase64}
-                                  onClose={() => setViewingBlockIndex(null)}
-                                />
-                              )}
-                            </div>
-                          </div>
-                        );
-                      })()}
-                    <div
-                      style={{
-                        display: "flex",
-                        flexWrap: "wrap",
-                        gap: 8,
-                        alignItems: "center",
-                        marginBottom: 8,
-                      }}
-                    >
-                      <button
-                        type="button"
-                        className="btn btn-secondary"
-                        style={{ fontSize: 12 }}
-                        onClick={() =>
-                          commentVideoFileInputRef.current?.click()
-                        }
-                        disabled={
-                          issueCommentSubmitting || commentAttachmentUploading
-                        }
-                        aria-label="Upload file (image, video, audio, PDF, or any file)"
-                        title="Upload file (image, video, audio, PDF, or any file)"
-                      >
-                        <svg
-                          width="14"
-                          height="14"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="2"
-                        >
-                          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                          <polyline points="17 8 12 3 7 8" />
-                          <line x1="12" y1="3" x2="12" y2="15" />
-                        </svg>
-                      </button>
-                      {canScreenRecord && (
-                        <button
-                          type="button"
-                          className="btn btn-secondary"
-                          style={{ fontSize: 12 }}
-                          onClick={handleTakeScreenshotAndAddToComment}
-                          disabled={
-                            issueCommentSubmitting ||
-                            commentAttachmentUploading ||
-                            screenshotUploading ||
-                            screenshotTaking
-                          }
-                          aria-label="Take Screenshot"
-                          title="Take Screenshot"
-                        >
-                          <svg
-                            width="14"
-                            height="14"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="2"
-                          >
-                            <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
-                            <circle cx="12" cy="13" r="4" />
-                          </svg>
-                        </button>
-                      )}
-                      {canAudioRecord &&
-                        (isRecording && recordingMode === "audio" ? (
-                          <button
-                            type="button"
-                            className="btn btn-danger-outline"
-                            style={{ fontSize: 12 }}
-                            onMouseDown={(e) => {
-                              e.preventDefault();
-                              stopRecording();
-                            }}
-                            aria-label="Stop"
-                            title="Stop"
-                          >
-                            <svg
-                              width="14"
-                              height="14"
-                              viewBox="0 0 24 24"
-                              fill="currentColor"
-                              aria-hidden="true"
-                            >
-                              <rect
-                                x="6"
-                                y="6"
-                                width="12"
-                                height="12"
-                                rx="1"
-                                ry="1"
-                              />
-                            </svg>
-                          </button>
-                        ) : (
-                          <button
-                            type="button"
-                            className="btn btn-secondary"
-                            style={{ fontSize: 12 }}
-                            onClick={() =>
-                              startAudioRecording({ forCommentPending: true })
-                            }
-                            disabled={
-                              issueCommentSubmitting ||
-                              isRecording ||
-                              recordingUploading
-                            }
-                            aria-label="Record Audio"
-                            title="Record Audio"
-                          >
-                            <svg
-                              width="14"
-                              height="14"
-                              viewBox="0 0 24 24"
-                              fill="none"
-                              stroke="currentColor"
-                              strokeWidth="2"
-                            >
-                              <path d="M12 2a3 3 0 0 1 3 3v6a3 3 0 0 1-6 0V5a3 3 0 0 1 3-3z" />
-                              <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
-                              <line x1="12" y1="19" x2="12" y2="23" />
-                              <line x1="8" y1="23" x2="16" y2="23" />
-                            </svg>
-                          </button>
-                        ))}
-                      {canScreenRecord &&
-                        (recordingFor === "comment-pending" &&
-                        recordingMode === "screen" ? (
-                          <button
-                            type="button"
-                            className="btn btn-danger-outline"
-                            style={{ fontSize: 12 }}
-                            onMouseDown={(e) => {
-                              e.preventDefault();
-                              stopRecording();
-                            }}
-                            aria-label="Stop"
-                            title="Stop"
-                          >
-                            <svg
-                              width="14"
-                              height="14"
-                              viewBox="0 0 24 24"
-                              fill="currentColor"
-                              aria-hidden="true"
-                            >
-                              <rect
-                                x="6"
-                                y="6"
-                                width="12"
-                                height="12"
-                                rx="1"
-                                ry="1"
-                              />
-                            </svg>
-                          </button>
-                        ) : (
-                          <button
-                            type="button"
-                            className="btn btn-secondary"
-                            style={{ fontSize: 12 }}
-                            onClick={() =>
-                              startRecording({ forCommentPending: true })
-                            }
-                            disabled={
-                              issueCommentSubmitting ||
-                              isRecording ||
-                              recordingUploading
-                            }
-                            aria-label="Record Screen"
-                            title="Record Screen"
-                          >
-                            <svg
-                              width="14"
-                              height="14"
-                              viewBox="0 0 24 24"
-                              fill="none"
-                              stroke="currentColor"
-                              strokeWidth="2"
-                            >
-                              <rect
-                                x="2"
-                                y="3"
-                                width="20"
-                                height="14"
-                                rx="2"
-                                ry="2"
-                              />
-                              <line x1="8" y1="21" x2="16" y2="21" />
-                              <line x1="12" y1="17" x2="12" y2="21" />
-                              <circle
-                                cx="12"
-                                cy="9"
-                                r="2.5"
-                                fill="currentColor"
-                              />
-                            </svg>
-                          </button>
-                        ))}
-                      {canCameraRecord &&
-                        (recordingFor === "comment-pending" &&
-                        recordingMode === "camera" ? (
-                          <button
-                            type="button"
-                            className="btn btn-danger-outline"
-                            style={{ fontSize: 12 }}
-                            onMouseDown={(e) => {
-                              e.preventDefault();
-                              stopRecording();
-                            }}
-                            aria-label="Stop"
-                            title="Stop"
-                          >
-                            <svg
-                              width="14"
-                              height="14"
-                              viewBox="0 0 24 24"
-                              fill="currentColor"
-                              aria-hidden="true"
-                            >
-                              <rect
-                                x="6"
-                                y="6"
-                                width="12"
-                                height="12"
-                                rx="1"
-                                ry="1"
-                              />
-                            </svg>
-                          </button>
-                        ) : (
-                          <button
-                            type="button"
-                            className="btn btn-secondary"
-                            style={{ fontSize: 12 }}
-                            onClick={() =>
-                              startCameraRecording({ forCommentPending: true })
-                            }
-                            disabled={
-                              issueCommentSubmitting ||
-                              isRecording ||
-                              recordingUploading
-                            }
-                            aria-label="Record with Camera"
-                            title="Record with Camera"
-                          >
-                            <svg
-                              width="14"
-                              height="14"
-                              viewBox="0 0 24 24"
-                              fill="none"
-                              stroke="currentColor"
-                              strokeWidth="2"
-                            >
-                              <path d="M23 7l-7 5 7 5V7z" />
-                              <rect
-                                x="1"
-                                y="5"
-                                width="15"
-                                height="14"
-                                rx="2"
-                                ry="2"
-                              />
-                              <circle
-                                cx="8"
-                                cy="12"
-                                r="2.5"
-                                fill="currentColor"
-                              />
-                            </svg>
-                          </button>
-                        ))}
-                    </div>
-                    <input
-                      ref={commentScreenshotFileInputRef}
-                      type="file"
-                      accept="image/*"
-                      aria-label="Comment screenshot"
-                      style={{ display: "none" }}
-                      onChange={handleCommentScreenshotFile}
-                    />
-                    <input
-                      ref={commentVideoFileInputRef}
-                      type="file"
-                      accept="*/*"
-                      aria-label="Upload file (image, video, audio, PDF, or any file)"
-                      style={{ display: "none" }}
-                      onChange={handleCommentVideoFile}
-                    />
-                    <div
-                      style={{ display: "flex", justifyContent: "flex-end" }}
-                    >
-                      {commentBlocks.some((b) => {
-                        if (b.kind === "text")
-                          return (b as CommentBlockText).value.trim() !== "";
-                        if (b.kind === "attachment") return true;
-                        if (b.kind === "recording")
-                          return selectedIssue?.recordings?.some(
-                            (r) =>
-                              r.id === (b as CommentBlockRecording).recordingId
-                          );
-                        if (b.kind === "screenshot")
-                          return selectedIssue?.screenshots?.some(
-                            (s) =>
-                              s.id ===
-                              (b as CommentBlockScreenshot).screenshotId
-                          );
-                        if (b.kind === "file")
-                          return selectedIssue?.files?.some(
-                            (f) => f.id === (b as CommentBlockFile).fileId
-                          );
-                        return false;
-                      }) && (
-                        <button
-                          type="button"
-                          className="btn btn-primary"
-                          onClick={handleAddComment}
-                          disabled={issueCommentSubmitting}
-                        >
-                          {issueCommentSubmitting ? "Adding…" : "Add"}
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                  {issueComments.length > 0 && (
-                    <ul
-                      className="issue-comments-list"
-                      style={{
-                        listStyle: "none",
-                        margin: "0 0 12px 0",
-                        padding: 0,
-                      }}
-                    >
-                      {issueComments.map((c) => (
-                        <li
-                          key={c.id}
-                          className="issue-comment"
-                          style={{
-                            marginBottom: 10,
-                            padding:
-                              editingCommentId === c.id ? 10 : "8px 10px",
-                            background:
-                              editingCommentId === c.id
-                                ? "var(--input-bg)"
-                                : "var(--bg-muted)",
-                            border:
-                              editingCommentId === c.id
-                                ? "1px solid var(--border-input)"
-                                : undefined,
-                            borderRadius: 6,
-                            fontSize: 13,
-                          }}
-                        >
-                          <div
-                            style={{
-                              display: "flex",
-                              justifyContent: "space-between",
-                              alignItems: "flex-start",
-                              gap: 8,
-                            }}
-                          >
-                            <div style={{ flex: 1, minWidth: 0, minHeight: 0 }}>
-                              {editingCommentId === c.id ? (
-                                <>
-                                  <div
-                                    className="form-control"
-                                    style={{
-                                      padding: 10,
-                                      border: "1px solid var(--border-input)",
-                                      borderRadius: 6,
-                                      background: "var(--input-bg)",
-                                      minHeight: 80,
-                                      maxHeight: 480,
-                                      resize: "vertical",
-                                      overflowY: "auto",
-                                      overflowX: "hidden",
-                                      marginBottom: 8,
-                                      display: "block",
-                                    }}
-                                  >
-                                    {(
-                                      editingCommentBlocks ?? [
-                                        {
-                                          kind: "text",
-                                          value: editingCommentDraft,
-                                        },
-                                      ]
-                                    ).map((block, bi) => {
-                                      if (block.kind === "text") {
-                                        return (
-                                          <textarea
-                                            key={`edit-text-${bi}`}
-                                            value={block.value}
-                                            onChange={(e) => {
-                                              const val = e.target.value;
-                                              setEditingCommentBlocks(
-                                                (prev) =>
-                                                  prev?.map((b, i) =>
-                                                    i === bi
-                                                      ? ({
-                                                          ...b,
-                                                          value: val,
-                                                        } as CommentBlock)
-                                                      : b
-                                                  ) ?? null
-                                              );
-                                            }}
-                                            rows={3}
-                                            style={{
-                                              width: "100%",
-                                              resize: "none",
-                                              minHeight: 60,
-                                              border: "none",
-                                              padding: 0,
-                                              background: "transparent",
-                                              outline: "none",
-                                              display: "block",
-                                              marginBottom: 4,
-                                              boxSizing: "border-box",
-                                            }}
-                                            aria-label="Edit comment text"
-                                          />
-                                        );
-                                      }
-                                      if (block.kind === "screenshot") {
-                                        const shot =
-                                          selectedIssue?.screenshots?.find(
-                                            (s) => s.id === block.screenshotId
-                                          );
-                                        if (!shot) return null;
-                                        const sIdx =
-                                          selectedIssue!.screenshots!.indexOf(
-                                            shot
-                                          ) + 1;
-                                        const displayLabel =
-                                          block.name ??
-                                          shot.name ??
-                                          `Screenshot ${sIdx}`;
-                                        return (
-                                          <div
-                                            key={`edit-shot-${bi}`}
-                                            style={{
-                                              display: "flex",
-                                              alignItems: "center",
-                                              gap: 8,
-                                              margin: "4px 0",
-                                              flexWrap: "wrap",
-                                            }}
-                                          >
-                                            <span
-                                              className="btn btn-secondary"
-                                              style={{
-                                                fontSize: 12,
-                                                cursor: "default",
-                                                pointerEvents: "none",
+                                {editingCommentId === c.id ? (
+                                  <>
+                                    <div
+                                      className="form-control"
+                                      style={{
+                                        padding: 10,
+                                        border: "1px solid var(--border-input)",
+                                        borderRadius: 6,
+                                        background: "var(--input-bg)",
+                                        minHeight: 80,
+                                        maxHeight: 480,
+                                        resize: "vertical",
+                                        overflowY: "auto",
+                                        overflowX: "hidden",
+                                        marginBottom: 8,
+                                        display: "block",
+                                      }}
+                                    >
+                                      {(
+                                        editingCommentBlocks ?? [
+                                          {
+                                            kind: "text",
+                                            value: editingCommentDraft,
+                                          },
+                                        ]
+                                      ).map((block, bi) => {
+                                        if (block.kind === "text") {
+                                          return (
+                                            <textarea
+                                              key={`edit-text-${bi}`}
+                                              value={block.value}
+                                              onChange={(e) => {
+                                                const val = e.target.value;
+                                                setEditingCommentBlocks(
+                                                  (prev) =>
+                                                    prev?.map((b, i) =>
+                                                      i === bi
+                                                        ? ({
+                                                            ...b,
+                                                            value: val,
+                                                          } as CommentBlock)
+                                                        : b
+                                                    ) ?? null
+                                                );
                                               }}
+                                              rows={3}
+                                              style={{
+                                                width: "100%",
+                                                resize: "none",
+                                                minHeight: 60,
+                                                border: "none",
+                                                padding: 0,
+                                                background: "transparent",
+                                                outline: "none",
+                                                display: "block",
+                                                marginBottom: 4,
+                                                boxSizing: "border-box",
+                                              }}
+                                              aria-label="Edit comment text"
+                                            />
+                                          );
+                                        }
+                                        if (block.kind === "screenshot") {
+                                          const shot =
+                                            selectedIssue?.screenshots?.find(
+                                              (s) => s.id === block.screenshotId
+                                            );
+                                          if (!shot) return null;
+                                          const sIdx =
+                                            selectedIssue!.screenshots!.indexOf(
+                                              shot
+                                            ) + 1;
+                                          const displayLabel =
+                                            block.name ??
+                                            shot.name ??
+                                            `Screenshot ${sIdx}`;
+                                          return (
+                                            <div
+                                              key={`edit-shot-${bi}`}
+                                              style={{
+                                                display: "flex",
+                                                alignItems: "center",
+                                                gap: 8,
+                                                margin: "4px 0",
+                                                flexWrap: "wrap",
+                                              }}
+                                            >
+                                              <span
+                                                className="btn btn-secondary"
+                                                style={{
+                                                  fontSize: 12,
+                                                  cursor: "default",
+                                                  pointerEvents: "none",
+                                                }}
+                                              >
+                                                <svg
+                                                  width="14"
+                                                  height="14"
+                                                  viewBox="0 0 24 24"
+                                                  fill="none"
+                                                  stroke="currentColor"
+                                                  strokeWidth="2"
+                                                >
+                                                  <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
+                                                  <circle
+                                                    cx="12"
+                                                    cy="13"
+                                                    r="4"
+                                                  />
+                                                </svg>{" "}
+                                                {displayLabel}
+                                              </span>
+                                              <button
+                                                type="button"
+                                                className="btn btn-icon"
+                                                style={{
+                                                  padding: "2px 4px",
+                                                  minWidth: 20,
+                                                  fontSize: 10,
+                                                }}
+                                                onClick={() =>
+                                                  removeEditingCommentBlock(bi)
+                                                }
+                                                aria-label="Remove"
+                                                title="Remove"
+                                              >
+                                                <svg
+                                                  width="10"
+                                                  height="10"
+                                                  viewBox="0 0 24 24"
+                                                  fill="none"
+                                                  stroke="currentColor"
+                                                  strokeWidth="2"
+                                                >
+                                                  <line
+                                                    x1="18"
+                                                    y1="6"
+                                                    x2="6"
+                                                    y2="18"
+                                                  />
+                                                  <line
+                                                    x1="6"
+                                                    y1="6"
+                                                    x2="18"
+                                                    y2="18"
+                                                  />
+                                                </svg>
+                                              </button>
+                                            </div>
+                                          );
+                                        }
+                                        if (block.kind === "recording") {
+                                          const rec =
+                                            selectedIssue?.recordings?.find(
+                                              (r) => r.id === block.recordingId
+                                            );
+                                          if (!rec) return null;
+                                          const url = rec.videoUrl ?? "";
+                                          const kindFromFilename = url.includes(
+                                            "-audio.webm"
+                                          )
+                                            ? "audio"
+                                            : url.includes("-camera.webm")
+                                              ? "camera"
+                                              : url.includes("-screen.webm")
+                                                ? "screen"
+                                                : null;
+                                          const isAudio =
+                                            rec.mediaType === "audio" ||
+                                            kindFromFilename === "audio";
+                                          const kind:
+                                            | "audio"
+                                            | "screen"
+                                            | "camera" = isAudio
+                                            ? "audio"
+                                            : ((kindFromFilename as
+                                                | "screen"
+                                                | "camera"
+                                                | null) ??
+                                              rec.recordingType ??
+                                              "screen");
+                                          const rIdx =
+                                            selectedIssue!.recordings!.indexOf(
+                                              rec
+                                            ) + 1;
+                                          const defaultLabel =
+                                            kind === "audio"
+                                              ? `Audio Recording ${rIdx}`
+                                              : kind === "camera"
+                                                ? `Camera Recording ${rIdx}`
+                                                : `Screen Recording ${rIdx}`;
+                                          const displayLabel =
+                                            rec.name ?? defaultLabel;
+                                          return (
+                                            <div
+                                              key={`edit-rec-${bi}`}
+                                              style={{
+                                                display: "flex",
+                                                alignItems: "center",
+                                                gap: 8,
+                                                margin: "4px 0",
+                                                flexWrap: "wrap",
+                                              }}
+                                            >
+                                              <span
+                                                className="btn btn-secondary"
+                                                style={{
+                                                  fontSize: 12,
+                                                  cursor: "default",
+                                                  pointerEvents: "none",
+                                                }}
+                                              >
+                                                <svg
+                                                  width="14"
+                                                  height="14"
+                                                  viewBox="0 0 24 24"
+                                                  fill="currentColor"
+                                                  aria-hidden="true"
+                                                >
+                                                  <polygon points="5 3 19 12 5 21 5 3" />
+                                                </svg>{" "}
+                                                {displayLabel}
+                                              </span>
+                                              <button
+                                                type="button"
+                                                className="btn btn-icon"
+                                                style={{
+                                                  padding: "2px 4px",
+                                                  minWidth: 20,
+                                                  fontSize: 10,
+                                                }}
+                                                onClick={() =>
+                                                  removeEditingCommentBlock(bi)
+                                                }
+                                                aria-label="Remove"
+                                                title="Remove"
+                                              >
+                                                <svg
+                                                  width="10"
+                                                  height="10"
+                                                  viewBox="0 0 24 24"
+                                                  fill="none"
+                                                  stroke="currentColor"
+                                                  strokeWidth="2"
+                                                >
+                                                  <line
+                                                    x1="18"
+                                                    y1="6"
+                                                    x2="6"
+                                                    y2="18"
+                                                  />
+                                                  <line
+                                                    x1="6"
+                                                    y1="6"
+                                                    x2="18"
+                                                    y2="18"
+                                                  />
+                                                </svg>
+                                              </button>
+                                            </div>
+                                          );
+                                        }
+                                        if (block.kind === "file") {
+                                          const f = selectedIssue?.files?.find(
+                                            (x) => x.id === block.fileId
+                                          );
+                                          if (!f) return null;
+                                          return (
+                                            <div
+                                              key={`edit-file-${bi}`}
+                                              style={{
+                                                display: "flex",
+                                                alignItems: "center",
+                                                gap: 8,
+                                                margin: "4px 0",
+                                                flexWrap: "wrap",
+                                              }}
+                                            >
+                                              <span
+                                                className="btn btn-secondary"
+                                                style={{
+                                                  fontSize: 12,
+                                                  cursor: "default",
+                                                  pointerEvents: "none",
+                                                }}
+                                              >
+                                                <svg
+                                                  width="14"
+                                                  height="14"
+                                                  viewBox="0 0 24 24"
+                                                  fill="none"
+                                                  stroke="currentColor"
+                                                  strokeWidth="2"
+                                                >
+                                                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                                                  <polyline points="17 8 12 3 7 8" />
+                                                  <line
+                                                    x1="12"
+                                                    y1="3"
+                                                    x2="12"
+                                                    y2="15"
+                                                  />
+                                                </svg>{" "}
+                                                {f.fileName}
+                                              </span>
+                                              <button
+                                                type="button"
+                                                className="btn btn-icon"
+                                                style={{
+                                                  padding: "2px 4px",
+                                                  minWidth: 20,
+                                                  fontSize: 10,
+                                                }}
+                                                onClick={() =>
+                                                  removeEditingCommentBlock(bi)
+                                                }
+                                                aria-label="Remove"
+                                                title="Remove"
+                                              >
+                                                <svg
+                                                  width="10"
+                                                  height="10"
+                                                  viewBox="0 0 24 24"
+                                                  fill="none"
+                                                  stroke="currentColor"
+                                                  strokeWidth="2"
+                                                >
+                                                  <line
+                                                    x1="18"
+                                                    y1="6"
+                                                    x2="6"
+                                                    y2="18"
+                                                  />
+                                                  <line
+                                                    x1="6"
+                                                    y1="6"
+                                                    x2="18"
+                                                    y2="18"
+                                                  />
+                                                </svg>
+                                              </button>
+                                            </div>
+                                          );
+                                        }
+                                        return null;
+                                      })}
+                                    </div>
+                                    <div
+                                      style={{
+                                        display: "flex",
+                                        flexWrap: "wrap",
+                                        gap: 8,
+                                        alignItems: "center",
+                                        marginTop: 8,
+                                        marginBottom: 8,
+                                      }}
+                                    >
+                                      <button
+                                        type="button"
+                                        className="btn btn-secondary"
+                                        style={{ fontSize: 12 }}
+                                        onClick={() =>
+                                          commentVideoFileInputRef.current?.click()
+                                        }
+                                        disabled={
+                                          commentAttachmentUploading ||
+                                          updatingCommentId === c.id
+                                        }
+                                        aria-label="Upload file (image, video, audio, PDF, or any file)"
+                                        title="Upload file (image, video, audio, PDF, or any file)"
+                                      >
+                                        <svg
+                                          width="14"
+                                          height="14"
+                                          viewBox="0 0 24 24"
+                                          fill="none"
+                                          stroke="currentColor"
+                                          strokeWidth="2"
+                                        >
+                                          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                                          <polyline points="17 8 12 3 7 8" />
+                                          <line
+                                            x1="12"
+                                            y1="3"
+                                            x2="12"
+                                            y2="15"
+                                          />
+                                        </svg>
+                                      </button>
+                                      {canScreenRecord && (
+                                        <button
+                                          type="button"
+                                          className="btn btn-secondary"
+                                          style={{ fontSize: 12 }}
+                                          onClick={
+                                            handleTakeScreenshotAndAddToComment
+                                          }
+                                          disabled={
+                                            commentAttachmentUploading ||
+                                            screenshotUploading ||
+                                            screenshotTaking ||
+                                            updatingCommentId === c.id
+                                          }
+                                          aria-label="Take Screenshot"
+                                          title="Take Screenshot"
+                                        >
+                                          <svg
+                                            width="14"
+                                            height="14"
+                                            viewBox="0 0 24 24"
+                                            fill="none"
+                                            stroke="currentColor"
+                                            strokeWidth="2"
+                                          >
+                                            <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
+                                            <circle cx="12" cy="13" r="4" />
+                                          </svg>
+                                        </button>
+                                      )}
+                                      {canAudioRecord &&
+                                        (recordingFor === c.id &&
+                                        recordingMode === "audio" ? (
+                                          <button
+                                            type="button"
+                                            className="btn btn-danger-outline"
+                                            style={{ fontSize: 12 }}
+                                            onMouseDown={(e) => {
+                                              e.preventDefault();
+                                              stopRecording();
+                                            }}
+                                            aria-label="Stop"
+                                            title="Stop"
+                                          >
+                                            <svg
+                                              width="14"
+                                              height="14"
+                                              viewBox="0 0 24 24"
+                                              fill="currentColor"
+                                              aria-hidden="true"
+                                            >
+                                              <rect
+                                                x="6"
+                                                y="6"
+                                                width="12"
+                                                height="12"
+                                                rx="1"
+                                                ry="1"
+                                              />
+                                            </svg>
+                                          </button>
+                                        ) : (
+                                          <button
+                                            type="button"
+                                            className="btn btn-secondary"
+                                            style={{ fontSize: 12 }}
+                                            onClick={() =>
+                                              startAudioRecording({
+                                                forCommentId: c.id,
+                                              })
+                                            }
+                                            disabled={
+                                              isRecording ||
+                                              updatingCommentId === c.id
+                                            }
+                                            aria-label="Record Audio"
+                                            title="Record Audio"
+                                          >
+                                            <svg
+                                              width="14"
+                                              height="14"
+                                              viewBox="0 0 24 24"
+                                              fill="none"
+                                              stroke="currentColor"
+                                              strokeWidth="2"
+                                            >
+                                              <path d="M12 2a3 3 0 0 1 3 3v6a3 3 0 0 1-6 0V5a3 3 0 0 1 3-3z" />
+                                              <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+                                              <line
+                                                x1="12"
+                                                y1="19"
+                                                x2="12"
+                                                y2="23"
+                                              />
+                                              <line
+                                                x1="8"
+                                                y1="23"
+                                                x2="16"
+                                                y2="23"
+                                              />
+                                            </svg>
+                                          </button>
+                                        ))}
+                                      {canScreenRecord &&
+                                        (recordingFor === c.id &&
+                                        recordingMode === "screen" ? (
+                                          <button
+                                            type="button"
+                                            className="btn btn-danger-outline"
+                                            style={{ fontSize: 12 }}
+                                            onMouseDown={(e) => {
+                                              e.preventDefault();
+                                              stopRecording();
+                                            }}
+                                            aria-label="Stop"
+                                            title="Stop"
+                                          >
+                                            <svg
+                                              width="14"
+                                              height="14"
+                                              viewBox="0 0 24 24"
+                                              fill="currentColor"
+                                              aria-hidden="true"
+                                            >
+                                              <rect
+                                                x="6"
+                                                y="6"
+                                                width="12"
+                                                height="12"
+                                                rx="1"
+                                                ry="1"
+                                              />
+                                            </svg>
+                                          </button>
+                                        ) : (
+                                          <button
+                                            type="button"
+                                            className="btn btn-secondary"
+                                            style={{ fontSize: 12 }}
+                                            onClick={() =>
+                                              startRecording({
+                                                forCommentId: c.id,
+                                              })
+                                            }
+                                            disabled={
+                                              isRecording ||
+                                              updatingCommentId === c.id
+                                            }
+                                            aria-label="Record Screen"
+                                            title="Record Screen"
+                                          >
+                                            <svg
+                                              width="14"
+                                              height="14"
+                                              viewBox="0 0 24 24"
+                                              fill="none"
+                                              stroke="currentColor"
+                                              strokeWidth="2"
+                                            >
+                                              <rect
+                                                x="2"
+                                                y="3"
+                                                width="20"
+                                                height="14"
+                                                rx="2"
+                                                ry="2"
+                                              />
+                                              <line
+                                                x1="8"
+                                                y1="21"
+                                                x2="16"
+                                                y2="21"
+                                              />
+                                              <line
+                                                x1="12"
+                                                y1="17"
+                                                x2="12"
+                                                y2="21"
+                                              />
+                                              <circle
+                                                cx="12"
+                                                cy="9"
+                                                r="2.5"
+                                                fill="currentColor"
+                                              />
+                                            </svg>
+                                          </button>
+                                        ))}
+                                      {canCameraRecord &&
+                                        (recordingFor === c.id &&
+                                        recordingMode === "camera" ? (
+                                          <button
+                                            type="button"
+                                            className="btn btn-danger-outline"
+                                            style={{ fontSize: 12 }}
+                                            onMouseDown={(e) => {
+                                              e.preventDefault();
+                                              stopRecording();
+                                            }}
+                                            aria-label="Stop"
+                                            title="Stop"
+                                          >
+                                            <svg
+                                              width="14"
+                                              height="14"
+                                              viewBox="0 0 24 24"
+                                              fill="currentColor"
+                                              aria-hidden="true"
+                                            >
+                                              <rect
+                                                x="6"
+                                                y="6"
+                                                width="12"
+                                                height="12"
+                                                rx="1"
+                                                ry="1"
+                                              />
+                                            </svg>
+                                          </button>
+                                        ) : (
+                                          <button
+                                            type="button"
+                                            className="btn btn-secondary"
+                                            style={{ fontSize: 12 }}
+                                            onClick={() =>
+                                              startCameraRecording({
+                                                forCommentId: c.id,
+                                              })
+                                            }
+                                            disabled={
+                                              isRecording ||
+                                              updatingCommentId === c.id
+                                            }
+                                            aria-label="Record with Camera"
+                                            title="Record with Camera"
+                                          >
+                                            <svg
+                                              width="14"
+                                              height="14"
+                                              viewBox="0 0 24 24"
+                                              fill="none"
+                                              stroke="currentColor"
+                                              strokeWidth="2"
+                                            >
+                                              <path d="M23 7l-7 5 7 5V7z" />
+                                              <rect
+                                                x="1"
+                                                y="5"
+                                                width="15"
+                                                height="14"
+                                                rx="2"
+                                                ry="2"
+                                              />
+                                              <circle
+                                                cx="8"
+                                                cy="12"
+                                                r="2.5"
+                                                fill="currentColor"
+                                              />
+                                            </svg>
+                                          </button>
+                                        ))}
+                                    </div>
+                                    <div
+                                      style={{
+                                        display: "flex",
+                                        gap: 8,
+                                        alignItems: "center",
+                                        marginBottom: 8,
+                                      }}
+                                    >
+                                      <button
+                                        type="button"
+                                        className="btn btn-primary"
+                                        onClick={handleSaveComment}
+                                        disabled={
+                                          updatingCommentId === c.id ||
+                                          !(
+                                            editingCommentBlocks
+                                              ? serializeEditingBlocksToBody(
+                                                  editingCommentBlocks
+                                                )
+                                              : editingCommentDraft
+                                          ).trim()
+                                        }
+                                      >
+                                        {updatingCommentId === c.id
+                                          ? "Saving…"
+                                          : "Save"}
+                                      </button>
+                                      <button
+                                        type="button"
+                                        className="btn btn-secondary"
+                                        onClick={handleCancelEditComment}
+                                        disabled={updatingCommentId === c.id}
+                                      >
+                                        Cancel
+                                      </button>
+                                    </div>
+                                  </>
+                                ) : (
+                                  <>
+                                    <div
+                                      style={{
+                                        whiteSpace: "pre-wrap",
+                                        wordBreak: "break-word",
+                                      }}
+                                    >
+                                      {commentBodyWithFileButtons(
+                                        c.body,
+                                        c.attachments,
+                                        getRecordingUrl,
+                                        getScreenshotUrl,
+                                        {
+                                          recordings: selectedIssue?.recordings,
+                                          screenshots:
+                                            selectedIssue?.screenshots,
+                                          files: selectedIssue?.files,
+                                          onScrollToRecording: (id: string) => {
+                                            const el =
+                                              issueDetailModalScrollRef.current?.querySelector(
+                                                `[data-recording-id="${id}"]`
+                                              );
+                                            if (el)
+                                              el.scrollIntoView({
+                                                behavior: "smooth",
+                                                block: "center",
+                                              });
+                                          },
+                                          onScrollToScreenshot: (
+                                            id: string
+                                          ) => {
+                                            const el =
+                                              issueDetailModalScrollRef.current?.querySelector(
+                                                `[data-screenshot-id="${id}"]`
+                                              );
+                                            if (el)
+                                              el.scrollIntoView({
+                                                behavior: "smooth",
+                                                block: "center",
+                                              });
+                                          },
+                                          onScrollToFile: (id: string) => {
+                                            const el =
+                                              issueDetailModalScrollRef.current?.querySelector(
+                                                `[data-file-id="${id}"]`
+                                              );
+                                            if (el)
+                                              el.scrollIntoView({
+                                                behavior: "smooth",
+                                                block: "center",
+                                              });
+                                          },
+                                        }
+                                      )}
+                                    </div>
+                                    {addingAttachmentToCommentId === c.id && (
+                                      <div
+                                        style={{
+                                          marginTop: 8,
+                                          padding: 8,
+                                          background: "var(--input-bg)",
+                                          borderRadius: 6,
+                                          border:
+                                            "1px solid var(--border-input)",
+                                        }}
+                                      >
+                                        <div
+                                          style={{
+                                            fontSize: 11,
+                                            color: "var(--text-muted)",
+                                            marginBottom: 6,
+                                          }}
+                                        >
+                                          Add attachment
+                                          {commentAttachmentUploading
+                                            ? " (uploading…)"
+                                            : ""}
+                                        </div>
+                                        <div
+                                          style={{
+                                            display: "flex",
+                                            flexWrap: "wrap",
+                                            gap: 8,
+                                            alignItems: "center",
+                                            marginBottom: 8,
+                                          }}
+                                        >
+                                          <button
+                                            type="button"
+                                            className="btn btn-secondary"
+                                            style={{ fontSize: 12 }}
+                                            onClick={() =>
+                                              commentVideoFileInputRef.current?.click()
+                                            }
+                                            disabled={
+                                              commentAttachmentUploading
+                                            }
+                                            aria-label="Upload file (image, video, audio, PDF, or any file)"
+                                            title="Upload file (image, video, audio, PDF, or any file)"
+                                          >
+                                            <svg
+                                              width="14"
+                                              height="14"
+                                              viewBox="0 0 24 24"
+                                              fill="none"
+                                              stroke="currentColor"
+                                              strokeWidth="2"
+                                            >
+                                              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                                              <polyline points="17 8 12 3 7 8" />
+                                              <line
+                                                x1="12"
+                                                y1="3"
+                                                x2="12"
+                                                y2="15"
+                                              />
+                                            </svg>
+                                          </button>
+                                          {canScreenRecord && (
+                                            <button
+                                              type="button"
+                                              className="btn btn-secondary"
+                                              style={{ fontSize: 12 }}
+                                              onClick={
+                                                handleTakeScreenshotAndAddToComment
+                                              }
+                                              disabled={
+                                                commentAttachmentUploading ||
+                                                screenshotUploading ||
+                                                screenshotTaking
+                                              }
+                                              aria-label="Take Screenshot"
+                                              title="Take Screenshot"
                                             >
                                               <svg
                                                 width="14"
@@ -6135,709 +6909,243 @@ export default function Home() {
                                               >
                                                 <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
                                                 <circle cx="12" cy="13" r="4" />
-                                              </svg>{" "}
-                                              {displayLabel}
-                                            </span>
-                                            <button
-                                              type="button"
-                                              className="btn btn-icon"
-                                              style={{
-                                                padding: "2px 4px",
-                                                minWidth: 20,
-                                                fontSize: 10,
-                                              }}
-                                              onClick={() =>
-                                                removeEditingCommentBlock(bi)
-                                              }
-                                              aria-label="Remove"
-                                              title="Remove"
-                                            >
-                                              <svg
-                                                width="10"
-                                                height="10"
-                                                viewBox="0 0 24 24"
-                                                fill="none"
-                                                stroke="currentColor"
-                                                strokeWidth="2"
-                                              >
-                                                <line
-                                                  x1="18"
-                                                  y1="6"
-                                                  x2="6"
-                                                  y2="18"
-                                                />
-                                                <line
-                                                  x1="6"
-                                                  y1="6"
-                                                  x2="18"
-                                                  y2="18"
-                                                />
                                               </svg>
                                             </button>
-                                          </div>
-                                        );
-                                      }
-                                      if (block.kind === "recording") {
-                                        const rec =
-                                          selectedIssue?.recordings?.find(
-                                            (r) => r.id === block.recordingId
-                                          );
-                                        if (!rec) return null;
-                                        const url = rec.videoUrl ?? "";
-                                        const kindFromFilename = url.includes(
-                                          "-audio.webm"
-                                        )
-                                          ? "audio"
-                                          : url.includes("-camera.webm")
-                                            ? "camera"
-                                            : url.includes("-screen.webm")
-                                              ? "screen"
-                                              : null;
-                                        const isAudio =
-                                          rec.mediaType === "audio" ||
-                                          kindFromFilename === "audio";
-                                        const kind:
-                                          | "audio"
-                                          | "screen"
-                                          | "camera" = isAudio
-                                          ? "audio"
-                                          : ((kindFromFilename as
-                                              | "screen"
-                                              | "camera"
-                                              | null) ??
-                                            rec.recordingType ??
-                                            "screen");
-                                        const rIdx =
-                                          selectedIssue!.recordings!.indexOf(
-                                            rec
-                                          ) + 1;
-                                        const defaultLabel =
-                                          kind === "audio"
-                                            ? `Audio Recording ${rIdx}`
-                                            : kind === "camera"
-                                              ? `Camera Recording ${rIdx}`
-                                              : `Screen Recording ${rIdx}`;
-                                        const displayLabel =
-                                          rec.name ?? defaultLabel;
-                                        return (
-                                          <div
-                                            key={`edit-rec-${bi}`}
-                                            style={{
-                                              display: "flex",
-                                              alignItems: "center",
-                                              gap: 8,
-                                              margin: "4px 0",
-                                              flexWrap: "wrap",
-                                            }}
-                                          >
-                                            <span
-                                              className="btn btn-secondary"
-                                              style={{
-                                                fontSize: 12,
-                                                cursor: "default",
-                                                pointerEvents: "none",
-                                              }}
-                                            >
-                                              <svg
-                                                width="14"
-                                                height="14"
-                                                viewBox="0 0 24 24"
-                                                fill="currentColor"
-                                                aria-hidden="true"
+                                          )}
+                                          {canAudioRecord &&
+                                            (recordingFor === c.id &&
+                                            recordingMode === "audio" ? (
+                                              <button
+                                                type="button"
+                                                className="btn btn-danger-outline"
+                                                style={{ fontSize: 12 }}
+                                                onMouseDown={(e) => {
+                                                  e.preventDefault();
+                                                  stopRecording();
+                                                }}
+                                                aria-label="Stop"
+                                                title="Stop"
                                               >
-                                                <polygon points="5 3 19 12 5 21 5 3" />
-                                              </svg>{" "}
-                                              {displayLabel}
-                                            </span>
-                                            <button
-                                              type="button"
-                                              className="btn btn-icon"
-                                              style={{
-                                                padding: "2px 4px",
-                                                minWidth: 20,
-                                                fontSize: 10,
-                                              }}
-                                              onClick={() =>
-                                                removeEditingCommentBlock(bi)
-                                              }
-                                              aria-label="Remove"
-                                              title="Remove"
-                                            >
-                                              <svg
-                                                width="10"
-                                                height="10"
-                                                viewBox="0 0 24 24"
-                                                fill="none"
-                                                stroke="currentColor"
-                                                strokeWidth="2"
+                                                <svg
+                                                  width="14"
+                                                  height="14"
+                                                  viewBox="0 0 24 24"
+                                                  fill="currentColor"
+                                                  aria-hidden="true"
+                                                >
+                                                  <rect
+                                                    x="6"
+                                                    y="6"
+                                                    width="12"
+                                                    height="12"
+                                                    rx="1"
+                                                    ry="1"
+                                                  />
+                                                </svg>
+                                              </button>
+                                            ) : (
+                                              <button
+                                                type="button"
+                                                className="btn btn-secondary"
+                                                style={{ fontSize: 12 }}
+                                                onClick={() =>
+                                                  startAudioRecording({
+                                                    forCommentId: c.id,
+                                                  })
+                                                }
+                                                disabled={isRecording}
+                                                aria-label="Record Audio"
+                                                title="Record Audio"
                                               >
-                                                <line
-                                                  x1="18"
-                                                  y1="6"
-                                                  x2="6"
-                                                  y2="18"
-                                                />
-                                                <line
-                                                  x1="6"
-                                                  y1="6"
-                                                  x2="18"
-                                                  y2="18"
-                                                />
-                                              </svg>
-                                            </button>
-                                          </div>
-                                        );
-                                      }
-                                      if (block.kind === "file") {
-                                        const f = selectedIssue?.files?.find(
-                                          (x) => x.id === block.fileId
-                                        );
-                                        if (!f) return null;
-                                        return (
-                                          <div
-                                            key={`edit-file-${bi}`}
-                                            style={{
-                                              display: "flex",
-                                              alignItems: "center",
-                                              gap: 8,
-                                              margin: "4px 0",
-                                              flexWrap: "wrap",
-                                            }}
-                                          >
-                                            <span
-                                              className="btn btn-secondary"
-                                              style={{
-                                                fontSize: 12,
-                                                cursor: "default",
-                                                pointerEvents: "none",
-                                              }}
-                                            >
-                                              <svg
-                                                width="14"
-                                                height="14"
-                                                viewBox="0 0 24 24"
-                                                fill="none"
-                                                stroke="currentColor"
-                                                strokeWidth="2"
+                                                <svg
+                                                  width="14"
+                                                  height="14"
+                                                  viewBox="0 0 24 24"
+                                                  fill="none"
+                                                  stroke="currentColor"
+                                                  strokeWidth="2"
+                                                >
+                                                  <path d="M12 2a3 3 0 0 1 3 3v6a3 3 0 0 1-6 0V5a3 3 0 0 1 3-3z" />
+                                                  <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+                                                  <line
+                                                    x1="12"
+                                                    y1="19"
+                                                    x2="12"
+                                                    y2="23"
+                                                  />
+                                                  <line
+                                                    x1="8"
+                                                    y1="23"
+                                                    x2="16"
+                                                    y2="23"
+                                                  />
+                                                </svg>
+                                              </button>
+                                            ))}
+                                          {canScreenRecord &&
+                                            (recordingFor === c.id &&
+                                            recordingMode === "screen" ? (
+                                              <button
+                                                type="button"
+                                                className="btn btn-danger-outline"
+                                                style={{ fontSize: 12 }}
+                                                onMouseDown={(e) => {
+                                                  e.preventDefault();
+                                                  stopRecording();
+                                                }}
+                                                aria-label="Stop"
+                                                title="Stop"
                                               >
-                                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                                                <polyline points="17 8 12 3 7 8" />
-                                                <line
-                                                  x1="12"
-                                                  y1="3"
-                                                  x2="12"
-                                                  y2="15"
-                                                />
-                                              </svg>{" "}
-                                              {f.fileName}
-                                            </span>
-                                            <button
-                                              type="button"
-                                              className="btn btn-icon"
-                                              style={{
-                                                padding: "2px 4px",
-                                                minWidth: 20,
-                                                fontSize: 10,
-                                              }}
-                                              onClick={() =>
-                                                removeEditingCommentBlock(bi)
-                                              }
-                                              aria-label="Remove"
-                                              title="Remove"
-                                            >
-                                              <svg
-                                                width="10"
-                                                height="10"
-                                                viewBox="0 0 24 24"
-                                                fill="none"
-                                                stroke="currentColor"
-                                                strokeWidth="2"
+                                                <svg
+                                                  width="14"
+                                                  height="14"
+                                                  viewBox="0 0 24 24"
+                                                  fill="currentColor"
+                                                  aria-hidden="true"
+                                                >
+                                                  <rect
+                                                    x="6"
+                                                    y="6"
+                                                    width="12"
+                                                    height="12"
+                                                    rx="1"
+                                                    ry="1"
+                                                  />
+                                                </svg>
+                                              </button>
+                                            ) : (
+                                              <button
+                                                type="button"
+                                                className="btn btn-secondary"
+                                                style={{ fontSize: 12 }}
+                                                onClick={() =>
+                                                  startRecording({
+                                                    forCommentId: c.id,
+                                                  })
+                                                }
+                                                disabled={isRecording}
+                                                aria-label="Record Screen"
+                                                title="Record Screen"
                                               >
-                                                <line
-                                                  x1="18"
-                                                  y1="6"
-                                                  x2="6"
-                                                  y2="18"
-                                                />
-                                                <line
-                                                  x1="6"
-                                                  y1="6"
-                                                  x2="18"
-                                                  y2="18"
-                                                />
-                                              </svg>
-                                            </button>
-                                          </div>
-                                        );
-                                      }
-                                      return null;
-                                    })}
-                                  </div>
-                                  <div
-                                    style={{
-                                      display: "flex",
-                                      flexWrap: "wrap",
-                                      gap: 8,
-                                      alignItems: "center",
-                                      marginTop: 8,
-                                      marginBottom: 8,
-                                    }}
-                                  >
-                                    <button
-                                      type="button"
-                                      className="btn btn-secondary"
-                                      style={{ fontSize: 12 }}
-                                      onClick={() =>
-                                        commentVideoFileInputRef.current?.click()
-                                      }
-                                      disabled={
-                                        commentAttachmentUploading ||
-                                        updatingCommentId === c.id
-                                      }
-                                      aria-label="Upload file (image, video, audio, PDF, or any file)"
-                                      title="Upload file (image, video, audio, PDF, or any file)"
-                                    >
-                                      <svg
-                                        width="14"
-                                        height="14"
-                                        viewBox="0 0 24 24"
-                                        fill="none"
-                                        stroke="currentColor"
-                                        strokeWidth="2"
-                                      >
-                                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                                        <polyline points="17 8 12 3 7 8" />
-                                        <line x1="12" y1="3" x2="12" y2="15" />
-                                      </svg>
-                                    </button>
-                                    {canScreenRecord && (
-                                      <button
-                                        type="button"
-                                        className="btn btn-secondary"
-                                        style={{ fontSize: 12 }}
-                                        onClick={
-                                          handleTakeScreenshotAndAddToComment
-                                        }
-                                        disabled={
-                                          commentAttachmentUploading ||
-                                          screenshotUploading ||
-                                          screenshotTaking ||
-                                          updatingCommentId === c.id
-                                        }
-                                        aria-label="Take Screenshot"
-                                        title="Take Screenshot"
-                                      >
-                                        <svg
-                                          width="14"
-                                          height="14"
-                                          viewBox="0 0 24 24"
-                                          fill="none"
-                                          stroke="currentColor"
-                                          strokeWidth="2"
-                                        >
-                                          <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
-                                          <circle cx="12" cy="13" r="4" />
-                                        </svg>
-                                      </button>
-                                    )}
-                                    {canAudioRecord &&
-                                      (recordingFor === c.id &&
-                                      recordingMode === "audio" ? (
-                                        <button
-                                          type="button"
-                                          className="btn btn-danger-outline"
-                                          style={{ fontSize: 12 }}
-                                          onMouseDown={(e) => {
-                                            e.preventDefault();
-                                            stopRecording();
-                                          }}
-                                          aria-label="Stop"
-                                          title="Stop"
-                                        >
-                                          <svg
-                                            width="14"
-                                            height="14"
-                                            viewBox="0 0 24 24"
-                                            fill="currentColor"
-                                            aria-hidden="true"
-                                          >
-                                            <rect
-                                              x="6"
-                                              y="6"
-                                              width="12"
-                                              height="12"
-                                              rx="1"
-                                              ry="1"
-                                            />
-                                          </svg>
-                                        </button>
-                                      ) : (
-                                        <button
-                                          type="button"
-                                          className="btn btn-secondary"
-                                          style={{ fontSize: 12 }}
-                                          onClick={() =>
-                                            startAudioRecording({
-                                              forCommentId: c.id,
-                                            })
-                                          }
-                                          disabled={
-                                            isRecording ||
-                                            updatingCommentId === c.id
-                                          }
-                                          aria-label="Record Audio"
-                                          title="Record Audio"
-                                        >
-                                          <svg
-                                            width="14"
-                                            height="14"
-                                            viewBox="0 0 24 24"
-                                            fill="none"
-                                            stroke="currentColor"
-                                            strokeWidth="2"
-                                          >
-                                            <path d="M12 2a3 3 0 0 1 3 3v6a3 3 0 0 1-6 0V5a3 3 0 0 1 3-3z" />
-                                            <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
-                                            <line
-                                              x1="12"
-                                              y1="19"
-                                              x2="12"
-                                              y2="23"
-                                            />
-                                            <line
-                                              x1="8"
-                                              y1="23"
-                                              x2="16"
-                                              y2="23"
-                                            />
-                                          </svg>
-                                        </button>
-                                      ))}
-                                    {canScreenRecord &&
-                                      (recordingFor === c.id &&
-                                      recordingMode === "screen" ? (
-                                        <button
-                                          type="button"
-                                          className="btn btn-danger-outline"
-                                          style={{ fontSize: 12 }}
-                                          onMouseDown={(e) => {
-                                            e.preventDefault();
-                                            stopRecording();
-                                          }}
-                                          aria-label="Stop"
-                                          title="Stop"
-                                        >
-                                          <svg
-                                            width="14"
-                                            height="14"
-                                            viewBox="0 0 24 24"
-                                            fill="currentColor"
-                                            aria-hidden="true"
-                                          >
-                                            <rect
-                                              x="6"
-                                              y="6"
-                                              width="12"
-                                              height="12"
-                                              rx="1"
-                                              ry="1"
-                                            />
-                                          </svg>
-                                        </button>
-                                      ) : (
-                                        <button
-                                          type="button"
-                                          className="btn btn-secondary"
-                                          style={{ fontSize: 12 }}
-                                          onClick={() =>
-                                            startRecording({
-                                              forCommentId: c.id,
-                                            })
-                                          }
-                                          disabled={
-                                            isRecording ||
-                                            updatingCommentId === c.id
-                                          }
-                                          aria-label="Record Screen"
-                                          title="Record Screen"
-                                        >
-                                          <svg
-                                            width="14"
-                                            height="14"
-                                            viewBox="0 0 24 24"
-                                            fill="none"
-                                            stroke="currentColor"
-                                            strokeWidth="2"
-                                          >
-                                            <rect
-                                              x="2"
-                                              y="3"
-                                              width="20"
-                                              height="14"
-                                              rx="2"
-                                              ry="2"
-                                            />
-                                            <line
-                                              x1="8"
-                                              y1="21"
-                                              x2="16"
-                                              y2="21"
-                                            />
-                                            <line
-                                              x1="12"
-                                              y1="17"
-                                              x2="12"
-                                              y2="21"
-                                            />
-                                            <circle
-                                              cx="12"
-                                              cy="9"
-                                              r="2.5"
-                                              fill="currentColor"
-                                            />
-                                          </svg>
-                                        </button>
-                                      ))}
-                                    {canCameraRecord &&
-                                      (recordingFor === c.id &&
-                                      recordingMode === "camera" ? (
-                                        <button
-                                          type="button"
-                                          className="btn btn-danger-outline"
-                                          style={{ fontSize: 12 }}
-                                          onMouseDown={(e) => {
-                                            e.preventDefault();
-                                            stopRecording();
-                                          }}
-                                          aria-label="Stop"
-                                          title="Stop"
-                                        >
-                                          <svg
-                                            width="14"
-                                            height="14"
-                                            viewBox="0 0 24 24"
-                                            fill="currentColor"
-                                            aria-hidden="true"
-                                          >
-                                            <rect
-                                              x="6"
-                                              y="6"
-                                              width="12"
-                                              height="12"
-                                              rx="1"
-                                              ry="1"
-                                            />
-                                          </svg>
-                                        </button>
-                                      ) : (
-                                        <button
-                                          type="button"
-                                          className="btn btn-secondary"
-                                          style={{ fontSize: 12 }}
-                                          onClick={() =>
-                                            startCameraRecording({
-                                              forCommentId: c.id,
-                                            })
-                                          }
-                                          disabled={
-                                            isRecording ||
-                                            updatingCommentId === c.id
-                                          }
-                                          aria-label="Record with Camera"
-                                          title="Record with Camera"
-                                        >
-                                          <svg
-                                            width="14"
-                                            height="14"
-                                            viewBox="0 0 24 24"
-                                            fill="none"
-                                            stroke="currentColor"
-                                            strokeWidth="2"
-                                          >
-                                            <path d="M23 7l-7 5 7 5V7z" />
-                                            <rect
-                                              x="1"
-                                              y="5"
-                                              width="15"
-                                              height="14"
-                                              rx="2"
-                                              ry="2"
-                                            />
-                                            <circle
-                                              cx="8"
-                                              cy="12"
-                                              r="2.5"
-                                              fill="currentColor"
-                                            />
-                                          </svg>
-                                        </button>
-                                      ))}
-                                  </div>
-                                  <div
-                                    style={{
-                                      display: "flex",
-                                      gap: 8,
-                                      alignItems: "center",
-                                      marginBottom: 8,
-                                    }}
-                                  >
-                                    <button
-                                      type="button"
-                                      className="btn btn-primary"
-                                      onClick={handleSaveComment}
-                                      disabled={
-                                        updatingCommentId === c.id ||
-                                        !(
-                                          editingCommentBlocks
-                                            ? serializeEditingBlocksToBody(
-                                                editingCommentBlocks
-                                              )
-                                            : editingCommentDraft
-                                        ).trim()
-                                      }
-                                    >
-                                      {updatingCommentId === c.id
-                                        ? "Saving…"
-                                        : "Save"}
-                                    </button>
-                                    <button
-                                      type="button"
-                                      className="btn btn-secondary"
-                                      onClick={handleCancelEditComment}
-                                      disabled={updatingCommentId === c.id}
-                                    >
-                                      Cancel
-                                    </button>
-                                  </div>
-                                </>
-                              ) : (
-                                <>
-                                  <div
-                                    style={{
-                                      whiteSpace: "pre-wrap",
-                                      wordBreak: "break-word",
-                                    }}
-                                  >
-                                    {commentBodyWithFileButtons(
-                                      c.body,
-                                      c.attachments,
-                                      getRecordingUrl,
-                                      getScreenshotUrl,
-                                      {
-                                        recordings: selectedIssue?.recordings,
-                                        screenshots: selectedIssue?.screenshots,
-                                        files: selectedIssue?.files,
-                                        onScrollToRecording: (id: string) => {
-                                          const el =
-                                            issueDetailModalScrollRef.current?.querySelector(
-                                              `[data-recording-id="${id}"]`
-                                            );
-                                          if (el)
-                                            el.scrollIntoView({
-                                              behavior: "smooth",
-                                              block: "center",
-                                            });
-                                        },
-                                        onScrollToScreenshot: (id: string) => {
-                                          const el =
-                                            issueDetailModalScrollRef.current?.querySelector(
-                                              `[data-screenshot-id="${id}"]`
-                                            );
-                                          if (el)
-                                            el.scrollIntoView({
-                                              behavior: "smooth",
-                                              block: "center",
-                                            });
-                                        },
-                                        onScrollToFile: (id: string) => {
-                                          const el =
-                                            issueDetailModalScrollRef.current?.querySelector(
-                                              `[data-file-id="${id}"]`
-                                            );
-                                          if (el)
-                                            el.scrollIntoView({
-                                              behavior: "smooth",
-                                              block: "center",
-                                            });
-                                        },
-                                      }
-                                    )}
-                                  </div>
-                                  {addingAttachmentToCommentId === c.id && (
-                                    <div
-                                      style={{
-                                        marginTop: 8,
-                                        padding: 8,
-                                        background: "var(--input-bg)",
-                                        borderRadius: 6,
-                                        border: "1px solid var(--border-input)",
-                                      }}
-                                    >
-                                      <div
-                                        style={{
-                                          fontSize: 11,
-                                          color: "var(--text-muted)",
-                                          marginBottom: 6,
-                                        }}
-                                      >
-                                        Add attachment
-                                        {commentAttachmentUploading
-                                          ? " (uploading…)"
-                                          : ""}
-                                      </div>
-                                      <div
-                                        style={{
-                                          display: "flex",
-                                          flexWrap: "wrap",
-                                          gap: 8,
-                                          alignItems: "center",
-                                          marginBottom: 8,
-                                        }}
-                                      >
-                                        <button
-                                          type="button"
-                                          className="btn btn-secondary"
-                                          style={{ fontSize: 12 }}
-                                          onClick={() =>
-                                            commentVideoFileInputRef.current?.click()
-                                          }
-                                          disabled={commentAttachmentUploading}
-                                          aria-label="Upload file (image, video, audio, PDF, or any file)"
-                                          title="Upload file (image, video, audio, PDF, or any file)"
-                                        >
-                                          <svg
-                                            width="14"
-                                            height="14"
-                                            viewBox="0 0 24 24"
-                                            fill="none"
-                                            stroke="currentColor"
-                                            strokeWidth="2"
-                                          >
-                                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                                            <polyline points="17 8 12 3 7 8" />
-                                            <line
-                                              x1="12"
-                                              y1="3"
-                                              x2="12"
-                                              y2="15"
-                                            />
-                                          </svg>
-                                        </button>
-                                        {canScreenRecord && (
+                                                <svg
+                                                  width="14"
+                                                  height="14"
+                                                  viewBox="0 0 24 24"
+                                                  fill="none"
+                                                  stroke="currentColor"
+                                                  strokeWidth="2"
+                                                >
+                                                  <rect
+                                                    x="2"
+                                                    y="3"
+                                                    width="20"
+                                                    height="14"
+                                                    rx="2"
+                                                    ry="2"
+                                                  />
+                                                  <line
+                                                    x1="8"
+                                                    y1="21"
+                                                    x2="16"
+                                                    y2="21"
+                                                  />
+                                                  <line
+                                                    x1="12"
+                                                    y1="17"
+                                                    x2="12"
+                                                    y2="21"
+                                                  />
+                                                  <circle
+                                                    cx="12"
+                                                    cy="9"
+                                                    r="2.5"
+                                                    fill="currentColor"
+                                                  />
+                                                </svg>
+                                              </button>
+                                            ))}
+                                          {canCameraRecord &&
+                                            (recordingFor === c.id &&
+                                            recordingMode === "camera" ? (
+                                              <button
+                                                type="button"
+                                                className="btn btn-danger-outline"
+                                                style={{ fontSize: 12 }}
+                                                onMouseDown={(e) => {
+                                                  e.preventDefault();
+                                                  stopRecording();
+                                                }}
+                                                aria-label="Stop"
+                                                title="Stop"
+                                              >
+                                                <svg
+                                                  width="14"
+                                                  height="14"
+                                                  viewBox="0 0 24 24"
+                                                  fill="currentColor"
+                                                  aria-hidden="true"
+                                                >
+                                                  <rect
+                                                    x="6"
+                                                    y="6"
+                                                    width="12"
+                                                    height="12"
+                                                    rx="1"
+                                                    ry="1"
+                                                  />
+                                                </svg>
+                                              </button>
+                                            ) : (
+                                              <button
+                                                type="button"
+                                                className="btn btn-secondary"
+                                                style={{ fontSize: 12 }}
+                                                onClick={() =>
+                                                  startCameraRecording({
+                                                    forCommentId: c.id,
+                                                  })
+                                                }
+                                                disabled={isRecording}
+                                                aria-label="Record with Camera"
+                                                title="Record with Camera"
+                                              >
+                                                <svg
+                                                  width="14"
+                                                  height="14"
+                                                  viewBox="0 0 24 24"
+                                                  fill="none"
+                                                  stroke="currentColor"
+                                                  strokeWidth="2"
+                                                >
+                                                  <path d="M23 7l-7 5 7 5V7z" />
+                                                  <rect
+                                                    x="1"
+                                                    y="5"
+                                                    width="15"
+                                                    height="14"
+                                                    rx="2"
+                                                    ry="2"
+                                                  />
+                                                  <circle
+                                                    cx="8"
+                                                    cy="12"
+                                                    r="2.5"
+                                                    fill="currentColor"
+                                                  />
+                                                </svg>
+                                              </button>
+                                            ))}
                                           <button
                                             type="button"
-                                            className="btn btn-secondary"
+                                            className="btn btn-icon"
                                             style={{ fontSize: 12 }}
-                                            onClick={
-                                              handleTakeScreenshotAndAddToComment
+                                            onClick={() =>
+                                              setAddingAttachmentToCommentId(
+                                                null
+                                              )
                                             }
-                                            disabled={
-                                              commentAttachmentUploading ||
-                                              screenshotUploading ||
-                                              screenshotTaking
-                                            }
-                                            aria-label="Take Screenshot"
-                                            title="Take Screenshot"
+                                            aria-label="Cancel"
+                                            title="Cancel"
                                           >
                                             <svg
                                               width="14"
@@ -6847,462 +7155,260 @@ export default function Home() {
                                               stroke="currentColor"
                                               strokeWidth="2"
                                             >
-                                              <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
-                                              <circle cx="12" cy="13" r="4" />
+                                              <line
+                                                x1="18"
+                                                y1="6"
+                                                x2="6"
+                                                y2="18"
+                                              />
+                                              <line
+                                                x1="6"
+                                                y1="6"
+                                                x2="18"
+                                                y2="18"
+                                              />
                                             </svg>
                                           </button>
-                                        )}
-                                        {canAudioRecord &&
-                                          (recordingFor === c.id &&
-                                          recordingMode === "audio" ? (
-                                            <button
-                                              type="button"
-                                              className="btn btn-danger-outline"
-                                              style={{ fontSize: 12 }}
-                                              onMouseDown={(e) => {
-                                                e.preventDefault();
-                                                stopRecording();
-                                              }}
-                                              aria-label="Stop"
-                                              title="Stop"
-                                            >
-                                              <svg
-                                                width="14"
-                                                height="14"
-                                                viewBox="0 0 24 24"
-                                                fill="currentColor"
-                                                aria-hidden="true"
-                                              >
-                                                <rect
-                                                  x="6"
-                                                  y="6"
-                                                  width="12"
-                                                  height="12"
-                                                  rx="1"
-                                                  ry="1"
-                                                />
-                                              </svg>
-                                            </button>
-                                          ) : (
-                                            <button
-                                              type="button"
-                                              className="btn btn-secondary"
-                                              style={{ fontSize: 12 }}
-                                              onClick={() =>
-                                                startAudioRecording({
-                                                  forCommentId: c.id,
-                                                })
-                                              }
-                                              disabled={isRecording}
-                                              aria-label="Record Audio"
-                                              title="Record Audio"
-                                            >
-                                              <svg
-                                                width="14"
-                                                height="14"
-                                                viewBox="0 0 24 24"
-                                                fill="none"
-                                                stroke="currentColor"
-                                                strokeWidth="2"
-                                              >
-                                                <path d="M12 2a3 3 0 0 1 3 3v6a3 3 0 0 1-6 0V5a3 3 0 0 1 3-3z" />
-                                                <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
-                                                <line
-                                                  x1="12"
-                                                  y1="19"
-                                                  x2="12"
-                                                  y2="23"
-                                                />
-                                                <line
-                                                  x1="8"
-                                                  y1="23"
-                                                  x2="16"
-                                                  y2="23"
-                                                />
-                                              </svg>
-                                            </button>
-                                          ))}
-                                        {canScreenRecord &&
-                                          (recordingFor === c.id &&
-                                          recordingMode === "screen" ? (
-                                            <button
-                                              type="button"
-                                              className="btn btn-danger-outline"
-                                              style={{ fontSize: 12 }}
-                                              onMouseDown={(e) => {
-                                                e.preventDefault();
-                                                stopRecording();
-                                              }}
-                                              aria-label="Stop"
-                                              title="Stop"
-                                            >
-                                              <svg
-                                                width="14"
-                                                height="14"
-                                                viewBox="0 0 24 24"
-                                                fill="currentColor"
-                                                aria-hidden="true"
-                                              >
-                                                <rect
-                                                  x="6"
-                                                  y="6"
-                                                  width="12"
-                                                  height="12"
-                                                  rx="1"
-                                                  ry="1"
-                                                />
-                                              </svg>
-                                            </button>
-                                          ) : (
-                                            <button
-                                              type="button"
-                                              className="btn btn-secondary"
-                                              style={{ fontSize: 12 }}
-                                              onClick={() =>
-                                                startRecording({
-                                                  forCommentId: c.id,
-                                                })
-                                              }
-                                              disabled={isRecording}
-                                              aria-label="Record Screen"
-                                              title="Record Screen"
-                                            >
-                                              <svg
-                                                width="14"
-                                                height="14"
-                                                viewBox="0 0 24 24"
-                                                fill="none"
-                                                stroke="currentColor"
-                                                strokeWidth="2"
-                                              >
-                                                <rect
-                                                  x="2"
-                                                  y="3"
-                                                  width="20"
-                                                  height="14"
-                                                  rx="2"
-                                                  ry="2"
-                                                />
-                                                <line
-                                                  x1="8"
-                                                  y1="21"
-                                                  x2="16"
-                                                  y2="21"
-                                                />
-                                                <line
-                                                  x1="12"
-                                                  y1="17"
-                                                  x2="12"
-                                                  y2="21"
-                                                />
-                                                <circle
-                                                  cx="12"
-                                                  cy="9"
-                                                  r="2.5"
-                                                  fill="currentColor"
-                                                />
-                                              </svg>
-                                            </button>
-                                          ))}
-                                        {canCameraRecord &&
-                                          (recordingFor === c.id &&
-                                          recordingMode === "camera" ? (
-                                            <button
-                                              type="button"
-                                              className="btn btn-danger-outline"
-                                              style={{ fontSize: 12 }}
-                                              onMouseDown={(e) => {
-                                                e.preventDefault();
-                                                stopRecording();
-                                              }}
-                                              aria-label="Stop"
-                                              title="Stop"
-                                            >
-                                              <svg
-                                                width="14"
-                                                height="14"
-                                                viewBox="0 0 24 24"
-                                                fill="currentColor"
-                                                aria-hidden="true"
-                                              >
-                                                <rect
-                                                  x="6"
-                                                  y="6"
-                                                  width="12"
-                                                  height="12"
-                                                  rx="1"
-                                                  ry="1"
-                                                />
-                                              </svg>
-                                            </button>
-                                          ) : (
-                                            <button
-                                              type="button"
-                                              className="btn btn-secondary"
-                                              style={{ fontSize: 12 }}
-                                              onClick={() =>
-                                                startCameraRecording({
-                                                  forCommentId: c.id,
-                                                })
-                                              }
-                                              disabled={isRecording}
-                                              aria-label="Record with Camera"
-                                              title="Record with Camera"
-                                            >
-                                              <svg
-                                                width="14"
-                                                height="14"
-                                                viewBox="0 0 24 24"
-                                                fill="none"
-                                                stroke="currentColor"
-                                                strokeWidth="2"
-                                              >
-                                                <path d="M23 7l-7 5 7 5V7z" />
-                                                <rect
-                                                  x="1"
-                                                  y="5"
-                                                  width="15"
-                                                  height="14"
-                                                  rx="2"
-                                                  ry="2"
-                                                />
-                                                <circle
-                                                  cx="8"
-                                                  cy="12"
-                                                  r="2.5"
-                                                  fill="currentColor"
-                                                />
-                                              </svg>
-                                            </button>
-                                          ))}
-                                        <button
-                                          type="button"
-                                          className="btn btn-icon"
-                                          style={{ fontSize: 12 }}
-                                          onClick={() =>
-                                            setAddingAttachmentToCommentId(null)
-                                          }
-                                          aria-label="Cancel"
-                                          title="Cancel"
-                                        >
-                                          <svg
-                                            width="14"
-                                            height="14"
-                                            viewBox="0 0 24 24"
-                                            fill="none"
-                                            stroke="currentColor"
-                                            strokeWidth="2"
-                                          >
-                                            <line
-                                              x1="18"
-                                              y1="6"
-                                              x2="6"
-                                              y2="18"
-                                            />
-                                            <line
-                                              x1="6"
-                                              y1="6"
-                                              x2="18"
-                                              y2="18"
-                                            />
-                                          </svg>
-                                        </button>
+                                        </div>
                                       </div>
-                                    </div>
-                                  )}
-                                  <div
-                                    style={{
-                                      marginTop: 4,
-                                      fontSize: 11,
-                                      color: "var(--text-muted)",
-                                      display: "flex",
-                                      alignItems: "center",
-                                      flexWrap: "wrap",
-                                      gap: 8,
-                                    }}
-                                  >
-                                    <span>
-                                      {new Date(c.createdAt).toLocaleString()}
-                                    </span>
-                                    {(c.editHistory?.length ?? 0) > 0 && (
-                                      <>
-                                        <span>· Edited</span>
-                                        <button
-                                          type="button"
-                                          className="btn btn-icon"
-                                          style={{
-                                            padding: "2px 4px",
-                                            minWidth: 20,
-                                            fontSize: 11,
-                                          }}
-                                          onClick={() =>
-                                            setCommentHistoryOpenId(
-                                              commentHistoryOpenId === c.id
-                                                ? null
-                                                : c.id
-                                            )
-                                          }
-                                          aria-expanded={
-                                            commentHistoryOpenId === c.id
-                                          }
-                                          aria-label="Toggle edit history"
-                                          title="Edit history"
-                                        >
-                                          {commentHistoryOpenId === c.id
-                                            ? "Hide history"
-                                            : "History"}
-                                        </button>
-                                      </>
                                     )}
-                                  </div>
-                                  {commentHistoryOpenId === c.id &&
-                                    (c.editHistory?.length ?? 0) > 0 && (
-                                      <div
-                                        style={{
-                                          marginTop: 8,
-                                          padding: "8px 10px",
-                                          background: "var(--input-bg)",
-                                          borderRadius: 4,
-                                          border:
-                                            "1px solid var(--border-input)",
-                                          fontSize: 12,
-                                        }}
-                                      >
+                                    <div
+                                      style={{
+                                        marginTop: 4,
+                                        fontSize: 11,
+                                        color: "var(--text-muted)",
+                                        display: "flex",
+                                        alignItems: "center",
+                                        flexWrap: "wrap",
+                                        gap: 8,
+                                      }}
+                                    >
+                                      <span>
+                                        {new Date(c.createdAt).toLocaleString()}
+                                      </span>
+                                      {(c.editHistory?.length ?? 0) > 0 && (
+                                        <>
+                                          <span>· Edited</span>
+                                          <button
+                                            type="button"
+                                            className="btn btn-icon"
+                                            style={{
+                                              padding: "2px 4px",
+                                              minWidth: 20,
+                                              fontSize: 11,
+                                            }}
+                                            onClick={() =>
+                                              setCommentHistoryOpenId(
+                                                commentHistoryOpenId === c.id
+                                                  ? null
+                                                  : c.id
+                                              )
+                                            }
+                                            aria-expanded={
+                                              commentHistoryOpenId === c.id
+                                            }
+                                            aria-label="Toggle edit history"
+                                            title="Edit history"
+                                          >
+                                            {commentHistoryOpenId === c.id
+                                              ? "Hide history"
+                                              : "History"}
+                                          </button>
+                                        </>
+                                      )}
+                                    </div>
+                                    {commentHistoryOpenId === c.id &&
+                                      (c.editHistory?.length ?? 0) > 0 && (
                                         <div
                                           style={{
-                                            fontWeight: 600,
-                                            marginBottom: 6,
-                                            color: "var(--text-muted)",
+                                            marginTop: 8,
+                                            padding: "8px 10px",
+                                            background: "var(--input-bg)",
+                                            borderRadius: 4,
+                                            border:
+                                              "1px solid var(--border-input)",
+                                            fontSize: 12,
                                           }}
                                         >
-                                          Edit history
+                                          <div
+                                            style={{
+                                              fontWeight: 600,
+                                              marginBottom: 6,
+                                              color: "var(--text-muted)",
+                                            }}
+                                          >
+                                            Edit history
+                                          </div>
+                                          {(c.editHistory ?? []).map(
+                                            (entry, i) => (
+                                              <div
+                                                key={i}
+                                                style={{
+                                                  marginBottom:
+                                                    i <
+                                                    (c.editHistory?.length ??
+                                                      0) -
+                                                      1
+                                                      ? 8
+                                                      : 0,
+                                                }}
+                                              >
+                                                <div
+                                                  style={{
+                                                    whiteSpace: "pre-wrap",
+                                                    wordBreak: "break-word",
+                                                  }}
+                                                >
+                                                  {entry.body}
+                                                </div>
+                                                <div
+                                                  style={{
+                                                    fontSize: 10,
+                                                    color: "var(--text-muted)",
+                                                    marginTop: 2,
+                                                  }}
+                                                >
+                                                  {new Date(
+                                                    entry.editedAt
+                                                  ).toLocaleString()}
+                                                </div>
+                                              </div>
+                                            )
+                                          )}
                                         </div>
-                                        {(c.editHistory ?? []).map(
-                                          (entry, i) => (
-                                            <div
-                                              key={i}
-                                              style={{
-                                                marginBottom:
-                                                  i <
-                                                  (c.editHistory?.length ?? 0) -
-                                                    1
-                                                    ? 8
-                                                    : 0,
-                                              }}
-                                            >
-                                              <div
-                                                style={{
-                                                  whiteSpace: "pre-wrap",
-                                                  wordBreak: "break-word",
-                                                }}
-                                              >
-                                                {entry.body}
-                                              </div>
-                                              <div
-                                                style={{
-                                                  fontSize: 10,
-                                                  color: "var(--text-muted)",
-                                                  marginTop: 2,
-                                                }}
-                                              >
-                                                {new Date(
-                                                  entry.editedAt
-                                                ).toLocaleString()}
-                                              </div>
-                                            </div>
-                                          )
-                                        )}
-                                      </div>
-                                    )}
-                                </>
+                                      )}
+                                  </>
+                                )}
+                              </div>
+                              {editingCommentId !== c.id && (
+                                <div
+                                  style={{
+                                    display: "flex",
+                                    gap: 4,
+                                    flexShrink: 0,
+                                  }}
+                                >
+                                  <button
+                                    type="button"
+                                    className="btn btn-icon"
+                                    style={{ padding: "4px 6px", minWidth: 28 }}
+                                    onClick={() => handleStartEditComment(c)}
+                                    aria-label="Edit comment"
+                                    title="Edit comment"
+                                  >
+                                    <svg
+                                      width="14"
+                                      height="14"
+                                      viewBox="0 0 24 24"
+                                      fill="none"
+                                      stroke="currentColor"
+                                      strokeWidth="2"
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                      aria-hidden="true"
+                                    >
+                                      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                                      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                                    </svg>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="btn btn-icon"
+                                    style={{
+                                      padding: "4px 6px",
+                                      minWidth: 28,
+                                      opacity:
+                                        deletingCommentId === c.id ? 0.6 : 1,
+                                    }}
+                                    onClick={() => handleDeleteComment(c.id)}
+                                    disabled={deletingCommentId === c.id}
+                                    aria-label={`Delete comment: ${c.body.slice(0, 30)}${c.body.length > 30 ? "…" : ""}`}
+                                    title="Delete comment"
+                                  >
+                                    <svg
+                                      width="14"
+                                      height="14"
+                                      viewBox="0 0 24 24"
+                                      fill="none"
+                                      stroke="currentColor"
+                                      strokeWidth="2"
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                      aria-hidden="true"
+                                    >
+                                      <polyline points="3 6 5 6 21 6" />
+                                      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                                      <line x1="10" y1="11" x2="10" y2="17" />
+                                      <line x1="14" y1="11" x2="14" y2="17" />
+                                    </svg>
+                                  </button>
+                                </div>
                               )}
                             </div>
-                            {editingCommentId !== c.id && (
-                              <div
-                                style={{
-                                  display: "flex",
-                                  gap: 4,
-                                  flexShrink: 0,
-                                }}
-                              >
-                                <button
-                                  type="button"
-                                  className="btn btn-icon"
-                                  style={{ padding: "4px 6px", minWidth: 28 }}
-                                  onClick={() => handleStartEditComment(c)}
-                                  aria-label="Edit comment"
-                                  title="Edit comment"
-                                >
-                                  <svg
-                                    width="14"
-                                    height="14"
-                                    viewBox="0 0 24 24"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    strokeWidth="2"
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                    aria-hidden="true"
-                                  >
-                                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-                                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-                                  </svg>
-                                </button>
-                                <button
-                                  type="button"
-                                  className="btn btn-icon"
-                                  style={{
-                                    padding: "4px 6px",
-                                    minWidth: 28,
-                                    opacity:
-                                      deletingCommentId === c.id ? 0.6 : 1,
-                                  }}
-                                  onClick={() => handleDeleteComment(c.id)}
-                                  disabled={deletingCommentId === c.id}
-                                  aria-label={`Delete comment: ${c.body.slice(0, 30)}${c.body.length > 30 ? "…" : ""}`}
-                                  title="Delete comment"
-                                >
-                                  <svg
-                                    width="14"
-                                    height="14"
-                                    viewBox="0 0 24 24"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    strokeWidth="2"
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                    aria-hidden="true"
-                                  >
-                                    <polyline points="3 6 5 6 21 6" />
-                                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-                                    <line x1="10" y1="11" x2="10" y2="17" />
-                                    <line x1="14" y1="11" x2="14" y2="17" />
-                                  </svg>
-                                </button>
-                              </div>
-                            )}
-                          </div>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </>
-              )}
-              {issueCommentsError && (
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </>
+                )}
+                {issueCommentsError && (
+                  <div
+                    className="error-banner"
+                    style={{
+                      marginTop: 8,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      gap: 8,
+                    }}
+                  >
+                    <span>{issueCommentsError}</span>
+                    <button
+                      type="button"
+                      onClick={() => setIssueCommentsError(null)}
+                      aria-label="Dismiss"
+                      title="Dismiss"
+                      style={{
+                        background: "none",
+                        border: "none",
+                        padding: "0 4px",
+                        cursor: "pointer",
+                        fontSize: 18,
+                        lineHeight: 1,
+                        opacity: 0.8,
+                      }}
+                    >
+                      ×
+                    </button>
+                  </div>
+                )}
+              </div>
+              <div
+                style={{
+                  marginTop: 16,
+                  fontSize: 12,
+                  color: "var(--text-muted)",
+                }}
+              >
+                Status:{" "}
+                {STATUSES.find((s) => s.id === selectedIssue.status)?.label ??
+                  selectedIssue.status}
+              </div>
+              {issueSaveError && (
                 <div
                   className="error-banner"
                   style={{
-                    marginTop: 8,
+                    marginTop: 12,
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "space-between",
                     gap: 8,
                   }}
                 >
-                  <span>{issueCommentsError}</span>
+                  <span>{issueSaveError}</span>
                   <button
                     type="button"
-                    onClick={() => setIssueCommentsError(null)}
+                    onClick={() => setIssueSaveError(null)}
                     aria-label="Dismiss"
                     title="Dismiss"
                     style={{
@@ -7319,65 +7425,22 @@ export default function Home() {
                   </button>
                 </div>
               )}
-            </div>
-            <div
-              style={{
-                marginTop: 16,
-                fontSize: 12,
-                color: "var(--text-muted)",
-              }}
-            >
-              Status:{" "}
-              {STATUSES.find((s) => s.id === selectedIssue.status)?.label ??
-                selectedIssue.status}
-            </div>
-            {issueSaveError && (
-              <div
-                className="error-banner"
-                style={{
-                  marginTop: 12,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  gap: 8,
-                }}
-              >
-                <span>{issueSaveError}</span>
-                <button
-                  type="button"
-                  onClick={() => setIssueSaveError(null)}
-                  aria-label="Dismiss"
-                  title="Dismiss"
-                  style={{
-                    background: "none",
-                    border: "none",
-                    padding: "0 4px",
-                    cursor: "pointer",
-                    fontSize: 18,
-                    lineHeight: 1,
-                    opacity: 0.8,
-                  }}
-                >
-                  ×
-                </button>
-              </div>
-            )}
-            {issueSaveSuccess &&
-              !hasIssueDetailChanges(selectedIssue, issueDetailOriginal) && (
-                <div
-                  style={{
-                    marginTop: 12,
-                    padding: "8px 12px",
-                    borderRadius: 4,
-                    background: "rgba(72,187,120,0.15)",
-                    color: "#48bb78",
-                    fontSize: 13,
-                    fontWeight: 500,
-                  }}
-                >
-                  Saved successfully
-                </div>
-              )}
+              {issueSaveSuccess &&
+                !hasIssueDetailChanges(selectedIssue, issueDetailOriginal) && (
+                  <div
+                    style={{
+                      marginTop: 12,
+                      padding: "8px 12px",
+                      borderRadius: 4,
+                      background: "rgba(72,187,120,0.15)",
+                      color: "#48bb78",
+                      fontSize: 13,
+                      fontWeight: 500,
+                    }}
+                  >
+                    Saved successfully
+                  </div>
+                )}
             </div>
             <div className="modal-actions">
               <button

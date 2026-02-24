@@ -9,35 +9,51 @@ import {
   Post,
   Put,
   Query,
+  Req,
   Res,
+  UseGuards,
 } from "@nestjs/common";
-import { Response } from "express";
-import { IssuesService } from "./issues.service";
+import { Request, Response } from "express";
+import { JwtAuthGuard } from "../auth/jwt.guard";
 import { IssueCommentsService } from "./issue-comments.service";
+import { IssuesService } from "./issues.service";
 
 @Controller("issues")
+@UseGuards(JwtAuthGuard)
 export class IssuesController {
   constructor(
     private readonly svc: IssuesService,
     private readonly commentsSvc: IssueCommentsService
   ) {}
 
+  private userId(req: Request & { user?: { sub: string } }): string {
+    return req.user!.sub;
+  }
+
   @Get()
   list(
-    @Query("projectId") projectId?: string,
-    @Query("search") search?: string
+    @Query("projectId") projectId: string | undefined,
+    @Query("search") search: string | undefined,
+    @Req() req: Request & { user?: { sub: string } }
   ) {
-    return this.svc.list(projectId, search);
+    return this.svc.list(projectId, search, this.userId(req));
   }
 
   @Get("recordings/stream/:filename")
-  streamRecording(@Param("filename") filename: string, @Res() res: Response) {
-    this.svc.streamRecording(filename, res);
+  async streamRecording(
+    @Param("filename") filename: string,
+    @Res() res: Response,
+    @Req() req: Request & { user?: { sub: string } }
+  ) {
+    await this.svc.streamRecording(filename, res, this.userId(req));
   }
 
   @Get(":id/comments")
-  listComments(@Param("id") id: string) {
-    return this.commentsSvc.list(id);
+  listComments(
+    @Param("id") id: string,
+    @Req() req: Request & { user?: { sub: string } }
+  ) {
+    return this.commentsSvc.list(id, this.userId(req));
   }
 
   @Post(":id/comments/:commentId/attachments")
@@ -49,40 +65,58 @@ export class IssuesController {
       type: "screenshot" | "video" | "screen_recording" | "camera_recording";
       imageBase64?: string;
       videoBase64?: string;
-    }
+    },
+    @Req() req: Request & { user?: { sub: string } }
   ) {
-    return this.commentsSvc.addAttachment(id, commentId, body);
+    return this.commentsSvc.addAttachment(
+      id,
+      commentId,
+      body,
+      this.userId(req)
+    );
   }
 
   @Post(":id/comments")
-  createComment(@Param("id") id: string, @Body() body: { body: string }) {
-    return this.commentsSvc.create(id, body.body);
+  createComment(
+    @Param("id") id: string,
+    @Body() body: { body: string },
+    @Req() req: Request & { user?: { sub: string } }
+  ) {
+    return this.commentsSvc.create(id, body.body, this.userId(req));
   }
 
   @Delete(":id/comments/:commentId/attachments/:attachmentId")
   removeCommentAttachment(
     @Param("id") id: string,
     @Param("commentId") commentId: string,
-    @Param("attachmentId") attachmentId: string
+    @Param("attachmentId") attachmentId: string,
+    @Req() req: Request & { user?: { sub: string } }
   ) {
-    return this.commentsSvc.removeAttachment(id, commentId, attachmentId);
+    return this.commentsSvc.removeAttachment(
+      id,
+      commentId,
+      attachmentId,
+      this.userId(req)
+    );
   }
 
   @Patch(":id/comments/:commentId")
   updateComment(
     @Param("id") id: string,
     @Param("commentId") commentId: string,
-    @Body() body: { body: string }
+    @Body() body: { body: string },
+    @Req() req: Request & { user?: { sub: string } }
   ) {
-    return this.commentsSvc.update(id, commentId, body.body);
+    return this.commentsSvc.update(id, commentId, body.body, this.userId(req));
   }
 
   @Delete(":id/comments/:commentId")
   deleteComment(
     @Param("id") id: string,
-    @Param("commentId") commentId: string
+    @Param("commentId") commentId: string,
+    @Req() req: Request & { user?: { sub: string } }
   ) {
-    return this.commentsSvc.delete(id, commentId);
+    return this.commentsSvc.delete(id, commentId, this.userId(req));
   }
 
   @Post(":id/recordings")
@@ -94,14 +128,16 @@ export class IssuesController {
       mediaType?: "video" | "audio";
       recordingType?: "screen" | "camera" | "audio";
       fileName?: string;
-    }
+    },
+    @Req() req: Request & { user?: { sub: string } }
   ) {
     return this.svc.addRecording(
       id,
       body.videoBase64,
       body.mediaType ?? "video",
       body.recordingType ?? "screen",
-      body.fileName
+      body.fileName,
+      this.userId(req)
     );
   }
 
@@ -114,48 +150,64 @@ export class IssuesController {
       mediaType?: "video" | "audio";
       recordingType?: "screen" | "camera" | "audio";
       name?: string | null;
-    }
+    },
+    @Req() req: Request & { user?: { sub: string } }
   ) {
-    return this.svc.updateRecording(id, recordingId, body);
+    return this.svc.updateRecording(id, recordingId, body, this.userId(req));
   }
 
   @Delete(":id/recordings/:recordingId")
   removeRecording(
     @Param("id") id: string,
-    @Param("recordingId") recordingId: string
+    @Param("recordingId") recordingId: string,
+    @Req() req: Request & { user?: { sub: string } }
   ) {
-    return this.svc.removeRecording(id, recordingId);
+    return this.svc.removeRecording(id, recordingId, this.userId(req));
   }
 
   @Post(":id/screenshots")
   addScreenshot(
     @Param("id") id: string,
-    @Body() body: { imageBase64: string; fileName?: string }
+    @Body() body: { imageBase64: string; fileName?: string },
+    @Req() req: Request & { user?: { sub: string } }
   ) {
-    return this.svc.addScreenshot(id, body.imageBase64, body.fileName);
+    return this.svc.addScreenshot(
+      id,
+      body.imageBase64,
+      body.fileName,
+      this.userId(req)
+    );
   }
 
   @Patch(":id/screenshots/:screenshotId")
   updateScreenshot(
     @Param("id") id: string,
     @Param("screenshotId") screenshotId: string,
-    @Body() body: { name?: string | null }
+    @Body() body: { name?: string | null },
+    @Req() req: Request & { user?: { sub: string } }
   ) {
-    return this.svc.updateScreenshot(id, screenshotId, body.name);
+    return this.svc.updateScreenshot(
+      id,
+      screenshotId,
+      body.name,
+      this.userId(req)
+    );
   }
 
   @Delete(":id/screenshots/:screenshotId")
   removeScreenshot(
     @Param("id") id: string,
-    @Param("screenshotId") screenshotId: string
+    @Param("screenshotId") screenshotId: string,
+    @Req() req: Request & { user?: { sub: string } }
   ) {
-    return this.svc.removeScreenshot(id, screenshotId);
+    return this.svc.removeScreenshot(id, screenshotId, this.userId(req));
   }
 
   @Post(":id/files")
   addFile(
     @Param("id") id: string,
-    @Body() body: { fileBase64?: string; fileName?: string }
+    @Body() body: { fileBase64?: string; fileName?: string },
+    @Req() req: Request & { user?: { sub: string } }
   ) {
     if (
       body?.fileBase64 == null ||
@@ -164,35 +216,49 @@ export class IssuesController {
     ) {
       throw new BadRequestException("fileBase64 and fileName are required");
     }
-    return this.svc.addFile(id, body.fileBase64, body.fileName);
+    return this.svc.addFile(
+      id,
+      body.fileBase64,
+      body.fileName,
+      this.userId(req)
+    );
   }
 
   @Get(":id/files/:fileId/stream")
   streamFile(
     @Param("id") id: string,
     @Param("fileId") fileId: string,
-    @Res() res: Response
+    @Res() res: Response,
+    @Req() req: Request & { user?: { sub: string } }
   ) {
-    return this.svc.streamFile(id, fileId, res);
+    return this.svc.streamFile(id, fileId, res, this.userId(req));
   }
 
   @Patch(":id/files/:fileId")
   updateFile(
     @Param("id") id: string,
     @Param("fileId") fileId: string,
-    @Body() body: { fileName?: string }
+    @Body() body: { fileName?: string },
+    @Req() req: Request & { user?: { sub: string } }
   ) {
-    return this.svc.updateFile(id, fileId, body);
+    return this.svc.updateFile(id, fileId, body, this.userId(req));
   }
 
   @Delete(":id/files/:fileId")
-  removeFile(@Param("id") id: string, @Param("fileId") fileId: string) {
-    return this.svc.removeFile(id, fileId);
+  removeFile(
+    @Param("id") id: string,
+    @Param("fileId") fileId: string,
+    @Req() req: Request & { user?: { sub: string } }
+  ) {
+    return this.svc.removeFile(id, fileId, this.userId(req));
   }
 
   @Get(":id")
-  get(@Param("id") id: string) {
-    return this.svc.get(id);
+  get(
+    @Param("id") id: string,
+    @Req() req: Request & { user?: { sub: string } }
+  ) {
+    return this.svc.get(id, this.userId(req));
   }
 
   @Post()
@@ -209,28 +275,43 @@ export class IssuesController {
       qualityScore?: number;
       projectId: string;
       assigneeId?: string;
-    }
+    },
+    @Req() req: Request & { user?: { sub: string } }
   ) {
-    return this.svc.create(body);
+    return this.svc.create(body, this.userId(req));
   }
 
   @Put(":id")
-  update(@Param("id") id: string, @Body() body: Record<string, unknown>) {
-    return this.svc.update(id, body);
+  update(
+    @Param("id") id: string,
+    @Body() body: Record<string, unknown>,
+    @Req() req: Request & { user?: { sub: string } }
+  ) {
+    return this.svc.update(id, body, this.userId(req));
   }
 
   @Patch(":id/status")
-  updateStatus(@Param("id") id: string, @Body() body: { status: string }) {
-    return this.svc.updateStatus(id, body.status);
+  updateStatus(
+    @Param("id") id: string,
+    @Body() body: { status: string },
+    @Req() req: Request & { user?: { sub: string } }
+  ) {
+    return this.svc.updateStatus(id, body.status, this.userId(req));
   }
 
   @Delete("bulk")
-  removeAll(@Query("projectId") projectId?: string) {
-    return this.svc.deleteMany(projectId);
+  removeAll(
+    @Query("projectId") projectId: string | undefined,
+    @Req() req: Request & { user?: { sub: string } }
+  ) {
+    return this.svc.deleteMany(projectId, this.userId(req));
   }
 
   @Delete(":id")
-  remove(@Param("id") id: string) {
-    return this.svc.delete(id);
+  remove(
+    @Param("id") id: string,
+    @Req() req: Request & { user?: { sub: string } }
+  ) {
+    return this.svc.delete(id, this.userId(req));
   }
 }

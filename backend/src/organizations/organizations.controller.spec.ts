@@ -1,13 +1,14 @@
 import { Test, TestingModule } from "@nestjs/testing";
 import { OrganizationsController } from "./organizations.controller";
 import { OrganizationsService } from "./organizations.service";
+import { JwtAuthGuard } from "../auth/jwt.guard";
 
 describe("OrganizationsController", () => {
   let controller: OrganizationsController;
   let service: OrganizationsService;
 
   const mockOrganizationsService = {
-    list: jest.fn(),
+    listForUser: jest.fn(),
     create: jest.fn(),
   };
 
@@ -18,7 +19,10 @@ describe("OrganizationsController", () => {
       providers: [
         { provide: OrganizationsService, useValue: mockOrganizationsService },
       ],
-    }).compile();
+    })
+      .overrideGuard(JwtAuthGuard)
+      .useValue({ canActivate: () => true })
+      .compile();
 
     controller = module.get<OrganizationsController>(OrganizationsController);
     service = module.get<OrganizationsService>(OrganizationsService);
@@ -29,12 +33,15 @@ describe("OrganizationsController", () => {
   });
 
   describe("list", () => {
-    it("should return result from service.list()", async () => {
+    it("should return result from service.listForUser() with user id", async () => {
       const list = [{ id: "1", name: "Org 1" }];
-      mockOrganizationsService.list.mockResolvedValue(list);
+      mockOrganizationsService.listForUser.mockResolvedValue(list);
+      const req = { user: { sub: "user-1" } };
 
-      await expect(controller.list()).resolves.toEqual(list);
-      expect(mockOrganizationsService.list).toHaveBeenCalledWith();
+      await expect(controller.list(req as any)).resolves.toEqual(list);
+      expect(mockOrganizationsService.listForUser).toHaveBeenCalledWith(
+        "user-1"
+      );
     });
   });
 

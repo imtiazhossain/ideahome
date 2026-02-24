@@ -3,9 +3,13 @@ import { INestApplication } from "@nestjs/common";
 import request from "supertest";
 import { AppModule } from "../src/app.module";
 import { PrismaService } from "../src/prisma.service";
+import { createTestUserWithOrg } from "./helpers";
 
 describe("ProjectsController (e2e)", () => {
   let app: INestApplication;
+  let prisma: PrismaService;
+  let token: string;
+  let userId: string;
   let orgId: string;
   let projectId: string;
 
@@ -18,18 +22,24 @@ describe("ProjectsController (e2e)", () => {
     app.enableCors();
     await app.init();
 
-    const orgRes = await request(app.getHttpServer())
-      .post("/organizations")
-      .send({ name: `E2E Org ${Date.now()}` });
-    orgId = orgRes.body.id;
+    prisma = app.get(PrismaService);
+    const testUser = await createTestUserWithOrg(prisma);
+    token = testUser.token;
+    userId = testUser.userId;
+    orgId = testUser.orgId;
   });
 
   afterAll(async () => {
-    const prisma = app.get(PrismaService);
-    if (orgId) {
+    if (projectId) {
+      await prisma.project.delete({ where: { id: projectId } }).catch(() => {});
+    }
+    if (userId) {
       await prisma.project
         .deleteMany({ where: { organizationId: orgId } })
         .catch(() => {});
+      await prisma.user.delete({ where: { id: userId } }).catch(() => {});
+    }
+    if (orgId) {
       await prisma.organization
         .delete({ where: { id: orgId } })
         .catch(() => {});
@@ -38,30 +48,20 @@ describe("ProjectsController (e2e)", () => {
     await app.close();
   });
 
-  it("GET /projects returns list", () => {
-    return request(app.getHttpServer())
-      .get("/projects")
+  const auth = (req: request.Test) =>
+    req.set("Authorization", `Bearer ${token}`);
+
+  it("GET /projects returns list (user-scoped)", () => {
+    return auth(request(app.getHttpServer()).get("/projects"))
       .expect(200)
       .expect((res: request.Response) => {
         expect(Array.isArray(res.body)).toBe(true);
       });
   });
 
-  it("GET /projects?orgId= returns list filtered by org", () => {
-    return request(app.getHttpServer())
-      .get("/projects")
-      .query({ orgId })
-      .expect(200)
-      .expect((res: request.Response) => {
-        expect(Array.isArray(res.body)).toBe(true);
-      });
-  });
-
-  it("POST /projects creates a project", () => {
+  it("POST /projects creates a project in user's org", () => {
     const name = `E2E Project ${Date.now()}`;
-    return request(app.getHttpServer())
-      .post("/projects")
-      .send({ name, organizationId: orgId })
+    return auth(request(app.getHttpServer()).post("/projects").send({ name }))
       .expect(201)
       .expect((res: request.Response) => {
         expect(res.body).toHaveProperty("id");
@@ -72,8 +72,7 @@ describe("ProjectsController (e2e)", () => {
   });
 
   it("GET /projects/:id returns a project", () => {
-    return request(app.getHttpServer())
-      .get(`/projects/${projectId}`)
+    return auth(request(app.getHttpServer()).get(`/projects/${projectId}`))
       .expect(200)
       .expect((res: request.Response) => {
         expect(res.body).toHaveProperty("id", projectId);
@@ -82,9 +81,11 @@ describe("ProjectsController (e2e)", () => {
 
   it("PUT /projects/:id updates", () => {
     const newName = `Updated E2E ${Date.now()}`;
-    return request(app.getHttpServer())
-      .put(`/projects/${projectId}`)
-      .send({ name: newName })
+    return auth(
+      request(app.getHttpServer())
+        .put(`/projects/${projectId}`)
+        .send({ name: newName })
+    )
       .expect(200)
       .expect((res: request.Response) => {
         expect(res.body).toHaveProperty("name", newName);
@@ -92,14 +93,14 @@ describe("ProjectsController (e2e)", () => {
   });
 
   it("DELETE /projects/:id deletes project and its issues", () => {
-    return request(app.getHttpServer())
-      .delete(`/projects/${projectId}`)
-      .expect(200);
+    return auth(
+      request(app.getHttpServer()).delete(`/projects/${projectId}`)
+    ).expect(200);
   });
 
   it("GET /projects/:id after delete returns 404", () => {
-    return request(app.getHttpServer())
-      .get(`/projects/${projectId}`)
-      .expect(404);
+    return auth(
+      request(app.getHttpServer()).get(`/projects/${projectId}`)
+    ).expect(404);
   });
 });

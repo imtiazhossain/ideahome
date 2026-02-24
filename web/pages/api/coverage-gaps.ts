@@ -18,7 +18,10 @@ function getMonorepoRoot(): string {
 
 type CoverageEntry = {
   s: Record<string, number>;
-  statementMap: Record<string, { start: { line: number }; end: { line: number } }>;
+  statementMap: Record<
+    string,
+    { start: { line: number }; end: { line: number } }
+  >;
 };
 
 /**
@@ -28,7 +31,10 @@ type CoverageEntry = {
  */
 export default async function handler(
   req: NextApiRequest,
-  res: NextApiResponse<{ files?: { file: string; path: string; statementPct: number }[]; error?: string }>
+  res: NextApiResponse<{
+    files?: { file: string; path: string; statementPct: number }[];
+    error?: string;
+  }>
 ) {
   if (req.method !== "GET") {
     res.setHeader("Allow", "GET");
@@ -36,11 +42,18 @@ export default async function handler(
   }
 
   const root = getMonorepoRoot();
-  const coveragePath = path.join(root, "backend", "src", "coverage", "coverage-final.json");
+  const coveragePath = path.join(
+    root,
+    "backend",
+    "src",
+    "coverage",
+    "coverage-final.json"
+  );
 
   if (!fs.existsSync(coveragePath)) {
     return res.status(200).json({
-      error: "No coverage data. Run “Run coverage” first to generate the report.",
+      error:
+        "No coverage data. Run “Run coverage” first to generate the report.",
     });
   }
 

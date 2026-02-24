@@ -1,7 +1,13 @@
 import React, { useEffect, useRef, useState } from "react";
 import Head from "next/head";
 import Link from "next/link";
-import { fetchProjects, updateProject } from "../lib/api";
+import { useRouter } from "next/router";
+import {
+  fetchProjects,
+  getUserScopedStorageKey,
+  isAuthenticated,
+  updateProject,
+} from "../lib/api";
 import { ProjectNavBar, DrawerCollapsedNav } from "../components/ProjectNavBar";
 import { useTheme } from "./_app";
 
@@ -57,12 +63,28 @@ const IconCheck = () => (
 
 type IdeaItem = { name: string; done: boolean };
 
-const IDEAS_STORAGE_KEY = "ideahome-ideas-list";
+const IDEAS_STORAGE_PREFIX = "ideahome-ideas-list";
+const LEGACY_IDEAS_STORAGE_KEY = "ideahome-ideas-list";
+
+function getIdeasStorageKey(): string {
+  return getUserScopedStorageKey(
+    IDEAS_STORAGE_PREFIX,
+    LEGACY_IDEAS_STORAGE_KEY
+  );
+}
 
 function loadStoredIdeas(): IdeaItem[] {
   if (typeof window === "undefined") return [];
   try {
-    const raw = localStorage.getItem(IDEAS_STORAGE_KEY);
+    const key = getIdeasStorageKey();
+    let raw = localStorage.getItem(key);
+    if (!raw && key !== LEGACY_IDEAS_STORAGE_KEY) {
+      raw = localStorage.getItem(LEGACY_IDEAS_STORAGE_KEY);
+      if (raw) {
+        localStorage.setItem(key, raw);
+        localStorage.removeItem(LEGACY_IDEAS_STORAGE_KEY);
+      }
+    }
     if (!raw) return [];
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
@@ -85,7 +107,7 @@ function loadStoredIdeas(): IdeaItem[] {
 
 function saveIdeas(ideas: IdeaItem[]) {
   if (typeof window === "undefined") return;
-  localStorage.setItem(IDEAS_STORAGE_KEY, JSON.stringify(ideas));
+  localStorage.setItem(getIdeasStorageKey(), JSON.stringify(ideas));
 }
 
 function reorder<T>(arr: T[], from: number, to: number): T[] {
@@ -96,6 +118,7 @@ function reorder<T>(arr: T[], from: number, to: number): T[] {
 }
 
 export default function IdeasPage() {
+  const router = useRouter();
   const [projects, setProjects] = useState<{ id: string; name: string }[]>([]);
   const [selectedProjectId, setSelectedProjectId] = useState<string>("");
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -128,8 +151,12 @@ export default function IdeasPage() {
       .catch(() => {});
 
   useEffect(() => {
+    if (!isAuthenticated()) {
+      router.replace("/login");
+      return;
+    }
     loadProjects();
-  }, []);
+  }, [router]);
   useEffect(() => {
     if (editingProjectId) {
       projectNameInputRef.current?.focus();
@@ -166,9 +193,11 @@ export default function IdeasPage() {
   };
 
   useEffect(() => {
+    if (!isAuthenticated()) return;
     setIdeas(loadStoredIdeas());
   }, []);
   useEffect(() => {
+    if (!isAuthenticated()) return;
     if (skipNextSaveRef.current) {
       skipNextSaveRef.current = false;
       return;

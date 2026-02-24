@@ -1,7 +1,13 @@
 import React, { useEffect, useRef, useState } from "react";
 import Head from "next/head";
 import Link from "next/link";
-import { fetchProjects, updateProject } from "../lib/api";
+import { useRouter } from "next/router";
+import {
+  fetchProjects,
+  getUserScopedStorageKey,
+  isAuthenticated,
+  updateProject,
+} from "../lib/api";
 import { ProjectNavBar, DrawerCollapsedNav } from "../components/ProjectNavBar";
 import { useTheme } from "./_app";
 
@@ -57,12 +63,25 @@ const IconCheck = () => (
 
 type TodoItem = { name: string; done: boolean };
 
-const TODO_STORAGE_KEY = "ideahome-todo-list";
+const TODO_STORAGE_PREFIX = "ideahome-todo-list";
+const LEGACY_TODO_STORAGE_KEY = "ideahome-todo-list";
+
+function getTodoStorageKey(): string {
+  return getUserScopedStorageKey(TODO_STORAGE_PREFIX, LEGACY_TODO_STORAGE_KEY);
+}
 
 function loadStoredTodos(): TodoItem[] {
   if (typeof window === "undefined") return [];
   try {
-    const raw = localStorage.getItem(TODO_STORAGE_KEY);
+    const key = getTodoStorageKey();
+    let raw = localStorage.getItem(key);
+    if (!raw && key !== LEGACY_TODO_STORAGE_KEY) {
+      raw = localStorage.getItem(LEGACY_TODO_STORAGE_KEY);
+      if (raw) {
+        localStorage.setItem(key, raw);
+        localStorage.removeItem(LEGACY_TODO_STORAGE_KEY);
+      }
+    }
     if (!raw) return [];
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
@@ -85,7 +104,7 @@ function loadStoredTodos(): TodoItem[] {
 
 function saveTodos(todos: TodoItem[]) {
   if (typeof window === "undefined") return;
-  localStorage.setItem(TODO_STORAGE_KEY, JSON.stringify(todos));
+  localStorage.setItem(getTodoStorageKey(), JSON.stringify(todos));
 }
 
 function reorder<T>(arr: T[], from: number, to: number): T[] {
@@ -96,6 +115,7 @@ function reorder<T>(arr: T[], from: number, to: number): T[] {
 }
 
 export default function TodoPage() {
+  const router = useRouter();
   const [projects, setProjects] = useState<{ id: string; name: string }[]>([]);
   const [selectedProjectId, setSelectedProjectId] = useState<string>("");
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -128,8 +148,12 @@ export default function TodoPage() {
       .catch(() => {});
 
   useEffect(() => {
+    if (!isAuthenticated()) {
+      router.replace("/login");
+      return;
+    }
     loadProjects();
-  }, []);
+  }, [router]);
   useEffect(() => {
     if (editingProjectId) {
       projectNameInputRef.current?.focus();
@@ -166,9 +190,11 @@ export default function TodoPage() {
   };
 
   useEffect(() => {
+    if (!isAuthenticated()) return;
     setTodos(loadStoredTodos());
   }, []);
   useEffect(() => {
+    if (!isAuthenticated()) return;
     if (skipNextSaveRef.current) {
       skipNextSaveRef.current = false;
       return;

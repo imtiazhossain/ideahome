@@ -53,7 +53,8 @@ function discoverUiTestsFromE2E(): UITestFile[] | null {
 function parseSpecContent(content: string): UITestSuite[] {
   const suites: UITestSuite[] = [];
   // Match test.describe("Suite name", () => { ... }) - capture suite name
-  const describeRe = /test\.describe\s*\(\s*["']([^"']+)["']\s*,\s*\(\)\s*=>\s*\{/g;
+  const describeRe =
+    /test\.describe\s*\(\s*["']([^"']+)["']\s*,\s*\(\)\s*=>\s*\{/g;
   // Match test("test name", async ... - capture test name (same line)
   const testRe = /test\s*\(\s*["']([^"']+)["']\s*,\s*(?:async\s*)?\(/g;
 
@@ -61,8 +62,15 @@ function parseSpecContent(content: string): UITestSuite[] {
   const describeMatches: { name: string; start: number; end: number }[] = [];
   while ((m = describeRe.exec(content)) !== null) {
     const start = m.index;
-    const brace = findMatchingBrace(content, start + content.slice(start).indexOf("{"));
-    describeMatches.push({ name: m[1], start, end: brace >= 0 ? brace : content.length });
+    const brace = findMatchingBrace(
+      content,
+      start + content.slice(start).indexOf("{")
+    );
+    describeMatches.push({
+      name: m[1],
+      start,
+      end: brace >= 0 ? brace : content.length,
+    });
   }
 
   for (const desc of describeMatches) {

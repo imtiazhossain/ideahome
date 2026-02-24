@@ -18,6 +18,53 @@
 - `pnpm test:e2e:web` — web UI e2e (Playwright). For full flows ensure backend + DB are running (`pnpm db:up`, `pnpm dev:backend`). Web app must be reachable at http://localhost:3000 (start with `pnpm dev:web` or let Playwright reuse an existing server).
 - `pnpm test:e2e:one` — run one Playwright UI test with video and verify recording is captured (web app must be at http://localhost:3000).
 
+## Workflow Orchestration
+### 1. Plan Node
+Default
+- Enter plan mode for ANY non-trivial task (3+ steps or architectural decisions)
+- If something goes sideways, STOP and re-plan immediately - don't keep pushing
+- Use plan mode for verification steps, not just building
+- Write detailed specs upfront to reduce ambiguity
+### 2. Subagent Strategy
+- Use subagents liberally to keep main context window clean
+- Offload research, exploration, and parallel analysis to subagents
+- For complex problems, throw more compute at it via subagents
+- One tack per subagent for focused execution
+### 3. Self-Improvement Loop
+- After ANY correction from the user: update "tasks/lessons.md"
+with the pattern
+- Write rules for yourself that prevent the same mistake
+- Ruthlessly iterate on these lessons until mistake rate drops
+- Review lessons at session start for relevant project
+### 4. Verification Before Done
+- Never mark a task complete without proving it works
+- Diff behavior between main and your changes when relevant
+- Ask yourself: "Would a staff engineer approve this?"
+- Run tests, check logs, demonstrate correctness
+### 5. Demand Elegance (Balanced)
+- For non-trivial changes: pause and ask "is there a more elegant way?"
+- If a fix feels hacky: "Knowing everything I know now, implement the elegant solution"
+- Skip this for simple, obvious fixes
+- don't over-engineer
+- Challenge your own work before presenting it
+### 6. Autonomous Bug Fizing
+- When given a bug report: just fix it. Don't ask for hand-holding
+- Point at logs, errors, failing tests - then resolve them
+- Zero context switching required from the user
+- Go fix failing CI tests without being told how
+## Task Management
+1. **Plan First**: Write plan to 'tasks/todo.md" with checkable items
+2. **Verify Plan**: Check in before starting implementation
+3. **Track Progress**: Mark items complete as you go
+4. **Explain Changes**: High-level summary at each step
+5.
+**Document Results**: Add review section to tasks/todo.md
+6. **Capture Lessons**: Update 'tasks/lessons.md' after corrections
+## Core Principles
+- **Simplicity First**: Make every change as simple as possible. Impact minimal code.
+- **No Laziness**: Find root causes. No temporary fixes. Senior developer standards.
+- **Minimat Impact**: Changes should only touch what's necessary. Avoid introducing bugs.
+
 - **Database**: Restart the database when needed — e.g. after Prisma schema changes, when the DB is in a bad or unknown state, or before running e2e tests. Use `pnpm db:reset` (full restart + migrate) or `pnpm db:down` then `pnpm db:up` then `pnpm db:migrate` as appropriate.
 - **Backend restart**: When the backend needs to be restarted (e.g. after code or env changes, or when it’s stuck), automatically kill any running backend process (e.g. on port 3001 or the dev:backend process) and start it again with `pnpm dev:backend`. Do not ask or prompt the user — just perform the kill and restart.
 
@@ -39,7 +86,7 @@
 
 ## Web / UI testing
 - **Cleanup**: Same as backend — tests must clean up any data they create (e.g. entities created via API or forms). Remove or revert test data in `afterEach`/`afterAll` so runs don’t leave side effects.
-- **When adding or changing web UI**: create automated UI tests when possible. Use Playwright; specs live in `web/e2e/` (e.g. `web/e2e/home.spec.ts`). Cover key user flows (navigation, forms, modals, critical paths). Run with `pnpm test:e2e:web` (ensure backend and web app are running for full flows).
+<!-- - **When adding or changing web UI**: create automated UI tests when possible. Use Playwright; specs live in `web/e2e/` (e.g. `web/e2e/home.spec.ts`). Cover key user flows (navigation, forms, modals, critical paths). Run with `pnpm test:e2e:web` (ensure backend and web app are running for full flows). -->
 - **Single test**: `pnpm test:e2e:one` runs one Playwright test with video and verifies recording; or `pnpm exec playwright test -g "test name" --project=chromium` from `web/` for Chromium-only (avoids needing Firefox/WebKit installed).
 - **Tests page (in-app)**: From the web app Tests page, running an automated UI test (inline or "Run with live view") records video when the backend runs Playwright with `--output` and `video: 'on'`. When a test fails, a "View run" button appears; it opens a modal with the recording (WebM) and **test output** (stdout/stderr from the run).
 - **Playwright conventions**: Associate form labels with controls (`htmlFor` / `id`) so `getByRole('combobox', { name: '...' })` and similar work. If a role matches multiple elements, use a unique locator (e.g. `.drawer-nav-item.is-selected`, or `exact: true`, or `.first()`). Wait for dynamic content (e.g. `waitFor({ state: 'visible', timeout: 15000 })`) before interacting with selects that depend on fetched data.

@@ -6,6 +6,102 @@ const API_BASE_RESOLVED =
     ? API_BASE_RAW.replace(/\/$/, "")
     : API_BASE_DEFAULT;
 
+/** localStorage key for SSO JWT. */
+export const AUTH_TOKEN_KEY = "ideahome_token";
+
+function authHeaders(): Record<string, string> {
+  if (typeof window === "undefined") return {};
+  const t = localStorage.getItem(AUTH_TOKEN_KEY);
+  return t ? { Authorization: `Bearer ${t}` } : {};
+}
+
+/** fetch that includes JWT when present (for SSO). */
+function apiFetch(
+  input: RequestInfo | URL,
+  init?: RequestInit
+): Promise<Response> {
+  const headers = new Headers(init?.headers);
+  Object.entries(authHeaders()).forEach(([k, v]) => headers.set(k, v));
+  return fetch(input, { ...init, headers });
+}
+
+/** When true, app does not redirect to login (use with backend SKIP_AUTH_DEV in local dev). */
+export function isSkipLoginDev(): boolean {
+  return process.env.NEXT_PUBLIC_SKIP_LOGIN_DEV === "true";
+}
+
+export function getStoredToken(): string | null {
+  if (typeof window === "undefined") return null;
+  return localStorage.getItem(AUTH_TOKEN_KEY);
+}
+
+export function setStoredToken(token: string): void {
+  if (typeof window === "undefined") return;
+  localStorage.setItem(AUTH_TOKEN_KEY, token);
+}
+
+export function clearStoredToken(): void {
+  if (typeof window === "undefined") return;
+  localStorage.removeItem(AUTH_TOKEN_KEY);
+}
+
+/** Decode JWT payload to get user id (sub). Used for user-scoped localStorage keys. */
+export function getUserIdFromToken(): string | null {
+  if (typeof window === "undefined") return null;
+  const token = getStoredToken();
+  if (!token) return null;
+  try {
+    const parts = token.split(".");
+    if (parts.length !== 3) return null;
+    const payload = parts[1];
+    const base64 = payload.replace(/-/g, "+").replace(/_/g, "/");
+    const json = atob(base64);
+    const decoded = JSON.parse(json) as { sub?: string };
+    return decoded.sub ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/** User-scoped localStorage key. Returns prefix-{userId} when authenticated, else legacyKey or prefix. */
+export function getUserScopedStorageKey(
+  prefix: string,
+  legacyKey?: string
+): string {
+  const userId = getUserIdFromToken();
+  return userId ? `${prefix}-${userId}` : (legacyKey ?? prefix);
+}
+
+/** Legacy localStorage keys cleared on logout. User-scoped keys (e.g. ideahome-ideas-list-{userId}) are NOT cleared so data persists per user. */
+export const USER_SAVED_DATA_STORAGE_KEYS = [
+  "ideahome-ideas-list",
+  "ideahome-bugs-list",
+  "ideahome-todo-list",
+  "ideahome-features-list",
+  "ideahome-expenses",
+  "ideahome-costs-expenses",
+  "ideahome-project-nav-tab-order",
+] as const;
+
+export function clearUserSavedData(): void {
+  if (typeof window === "undefined") return;
+  for (const k of USER_SAVED_DATA_STORAGE_KEYS) {
+    localStorage.removeItem(k);
+  }
+}
+
+export function isAuthenticated(): boolean {
+  if (isSkipLoginDev()) return true;
+  return Boolean(getStoredToken());
+}
+
+export function logout(redirectTo: string = "/login"): void {
+  clearStoredToken();
+  clearUserSavedData();
+  if (typeof window === "undefined") return;
+  window.location.href = redirectTo;
+}
+
 /**
  * Backend base URL. In the browser, if the configured API URL is the same as the current page origin,
  * we use "" (same-origin) so Next.js rewrites can proxy /issues, /projects, etc. to the backend.
@@ -83,7 +179,7 @@ export const STATUSES = [
 ] as const;
 
 export async function fetchOrganizations(): Promise<Organization[]> {
-  const r = await fetch(`${getApiBase()}/organizations`);
+  const r = await apiFetch(`${getApiBase()}/organizations`);
   if (!r.ok) throw new Error("Failed to fetch organizations");
   return r.json();
 }
@@ -91,7 +187,7 @@ export async function fetchOrganizations(): Promise<Organization[]> {
 export async function createOrganization(body: {
   name: string;
 }): Promise<Organization> {
-  const r = await fetch(`${getApiBase()}/organizations`, {
+  const r = await apiFetch(`${getApiBase()}/organizations`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
@@ -101,16 +197,14 @@ export async function createOrganization(body: {
 }
 
 export async function fetchProjects(): Promise<Project[]> {
-  const r = await fetch(`${getApiBase()}/projects`);
+  const r = await apiFetch(`${getApiBase()}/projects`);
   if (!r.ok) throw new Error("Failed to fetch projects");
   return r.json();
 }
 
-export async function createProject(body: {
-  name: string;
-  organizationId: string;
-}): Promise<Project> {
-  const r = await fetch(`${getApiBase()}/projects`, {
+/** Create a project in the current user's workspace. Backend assigns the user's org. */
+export async function createProject(body: { name: string }): Promise<Project> {
+  const r = await apiFetch(`${getApiBase()}/projects`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
@@ -123,7 +217,7 @@ export async function updateProject(
   id: string,
   data: { name: string }
 ): Promise<Project> {
-  const r = await fetch(`${getApiBase()}/projects/${id}`, {
+  const r = await apiFetch(`${getApiBase()}/projects/${id}`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(data),
@@ -140,7 +234,9 @@ export async function updateProject(
 }
 
 export async function deleteProject(id: string): Promise<void> {
-  const r = await fetch(`${getApiBase()}/projects/${id}`, { method: "DELETE" });
+  const r = await apiFetch(`${getApiBase()}/projects/${id}`, {
+    method: "DELETE",
+  });
   if (!r.ok) {
     const msg = await r.json().catch(() => ({ message: r.statusText }));
     const text =
@@ -152,7 +248,7 @@ export async function deleteProject(id: string): Promise<void> {
 }
 
 export async function fetchUsers(): Promise<User[]> {
-  const r = await fetch(`${getApiBase()}/users`);
+  const r = await apiFetch(`${getApiBase()}/users`);
   if (!r.ok) throw new Error("Failed to fetch users");
   return r.json();
 }
@@ -162,14 +258,14 @@ export async function fetchIssues(projectId?: string): Promise<Issue[]> {
   const url = projectId
     ? `${base}/issues?projectId=${encodeURIComponent(projectId)}`
     : `${base}/issues`;
-  const r = await fetch(url);
+  const r = await apiFetch(url);
   if (!r.ok) throw new Error("Failed to fetch issues");
   return r.json();
 }
 
 /** Fetch a single issue by id. */
 export async function fetchIssue(id: string): Promise<Issue> {
-  const r = await fetch(`${getApiBase()}/issues/${encodeURIComponent(id)}`);
+  const r = await apiFetch(`${getApiBase()}/issues/${encodeURIComponent(id)}`);
   if (!r.ok)
     throw new Error(
       r.status === 404 ? "Issue not found" : "Failed to fetch issue"
@@ -185,7 +281,7 @@ export async function fetchIssueSearch(
   if (!search.trim()) return [];
   const base = getApiBase();
   const url = `${base}/issues?projectId=${encodeURIComponent(projectId)}&search=${encodeURIComponent(search.trim())}`;
-  const r = await fetch(url);
+  const r = await apiFetch(url);
   if (!r.ok) throw new Error("Failed to search issues");
   return r.json();
 }
@@ -202,7 +298,7 @@ export async function createIssue(body: {
   assigneeId?: string;
   qualityScore?: number;
 }): Promise<Issue> {
-  const r = await fetch(`${getApiBase()}/issues`, {
+  const r = await apiFetch(`${getApiBase()}/issues`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
@@ -215,7 +311,7 @@ export async function updateIssue(
   id: string,
   body: Record<string, unknown>
 ): Promise<Issue> {
-  const r = await fetch(`${getApiBase()}/issues/${id}`, {
+  const r = await apiFetch(`${getApiBase()}/issues/${id}`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
@@ -239,7 +335,7 @@ export async function updateIssueStatus(
   id: string,
   status: string
 ): Promise<Issue> {
-  const r = await fetch(`${getApiBase()}/issues/${id}/status`, {
+  const r = await apiFetch(`${getApiBase()}/issues/${id}/status`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ status }),
@@ -255,7 +351,9 @@ export async function updateIssueStatus(
 }
 
 export async function deleteIssue(id: string): Promise<void> {
-  const r = await fetch(`${getApiBase()}/issues/${id}`, { method: "DELETE" });
+  const r = await apiFetch(`${getApiBase()}/issues/${id}`, {
+    method: "DELETE",
+  });
   if (!r.ok) throw new Error("Failed to delete issue");
 }
 
@@ -265,7 +363,7 @@ export async function deleteAllIssues(projectId?: string): Promise<void> {
   const url = projectId
     ? `${base}/issues/bulk?projectId=${encodeURIComponent(projectId)}`
     : `${base}/issues/bulk`;
-  const r = await fetch(url, { method: "DELETE" });
+  const r = await apiFetch(url, { method: "DELETE" });
   if (!r.ok) {
     const msg = await r.text().catch(() => r.statusText);
     throw new Error(`Failed to delete issues: ${r.status} ${msg || ""}`.trim());
@@ -305,7 +403,7 @@ export async function fetchIssueComments(
   issueId: string
 ): Promise<IssueComment[]> {
   try {
-    const r = await fetch(`${getApiBase()}/issues/${issueId}/comments`);
+    const r = await apiFetch(`${getApiBase()}/issues/${issueId}/comments`);
     if (!r.ok)
       throw new Error(
         `Failed to fetch comments (${r.status}). Is the backend running on port 3001?`
@@ -325,7 +423,7 @@ export async function createIssueComment(
   issueId: string,
   body: string
 ): Promise<IssueComment> {
-  const r = await fetch(`${getApiBase()}/issues/${issueId}/comments`, {
+  const r = await apiFetch(`${getApiBase()}/issues/${issueId}/comments`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ body }),
@@ -339,7 +437,7 @@ export async function updateIssueComment(
   commentId: string,
   body: string
 ): Promise<IssueComment> {
-  const r = await fetch(
+  const r = await apiFetch(
     `${getApiBase()}/issues/${issueId}/comments/${commentId}`,
     {
       method: "PATCH",
@@ -360,7 +458,7 @@ export async function deleteIssueComment(
   issueId: string,
   commentId: string
 ): Promise<void> {
-  const r = await fetch(
+  const r = await apiFetch(
     `${getApiBase()}/issues/${issueId}/comments/${commentId}`,
     { method: "DELETE" }
   );
@@ -382,7 +480,7 @@ export async function addCommentAttachment(
     videoBase64?: string;
   }
 ): Promise<IssueComment> {
-  const r = await fetch(
+  const r = await apiFetch(
     `${getApiBase()}/issues/${issueId}/comments/${commentId}/attachments`,
     {
       method: "POST",
@@ -412,7 +510,7 @@ export async function deleteCommentAttachment(
   commentId: string,
   attachmentId: string
 ): Promise<IssueComment> {
-  const r = await fetch(
+  const r = await apiFetch(
     `${getApiBase()}/issues/${issueId}/comments/${commentId}/attachments/${attachmentId}`,
     { method: "DELETE" }
   );
@@ -436,7 +534,7 @@ export type RunUiTestResult = {
 };
 
 export async function runUiTest(grep: string): Promise<RunUiTestResult> {
-  const r = await fetch(`${getApiBase()}/tests/run-ui`, {
+  const r = await apiFetch(`${getApiBase()}/tests/run-ui`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ grep }),
@@ -455,7 +553,7 @@ export type RunApiTestResult = {
 export async function runApiTest(
   testNamePattern: string
 ): Promise<RunApiTestResult> {
-  const r = await fetch(`${getApiBase()}/tests/run-api`, {
+  const r = await apiFetch(`${getApiBase()}/tests/run-api`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ testNamePattern }),
@@ -471,7 +569,7 @@ export async function uploadIssueRecording(
   recordingType: "screen" | "camera" | "audio" = "screen",
   fileName?: string
 ): Promise<Issue> {
-  const r = await fetch(`${getApiBase()}/issues/${issueId}/recordings`, {
+  const r = await apiFetch(`${getApiBase()}/issues/${issueId}/recordings`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ videoBase64, mediaType, recordingType, fileName }),
@@ -489,7 +587,7 @@ export async function updateIssueRecording(
     name?: string | null;
   }
 ): Promise<Issue> {
-  const r = await fetch(
+  const r = await apiFetch(
     `${getApiBase()}/issues/${issueId}/recordings/${recordingId}`,
     {
       method: "PATCH",
@@ -505,7 +603,7 @@ export async function deleteIssueRecording(
   issueId: string,
   recordingId: string
 ): Promise<Issue> {
-  const r = await fetch(
+  const r = await apiFetch(
     `${getApiBase()}/issues/${issueId}/recordings/${recordingId}`,
     { method: "DELETE" }
   );
@@ -524,7 +622,7 @@ export async function uploadIssueScreenshot(
   imageBase64: string,
   fileName?: string
 ): Promise<Issue> {
-  const r = await fetch(`${getApiBase()}/issues/${issueId}/screenshots`, {
+  const r = await apiFetch(`${getApiBase()}/issues/${issueId}/screenshots`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ imageBase64, fileName: fileName ?? undefined }),
@@ -545,7 +643,7 @@ export async function updateIssueScreenshot(
   screenshotId: string,
   data: { name?: string | null }
 ): Promise<Issue> {
-  const r = await fetch(
+  const r = await apiFetch(
     `${getApiBase()}/issues/${issueId}/screenshots/${encodeURIComponent(screenshotId)}`,
     {
       method: "PATCH",
@@ -574,7 +672,7 @@ export async function deleteIssueScreenshot(
   issueId: string,
   screenshotId: string
 ): Promise<Issue> {
-  const r = await fetch(
+  const r = await apiFetch(
     `${getApiBase()}/issues/${issueId}/screenshots/${encodeURIComponent(screenshotId)}`,
     { method: "DELETE" }
   );
@@ -592,7 +690,7 @@ export async function uploadIssueFile(
   fileBase64: string,
   fileName: string
 ): Promise<Issue> {
-  const r = await fetch(`${getApiBase()}/issues/${issueId}/files`, {
+  const r = await apiFetch(`${getApiBase()}/issues/${issueId}/files`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ fileBase64, fileName }),
@@ -613,11 +711,14 @@ export async function updateIssueFile(
   fileId: string,
   data: { fileName?: string }
 ): Promise<Issue> {
-  const r = await fetch(`${getApiBase()}/issues/${issueId}/files/${fileId}`, {
-    method: "PATCH",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(data),
-  });
+  const r = await apiFetch(
+    `${getApiBase()}/issues/${issueId}/files/${fileId}`,
+    {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    }
+  );
   if (!r.ok) throw new Error(`Failed to update file: ${r.statusText}`);
   return r.json();
 }
@@ -626,9 +727,12 @@ export async function deleteIssueFile(
   issueId: string,
   fileId: string
 ): Promise<Issue> {
-  const r = await fetch(`${getApiBase()}/issues/${issueId}/files/${fileId}`, {
-    method: "DELETE",
-  });
+  const r = await apiFetch(
+    `${getApiBase()}/issues/${issueId}/files/${fileId}`,
+    {
+      method: "DELETE",
+    }
+  );
   if (!r.ok) throw new Error(`Failed to delete file: ${r.statusText}`);
   return r.json();
 }

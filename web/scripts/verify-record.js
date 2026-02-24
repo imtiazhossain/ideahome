@@ -28,7 +28,10 @@ function findFirstWebm(dir) {
 
 async function main() {
   const outputDir = path.join(os.tmpdir(), `playwright-verify-${Date.now()}`);
-  const configPath = path.join(os.tmpdir(), `playwright-verify-config-${Date.now()}.json`);
+  const configPath = path.join(
+    os.tmpdir(),
+    `playwright-verify-config-${Date.now()}.json`
+  );
   const baseURL = process.env.PLAYWRIGHT_BASE_URL || "http://localhost:3000";
 
   fs.mkdirSync(outputDir, { recursive: true });
@@ -47,7 +50,17 @@ async function main() {
   delete env.NO_COLOR;
   const child = spawn(
     "pnpm",
-    ["exec", "playwright", "test", "--config", configPath, "--output", outputDir, "-g", GREP],
+    [
+      "exec",
+      "playwright",
+      "test",
+      "--config",
+      configPath,
+      "--output",
+      outputDir,
+      "-g",
+      GREP,
+    ],
     { cwd: WEB_DIR, env, stdio: "inherit" }
   );
 

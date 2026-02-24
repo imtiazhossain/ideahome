@@ -5,7 +5,10 @@ const nextConfig = {
     return [
       { source: "/issues", destination: `${backend}/issues` },
       { source: "/issues/:path*", destination: `${backend}/issues/:path*` },
-      { source: "/organizations/:path*", destination: `${backend}/organizations/:path*` },
+      {
+        source: "/organizations/:path*",
+        destination: `${backend}/organizations/:path*`,
+      },
       { source: "/projects/:path*", destination: `${backend}/projects/:path*` },
       { source: "/users/:path*", destination: `${backend}/users/:path*` },
       { source: "/uploads/:path*", destination: `${backend}/uploads/:path*` },

@@ -1,6 +1,7 @@
 import { Test, TestingModule } from "@nestjs/testing";
 import { ProjectsController } from "./projects.controller";
 import { ProjectsService } from "./projects.service";
+import { JwtAuthGuard } from "../auth/jwt.guard";
 
 describe("ProjectsController", () => {
   let controller: ProjectsController;
@@ -19,7 +20,10 @@ describe("ProjectsController", () => {
     const module: TestingModule = await Test.createTestingModule({
       controllers: [ProjectsController],
       providers: [{ provide: ProjectsService, useValue: mockProjectsService }],
-    }).compile();
+    })
+      .overrideGuard(JwtAuthGuard)
+      .useValue({ canActivate: () => true })
+      .compile();
 
     controller = module.get<ProjectsController>(ProjectsController);
     service = module.get<ProjectsService>(ProjectsService);
@@ -29,62 +33,68 @@ describe("ProjectsController", () => {
     expect(controller).toBeDefined();
   });
 
+  const req = { user: { sub: "user-1" } };
+
   describe("list", () => {
-    it("should return result from service.list()", async () => {
+    it("should return result from service.list() with user id", async () => {
       const list = [{ id: "1", name: "Project 1" }];
       mockProjectsService.list.mockResolvedValue(list);
 
-      await expect(controller.list()).resolves.toEqual(list);
-      expect(mockProjectsService.list).toHaveBeenCalledWith(undefined);
-    });
-
-    it("should pass orgId to service.list()", async () => {
-      const list = [{ id: "1", name: "Project 1", organizationId: "o1" }];
-      mockProjectsService.list.mockResolvedValue(list);
-
-      await expect(controller.list("o1")).resolves.toEqual(list);
-      expect(mockProjectsService.list).toHaveBeenCalledWith("o1");
+      await expect(controller.list(req as any)).resolves.toEqual(list);
+      expect(mockProjectsService.list).toHaveBeenCalledWith("user-1");
     });
   });
 
   describe("get", () => {
-    it("should return result from service.get()", async () => {
+    it("should return result from service.get() with user id", async () => {
       const project = { id: "1", name: "Project 1" };
       mockProjectsService.get.mockResolvedValue(project);
 
-      await expect(controller.get("1")).resolves.toEqual(project);
-      expect(mockProjectsService.get).toHaveBeenCalledWith("1");
+      await expect(controller.get("1", req as any)).resolves.toEqual(project);
+      expect(mockProjectsService.get).toHaveBeenCalledWith("1", "user-1");
     });
   });
 
   describe("create", () => {
-    it("should pass body to service.create()", async () => {
-      const body = { name: "New Project", organizationId: "o1" };
+    it("should pass userId and name to service.create()", async () => {
+      const body = { name: "New Project" };
       const created = { id: "1", ...body };
       mockProjectsService.create.mockResolvedValue(created);
 
-      await expect(controller.create(body)).resolves.toEqual(created);
-      expect(mockProjectsService.create).toHaveBeenCalledWith(body);
+      await expect(controller.create(body, req as any)).resolves.toEqual(
+        created
+      );
+      expect(mockProjectsService.create).toHaveBeenCalledWith("user-1", {
+        name: "New Project",
+      });
     });
   });
 
   describe("update", () => {
-    it("should pass id and body to service.update()", async () => {
+    it("should pass id, userId and body to service.update()", async () => {
       const body = { name: "Updated Name" };
       const updated = { id: "1", ...body };
       mockProjectsService.update.mockResolvedValue(updated);
 
-      await expect(controller.update("1", body)).resolves.toEqual(updated);
-      expect(mockProjectsService.update).toHaveBeenCalledWith("1", body);
+      await expect(controller.update("1", body, req as any)).resolves.toEqual(
+        updated
+      );
+      expect(mockProjectsService.update).toHaveBeenCalledWith(
+        "1",
+        "user-1",
+        body
+      );
     });
   });
 
   describe("remove", () => {
-    it("should call service.delete() with id", async () => {
+    it("should call service.delete() with id and user id", async () => {
       mockProjectsService.delete.mockResolvedValue({ id: "1" });
 
-      await expect(controller.remove("1")).resolves.toEqual({ id: "1" });
-      expect(mockProjectsService.delete).toHaveBeenCalledWith("1");
+      await expect(controller.remove("1", req as any)).resolves.toEqual({
+        id: "1",
+      });
+      expect(mockProjectsService.delete).toHaveBeenCalledWith("1", "user-1");
     });
   });
 });

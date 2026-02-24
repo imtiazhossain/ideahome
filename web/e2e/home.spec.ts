@@ -436,8 +436,12 @@ test.describe("Issue detail", () => {
         .locator(".modal")
         .filter({ hasText: "Create project" });
       await expect(createProjectModal).toBeVisible({ timeout: 10000 });
-      if (await createProjectModal.getByPlaceholder("My Organization").isVisible()) {
-        await createProjectModal.getByPlaceholder("My Organization").fill("E2E Org");
+      if (
+        await createProjectModal.getByPlaceholder("My Organization").isVisible()
+      ) {
+        await createProjectModal
+          .getByPlaceholder("My Organization")
+          .fill("E2E Org");
       } else {
         await createProjectModal
           .getByRole("combobox", { name: "Organization" })
@@ -695,9 +699,7 @@ test.describe("Run automated test", () => {
       await expect(runTestModal).toContainText(
         "home page loads with title and app bar"
       );
-      await expect(
-        runTestModal.locator("button.btn-secondary")
-      ).toBeVisible();
+      await expect(runTestModal.locator("button.btn-secondary")).toBeVisible();
       await expect(
         runTestModal.getByRole("button", { name: "Copy run command" })
       ).toBeVisible();

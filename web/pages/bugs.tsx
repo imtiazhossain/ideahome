@@ -1,7 +1,13 @@
 import React, { useEffect, useRef, useState } from "react";
 import Head from "next/head";
 import Link from "next/link";
-import { fetchProjects, updateProject } from "../lib/api";
+import { useRouter } from "next/router";
+import {
+  fetchProjects,
+  getUserScopedStorageKey,
+  isAuthenticated,
+  updateProject,
+} from "../lib/api";
 import { ProjectNavBar, DrawerCollapsedNav } from "../components/ProjectNavBar";
 import { useTheme } from "./_app";
 
@@ -57,12 +63,25 @@ const IconCheck = () => (
 
 type BugItem = { name: string; done: boolean };
 
-const BUGS_STORAGE_KEY = "ideahome-bugs-list";
+const BUGS_STORAGE_PREFIX = "ideahome-bugs-list";
+const LEGACY_BUGS_STORAGE_KEY = "ideahome-bugs-list";
+
+function getBugsStorageKey(): string {
+  return getUserScopedStorageKey(BUGS_STORAGE_PREFIX, LEGACY_BUGS_STORAGE_KEY);
+}
 
 function loadStoredBugs(): BugItem[] {
   if (typeof window === "undefined") return [];
   try {
-    const raw = localStorage.getItem(BUGS_STORAGE_KEY);
+    const key = getBugsStorageKey();
+    let raw = localStorage.getItem(key);
+    if (!raw && key !== LEGACY_BUGS_STORAGE_KEY) {
+      raw = localStorage.getItem(LEGACY_BUGS_STORAGE_KEY);
+      if (raw) {
+        localStorage.setItem(key, raw);
+        localStorage.removeItem(LEGACY_BUGS_STORAGE_KEY);
+      }
+    }
     if (!raw) return [];
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
@@ -85,7 +104,7 @@ function loadStoredBugs(): BugItem[] {
 
 function saveBugs(bugs: BugItem[]) {
   if (typeof window === "undefined") return;
-  localStorage.setItem(BUGS_STORAGE_KEY, JSON.stringify(bugs));
+  localStorage.setItem(getBugsStorageKey(), JSON.stringify(bugs));
 }
 
 function reorder<T>(arr: T[], from: number, to: number): T[] {
@@ -96,6 +115,7 @@ function reorder<T>(arr: T[], from: number, to: number): T[] {
 }
 
 export default function BugsPage() {
+  const router = useRouter();
   const [projects, setProjects] = useState<{ id: string; name: string }[]>([]);
   const [selectedProjectId, setSelectedProjectId] = useState<string>("");
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -128,8 +148,12 @@ export default function BugsPage() {
       .catch(() => {});
 
   useEffect(() => {
+    if (!isAuthenticated()) {
+      router.replace("/login");
+      return;
+    }
     loadProjects();
-  }, []);
+  }, [router]);
   useEffect(() => {
     if (editingProjectId) {
       projectNameInputRef.current?.focus();
@@ -166,9 +190,11 @@ export default function BugsPage() {
   };
 
   useEffect(() => {
+    if (!isAuthenticated()) return;
     setBugs(loadStoredBugs());
   }, []);
   useEffect(() => {
+    if (!isAuthenticated()) return;
     if (skipNextSaveRef.current) {
       skipNextSaveRef.current = false;
       return;

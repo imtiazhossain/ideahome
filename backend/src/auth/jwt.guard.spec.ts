@@ -1,5 +1,6 @@
 import { ExecutionContext, UnauthorizedException } from "@nestjs/common";
 import { JwtAuthGuard } from "./jwt.guard";
+import { PrismaService } from "../prisma.service";
 import * as jwt from "jsonwebtoken";
 
 jest.mock("jsonwebtoken", () => ({
@@ -8,6 +9,7 @@ jest.mock("jsonwebtoken", () => ({
 
 describe("JwtAuthGuard", () => {
   let guard: JwtAuthGuard;
+  let mockPrisma: { user: { findUnique: jest.Mock; findFirst: jest.Mock } };
   const mockVerify = jwt.verify as jest.MockedFunction<typeof jwt.verify>;
 
   function createMockContext(
@@ -20,63 +22,75 @@ describe("JwtAuthGuard", () => {
   }
 
   beforeEach(() => {
-    guard = new JwtAuthGuard();
+    mockPrisma = {
+      user: {
+        findUnique: jest.fn().mockResolvedValue(null),
+        findFirst: jest.fn().mockResolvedValue(null),
+      },
+    };
+    guard = new JwtAuthGuard(mockPrisma as unknown as PrismaService);
     jest.clearAllMocks();
     delete process.env.JWT_SECRET;
+    delete process.env.SKIP_AUTH_DEV;
+    delete process.env.DEV_USER_ID;
   });
+
+  async function canActivate(ctx: ExecutionContext): Promise<boolean> {
+    return guard.canActivate(ctx);
+  }
 
   it("should be defined", () => {
     expect(guard).toBeDefined();
   });
 
-  it("should throw when Authorization header is missing", () => {
+  it("should throw when Authorization header is missing", async () => {
     const ctx = createMockContext({});
-    expect(() => guard.canActivate(ctx)).toThrow(UnauthorizedException);
-    expect(() => guard.canActivate(ctx)).toThrow(
+    await expect(canActivate(ctx)).rejects.toThrow(UnauthorizedException);
+    await expect(canActivate(ctx)).rejects.toThrow(
       "Missing Authorization header"
     );
   });
 
-  it("should use lowercase authorization header", () => {
+  it("should use lowercase authorization header", async () => {
     const ctx = createMockContext({ authorization: "Bearer token" });
     mockVerify.mockReturnValue({ sub: "user1" } as never);
-    expect(guard.canActivate(ctx)).toBe(true);
+    expect(await canActivate(ctx)).toBe(true);
     expect(mockVerify).toHaveBeenCalledWith("token", "dev-secret");
   });
 
-  it("should use capitalized Authorization header", () => {
+  it("should use capitalized Authorization header", async () => {
     const ctx = createMockContext({ Authorization: "Bearer token2" });
     mockVerify.mockReturnValue({ sub: "user2" } as never);
-    expect(guard.canActivate(ctx)).toBe(true);
+    expect(await canActivate(ctx)).toBe(true);
     expect(mockVerify).toHaveBeenCalledWith("token2", "dev-secret");
   });
 
-  it("should use first element when authorization is an array", () => {
+  it("should use first element when authorization is an array", async () => {
     const ctx = createMockContext({ authorization: ["Bearer array-token"] });
     mockVerify.mockReturnValue({ sub: "user3" } as never);
-    expect(guard.canActivate(ctx)).toBe(true);
+    expect(await canActivate(ctx)).toBe(true);
     expect(mockVerify).toHaveBeenCalledWith("array-token", "dev-secret");
   });
 
-  it("should throw when format has wrong number of parts", () => {
+  it("should throw when format has wrong number of parts", async () => {
     const ctx = createMockContext({ authorization: "Bearer" });
-    expect(() => guard.canActivate(ctx)).toThrow(UnauthorizedException);
-    expect(() => guard.canActivate(ctx)).toThrow(
+    await expect(canActivate(ctx)).rejects.toThrow(UnauthorizedException);
+    await expect(canActivate(ctx)).rejects.toThrow(
       "Invalid Authorization format"
     );
     expect(mockVerify).not.toHaveBeenCalled();
   });
 
-  it("should throw when scheme is not Bearer", () => {
+  it("should throw when scheme is not Bearer", async () => {
     const ctx = createMockContext({ authorization: "Basic token" });
-    expect(() => guard.canActivate(ctx)).toThrow(UnauthorizedException);
-    expect(() => guard.canActivate(ctx)).toThrow(
+    await expect(canActivate(ctx)).rejects.toThrow(UnauthorizedException);
+    await expect(canActivate(ctx)).rejects.toThrow(
       "Invalid Authorization format"
     );
     expect(mockVerify).not.toHaveBeenCalled();
   });
 
-  it("should set req.user and return true when token is valid", () => {
+  it("should set req.user and return true when token is valid", async () => {
     const req: { headers: { authorization: string }; user?: unknown } = {
       headers: { authorization: "Bearer valid-token" },
     };
@@ -86,25 +100,98 @@ describe("JwtAuthGuard", () => {
     const payload = { sub: "user-id", email: "u@example.com" };
     mockVerify.mockReturnValue(payload as never);
 
-    expect(guard.canActivate(ctx)).toBe(true);
+    expect(await canActivate(ctx)).toBe(true);
     expect(req.user).toEqual(payload);
     expect(mockVerify).toHaveBeenCalledWith("valid-token", "dev-secret");
   });
 
-  it("should use JWT_SECRET from env when set", () => {
+  it("should use JWT_SECRET from env when set", async () => {
     process.env.JWT_SECRET = "custom-secret";
     const ctx = createMockContext({ authorization: "Bearer t" });
     mockVerify.mockReturnValue({} as never);
-    guard.canActivate(ctx);
+    await canActivate(ctx);
     expect(mockVerify).toHaveBeenCalledWith("t", "custom-secret");
   });
 
-  it("should throw when token is invalid or expired", () => {
+  it("should throw when token is invalid or expired", async () => {
     const ctx = createMockContext({ authorization: "Bearer bad-token" });
     mockVerify.mockImplementation(() => {
       throw new Error("invalid token");
     });
-    expect(() => guard.canActivate(ctx)).toThrow(UnauthorizedException);
-    expect(() => guard.canActivate(ctx)).toThrow("Invalid or expired token");
+    await expect(canActivate(ctx)).rejects.toThrow(UnauthorizedException);
+    await expect(canActivate(ctx)).rejects.toThrow("Invalid or expired token");
+  });
+
+  describe("SKIP_AUTH_DEV", () => {
+    const devUser = { id: "dev-user-id", email: "dev@localhost" };
+
+    it("should allow no token and set req.user when SKIP_AUTH_DEV and first user exists", async () => {
+      process.env.SKIP_AUTH_DEV = "true";
+      mockPrisma.user.findFirst.mockResolvedValue(devUser);
+      const req: { headers: Record<string, string>; user?: unknown } = {
+        headers: {},
+      };
+      const ctx = {
+        switchToHttp: () => ({ getRequest: () => req }),
+      } as unknown as ExecutionContext;
+
+      expect(await canActivate(ctx)).toBe(true);
+      expect(req.user).toEqual({ sub: devUser.id, email: devUser.email });
+      expect(mockVerify).not.toHaveBeenCalled();
+    });
+
+    it("should allow invalid token and set req.user when SKIP_AUTH_DEV and user exists", async () => {
+      process.env.SKIP_AUTH_DEV = "true";
+      mockPrisma.user.findFirst.mockResolvedValue(devUser);
+      mockVerify.mockImplementation(() => {
+        throw new Error("invalid token");
+      });
+      const req: { headers: { authorization: string }; user?: unknown } = {
+        headers: { authorization: "Bearer bad" },
+      };
+      const ctx = {
+        switchToHttp: () => ({ getRequest: () => req }),
+      } as unknown as ExecutionContext;
+
+      expect(await canActivate(ctx)).toBe(true);
+      expect(req.user).toEqual({ sub: devUser.id, email: devUser.email });
+    });
+
+    it("should use DEV_USER_ID when set", async () => {
+      process.env.SKIP_AUTH_DEV = "true";
+      process.env.DEV_USER_ID = "custom-dev-id";
+      mockPrisma.user.findUnique.mockResolvedValue({
+        id: "custom-dev-id",
+        email: "custom@dev.local",
+      });
+      const req: { headers: Record<string, string>; user?: unknown } = {
+        headers: {},
+      };
+      const ctx = {
+        switchToHttp: () => ({ getRequest: () => req }),
+      } as unknown as ExecutionContext;
+
+      expect(await canActivate(ctx)).toBe(true);
+      expect(req.user).toEqual({
+        sub: "custom-dev-id",
+        email: "custom@dev.local",
+      });
+      expect(mockPrisma.user.findUnique).toHaveBeenCalledWith({
+        where: { id: "custom-dev-id" },
+        select: { id: true, email: true },
+      });
+      expect(mockPrisma.user.findFirst).not.toHaveBeenCalled();
+    });
+
+    it("should throw when SKIP_AUTH_DEV but no user in DB", async () => {
+      process.env.SKIP_AUTH_DEV = "true";
+      mockPrisma.user.findFirst.mockResolvedValue(null);
+      const ctx = createMockContext({});
+
+      await expect(canActivate(ctx)).rejects.toThrow(UnauthorizedException);
+      await expect(canActivate(ctx)).rejects.toThrow(
+        "Missing Authorization header"
+      );
+    });
   });
 });

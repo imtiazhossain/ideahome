@@ -3,6 +3,7 @@ import {
   Injectable,
   NotFoundException,
 } from "@nestjs/common";
+import { IssuesService } from "./issues.service";
 import { PrismaService } from "../prisma.service";
 import { writeFile, mkdir, unlink } from "fs/promises";
 import { existsSync } from "fs";
@@ -15,7 +16,10 @@ const COMMENT_INCLUDE = {
 
 @Injectable()
 export class IssueCommentsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly issuesService: IssuesService
+  ) {}
 
   private get recordingsDir(): string {
     return join(__dirname, "..", "..", "uploads", "recordings");
@@ -25,11 +29,8 @@ export class IssueCommentsService {
     return join(__dirname, "..", "..", "uploads", "screenshots");
   }
 
-  async list(issueId: string) {
-    const issue = await this.prisma.issue.findUnique({
-      where: { id: issueId },
-    });
-    if (!issue) throw new NotFoundException("Issue not found");
+  async list(issueId: string, userId: string) {
+    await this.issuesService.verifyIssueAccess(issueId, userId);
     return this.prisma.issueComment.findMany({
       where: { issueId },
       orderBy: { createdAt: "asc" },
@@ -37,18 +38,21 @@ export class IssueCommentsService {
     });
   }
 
-  async create(issueId: string, body: string) {
-    const issue = await this.prisma.issue.findUnique({
-      where: { id: issueId },
-    });
-    if (!issue) throw new NotFoundException("Issue not found");
+  async create(issueId: string, body: string, userId: string) {
+    await this.issuesService.verifyIssueAccess(issueId, userId);
     return this.prisma.issueComment.create({
       data: { issueId, body },
       include: COMMENT_INCLUDE,
     });
   }
 
-  async update(issueId: string, commentId: string, body: string) {
+  async update(
+    issueId: string,
+    commentId: string,
+    body: string,
+    userId: string
+  ) {
+    await this.issuesService.verifyIssueAccess(issueId, userId);
     const comment = await this.prisma.issueComment.findUnique({
       where: { id: commentId },
     });
@@ -84,8 +88,10 @@ export class IssueCommentsService {
       type: "screenshot" | "video" | "screen_recording" | "camera_recording";
       imageBase64?: string;
       videoBase64?: string;
-    }
+    },
+    userId: string
   ) {
+    await this.issuesService.verifyIssueAccess(issueId, userId);
     const comment = await this.prisma.issueComment.findFirst({
       where: { id: commentId, issueId },
     });
@@ -140,8 +146,10 @@ export class IssueCommentsService {
   async removeAttachment(
     issueId: string,
     commentId: string,
-    attachmentId: string
+    attachmentId: string,
+    userId: string
   ) {
+    await this.issuesService.verifyIssueAccess(issueId, userId);
     const attachment = await this.prisma.commentAttachment.findFirst({
       where: { id: attachmentId, comment: { id: commentId, issueId } },
     });
@@ -154,7 +162,8 @@ export class IssueCommentsService {
     return this.getOne(commentId);
   }
 
-  async delete(issueId: string, commentId: string) {
+  async delete(issueId: string, commentId: string, userId: string) {
+    await this.issuesService.verifyIssueAccess(issueId, userId);
     const comment = await this.prisma.issueComment.findFirst({
       where: { id: commentId, issueId },
       include: { attachments: true },

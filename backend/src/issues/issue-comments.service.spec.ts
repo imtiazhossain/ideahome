@@ -1,7 +1,10 @@
 import { Test, TestingModule } from "@nestjs/testing";
 import { NotFoundException } from "@nestjs/common";
 import { IssueCommentsService } from "./issue-comments.service";
+import { IssuesService } from "./issues.service";
 import { PrismaService } from "../prisma.service";
+
+const TEST_USER_ID = "user-1";
 
 jest.mock("fs/promises", () => ({
   mkdir: jest.fn().mockResolvedValue(undefined),
@@ -31,12 +34,18 @@ describe("IssueCommentsService", () => {
     $transaction: jest.fn(),
   };
 
+  const mockIssuesService = {
+    verifyIssueAccess: jest.fn().mockResolvedValue(undefined),
+  };
+
   beforeEach(async () => {
     jest.clearAllMocks();
+    mockIssuesService.verifyIssueAccess.mockResolvedValue(undefined);
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         IssueCommentsService,
         { provide: PrismaService, useValue: mockPrisma },
+        { provide: IssuesService, useValue: mockIssuesService },
       ],
     }).compile();
 
@@ -57,11 +66,12 @@ describe("IssueCommentsService", () => {
       mockPrisma.issue.findUnique.mockResolvedValue(issue);
       mockPrisma.issueComment.findMany.mockResolvedValue(comments);
 
-      const result = await service.list("issue-1");
+      const result = await service.list("issue-1", TEST_USER_ID);
       expect(result).toEqual(comments);
-      expect(mockPrisma.issue.findUnique).toHaveBeenCalledWith({
-        where: { id: "issue-1" },
-      });
+      expect(mockIssuesService.verifyIssueAccess).toHaveBeenCalledWith(
+        "issue-1",
+        TEST_USER_ID
+      );
       expect(mockPrisma.issueComment.findMany).toHaveBeenCalledWith({
         where: { issueId: "issue-1" },
         orderBy: { createdAt: "asc" },
@@ -70,10 +80,16 @@ describe("IssueCommentsService", () => {
     });
 
     it("should throw NotFoundException when issue does not exist", async () => {
-      mockPrisma.issue.findUnique.mockResolvedValue(null);
+      mockIssuesService.verifyIssueAccess.mockRejectedValue(
+        new NotFoundException("Issue not found")
+      );
 
-      await expect(service.list("missing")).rejects.toThrow(NotFoundException);
-      await expect(service.list("missing")).rejects.toThrow("Issue not found");
+      await expect(service.list("missing", TEST_USER_ID)).rejects.toThrow(
+        NotFoundException
+      );
+      await expect(service.list("missing", TEST_USER_ID)).rejects.toThrow(
+        "Issue not found"
+      );
       expect(mockPrisma.issueComment.findMany).not.toHaveBeenCalled();
     });
   });
@@ -85,11 +101,16 @@ describe("IssueCommentsService", () => {
       mockPrisma.issue.findUnique.mockResolvedValue(issue);
       mockPrisma.issueComment.create.mockResolvedValue(created);
 
-      const result = await service.create("issue-1", "New comment");
+      const result = await service.create(
+        "issue-1",
+        "New comment",
+        TEST_USER_ID
+      );
       expect(result).toEqual(created);
-      expect(mockPrisma.issue.findUnique).toHaveBeenCalledWith({
-        where: { id: "issue-1" },
-      });
+      expect(mockIssuesService.verifyIssueAccess).toHaveBeenCalledWith(
+        "issue-1",
+        TEST_USER_ID
+      );
       expect(mockPrisma.issueComment.create).toHaveBeenCalledWith({
         data: { issueId: "issue-1", body: "New comment" },
         include: expect.any(Object),
@@ -97,14 +118,16 @@ describe("IssueCommentsService", () => {
     });
 
     it("should throw NotFoundException when issue does not exist", async () => {
-      mockPrisma.issue.findUnique.mockResolvedValue(null);
+      mockIssuesService.verifyIssueAccess.mockRejectedValue(
+        new NotFoundException("Issue not found")
+      );
 
-      await expect(service.create("missing", "body")).rejects.toThrow(
-        NotFoundException
-      );
-      await expect(service.create("missing", "body")).rejects.toThrow(
-        "Issue not found"
-      );
+      await expect(
+        service.create("missing", "body", TEST_USER_ID)
+      ).rejects.toThrow(NotFoundException);
+      await expect(
+        service.create("missing", "body", TEST_USER_ID)
+      ).rejects.toThrow("Issue not found");
       expect(mockPrisma.issueComment.create).not.toHaveBeenCalled();
     });
   });
@@ -119,7 +142,12 @@ describe("IssueCommentsService", () => {
         .mockResolvedValueOnce(comment)
         .mockResolvedValueOnce(updated);
 
-      const result = await service.update("issue-1", "c1", "New body");
+      const result = await service.update(
+        "issue-1",
+        "c1",
+        "New body",
+        TEST_USER_ID
+      );
       expect(result).toEqual(updated);
       expect(mockPrisma.issueCommentEdit.create).toHaveBeenCalledWith({
         data: { commentId: "c1", body: "Old body" },
@@ -134,7 +162,12 @@ describe("IssueCommentsService", () => {
       const comment = { id: "c1", issueId: "issue-1", body: "Same" };
       mockPrisma.issueComment.findUnique.mockResolvedValue(comment);
 
-      const result = await service.update("issue-1", "c1", "Same");
+      const result = await service.update(
+        "issue-1",
+        "c1",
+        "Same",
+        TEST_USER_ID
+      );
       expect(result).toEqual(comment);
       expect(mockPrisma.$transaction).not.toHaveBeenCalled();
     });
@@ -142,12 +175,12 @@ describe("IssueCommentsService", () => {
     it("should throw NotFoundException when comment does not exist", async () => {
       mockPrisma.issueComment.findUnique.mockResolvedValue(null);
 
-      await expect(service.update("issue-1", "missing", "New")).rejects.toThrow(
-        NotFoundException
-      );
-      await expect(service.update("issue-1", "missing", "New")).rejects.toThrow(
-        "Comment not found"
-      );
+      await expect(
+        service.update("issue-1", "missing", "New", TEST_USER_ID)
+      ).rejects.toThrow(NotFoundException);
+      await expect(
+        service.update("issue-1", "missing", "New", TEST_USER_ID)
+      ).rejects.toThrow("Comment not found");
     });
 
     it("should throw NotFoundException when comment belongs to another issue", async () => {
@@ -156,9 +189,9 @@ describe("IssueCommentsService", () => {
         issueId: "other",
       });
 
-      await expect(service.update("issue-1", "c1", "New")).rejects.toThrow(
-        NotFoundException
-      );
+      await expect(
+        service.update("issue-1", "c1", "New", TEST_USER_ID)
+      ).rejects.toThrow(NotFoundException);
     });
 
     it("should throw when getOne does not find comment after update", async () => {
@@ -168,12 +201,12 @@ describe("IssueCommentsService", () => {
         .mockResolvedValueOnce(null);
       mockPrisma.$transaction.mockResolvedValue(undefined);
 
-      await expect(service.update("issue-1", "c1", "New")).rejects.toThrow(
-        NotFoundException
-      );
-      await expect(service.update("issue-1", "c1", "New")).rejects.toThrow(
-        "Comment not found"
-      );
+      await expect(
+        service.update("issue-1", "c1", "New", TEST_USER_ID)
+      ).rejects.toThrow(NotFoundException);
+      await expect(
+        service.update("issue-1", "c1", "New", TEST_USER_ID)
+      ).rejects.toThrow("Comment not found");
     });
   });
 
@@ -190,10 +223,15 @@ describe("IssueCommentsService", () => {
       mockPrisma.commentAttachment.create.mockResolvedValue(created);
       mockPrisma.issueComment.findUnique.mockResolvedValue(created);
 
-      const result = await service.addAttachment("issue-1", "c1", {
-        type: "screenshot",
-        imageBase64: "  iVBORw0KGgo=  ",
-      });
+      const result = await service.addAttachment(
+        "issue-1",
+        "c1",
+        {
+          type: "screenshot",
+          imageBase64: "  iVBORw0KGgo=  ",
+        },
+        TEST_USER_ID
+      );
       expect(result).toEqual(created);
       expect(mockPrisma.commentAttachment.create).toHaveBeenCalledWith({
         data: expect.objectContaining({ commentId: "c1", type: "screenshot" }),
@@ -212,10 +250,15 @@ describe("IssueCommentsService", () => {
       mockPrisma.commentAttachment.create.mockResolvedValue(created);
       mockPrisma.issueComment.findUnique.mockResolvedValue(created);
 
-      const result = await service.addAttachment("issue-1", "c1", {
-        type: "video",
-        videoBase64: "  dmlkZW8=  ",
-      });
+      const result = await service.addAttachment(
+        "issue-1",
+        "c1",
+        {
+          type: "video",
+          videoBase64: "  dmlkZW8=  ",
+        },
+        TEST_USER_ID
+      );
       expect(result).toEqual(created);
       expect(mockPrisma.commentAttachment.create).toHaveBeenCalledWith({
         data: expect.objectContaining({ commentId: "c1", type: "video" }),
@@ -229,7 +272,12 @@ describe("IssueCommentsService", () => {
       });
 
       await expect(
-        service.addAttachment("issue-1", "c1", { type: "screenshot" })
+        service.addAttachment(
+          "issue-1",
+          "c1",
+          { type: "screenshot" },
+          TEST_USER_ID
+        )
       ).rejects.toThrow("Provide a non-empty imageBase64 for screenshot");
     });
 
@@ -240,7 +288,12 @@ describe("IssueCommentsService", () => {
       });
 
       await expect(
-        service.addAttachment("issue-1", "c1", { type: "screen_recording" })
+        service.addAttachment(
+          "issue-1",
+          "c1",
+          { type: "screen_recording" },
+          TEST_USER_ID
+        )
       ).rejects.toThrow(
         "Provide a non-empty videoBase64 for video, screen_recording, or camera_recording"
       );
@@ -250,10 +303,15 @@ describe("IssueCommentsService", () => {
       mockPrisma.issueComment.findFirst.mockResolvedValue(null);
 
       await expect(
-        service.addAttachment("issue-1", "c1", {
-          type: "screenshot",
-          imageBase64: "abc",
-        })
+        service.addAttachment(
+          "issue-1",
+          "c1",
+          {
+            type: "screenshot",
+            imageBase64: "abc",
+          },
+          TEST_USER_ID
+        )
       ).rejects.toThrow(NotFoundException);
     });
   });
@@ -270,7 +328,12 @@ describe("IssueCommentsService", () => {
       mockPrisma.commentAttachment.delete.mockResolvedValue(attachment);
       mockPrisma.issueComment.findUnique.mockResolvedValue(comment);
 
-      const result = await service.removeAttachment("issue-1", "c1", "a1");
+      const result = await service.removeAttachment(
+        "issue-1",
+        "c1",
+        "a1",
+        TEST_USER_ID
+      );
       expect(result).toEqual(comment);
       expect(mockPrisma.commentAttachment.delete).toHaveBeenCalledWith({
         where: { id: "a1" },
@@ -281,7 +344,7 @@ describe("IssueCommentsService", () => {
       mockPrisma.commentAttachment.findFirst.mockResolvedValue(null);
 
       await expect(
-        service.removeAttachment("issue-1", "c1", "a1")
+        service.removeAttachment("issue-1", "c1", "a1", TEST_USER_ID)
       ).rejects.toThrow(NotFoundException);
     });
 
@@ -297,7 +360,12 @@ describe("IssueCommentsService", () => {
       mockPrisma.issueComment.findUnique.mockResolvedValue(comment);
       require("fs").existsSync.mockReturnValue(true);
 
-      const result = await service.removeAttachment("issue-1", "c1", "a1");
+      const result = await service.removeAttachment(
+        "issue-1",
+        "c1",
+        "a1",
+        TEST_USER_ID
+      );
       expect(result).toEqual(comment);
       expect(require("fs/promises").unlink).toHaveBeenCalled();
     });
@@ -309,7 +377,7 @@ describe("IssueCommentsService", () => {
       mockPrisma.issueComment.findFirst.mockResolvedValue(comment);
       mockPrisma.issueComment.delete.mockResolvedValue(comment);
 
-      await service.delete("issue-1", "c1");
+      await service.delete("issue-1", "c1", TEST_USER_ID);
       expect(mockPrisma.issueComment.findFirst).toHaveBeenCalledWith({
         where: { id: "c1", issueId: "issue-1" },
         include: { attachments: true },
@@ -322,12 +390,12 @@ describe("IssueCommentsService", () => {
     it("should throw NotFoundException when comment does not exist", async () => {
       mockPrisma.issueComment.findFirst.mockResolvedValue(null);
 
-      await expect(service.delete("issue-1", "missing")).rejects.toThrow(
-        NotFoundException
-      );
-      await expect(service.delete("issue-1", "missing")).rejects.toThrow(
-        "Comment not found"
-      );
+      await expect(
+        service.delete("issue-1", "missing", TEST_USER_ID)
+      ).rejects.toThrow(NotFoundException);
+      await expect(
+        service.delete("issue-1", "missing", TEST_USER_ID)
+      ).rejects.toThrow("Comment not found");
       expect(mockPrisma.issueComment.delete).not.toHaveBeenCalled();
     });
 
@@ -342,7 +410,7 @@ describe("IssueCommentsService", () => {
       const existsSync = require("fs").existsSync;
       existsSync.mockReturnValue(true);
 
-      await service.delete("issue-1", "c1");
+      await service.delete("issue-1", "c1", TEST_USER_ID);
       expect(mockPrisma.issueComment.delete).toHaveBeenCalledWith({
         where: { id: "c1" },
       });

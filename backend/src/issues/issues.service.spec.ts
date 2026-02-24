@@ -26,6 +26,12 @@ describe("IssuesService", () => {
   let prisma: PrismaService;
 
   const mockPrisma = {
+    user: {
+      findUnique: jest.fn().mockResolvedValue({ organizationId: "o1" }),
+    },
+    project: {
+      findUnique: jest.fn(),
+    },
     issue: {
       findMany: jest.fn(),
       findUnique: jest.fn(),
@@ -33,6 +39,7 @@ describe("IssuesService", () => {
       update: jest.fn(),
       delete: jest.fn(),
       deleteMany: jest.fn(),
+      count: jest.fn(),
     },
     issueRecording: {
       findFirst: jest.fn(),
@@ -166,12 +173,17 @@ describe("IssuesService", () => {
     it("should create an issue", async () => {
       const input = { title: "New", description: "Desc", projectId: "p1" };
       const expected = { id: "1", ...input };
+      mockPrisma.project.findUnique.mockResolvedValue({
+        id: "p1",
+        name: "Project 1",
+      });
+      mockPrisma.issue.count.mockResolvedValue(0);
       mockPrisma.issue.create.mockResolvedValue(expected);
 
       const result = await service.create(input);
       expect(result).toEqual(expected);
       expect(mockPrisma.issue.create).toHaveBeenCalledWith({
-        data: input,
+        data: { ...input, key: "P1-1" },
         include: ISSUE_INCLUDE,
       });
     });
@@ -180,12 +192,17 @@ describe("IssuesService", () => {
       const tests = JSON.stringify(["test A", "test B"]);
       const input = { title: "New", projectId: "p1", automatedTest: tests };
       const expected = { id: "2", ...input };
+      mockPrisma.project.findUnique.mockResolvedValue({
+        id: "p1",
+        name: "Project 1",
+      });
+      mockPrisma.issue.count.mockResolvedValue(0);
       mockPrisma.issue.create.mockResolvedValue(expected);
 
       const result = await service.create(input);
       expect(result).toEqual(expected);
       expect(mockPrisma.issue.create).toHaveBeenCalledWith({
-        data: input,
+        data: { ...input, key: "P1-1" },
         include: ISSUE_INCLUDE,
       });
     });
@@ -301,55 +318,63 @@ describe("IssuesService", () => {
 
   describe("deleteMany", () => {
     it("should delete all issues when projectId is provided", async () => {
+      mockPrisma.user.findUnique.mockResolvedValue({ organizationId: "o1" });
       mockPrisma.issue.findMany.mockResolvedValue([
         { id: "1", recordings: [], screenshots: [], files: [] },
         { id: "2", recordings: [], screenshots: [], files: [] },
       ]);
       mockPrisma.issue.deleteMany.mockResolvedValue({ count: 2 });
 
-      await service.deleteMany("project-1");
+      await service.deleteMany("project-1", "user-1");
       expect(mockPrisma.issue.findMany).toHaveBeenCalledWith({
-        where: { projectId: "project-1" },
+        where: {
+          project: { organizationId: "o1" },
+          projectId: "project-1",
+        },
         include: { recordings: true, screenshots: true, files: true },
       });
       expect(mockPrisma.issue.deleteMany).toHaveBeenCalledWith({
-        where: { projectId: "project-1" },
+        where: {
+          project: { organizationId: "o1" },
+          projectId: "project-1",
+        },
       });
     });
 
     it("should delete all issues when projectId is undefined", async () => {
+      mockPrisma.user.findUnique.mockResolvedValue({ organizationId: "o1" });
       mockPrisma.issue.findMany.mockResolvedValue([]);
       mockPrisma.issue.deleteMany.mockResolvedValue({ count: 0 });
 
-      await service.deleteMany(undefined);
+      await service.deleteMany(undefined, "user-1");
       expect(mockPrisma.issue.findMany).toHaveBeenCalledWith({
-        where: {},
+        where: { project: { organizationId: "o1" } },
         include: { recordings: true, screenshots: true, files: true },
       });
       expect(mockPrisma.issue.deleteMany).toHaveBeenCalledWith({
-        where: {},
+        where: { project: { organizationId: "o1" } },
       });
     });
   });
 
   describe("streamRecording", () => {
-    it("should throw on invalid filename", () => {
-      expect(() =>
+    it("should throw on invalid filename", async () => {
+      await expect(
         service.streamRecording("../../../etc/passwd", {} as any)
-      ).toThrow(NotFoundException);
-      expect(() => service.streamRecording("x", {} as any)).toThrow(
+      ).rejects.toThrow(NotFoundException);
+      await expect(service.streamRecording("x", {} as any)).rejects.toThrow(
         NotFoundException
       );
     });
 
-    it("should throw when file does not exist", () => {
+    it("should throw when file does not exist", async () => {
       require("fs").existsSync.mockReturnValue(false);
-      expect(() => service.streamRecording("valid.webm", {} as any)).toThrow(
-        NotFoundException
-      );
+      await expect(
+        service.streamRecording("valid.webm", {} as any)
+      ).rejects.toThrow(NotFoundException);
     });
 
-    it("should set headers and pipe stream when file exists", () => {
+    it("should set headers and pipe stream when file exists", async () => {
       require("fs").existsSync.mockReturnValue(true);
       const setHeader = jest.fn();
       const pipe = jest.fn();
@@ -357,7 +382,7 @@ describe("IssuesService", () => {
       const { createReadStream } = require("fs");
       createReadStream.mockReturnValue({ pipe });
 
-      service.streamRecording("video.webm", res as any);
+      await service.streamRecording("video.webm", res as any);
       expect(setHeader).toHaveBeenCalledWith("Content-Type", "video/webm");
       expect(setHeader).toHaveBeenCalledWith("Accept-Ranges", "bytes");
       expect(pipe).toHaveBeenCalledWith(res);

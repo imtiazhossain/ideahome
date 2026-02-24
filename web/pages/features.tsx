@@ -1,7 +1,13 @@
 import React, { useEffect, useRef, useState } from "react";
 import Head from "next/head";
 import Link from "next/link";
-import { fetchProjects, updateProject } from "../lib/api";
+import { useRouter } from "next/router";
+import {
+  fetchProjects,
+  getUserScopedStorageKey,
+  isAuthenticated,
+  updateProject,
+} from "../lib/api";
 import { ProjectNavBar, DrawerCollapsedNav } from "../components/ProjectNavBar";
 import { useTheme } from "./_app";
 
@@ -57,12 +63,28 @@ const IconCheck = () => (
 
 type FeatureItem = { name: string; done: boolean };
 
-const FEATURES_STORAGE_KEY = "ideahome-features-list";
+const FEATURES_STORAGE_PREFIX = "ideahome-features-list";
+const LEGACY_FEATURES_STORAGE_KEY = "ideahome-features-list";
+
+function getFeaturesStorageKey(): string {
+  return getUserScopedStorageKey(
+    FEATURES_STORAGE_PREFIX,
+    LEGACY_FEATURES_STORAGE_KEY
+  );
+}
 
 function loadStoredFeatures(): FeatureItem[] {
   if (typeof window === "undefined") return [];
   try {
-    const raw = localStorage.getItem(FEATURES_STORAGE_KEY);
+    const key = getFeaturesStorageKey();
+    let raw = localStorage.getItem(key);
+    if (!raw && key !== LEGACY_FEATURES_STORAGE_KEY) {
+      raw = localStorage.getItem(LEGACY_FEATURES_STORAGE_KEY);
+      if (raw) {
+        localStorage.setItem(key, raw);
+        localStorage.removeItem(LEGACY_FEATURES_STORAGE_KEY);
+      }
+    }
     if (!raw) return [];
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
@@ -85,7 +107,7 @@ function loadStoredFeatures(): FeatureItem[] {
 
 function saveFeatures(features: FeatureItem[]) {
   if (typeof window === "undefined") return;
-  localStorage.setItem(FEATURES_STORAGE_KEY, JSON.stringify(features));
+  localStorage.setItem(getFeaturesStorageKey(), JSON.stringify(features));
 }
 
 function reorder<T>(arr: T[], from: number, to: number): T[] {
@@ -96,6 +118,7 @@ function reorder<T>(arr: T[], from: number, to: number): T[] {
 }
 
 export default function FeaturesPage() {
+  const router = useRouter();
   const [projects, setProjects] = useState<{ id: string; name: string }[]>([]);
   const [selectedProjectId, setSelectedProjectId] = useState<string>("");
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -128,8 +151,12 @@ export default function FeaturesPage() {
       .catch(() => {});
 
   useEffect(() => {
+    if (!isAuthenticated()) {
+      router.replace("/login");
+      return;
+    }
     loadProjects();
-  }, []);
+  }, [router]);
   useEffect(() => {
     if (editingProjectId) {
       projectNameInputRef.current?.focus();
@@ -166,9 +193,11 @@ export default function FeaturesPage() {
   };
 
   useEffect(() => {
+    if (!isAuthenticated()) return;
     setFeatures(loadStoredFeatures());
   }, []);
   useEffect(() => {
+    if (!isAuthenticated()) return;
     if (skipNextSaveRef.current) {
       skipNextSaveRef.current = false;
       return;

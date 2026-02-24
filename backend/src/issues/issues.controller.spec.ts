@@ -2,6 +2,7 @@ import { Test, TestingModule } from "@nestjs/testing";
 import { IssuesController } from "./issues.controller";
 import { IssuesService } from "./issues.service";
 import { IssueCommentsService } from "./issue-comments.service";
+import { JwtAuthGuard } from "../auth/jwt.guard";
 
 describe("IssuesController", () => {
   let controller: IssuesController;
@@ -44,11 +45,16 @@ describe("IssuesController", () => {
         { provide: IssuesService, useValue: mockIssuesService },
         { provide: IssueCommentsService, useValue: mockIssueCommentsService },
       ],
-    }).compile();
+    })
+      .overrideGuard(JwtAuthGuard)
+      .useValue({ canActivate: () => true })
+      .compile();
 
     controller = module.get<IssuesController>(IssuesController);
     service = module.get<IssuesService>(IssuesService);
   });
+
+  const req = { user: { sub: "user-1" } };
 
   it("should be defined", () => {
     expect(controller).toBeDefined();
@@ -59,34 +65,54 @@ describe("IssuesController", () => {
       const list = [{ id: "1", title: "Issue 1" }];
       mockIssuesService.list.mockResolvedValue(list);
 
-      await expect(controller.list()).resolves.toEqual(list);
-      expect(mockIssuesService.list).toHaveBeenCalledWith(undefined, undefined);
+      await expect(
+        controller.list(undefined, undefined, req as any)
+      ).resolves.toEqual(list);
+      expect(mockIssuesService.list).toHaveBeenCalledWith(
+        undefined,
+        undefined,
+        "user-1"
+      );
     });
 
     it("should pass projectId to service.list()", async () => {
       const list = [{ id: "1", title: "Issue 1", projectId: "p1" }];
       mockIssuesService.list.mockResolvedValue(list);
 
-      await expect(controller.list("p1")).resolves.toEqual(list);
-      expect(mockIssuesService.list).toHaveBeenCalledWith("p1", undefined);
+      await expect(
+        controller.list("p1", undefined, req as any)
+      ).resolves.toEqual(list);
+      expect(mockIssuesService.list).toHaveBeenCalledWith(
+        "p1",
+        undefined,
+        "user-1"
+      );
     });
 
     it("should pass projectId and search to service.list()", async () => {
       const list = [{ id: "1", title: "Issue 1", projectId: "p1" }];
       mockIssuesService.list.mockResolvedValue(list);
 
-      await expect(controller.list("p1", "bug")).resolves.toEqual(list);
-      expect(mockIssuesService.list).toHaveBeenCalledWith("p1", "bug");
+      await expect(controller.list("p1", "bug", req as any)).resolves.toEqual(
+        list
+      );
+      expect(mockIssuesService.list).toHaveBeenCalledWith(
+        "p1",
+        "bug",
+        "user-1"
+      );
     });
   });
 
   describe("streamRecording", () => {
-    it("should call service.streamRecording with filename and res", () => {
+    it("should call service.streamRecording with filename, res and userId", async () => {
       const res = {} as any;
-      controller.streamRecording("rec.webm", res);
+      mockIssuesService.streamRecording.mockResolvedValue(undefined);
+      await controller.streamRecording("rec.webm", res, req as any);
       expect(mockIssuesService.streamRecording).toHaveBeenCalledWith(
         "rec.webm",
-        res
+        res,
+        "user-1"
       );
     });
   });
@@ -96,8 +122,10 @@ describe("IssuesController", () => {
       const comments = [{ id: "c1", issueId: "1", body: "A comment" }];
       mockIssueCommentsService.list.mockResolvedValue(comments);
 
-      await expect(controller.listComments("1")).resolves.toEqual(comments);
-      expect(mockIssueCommentsService.list).toHaveBeenCalledWith("1");
+      await expect(controller.listComments("1", req as any)).resolves.toEqual(
+        comments
+      );
+      expect(mockIssueCommentsService.list).toHaveBeenCalledWith("1", "user-1");
     });
   });
 
@@ -107,12 +135,13 @@ describe("IssuesController", () => {
       mockIssueCommentsService.addAttachment.mockResolvedValue({ id: "a1" });
 
       await expect(
-        controller.addCommentAttachment("1", "c1", body)
+        controller.addCommentAttachment("1", "c1", body, req as any)
       ).resolves.toEqual({ id: "a1" });
       expect(mockIssueCommentsService.addAttachment).toHaveBeenCalledWith(
         "1",
         "c1",
-        body
+        body,
+        "user-1"
       );
     });
   });
@@ -123,11 +152,12 @@ describe("IssuesController", () => {
       mockIssueCommentsService.create.mockResolvedValue(created);
 
       await expect(
-        controller.createComment("1", { body: "New comment" })
+        controller.createComment("1", { body: "New comment" }, req as any)
       ).resolves.toEqual(created);
       expect(mockIssueCommentsService.create).toHaveBeenCalledWith(
         "1",
-        "New comment"
+        "New comment",
+        "user-1"
       );
     });
   });
@@ -138,12 +168,13 @@ describe("IssuesController", () => {
       mockIssueCommentsService.update.mockResolvedValue(updated);
 
       await expect(
-        controller.updateComment("1", "c1", { body: "Updated" })
+        controller.updateComment("1", "c1", { body: "Updated" }, req as any)
       ).resolves.toEqual(updated);
       expect(mockIssueCommentsService.update).toHaveBeenCalledWith(
         "1",
         "c1",
-        "Updated"
+        "Updated",
+        "user-1"
       );
     });
   });
@@ -153,9 +184,13 @@ describe("IssuesController", () => {
       mockIssueCommentsService.delete.mockResolvedValue(undefined);
 
       await expect(
-        controller.deleteComment("1", "c1")
+        controller.deleteComment("1", "c1", req as any)
       ).resolves.toBeUndefined();
-      expect(mockIssueCommentsService.delete).toHaveBeenCalledWith("1", "c1");
+      expect(mockIssueCommentsService.delete).toHaveBeenCalledWith(
+        "1",
+        "c1",
+        "user-1"
+      );
     });
   });
 
@@ -164,12 +199,13 @@ describe("IssuesController", () => {
       mockIssueCommentsService.removeAttachment.mockResolvedValue({ id: "c1" });
 
       await expect(
-        controller.removeCommentAttachment("1", "c1", "a1")
+        controller.removeCommentAttachment("1", "c1", "a1", req as any)
       ).resolves.toEqual({ id: "c1" });
       expect(mockIssueCommentsService.removeAttachment).toHaveBeenCalledWith(
         "1",
         "c1",
-        "a1"
+        "a1",
+        "user-1"
       );
     });
   });
@@ -179,32 +215,38 @@ describe("IssuesController", () => {
       mockIssuesService.addRecording.mockResolvedValue({ id: "1" });
 
       await expect(
-        controller.addRecording("1", { videoBase64: "abc" })
+        controller.addRecording("1", { videoBase64: "abc" }, req as any)
       ).resolves.toEqual({ id: "1" });
       expect(mockIssuesService.addRecording).toHaveBeenCalledWith(
         "1",
         "abc",
         "video",
         "screen",
-        undefined
+        undefined,
+        "user-1"
       );
     });
 
     it("should pass optional mediaType, recordingType, fileName", async () => {
       mockIssuesService.addRecording.mockResolvedValue({ id: "1" });
 
-      await controller.addRecording("1", {
-        videoBase64: "abc",
-        mediaType: "audio",
-        recordingType: "camera",
-        fileName: "rec.webm",
-      });
+      await controller.addRecording(
+        "1",
+        {
+          videoBase64: "abc",
+          mediaType: "audio",
+          recordingType: "camera",
+          fileName: "rec.webm",
+        },
+        req as any
+      );
       expect(mockIssuesService.addRecording).toHaveBeenCalledWith(
         "1",
         "abc",
         "audio",
         "camera",
-        "rec.webm"
+        "rec.webm",
+        "user-1"
       );
     });
   });
@@ -215,12 +257,13 @@ describe("IssuesController", () => {
       const body = { name: "New name" };
 
       await expect(
-        controller.updateRecording("1", "r1", body)
+        controller.updateRecording("1", "r1", body, req as any)
       ).resolves.toEqual({ id: "1" });
       expect(mockIssuesService.updateRecording).toHaveBeenCalledWith(
         "1",
         "r1",
-        body
+        body,
+        "user-1"
       );
     });
   });
@@ -229,10 +272,14 @@ describe("IssuesController", () => {
     it("should delegate to service", async () => {
       mockIssuesService.removeRecording.mockResolvedValue({ id: "1" });
 
-      await expect(controller.removeRecording("1", "r1")).resolves.toEqual({
-        id: "1",
-      });
-      expect(mockIssuesService.removeRecording).toHaveBeenCalledWith("1", "r1");
+      await expect(
+        controller.removeRecording("1", "r1", req as any)
+      ).resolves.toEqual({ id: "1" });
+      expect(mockIssuesService.removeRecording).toHaveBeenCalledWith(
+        "1",
+        "r1",
+        "user-1"
+      );
     });
   });
 
@@ -241,12 +288,13 @@ describe("IssuesController", () => {
       mockIssuesService.addScreenshot.mockResolvedValue({ id: "1" });
 
       await expect(
-        controller.addScreenshot("1", { imageBase64: "abc" })
+        controller.addScreenshot("1", { imageBase64: "abc" }, req as any)
       ).resolves.toEqual({ id: "1" });
       expect(mockIssuesService.addScreenshot).toHaveBeenCalledWith(
         "1",
         "abc",
-        undefined
+        undefined,
+        "user-1"
       );
     });
   });
@@ -256,12 +304,13 @@ describe("IssuesController", () => {
       mockIssuesService.updateScreenshot.mockResolvedValue({ id: "1" });
 
       await expect(
-        controller.updateScreenshot("1", "s1", { name: "x" })
+        controller.updateScreenshot("1", "s1", { name: "x" }, req as any)
       ).resolves.toEqual({ id: "1" });
       expect(mockIssuesService.updateScreenshot).toHaveBeenCalledWith(
         "1",
         "s1",
-        "x"
+        "x",
+        "user-1"
       );
     });
   });
@@ -270,29 +319,34 @@ describe("IssuesController", () => {
     it("should delegate to service", async () => {
       mockIssuesService.removeScreenshot.mockResolvedValue({ id: "1" });
 
-      await expect(controller.removeScreenshot("1", "s1")).resolves.toEqual({
-        id: "1",
-      });
+      await expect(
+        controller.removeScreenshot("1", "s1", req as any)
+      ).resolves.toEqual({ id: "1" });
       expect(mockIssuesService.removeScreenshot).toHaveBeenCalledWith(
         "1",
-        "s1"
+        "s1",
+        "user-1"
       );
     });
   });
 
   describe("addFile", () => {
     it("should throw BadRequest when fileBase64 or fileName missing", () => {
-      expect(() => controller.addFile("1", {} as any)).toThrow(
-        "fileBase64 and fileName are required"
-      );
-      expect(() => controller.addFile("1", { fileBase64: "x" } as any)).toThrow(
-        "fileBase64 and fileName are required"
-      );
-      expect(() => controller.addFile("1", { fileName: "x" } as any)).toThrow(
+      expect(() => controller.addFile("1", {} as any, req as any)).toThrow(
         "fileBase64 and fileName are required"
       );
       expect(() =>
-        controller.addFile("1", { fileBase64: "x", fileName: "" } as any)
+        controller.addFile("1", { fileBase64: "x" } as any, req as any)
+      ).toThrow("fileBase64 and fileName are required");
+      expect(() =>
+        controller.addFile("1", { fileName: "x" } as any, req as any)
+      ).toThrow("fileBase64 and fileName are required");
+      expect(() =>
+        controller.addFile(
+          "1",
+          { fileBase64: "x", fileName: "" } as any,
+          req as any
+        )
       ).toThrow("fileBase64 and fileName are required");
     });
 
@@ -300,12 +354,17 @@ describe("IssuesController", () => {
       mockIssuesService.addFile.mockResolvedValue({ id: "1" });
 
       await expect(
-        controller.addFile("1", { fileBase64: "abc", fileName: "doc.pdf" })
+        controller.addFile(
+          "1",
+          { fileBase64: "abc", fileName: "doc.pdf" },
+          req as any
+        )
       ).resolves.toEqual({ id: "1" });
       expect(mockIssuesService.addFile).toHaveBeenCalledWith(
         "1",
         "abc",
-        "doc.pdf"
+        "doc.pdf",
+        "user-1"
       );
     });
   });
@@ -313,14 +372,16 @@ describe("IssuesController", () => {
   describe("streamFile", () => {
     it("should delegate to service", async () => {
       mockIssuesService.streamFile.mockResolvedValue(undefined);
+      const res = {} as any;
 
       await expect(
-        controller.streamFile("1", "f1", {} as any)
+        controller.streamFile("1", "f1", res, req as any)
       ).resolves.toBeUndefined();
       expect(mockIssuesService.streamFile).toHaveBeenCalledWith(
         "1",
         "f1",
-        {} as any
+        res,
+        "user-1"
       );
     });
   });
@@ -330,11 +391,16 @@ describe("IssuesController", () => {
       mockIssuesService.updateFile.mockResolvedValue({ id: "1" });
 
       await expect(
-        controller.updateFile("1", "f1", { fileName: "new.pdf" })
+        controller.updateFile("1", "f1", { fileName: "new.pdf" }, req as any)
       ).resolves.toEqual({ id: "1" });
-      expect(mockIssuesService.updateFile).toHaveBeenCalledWith("1", "f1", {
-        fileName: "new.pdf",
-      });
+      expect(mockIssuesService.updateFile).toHaveBeenCalledWith(
+        "1",
+        "f1",
+        {
+          fileName: "new.pdf",
+        },
+        "user-1"
+      );
     });
   });
 
@@ -342,8 +408,14 @@ describe("IssuesController", () => {
     it("should delegate to service", async () => {
       mockIssuesService.removeFile.mockResolvedValue(undefined);
 
-      await expect(controller.removeFile("1", "f1")).resolves.toBeUndefined();
-      expect(mockIssuesService.removeFile).toHaveBeenCalledWith("1", "f1");
+      await expect(
+        controller.removeFile("1", "f1", req as any)
+      ).resolves.toBeUndefined();
+      expect(mockIssuesService.removeFile).toHaveBeenCalledWith(
+        "1",
+        "f1",
+        "user-1"
+      );
     });
   });
 
@@ -352,8 +424,8 @@ describe("IssuesController", () => {
       const issue = { id: "1", title: "Issue 1" };
       mockIssuesService.get.mockResolvedValue(issue);
 
-      await expect(controller.get("1")).resolves.toEqual(issue);
-      expect(mockIssuesService.get).toHaveBeenCalledWith("1");
+      await expect(controller.get("1", req as any)).resolves.toEqual(issue);
+      expect(mockIssuesService.get).toHaveBeenCalledWith("1", "user-1");
     });
   });
 
@@ -363,8 +435,10 @@ describe("IssuesController", () => {
       const created = { id: "1", ...body };
       mockIssuesService.create.mockResolvedValue(created);
 
-      await expect(controller.create(body)).resolves.toEqual(created);
-      expect(mockIssuesService.create).toHaveBeenCalledWith(body);
+      await expect(controller.create(body, req as any)).resolves.toEqual(
+        created
+      );
+      expect(mockIssuesService.create).toHaveBeenCalledWith(body, "user-1");
     });
   });
 
@@ -374,8 +448,14 @@ describe("IssuesController", () => {
       const updated = { id: "1", ...body };
       mockIssuesService.update.mockResolvedValue(updated);
 
-      await expect(controller.update("1", body)).resolves.toEqual(updated);
-      expect(mockIssuesService.update).toHaveBeenCalledWith("1", body);
+      await expect(controller.update("1", body, req as any)).resolves.toEqual(
+        updated
+      );
+      expect(mockIssuesService.update).toHaveBeenCalledWith(
+        "1",
+        body,
+        "user-1"
+      );
     });
   });
 
@@ -385,9 +465,13 @@ describe("IssuesController", () => {
       mockIssuesService.updateStatus.mockResolvedValue(updated);
 
       await expect(
-        controller.updateStatus("1", { status: "done" })
+        controller.updateStatus("1", { status: "done" }, req as any)
       ).resolves.toEqual(updated);
-      expect(mockIssuesService.updateStatus).toHaveBeenCalledWith("1", "done");
+      expect(mockIssuesService.updateStatus).toHaveBeenCalledWith(
+        "1",
+        "done",
+        "user-1"
+      );
     });
   });
 
@@ -395,8 +479,10 @@ describe("IssuesController", () => {
     it("should call service.delete() with id", async () => {
       mockIssuesService.delete.mockResolvedValue({ id: "1" });
 
-      await expect(controller.remove("1")).resolves.toEqual({ id: "1" });
-      expect(mockIssuesService.delete).toHaveBeenCalledWith("1");
+      await expect(controller.remove("1", req as any)).resolves.toEqual({
+        id: "1",
+      });
+      expect(mockIssuesService.delete).toHaveBeenCalledWith("1", "user-1");
     });
   });
 });

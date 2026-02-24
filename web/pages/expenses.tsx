@@ -1,7 +1,13 @@
 import React, { useEffect, useRef, useState } from "react";
 import Head from "next/head";
 import Link from "next/link";
-import { fetchProjects, updateProject } from "../lib/api";
+import { useRouter } from "next/router";
+import {
+  fetchProjects,
+  getUserScopedStorageKey,
+  isAuthenticated,
+  updateProject,
+} from "../lib/api";
 import { ProjectNavBar, DrawerCollapsedNav } from "../components/ProjectNavBar";
 import { useTheme } from "./_app";
 
@@ -49,16 +55,31 @@ type ExpenseItem = {
   category: string;
 };
 
-const EXPENSES_STORAGE_KEY = "ideahome-expenses";
-const LEGACY_STORAGE_KEY = "ideahome-costs-expenses";
+const EXPENSES_STORAGE_PREFIX = "ideahome-expenses";
+const LEGACY_EXPENSES_KEY = "ideahome-expenses";
+const LEGACY_COSTS_KEY = "ideahome-costs-expenses";
 const CATEGORIES = ["Travel", "Supplies", "Software", "Services", "Other"];
+
+function getExpensesStorageKey(): string {
+  return getUserScopedStorageKey(EXPENSES_STORAGE_PREFIX, LEGACY_EXPENSES_KEY);
+}
 
 function loadStoredExpenses(): ExpenseItem[] {
   if (typeof window === "undefined") return [];
   try {
-    let raw = localStorage.getItem(EXPENSES_STORAGE_KEY);
-    const fromLegacy = !raw;
-    if (!raw) raw = localStorage.getItem(LEGACY_STORAGE_KEY);
+    const key = getExpensesStorageKey();
+    let raw = localStorage.getItem(key);
+    let fromLegacy = false;
+    if (!raw && key !== LEGACY_EXPENSES_KEY) {
+      raw = localStorage.getItem(LEGACY_EXPENSES_KEY);
+      if (!raw) raw = localStorage.getItem(LEGACY_COSTS_KEY);
+      fromLegacy = !!raw;
+      if (raw) {
+        localStorage.setItem(key, raw);
+        localStorage.removeItem(LEGACY_EXPENSES_KEY);
+        localStorage.removeItem(LEGACY_COSTS_KEY);
+      }
+    }
     if (!raw) return [];
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
@@ -90,7 +111,7 @@ function loadStoredExpenses(): ExpenseItem[] {
       };
     });
     if (fromLegacy && loaded.length > 0) {
-      localStorage.setItem(EXPENSES_STORAGE_KEY, JSON.stringify(loaded));
+      localStorage.setItem(key, JSON.stringify(loaded));
     }
     return loaded;
   } catch {
@@ -100,7 +121,7 @@ function loadStoredExpenses(): ExpenseItem[] {
 
 function saveExpenses(expenses: ExpenseItem[]) {
   if (typeof window === "undefined") return;
-  localStorage.setItem(EXPENSES_STORAGE_KEY, JSON.stringify(expenses));
+  localStorage.setItem(getExpensesStorageKey(), JSON.stringify(expenses));
 }
 
 function formatCurrency(amount: number): string {
@@ -111,6 +132,7 @@ function formatCurrency(amount: number): string {
 }
 
 export default function ExpensesPage() {
+  const router = useRouter();
   const [projects, setProjects] = useState<{ id: string; name: string }[]>([]);
   const [selectedProjectId, setSelectedProjectId] = useState<string>("");
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -137,8 +159,12 @@ export default function ExpensesPage() {
       .catch(() => {});
 
   useEffect(() => {
+    if (!isAuthenticated()) {
+      router.replace("/login");
+      return;
+    }
     loadProjects();
-  }, []);
+  }, [router]);
   useEffect(() => {
     if (editingProjectId) {
       projectNameInputRef.current?.focus();
@@ -148,9 +174,11 @@ export default function ExpensesPage() {
 
   const isFirstSaveRun = useRef(true);
   useEffect(() => {
+    if (!isAuthenticated()) return;
     setExpenses(loadStoredExpenses());
   }, []);
   useEffect(() => {
+    if (!isAuthenticated()) return;
     if (isFirstSaveRun.current) {
       isFirstSaveRun.current = false;
       return;

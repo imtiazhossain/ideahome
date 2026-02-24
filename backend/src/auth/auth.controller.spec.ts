@@ -1,6 +1,7 @@
 import { Test, TestingModule } from "@nestjs/testing";
 import { __setUserinfoResponse } from "openid-client";
 import { AuthController } from "./auth.controller";
+import { AuthService } from "./auth.service";
 import { PrismaService } from "../prisma.service";
 
 const mockRedirect = jest.fn();
@@ -19,14 +20,34 @@ describe("AuthController", () => {
   let controller: AuthController;
 
   const mockPrisma = {
-    user: { upsert: jest.fn() },
+    user: {
+      findFirst: jest.fn(),
+      create: jest.fn(),
+      update: jest.fn(),
+    },
+  };
+
+  const mockAuthService = {
+    createState: jest.fn(),
+    consumeState: jest.fn(),
+    getRedirectUri: jest.fn(),
+    getFrontendCallbackUrl: jest.fn(),
+    findOrCreateUserBySso: jest.fn(),
+    ensureUserOrganization: jest.fn().mockResolvedValue(undefined),
+    signToken: jest.fn(),
+    exchangeGoogleCode: jest.fn(),
+    exchangeGitHubCode: jest.fn(),
+    exchangeAppleCode: jest.fn(),
   };
 
   beforeEach(async () => {
     jest.clearAllMocks();
     const module: TestingModule = await Test.createTestingModule({
       controllers: [AuthController],
-      providers: [{ provide: PrismaService, useValue: mockPrisma }],
+      providers: [
+        { provide: PrismaService, useValue: mockPrisma },
+        { provide: AuthService, useValue: mockAuthService },
+      ],
     }).compile();
 
     controller = module.get<AuthController>(AuthController);
@@ -54,7 +75,8 @@ describe("AuthController", () => {
         email: "mock@example.com",
         name: "Mock User",
       };
-      mockPrisma.user.upsert.mockResolvedValue(user);
+      mockPrisma.user.findFirst.mockResolvedValue(null);
+      mockPrisma.user.create.mockResolvedValue(user);
 
       const res = mockRes();
       await controller.callback({} as any, res as any, {
@@ -62,10 +84,12 @@ describe("AuthController", () => {
         state: "mock-state",
       });
 
-      expect(mockPrisma.user.upsert).toHaveBeenCalledWith({
+      expect(mockPrisma.user.findFirst).toHaveBeenCalledWith({
         where: { email: "mock@example.com" },
-        update: { name: "Mock User" },
-        create: { email: "mock@example.com", name: "Mock User" },
+        orderBy: { createdAt: "asc" },
+      });
+      expect(mockPrisma.user.create).toHaveBeenCalledWith({
+        data: { email: "mock@example.com", name: "Mock User" },
       });
       expect(mockJson).toHaveBeenCalled();
       const payload = mockJson.mock.calls[0][0];
@@ -76,7 +100,8 @@ describe("AuthController", () => {
     it("should pass undefined name when userinfo has email but no name", async () => {
       __setUserinfoResponse({ email: "nobody@example.com" });
       const user = { id: "user-2", email: "nobody@example.com", name: null };
-      mockPrisma.user.upsert.mockResolvedValue(user);
+      mockPrisma.user.findFirst.mockResolvedValue(null);
+      mockPrisma.user.create.mockResolvedValue(user);
 
       const res = mockRes();
       await controller.callback({} as any, res as any, {
@@ -84,10 +109,12 @@ describe("AuthController", () => {
         state: "mock-state",
       });
 
-      expect(mockPrisma.user.upsert).toHaveBeenCalledWith({
+      expect(mockPrisma.user.findFirst).toHaveBeenCalledWith({
         where: { email: "nobody@example.com" },
-        update: { name: undefined },
-        create: { email: "nobody@example.com", name: undefined },
+        orderBy: { createdAt: "asc" },
+      });
+      expect(mockPrisma.user.create).toHaveBeenCalledWith({
+        data: { email: "nobody@example.com", name: undefined },
       });
     });
 

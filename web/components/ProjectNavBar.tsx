@@ -1,6 +1,11 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
-import { fetchIssueSearch } from "../lib/api";
+import {
+  fetchIssueSearch,
+  getStoredToken,
+  getUserScopedStorageKey,
+  logout,
+} from "../lib/api";
 import type { Issue } from "../lib/api";
 
 const TAB_GAP = 2;
@@ -22,7 +27,15 @@ const IconGrip = () => (
   </svg>
 );
 
-const TAB_ORDER_STORAGE_KEY = "ideahome-project-nav-tab-order";
+const TAB_ORDER_STORAGE_PREFIX = "ideahome-project-nav-tab-order";
+const LEGACY_TAB_ORDER_STORAGE_KEY = "ideahome-project-nav-tab-order";
+
+function getTabOrderStorageKey(): string {
+  return getUserScopedStorageKey(
+    TAB_ORDER_STORAGE_PREFIX,
+    LEGACY_TAB_ORDER_STORAGE_KEY
+  );
+}
 
 const IconGlobe = () => (
   <svg
@@ -358,6 +371,22 @@ const IconIdeas = () => (
     <path d="M15.09 14c.18-.98.65-1.74 1.41-2.5A4.65 4.65 0 0 0 18 8 6 6 0 0 0 6 8c0 1 .23 2.23 1.5 3.5A4.61 4.61 0 0 1 8.91 14" />
   </svg>
 );
+const IconProfile = () => (
+  <svg
+    width="20"
+    height="20"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden
+  >
+    <circle cx="12" cy="8" r="4" />
+    <path d="M4 20c0-4 4-6 8-6s8 2 8 6" />
+  </svg>
+);
 
 export type ProjectNavTabId =
   | "todo"
@@ -420,9 +449,8 @@ export function useTabOrder() {
 }
 
 export function TabOrderProvider({ children }: { children: React.ReactNode }) {
-  const [tabOrder, setTabOrderState] = useState<ProjectNavTabId[]>(
-    DEFAULT_TAB_ORDER
-  );
+  const [tabOrder, setTabOrderState] =
+    useState<ProjectNavTabId[]>(DEFAULT_TAB_ORDER);
   useEffect(() => {
     setTabOrderState(loadTabOrder());
   }, []);
@@ -484,7 +512,15 @@ const DEFAULT_TAB_ORDER: ProjectNavTabId[] = TABS.map((t) => t.id);
 function loadTabOrder(): ProjectNavTabId[] {
   if (typeof window === "undefined") return DEFAULT_TAB_ORDER;
   try {
-    const raw = localStorage.getItem(TAB_ORDER_STORAGE_KEY);
+    const key = getTabOrderStorageKey();
+    let raw = localStorage.getItem(key);
+    if (!raw && key !== LEGACY_TAB_ORDER_STORAGE_KEY) {
+      raw = localStorage.getItem(LEGACY_TAB_ORDER_STORAGE_KEY);
+      if (raw) {
+        localStorage.setItem(key, raw);
+        localStorage.removeItem(LEGACY_TAB_ORDER_STORAGE_KEY);
+      }
+    }
     if (!raw) return DEFAULT_TAB_ORDER;
     const parsed = JSON.parse(raw) as string[];
     const valid = parsed.filter((id): id is ProjectNavTabId =>
@@ -499,7 +535,7 @@ function loadTabOrder(): ProjectNavTabId[] {
 
 function saveTabOrder(order: ProjectNavTabId[]) {
   try {
-    localStorage.setItem(TAB_ORDER_STORAGE_KEY, JSON.stringify(order));
+    localStorage.setItem(getTabOrderStorageKey(), JSON.stringify(order));
   } catch {
     // ignore
   }
@@ -539,6 +575,13 @@ export function ProjectNavBar({
   const [projectSearchOpen, setProjectSearchOpen] = useState(false);
   const [projectSearchLoading, setProjectSearchLoading] = useState(false);
   const projectSearchRef = useRef<HTMLDivElement>(null);
+  const [hasToken, setHasToken] = useState<boolean | null>(null);
+  useEffect(() => {
+    setHasToken(!!getStoredToken());
+  }, []);
+  const handleLogout = useCallback(() => {
+    logout("/login");
+  }, []);
 
   useEffect(() => {
     if (!projectId || !projectSearchQuery.trim()) {
@@ -844,6 +887,28 @@ export function ProjectNavBar({
                 <IconPlus />
                 Create Deck
               </button>
+            )}
+            {hasToken !== null && (
+              <span className="project-nav-auth">
+                {hasToken ? (
+                  <button
+                    type="button"
+                    className="project-nav-auth-btn"
+                    onClick={handleLogout}
+                    aria-label="Log out"
+                  >
+                    Log out
+                  </button>
+                ) : (
+                  <Link
+                    href="/login"
+                    className="project-nav-auth-link"
+                    aria-label="Sign in"
+                  >
+                    <IconProfile />
+                  </Link>
+                )}
+              </span>
             )}
           </div>
         </div>

@@ -24,7 +24,12 @@ function getMonorepoRoot(): string {
  */
 export default async function handler(
   req: NextApiRequest,
-  res: NextApiResponse<{ ok: boolean; reportCopied?: boolean; output?: string; error?: string }>
+  res: NextApiResponse<{
+    ok: boolean;
+    reportCopied?: boolean;
+    output?: string;
+    error?: string;
+  }>
 ) {
   if (req.method !== "POST") {
     res.setHeader("Allow", "POST");
@@ -53,26 +58,27 @@ export default async function handler(
       let stderr = "";
       proc.stdout?.on("data", (d) => (stdout += d.toString()));
       proc.stderr?.on("data", (d) => (stderr += d.toString()));
-      proc.on("close", (code) =>
-        resolve({ stdout, stderr, code: code ?? 1 })
-      );
+      proc.on("close", (code) => resolve({ stdout, stderr, code: code ?? 1 }));
     });
 
   const backendDir = path.join(root, "backend");
   const lines: string[] = [];
   try {
     lines.push("Running: jest --config ./jest.json --coverage (in backend/)");
-    const testResult = await run("pnpm", [
-      "exec",
-      "jest",
-      "--config",
-      "./jest.json",
-      "--coverage",
-    ], backendDir);
+    const testResult = await run(
+      "pnpm",
+      ["exec", "jest", "--config", "./jest.json", "--coverage"],
+      backendDir
+    );
     lines.push(testResult.stdout);
     if (testResult.stderr) lines.push(testResult.stderr);
 
-    const lcovReportDir = path.join(backendDir, "src", "coverage", "lcov-report");
+    const lcovReportDir = path.join(
+      backendDir,
+      "src",
+      "coverage",
+      "lcov-report"
+    );
     const reportExists = fs.existsSync(lcovReportDir);
 
     if (reportExists) {

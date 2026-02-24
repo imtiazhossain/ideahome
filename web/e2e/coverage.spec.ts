@@ -56,5 +56,4 @@ test.describe("Code Coverage page", () => {
       ).toBeVisible();
     });
   });
-
 });

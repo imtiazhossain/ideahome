@@ -21,9 +21,7 @@ function projectNameToAcronym(name: string): string {
   if (!trimmed) return "PRJ";
   const words = trimmed.split(/\s+/).filter(Boolean);
   if (words.length >= 2) {
-    return words
-      .map((w) => (w[0] ?? "").toUpperCase())
-      .join("");
+    return words.map((w) => (w[0] ?? "").toUpperCase()).join("");
   }
   return trimmed.slice(0, 3).toUpperCase() || "PRJ";
 }
@@ -32,8 +30,58 @@ function projectNameToAcronym(name: string): string {
 export class IssuesService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async list(projectId?: string, search?: string) {
-    const where: Prisma.IssueWhereInput = projectId ? { projectId } : {};
+  private async getOrgIdForUser(userId: string): Promise<string> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { organizationId: true },
+    });
+    if (!user?.organizationId) {
+      throw new NotFoundException(
+        "User has no organization. Complete login again to create one."
+      );
+    }
+    return user.organizationId;
+  }
+
+  private async verifyIssueBelongsToUser(
+    issueId: string,
+    userId: string
+  ): Promise<void> {
+    const orgId = await this.getOrgIdForUser(userId);
+    const issue = await this.prisma.issue.findUnique({
+      where: { id: issueId },
+      include: { project: true },
+    });
+    if (!issue || issue.project.organizationId !== orgId) {
+      throw new NotFoundException("Issue not found");
+    }
+  }
+
+  /** Public for use by IssueCommentsService. Verifies the issue belongs to the user's org. */
+  async verifyIssueAccess(issueId: string, userId: string): Promise<void> {
+    return this.verifyIssueBelongsToUser(issueId, userId);
+  }
+
+  private async verifyProjectBelongsToUser(
+    projectId: string,
+    userId: string
+  ): Promise<void> {
+    const orgId = await this.getOrgIdForUser(userId);
+    const project = await this.prisma.project.findUnique({
+      where: { id: projectId },
+    });
+    if (!project || project.organizationId !== orgId) {
+      throw new NotFoundException("Project not found");
+    }
+  }
+
+  async list(projectId?: string, search?: string, userId?: string) {
+    const where: Prisma.IssueWhereInput = {};
+    if (userId) {
+      const orgId = await this.getOrgIdForUser(userId);
+      where.project = { organizationId: orgId };
+    }
+    if (projectId) where.projectId = projectId;
     if (search && search.trim()) {
       const term = search.trim();
       const contains = { contains: term, mode: "insensitive" as const };
@@ -54,27 +102,32 @@ export class IssuesService {
     });
   }
 
-  async get(id: string) {
+  async get(id: string, userId?: string) {
     const issue = await this.prisma.issue.findUnique({
       where: { id },
       include: ISSUE_INCLUDE,
     });
     if (!issue) throw new NotFoundException("Issue not found");
+    if (userId) await this.verifyIssueBelongsToUser(id, userId);
     return issue;
   }
 
-  async create(data: {
-    title: string;
-    description?: string;
-    acceptanceCriteria?: string;
-    database?: string;
-    api?: string;
-    testCases?: string;
-    automatedTest?: string;
-    qualityScore?: number;
-    projectId: string;
-    assigneeId?: string;
-  }) {
+  async create(
+    data: {
+      title: string;
+      description?: string;
+      acceptanceCriteria?: string;
+      database?: string;
+      api?: string;
+      testCases?: string;
+      automatedTest?: string;
+      qualityScore?: number;
+      projectId: string;
+      assigneeId?: string;
+    },
+    userId?: string
+  ) {
+    if (userId) await this.verifyProjectBelongsToUser(data.projectId, userId);
     const project = await this.prisma.project.findUnique({
       where: { id: data.projectId },
     });
@@ -90,7 +143,8 @@ export class IssuesService {
     });
   }
 
-  async update(id: string, data: Record<string, unknown>) {
+  async update(id: string, data: Record<string, unknown>, userId?: string) {
+    if (userId) await this.verifyIssueBelongsToUser(id, userId);
     const allowed = [
       "title",
       "description",
@@ -114,7 +168,8 @@ export class IssuesService {
     });
   }
 
-  async updateStatus(id: string, status: string) {
+  async updateStatus(id: string, status: string, userId?: string) {
+    if (userId) await this.verifyIssueBelongsToUser(id, userId);
     return this.prisma.issue.update({
       where: { id },
       data: { status },
@@ -122,7 +177,8 @@ export class IssuesService {
     });
   }
 
-  async delete(id: string) {
+  async delete(id: string, userId?: string) {
+    if (userId) await this.verifyIssueBelongsToUser(id, userId);
     const issue = await this.prisma.issue.findUnique({
       where: { id },
       include: { recordings: true, screenshots: true, files: true },
@@ -133,9 +189,13 @@ export class IssuesService {
     return this.prisma.issue.delete({ where: { id } });
   }
 
-  /** Delete all issues, optionally scoped by projectId. Cleans up related files. */
-  async deleteMany(projectId?: string) {
-    const where: Prisma.IssueWhereInput = projectId ? { projectId } : {};
+  /** Delete all issues, optionally scoped by projectId. Cleans up related files. Only deletes issues in user's org. */
+  async deleteMany(projectId: string | undefined, userId: string) {
+    const orgId = await this.getOrgIdForUser(userId);
+    const where: Prisma.IssueWhereInput = {
+      project: { organizationId: orgId },
+    };
+    if (projectId) where.projectId = projectId;
     const issues = await this.prisma.issue.findMany({
       where,
       include: { recordings: true, screenshots: true, files: true },
@@ -180,9 +240,24 @@ export class IssuesService {
   };
 
   /** Stream a recording file with correct Content-Type and range support for video/audio playback. */
-  streamRecording(filename: string, res: Response): void {
+  async streamRecording(
+    filename: string,
+    res: Response,
+    userId?: string
+  ): Promise<void> {
     if (!/^[a-zA-Z0-9_.-]+\.(webm|mp4|mov|mp3|m4a|ogg|wav)$/i.test(filename)) {
       throw new NotFoundException("Invalid recording filename");
+    }
+    if (userId) {
+      const recording = await this.prisma.issueRecording.findFirst({
+        where: { videoUrl: { endsWith: filename } },
+        include: { issue: { include: { project: true } } },
+      });
+      if (!recording) throw new NotFoundException("Recording not found");
+      const orgId = await this.getOrgIdForUser(userId);
+      if (recording.issue.project.organizationId !== orgId) {
+        throw new NotFoundException("Recording not found");
+      }
     }
     const filePath = join(this.uploadsDir, filename);
     if (!existsSync(filePath)) {
@@ -203,8 +278,10 @@ export class IssuesService {
     videoBase64: string,
     mediaType: "video" | "audio" = "video",
     recordingType: "screen" | "camera" | "audio" = "screen",
-    fileName?: string
+    fileName?: string,
+    userId?: string
   ) {
+    if (userId) await this.verifyIssueBelongsToUser(issueId, userId);
     const issue = await this.prisma.issue.findUnique({
       where: { id: issueId },
     });
@@ -252,8 +329,10 @@ export class IssuesService {
       mediaType?: "video" | "audio";
       recordingType?: "screen" | "camera" | "audio";
       name?: string | null;
-    }
+    },
+    userId?: string
   ) {
+    if (userId) await this.verifyIssueBelongsToUser(issueId, userId);
     const recording = await this.prisma.issueRecording.findFirst({
       where: { id: recordingId, issueId },
     });
@@ -278,7 +357,8 @@ export class IssuesService {
     return this.get(issueId);
   }
 
-  async removeRecording(issueId: string, recordingId: string) {
+  async removeRecording(issueId: string, recordingId: string, userId?: string) {
+    if (userId) await this.verifyIssueBelongsToUser(issueId, userId);
     const recording = await this.prisma.issueRecording.findFirst({
       where: { id: recordingId, issueId },
     });
@@ -295,7 +375,13 @@ export class IssuesService {
     return join(__dirname, "..", "..", "uploads", "screenshots");
   }
 
-  async addScreenshot(issueId: string, imageBase64: string, fileName?: string) {
+  async addScreenshot(
+    issueId: string,
+    imageBase64: string,
+    fileName?: string,
+    userId?: string
+  ) {
+    if (userId) await this.verifyIssueBelongsToUser(issueId, userId);
     const issue = await this.prisma.issue.findUnique({
       where: { id: issueId },
     });
@@ -320,8 +406,10 @@ export class IssuesService {
   async updateScreenshot(
     issueId: string,
     screenshotId: string,
-    name?: string | null
+    name?: string | null,
+    userId?: string
   ) {
+    if (userId) await this.verifyIssueBelongsToUser(issueId, userId);
     const screenshot = await this.prisma.issueScreenshot.findUnique({
       where: { id: screenshotId },
     });
@@ -341,7 +429,12 @@ export class IssuesService {
     return this.get(issueId);
   }
 
-  async removeScreenshot(issueId: string, screenshotId: string) {
+  async removeScreenshot(
+    issueId: string,
+    screenshotId: string,
+    userId?: string
+  ) {
+    if (userId) await this.verifyIssueBelongsToUser(issueId, userId);
     const screenshot = await this.prisma.issueScreenshot.findFirst({
       where: { id: screenshotId, issueId },
     });
@@ -358,7 +451,13 @@ export class IssuesService {
     return join(__dirname, "..", "..", "uploads", "files");
   }
 
-  async addFile(issueId: string, fileBase64: string, fileName: string) {
+  async addFile(
+    issueId: string,
+    fileBase64: string,
+    fileName: string,
+    userId?: string
+  ) {
+    if (userId) await this.verifyIssueBelongsToUser(issueId, userId);
     const issue = await this.prisma.issue.findUnique({
       where: { id: issueId },
     });
@@ -384,8 +483,10 @@ export class IssuesService {
   async updateFile(
     issueId: string,
     fileId: string,
-    data: { fileName?: string }
+    data: { fileName?: string },
+    userId?: string
   ) {
+    if (userId) await this.verifyIssueBelongsToUser(issueId, userId);
     const file = await this.prisma.issueFile.findFirst({
       where: { id: fileId, issueId },
     });
@@ -399,7 +500,8 @@ export class IssuesService {
     return this.get(issueId);
   }
 
-  async removeFile(issueId: string, fileId: string) {
+  async removeFile(issueId: string, fileId: string, userId?: string) {
+    if (userId) await this.verifyIssueBelongsToUser(issueId, userId);
     const file = await this.prisma.issueFile.findFirst({
       where: { id: fileId, issueId },
     });
@@ -415,8 +517,10 @@ export class IssuesService {
   async streamFile(
     issueId: string,
     fileId: string,
-    res: Response
+    res: Response,
+    userId?: string
   ): Promise<void> {
+    if (userId) await this.verifyIssueBelongsToUser(issueId, userId);
     const file = await this.prisma.issueFile.findFirst({
       where: { id: fileId, issueId },
     });

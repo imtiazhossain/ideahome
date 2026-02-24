@@ -118,11 +118,17 @@ import { API_TESTS } from "./api-tests"; // Update API_TESTS in pages/api-tests.
 import { useTheme } from "./_app";
 
 /** Fetch automated UI tests list. Refresh button uses bustCache so the server re-discovers from e2e/*.spec.ts. */
-async function fetchUiTestsList(options?: { bustCache?: boolean }): Promise<UITestFile[]> {
-  const url = options?.bustCache ? `/api/ui-tests?_=${Date.now()}` : "/api/ui-tests";
+async function fetchUiTestsList(options?: {
+  bustCache?: boolean;
+}): Promise<UITestFile[]> {
+  const url = options?.bustCache
+    ? `/api/ui-tests?_=${Date.now()}`
+    : "/api/ui-tests";
   const r = await fetch(url, {
     cache: "no-store",
-    ...(options?.bustCache && { headers: { Pragma: "no-cache", "Cache-Control": "no-cache" } }),
+    ...(options?.bustCache && {
+      headers: { Pragma: "no-cache", "Cache-Control": "no-cache" },
+    }),
   });
   if (!r.ok) return uiTestsInitial;
   const data = await r.json();
@@ -143,8 +149,7 @@ export default function TestsPage() {
   const [editingProjectName, setEditingProjectName] = useState("");
   const projectNameInputRef = useRef<HTMLInputElement>(null);
 
-  const [uiTestsList, setUiTestsList] =
-    useState<UITestFile[]>(uiTestsInitial);
+  const [uiTestsList, setUiTestsList] = useState<UITestFile[]>(uiTestsInitial);
   const [uiTestsLoading, setUiTestsLoading] = useState(false);
 
   const [runTestModal, setRunTestModal] = useState<{
@@ -179,20 +184,23 @@ export default function TestsPage() {
     0
   );
 
-  const loadUiTestsList = React.useCallback(async (fromRefreshButton = false) => {
-    if (fromRefreshButton) {
-      setInlineTestResults({});
-      setRunningSuiteKey(null);
-      setRunningAllUiTests(false);
-    }
-    setUiTestsLoading(true);
-    try {
-      const list = await fetchUiTestsList({ bustCache: fromRefreshButton });
-      setUiTestsList(list);
-    } finally {
-      setUiTestsLoading(false);
-    }
-  }, []);
+  const loadUiTestsList = React.useCallback(
+    async (fromRefreshButton = false) => {
+      if (fromRefreshButton) {
+        setInlineTestResults({});
+        setRunningSuiteKey(null);
+        setRunningAllUiTests(false);
+      }
+      setUiTestsLoading(true);
+      try {
+        const list = await fetchUiTestsList({ bustCache: fromRefreshButton });
+        setUiTestsList(list);
+      } finally {
+        setUiTestsLoading(false);
+      }
+    },
+    []
+  );
 
   useEffect(() => {
     loadUiTestsList();
@@ -580,7 +588,11 @@ export default function TestsPage() {
                       strokeLinecap="round"
                       strokeLinejoin="round"
                       aria-hidden
-                      className={uiTestsLoading ? "tests-page-section-refresh-icon--spin" : undefined}
+                      className={
+                        uiTestsLoading
+                          ? "tests-page-section-refresh-icon--spin"
+                          : undefined
+                      }
                     >
                       <path d="M23 4v6h-6" />
                       <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
@@ -719,13 +731,30 @@ export default function TestsPage() {
                                     className="automated-test-name-copy"
                                     onClick={(e) => {
                                       e.stopPropagation();
-                                      void navigator.clipboard.writeText(testName);
+                                      void navigator.clipboard.writeText(
+                                        testName
+                                      );
                                     }}
                                     title="Copy test name"
                                     aria-label="Copy test name"
                                   >
-                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-                                      <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                                    <svg
+                                      viewBox="0 0 24 24"
+                                      fill="none"
+                                      stroke="currentColor"
+                                      strokeWidth="2"
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                      aria-hidden
+                                    >
+                                      <rect
+                                        x="9"
+                                        y="9"
+                                        width="13"
+                                        height="13"
+                                        rx="2"
+                                        ry="2"
+                                      />
                                       <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
                                     </svg>
                                   </button>
@@ -1104,7 +1133,10 @@ export default function TestsPage() {
       )}
 
       {viewRunModal && (
-        <div className="modal-overlay modal-overlay--scrollable" onClick={() => setViewRunModal(null)}>
+        <div
+          className="modal-overlay modal-overlay--scrollable"
+          onClick={() => setViewRunModal(null)}
+        >
           <div
             className="modal modal--fit-screen"
             onClick={(e) => e.stopPropagation()}
@@ -1124,157 +1156,162 @@ export default function TestsPage() {
               </button>
             </div>
             <div className="modal-body modal-body--scrollable">
-            {viewRunModal.result.videoBase64 ? (
-              <div
-                className="run-test-browser-view"
-                style={{
-                  marginBottom: 16,
-                  minHeight: 120,
-                  background: "var(--column-bg)",
-                  borderRadius: 8,
-                  overflow: "hidden",
-                  border: "1px solid var(--border, #e2e8f0)",
-                }}
-              >
-                <div style={{ padding: 8 }}>
-                  <p
-                    style={{
-                      margin: "0 0 6px",
-                      fontSize: 12,
-                      fontWeight: 600,
-                      color: "var(--text-muted)",
-                    }}
-                  >
-                    Recording
-                  </p>
-                  <video
-                    src={`data:video/webm;base64,${viewRunModal.result.videoBase64}`}
-                    controls
-                    loop
-                    playsInline
-                    style={{
-                      width: "100%",
-                      maxHeight: "min(360px, 45vh)",
-                      objectFit: "contain",
-                      background: "var(--bg-page)",
-                      borderRadius: 6,
-                    }}
-                  >
-                    Your browser does not support the video tag.
-                  </video>
-                </div>
-              </div>
-            ) : (
-              <p
-                style={{
-                  margin: "0 0 16px",
-                  fontSize: 13,
-                  color: "var(--text-muted)",
-                }}
-              >
-                No recording for this run.
-              </p>
-            )}
-            <div
-              style={{
-                marginBottom: 16,
-                padding: 12,
-                background: "rgba(197, 48, 48, 0.1)",
-                borderRadius: 8,
-                border: "1px solid var(--danger, #c53030)",
-              }}
-            >
-              <p style={{ margin: "0 0 8px", fontWeight: 600, fontSize: 14 }}>
-                Test output
-              </p>
-              {(() => {
-                const rawOutput =
-                  [viewRunModal.result.output, viewRunModal.result.errorOutput]
-                    .filter(Boolean)
-                    .join("\n") || "No output";
-                const fullOutput =
-                  rawOutput === "No output"
-                    ? rawOutput
-                    : prefixStepLinesWithDash(
-                        dedupeStepLines(shortenStepLines(stripAnsi(rawOutput)))
-                      );
-                const stepsFromApi = viewRunModal.result.steps ?? [];
-                const stepsFromOutput = parseStepsFromOutput(fullOutput);
-                const steps =
-                  stepsFromApi.length > 0
-                    ? stepsFromApi.map((s) =>
-                        s.duration != null
-                          ? `${s.title} (${s.duration}ms)`
-                          : s.title
-                      )
-                    : stepsFromOutput;
-                return (
-                  <>
-                    {steps.length > 0 && (
-                      <div style={{ marginBottom: 10 }}>
-                        <p
-                          style={{
-                            margin: "0 0 6px",
-                            fontSize: 12,
-                            fontWeight: 600,
-                            color: "var(--text-muted)",
-                          }}
-                        >
-                          Steps (what the test did)
-                        </p>
-                        <ul
-                          style={{
-                            margin: 0,
-                            paddingLeft: 20,
-                            fontSize: 12,
-                            lineHeight: 1.6,
-                            maxHeight: 200,
-                            overflowY: "auto",
-                            overflowX: "hidden",
-                          }}
-                        >
-                          {steps.map((step, i) => (
-                            <li
-                              key={i}
-                              style={{
-                                marginBottom: 2,
-                                wordBreak: "break-word",
-                              }}
-                            >
-                              <span
-                                style={{
-                                  color: "var(--text-muted)",
-                                  marginRight: 6,
-                                }}
-                              >
-                                {i + 1}.
-                              </span>
-                              {step}
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-                    <pre
+              {viewRunModal.result.videoBase64 ? (
+                <div
+                  className="run-test-browser-view"
+                  style={{
+                    marginBottom: 16,
+                    minHeight: 120,
+                    background: "var(--column-bg)",
+                    borderRadius: 8,
+                    overflow: "hidden",
+                    border: "1px solid var(--border, #e2e8f0)",
+                  }}
+                >
+                  <div style={{ padding: 8 }}>
+                    <p
                       style={{
-                        margin: 0,
-                        padding: 10,
-                        background: "var(--bg-page)",
-                        borderRadius: 6,
+                        margin: "0 0 6px",
                         fontSize: 12,
-                        height: 280,
-                        maxHeight: 280,
-                        overflow: "auto",
-                        whiteSpace: "pre-wrap",
-                        wordBreak: "break-word",
+                        fontWeight: 600,
+                        color: "var(--text-muted)",
                       }}
                     >
-                      {fullOutput}
-                    </pre>
-                  </>
-                );
-              })()}
-            </div>
+                      Recording
+                    </p>
+                    <video
+                      src={`data:video/webm;base64,${viewRunModal.result.videoBase64}`}
+                      controls
+                      loop
+                      playsInline
+                      style={{
+                        width: "100%",
+                        maxHeight: "min(360px, 45vh)",
+                        objectFit: "contain",
+                        background: "var(--bg-page)",
+                        borderRadius: 6,
+                      }}
+                    >
+                      Your browser does not support the video tag.
+                    </video>
+                  </div>
+                </div>
+              ) : (
+                <p
+                  style={{
+                    margin: "0 0 16px",
+                    fontSize: 13,
+                    color: "var(--text-muted)",
+                  }}
+                >
+                  No recording for this run.
+                </p>
+              )}
+              <div
+                style={{
+                  marginBottom: 16,
+                  padding: 12,
+                  background: "rgba(197, 48, 48, 0.1)",
+                  borderRadius: 8,
+                  border: "1px solid var(--danger, #c53030)",
+                }}
+              >
+                <p style={{ margin: "0 0 8px", fontWeight: 600, fontSize: 14 }}>
+                  Test output
+                </p>
+                {(() => {
+                  const rawOutput =
+                    [
+                      viewRunModal.result.output,
+                      viewRunModal.result.errorOutput,
+                    ]
+                      .filter(Boolean)
+                      .join("\n") || "No output";
+                  const fullOutput =
+                    rawOutput === "No output"
+                      ? rawOutput
+                      : prefixStepLinesWithDash(
+                          dedupeStepLines(
+                            shortenStepLines(stripAnsi(rawOutput))
+                          )
+                        );
+                  const stepsFromApi = viewRunModal.result.steps ?? [];
+                  const stepsFromOutput = parseStepsFromOutput(fullOutput);
+                  const steps =
+                    stepsFromApi.length > 0
+                      ? stepsFromApi.map((s) =>
+                          s.duration != null
+                            ? `${s.title} (${s.duration}ms)`
+                            : s.title
+                        )
+                      : stepsFromOutput;
+                  return (
+                    <>
+                      {steps.length > 0 && (
+                        <div style={{ marginBottom: 10 }}>
+                          <p
+                            style={{
+                              margin: "0 0 6px",
+                              fontSize: 12,
+                              fontWeight: 600,
+                              color: "var(--text-muted)",
+                            }}
+                          >
+                            Steps (what the test did)
+                          </p>
+                          <ul
+                            style={{
+                              margin: 0,
+                              paddingLeft: 20,
+                              fontSize: 12,
+                              lineHeight: 1.6,
+                              maxHeight: 200,
+                              overflowY: "auto",
+                              overflowX: "hidden",
+                            }}
+                          >
+                            {steps.map((step, i) => (
+                              <li
+                                key={i}
+                                style={{
+                                  marginBottom: 2,
+                                  wordBreak: "break-word",
+                                }}
+                              >
+                                <span
+                                  style={{
+                                    color: "var(--text-muted)",
+                                    marginRight: 6,
+                                  }}
+                                >
+                                  {i + 1}.
+                                </span>
+                                {step}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                      <pre
+                        style={{
+                          margin: 0,
+                          padding: 10,
+                          background: "var(--bg-page)",
+                          borderRadius: 6,
+                          fontSize: 12,
+                          height: 280,
+                          maxHeight: 280,
+                          overflow: "auto",
+                          whiteSpace: "pre-wrap",
+                          wordBreak: "break-word",
+                        }}
+                      >
+                        {fullOutput}
+                      </pre>
+                    </>
+                  );
+                })()}
+              </div>
             </div>
             <div className="modal-actions">
               <button
