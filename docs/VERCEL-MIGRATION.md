@@ -74,6 +74,20 @@ Update your OAuth app settings:
 3. Enable **Include source files outside of the Root Directory** if Root Directory is `web`
 4. Deploy
 
+## Troubleshooting
+
+### "Can't reach database server at `ep-xxx.region.postgres.vercel-storage.com`" (P1001)
+
+Your app is using the **placeholder** `DATABASE_URL` from `.env.vercel.example`, not a real Vercel Postgres URL.
+
+**Fix:** In Vercel → Project → **Settings** → **Environment Variables**, set `DATABASE_URL` to the **actual** connection string from your Postgres store:
+
+1. Vercel Dashboard → your project → **Storage**
+2. Open your **Postgres** database
+3. Use the **.env** tab or **Connection string** and copy the URL (it will look like `postgres://default:...@ep-<id>-<region>.postgres.vercel-storage.com:5432/verceldb?sslmode=require` with real `ep-...` and region)
+4. Paste that value as `DATABASE_URL` for Production (and Preview/Development if you use them)
+5. Redeploy so the new env is picked up
+
 ## Build memory
 
 If the build fails with "exceeded the amount of memory available":
