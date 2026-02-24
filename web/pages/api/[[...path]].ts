@@ -40,7 +40,7 @@ export default async function handler(
       res.on("finish", () => resolve());
       res.on("close", () => resolve());
       res.on("error", reject);
-      nestHandler(req, res as import("express").Response).catch(reject);
+      nestHandler(req, res as unknown as import("express").Response).catch(reject);
     });
   } finally {
     nodeReq.url = savedUrl;
