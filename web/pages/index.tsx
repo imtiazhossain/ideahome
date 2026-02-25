@@ -1,4 +1,10 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import Link from "next/link";
 import { useRouter } from "next/router";
 import {
@@ -3310,9 +3316,7 @@ export default function Home() {
             onSelectProject={setSelectedProjectId}
             onCreateProject={handleCreateProjectWithName}
             onDeleteProjectClick={() => {
-              const current = projects.find(
-                (p) => p.id === selectedProjectId
-              );
+              const current = projects.find((p) => p.id === selectedProjectId);
               if (current) setProjectToDelete(current);
             }}
             onDeleteAllIssuesClick={() => setDeleteAllConfirmOpen(true)}
@@ -3838,7 +3842,8 @@ export default function Home() {
                       />
                       <span className="form-hint">
                         No organizations yet. Enter a name to create one with
-                        this project, or leave blank for &quot;My Workspace&quot;.
+                        this project, or leave blank for &quot;My
+                        Workspace&quot;.
                       </span>
                     </div>
                   ) : (

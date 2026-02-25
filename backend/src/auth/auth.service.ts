@@ -183,11 +183,9 @@ export class AuthService {
   }
 
   signToken(user: { id: string; email: string }): string {
-    return jwt.sign(
-      { sub: user.id, email: user.email },
-      getJwtSecret(),
-      { expiresIn: "7d" }
-    );
+    return jwt.sign({ sub: user.id, email: user.email }, getJwtSecret(), {
+      expiresIn: "7d",
+    });
   }
 
   async exchangeGoogleCode(code: string): Promise<SsoProfile> {

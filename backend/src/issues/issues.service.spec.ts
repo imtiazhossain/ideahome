@@ -722,7 +722,7 @@ describe("IssuesService", () => {
       expect(setHeader).toHaveBeenCalledWith("Content-Type", "application/pdf");
       expect(setHeader).toHaveBeenCalledWith(
         "Content-Disposition",
-        "inline; filename=\"doc.pdf\""
+        'inline; filename="doc.pdf"'
       );
       expect(pipe).toHaveBeenCalledWith(res);
     });
@@ -744,7 +744,7 @@ describe("IssuesService", () => {
       await service.streamFile("i1", "f1", res as any);
       expect(setHeader).toHaveBeenCalledWith(
         "Content-Disposition",
-        "attachment; filename=\"data.bin\""
+        'attachment; filename="data.bin"'
       );
     });
 

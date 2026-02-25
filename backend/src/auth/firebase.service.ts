@@ -45,7 +45,12 @@ export class FirebaseService implements OnModuleInit {
     if (!this.app) return null;
     try {
       const decoded = await this.app.auth().verifyIdToken(idToken);
-      const payload = decoded as { uid: string; email?: string; name?: string; display_name?: string };
+      const payload = decoded as {
+        uid: string;
+        email?: string;
+        name?: string;
+        display_name?: string;
+      };
       return {
         uid: payload.uid,
         email: payload.email ?? undefined,

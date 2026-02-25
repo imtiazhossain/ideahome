@@ -33,10 +33,10 @@ export class JwtAuthGuard implements CanActivate {
       }
       const token = parts[1];
       try {
-        const payload = jwt.verify(
-          token,
-          getJwtSecret()
-        ) as { sub?: string; email?: string };
+        const payload = jwt.verify(token, getJwtSecret()) as {
+          sub?: string;
+          email?: string;
+        };
         if (payload.sub) {
           await this.ensureUserAndOrg(payload.sub);
         }

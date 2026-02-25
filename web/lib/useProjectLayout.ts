@@ -160,12 +160,7 @@ export function useProjectLayout(): UseProjectLayoutReturn {
     } finally {
       setProjectDeleting(false);
     }
-  }, [
-    projectToDelete,
-    selectedProjectId,
-    setSelectedProjectId,
-    loadProjects,
-  ]);
+  }, [projectToDelete, selectedProjectId, setSelectedProjectId, loadProjects]);
 
   const projectDisplayName =
     projects.find((p) => p.id === selectedProjectId)?.name ??

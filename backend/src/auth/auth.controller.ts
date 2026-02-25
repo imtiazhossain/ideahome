@@ -86,10 +86,7 @@ export class AuthController {
   }
 
   @Get("callback")
-  async callback(
-    @Res() res: Response,
-    @Query() query: OAuthCallbackQuery
-  ) {
+  async callback(@Res() res: Response, @Query() query: OAuthCallbackQuery) {
     const { code, state } = query;
     if (!code || !state) {
       return res.status(400).json({ error: "Missing code or state" });
@@ -161,12 +158,8 @@ export class AuthController {
     @Query("code") code: string,
     @Query("state") state: string
   ) {
-    return this.handleSsoCallback(
-      res,
-      "google",
-      state,
-      code,
-      (c) => this.authService.exchangeGoogleCode(c)
+    return this.handleSsoCallback(res, "google", state, code, (c) =>
+      this.authService.exchangeGoogleCode(c)
     );
   }
 
@@ -195,12 +188,8 @@ export class AuthController {
     @Query("code") code: string,
     @Query("state") state: string
   ) {
-    return this.handleSsoCallback(
-      res,
-      "github",
-      state,
-      code,
-      (c) => this.authService.exchangeGitHubCode(c)
+    return this.handleSsoCallback(res, "github", state, code, (c) =>
+      this.authService.exchangeGitHubCode(c)
     );
   }
 
@@ -231,12 +220,8 @@ export class AuthController {
     @Query("code") code: string,
     @Query("state") state: string
   ) {
-    return this.handleSsoCallback(
-      res,
-      "apple",
-      state,
-      code,
-      (c) => this.authService.exchangeAppleCode(c)
+    return this.handleSsoCallback(res, "apple", state, code, (c) =>
+      this.authService.exchangeAppleCode(c)
     );
   }
 

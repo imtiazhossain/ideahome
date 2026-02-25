@@ -37,7 +37,10 @@ export class BugsService {
 
   async list(projectId: string, userId: string, search?: string) {
     await this.verifyProjectAccess(projectId, userId);
-    const where: { projectId: string; name?: { contains: string; mode: "insensitive" } } = {
+    const where: {
+      projectId: string;
+      name?: { contains: string; mode: "insensitive" };
+    } = {
       projectId,
     };
     if (search?.trim()) {

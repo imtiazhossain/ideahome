@@ -530,14 +530,11 @@ export default function TestsPage() {
             onSelectProject={setSelectedProjectId}
             onCreateProject={(name) => {
               void router.push(
-                "/?createProject=1&projectName=" +
-                  encodeURIComponent(name)
+                "/?createProject=1&projectName=" + encodeURIComponent(name)
               );
             }}
             onDeleteProjectClick={() => {
-              const current = projects.find(
-                (p) => p.id === selectedProjectId
-              );
+              const current = projects.find((p) => p.id === selectedProjectId);
               if (current) setProjectToDelete(current);
             }}
           />

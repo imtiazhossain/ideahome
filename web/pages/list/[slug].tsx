@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/router";
-import { reorder } from "../../lib/utils";
+import { reorder, applyToggleDoneOrder } from "../../lib/utils";
 import {
   getCustomListBySlug,
   getCustomListItems,
@@ -68,12 +68,9 @@ export default function CustomListPage() {
     setCustomListItems(slug, items);
   }, [slug, hydrated, items]);
 
-  const persistItems = useCallback(
-    (next: CustomListItem[]) => {
-      setItems(next);
-    },
-    []
-  );
+  const persistItems = useCallback((next: CustomListItem[]) => {
+    setItems(next);
+  }, []);
 
   const addItem = (e: React.FormEvent) => {
     e.preventDefault();
@@ -90,11 +87,7 @@ export default function CustomListPage() {
     const inserted =
       newOrder === items.length
         ? [...items, newOne]
-        : [
-            ...items.slice(0, newOrder),
-            newOne,
-            ...items.slice(newOrder),
-          ];
+        : [...items.slice(0, newOrder), newOne, ...items.slice(newOrder)];
     persistItems(inserted);
     setNewItem("");
   };
@@ -105,13 +98,13 @@ export default function CustomListPage() {
     pushHistory();
     const item = items[index];
     const newDone = !item.done;
+    let newIndex = 0;
     setItems((prev) => {
-      const next = [...prev];
-      next[index] = { ...next[index], done: newDone };
-      const without = next.filter((_, i) => i !== index);
-      return newDone ? [...without, next[index]] : [next[index], ...without];
+      const [reordered, idx] = applyToggleDoneOrder(prev, index, newDone);
+      newIndex = idx;
+      return reordered;
     });
-    if (editingIndex === index) setEditingIndex(newDone ? items.length - 1 : 0);
+    if (editingIndex === index) setEditingIndex(newIndex);
   };
 
   const removeItem = (index: number, skipHistory?: boolean) => {

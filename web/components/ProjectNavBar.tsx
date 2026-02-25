@@ -60,7 +60,8 @@ const LEGACY_TAB_ORDER_STORAGE_KEY = "ideahome-project-nav-tab-order";
 const HIDDEN_TABS_STORAGE_PREFIX = "ideahome-project-nav-tabs-hidden";
 const HIDDEN_TABS_LEGACY_KEY = "ideahome-project-nav-tabs-hidden";
 const SETTINGS_BUTTON_VISIBLE_PREFIX = "ideahome-project-nav-settings-visible";
-const SETTINGS_BUTTON_VISIBLE_LEGACY_KEY = "ideahome-project-nav-settings-visible";
+const SETTINGS_BUTTON_VISIBLE_LEGACY_KEY =
+  "ideahome-project-nav-settings-visible";
 
 /** Set when user explicitly clicks Board tab; tells _app to skip redirect away from /. */
 export const EXPLICIT_BOARD_SESSION_KEY = "ideahome-explicit-board";
@@ -574,8 +575,10 @@ function loadHiddenTabIds(): ProjectNavTabId[] {
     const raw = localStorage.getItem(getHiddenTabsStorageKey());
     if (!raw) return [];
     const parsed = JSON.parse(raw) as string[];
-    const valid = parsed.filter((id): id is ProjectNavTabId =>
-      typeof id === "string" && (TABS.some((t) => t.id === id) || id.startsWith("custom-"))
+    const valid = parsed.filter(
+      (id): id is ProjectNavTabId =>
+        typeof id === "string" &&
+        (TABS.some((t) => t.id === id) || id.startsWith("custom-"))
     );
     return valid;
   } catch {
@@ -709,9 +712,9 @@ function loadTabOrder(): ProjectNavTabId[] {
     const isValidId = (id: string): id is ProjectNavTabId =>
       TABS.some((t) => t.id === id) || customIds.has(id);
     const valid = parsed.filter(isValidId);
-    const missingBuiltIn = TABS.filter(
-      (t) => !valid.includes(t.id)
-    ).map((t) => t.id);
+    const missingBuiltIn = TABS.filter((t) => !valid.includes(t.id)).map(
+      (t) => t.id
+    );
     const missingCustom = customLists
       .map((l) => getCustomListTabId(l.slug))
       .filter((id) => !valid.includes(id));
@@ -813,13 +816,15 @@ export function ProjectNavBar({
   showSettingsButton = true,
 }: ProjectNavBarProps) {
   const router = useRouter();
-  const { tabOrder, setTabOrder, hiddenTabIds, setHiddenTabIds } = useTabOrder();
+  const { tabOrder, setTabOrder, hiddenTabIds, setHiddenTabIds } =
+    useTabOrder();
   const [settingsButtonVisible, setSettingsButtonVisible] = useState(true);
   const [settingsMenuOpen, setSettingsMenuOpen] = useState(false);
   const [reorderSectionOpen, setReorderSectionOpen] = useState(false);
   const [showTabsSectionOpen, setShowTabsSectionOpen] = useState(false);
   const [addSectionOpen, setAddSectionOpen] = useState(false);
-  const [deleteProjectSectionOpen, setDeleteProjectSectionOpen] = useState(false);
+  const [deleteProjectSectionOpen, setDeleteProjectSectionOpen] =
+    useState(false);
   const settingsMenuRef = useRef<HTMLDivElement>(null);
   const [createListModalOpen, setCreateListModalOpen] = useState(false);
   const [createListName, setCreateListName] = useState("");
@@ -886,21 +891,21 @@ export function ProjectNavBar({
       Promise.allSettled(fetches)
         .then((settled) => {
           const [issuesRes, todosRes, ideasRes, bugsRes, featuresRes] = settled;
-          const issues = (issuesRes.status === "fulfilled"
-            ? issuesRes.value
-            : []) as Issue[];
-          const todos = (todosRes.status === "fulfilled"
-            ? todosRes.value
-            : []) as Todo[];
-          const ideas = (ideasRes.status === "fulfilled"
-            ? ideasRes.value
-            : []) as Idea[];
-          const bugs = (bugsRes.status === "fulfilled"
-            ? bugsRes.value
-            : []) as Bug[];
-          const features = (featuresRes.status === "fulfilled"
-            ? featuresRes.value
-            : []) as Feature[];
+          const issues = (
+            issuesRes.status === "fulfilled" ? issuesRes.value : []
+          ) as Issue[];
+          const todos = (
+            todosRes.status === "fulfilled" ? todosRes.value : []
+          ) as Todo[];
+          const ideas = (
+            ideasRes.status === "fulfilled" ? ideasRes.value : []
+          ) as Idea[];
+          const bugs = (
+            bugsRes.status === "fulfilled" ? bugsRes.value : []
+          ) as Bug[];
+          const features = (
+            featuresRes.status === "fulfilled" ? featuresRes.value : []
+          ) as Feature[];
           if (
             issuesRes.status === "rejected" ||
             todosRes.status === "rejected" ||
@@ -960,16 +965,18 @@ export function ProjectNavBar({
               projectId: item.projectId,
             });
           });
-          features.slice(0, PROJECT_SEARCH_MAX_PER_LIST).forEach((item: Feature) => {
-            results.push({
-              type: "list",
-              id: item.id,
-              name: item.name,
-              page: "/features",
-              pageLabel: "Features",
-              projectId: item.projectId,
+          features
+            .slice(0, PROJECT_SEARCH_MAX_PER_LIST)
+            .forEach((item: Feature) => {
+              results.push({
+                type: "list",
+                id: item.id,
+                name: item.name,
+                page: "/features",
+                pageLabel: "Features",
+                projectId: item.projectId,
+              });
             });
-          });
           setProjectSearchResults(results);
         })
         .catch(() => setProjectSearchResults([]))
@@ -1059,23 +1066,39 @@ export function ProjectNavBar({
   const hiddenSet = new Set(hiddenTabIds);
   const orderedTabs = tabOrder
     .filter((id) => !hiddenSet.has(id))
-    .map((id): { id: ProjectNavTabId; label: string; icon: React.ReactNode; href?: string; hasDropdown?: boolean } | null => {
-      const builtIn = TABS.find((t) => t.id === id);
-      if (builtIn) return builtIn;
-      if (typeof id === "string" && id.startsWith("custom-")) {
-        const slug = id.slice(7);
-        const list = customLists.find((l) => l.slug === slug);
-        if (list)
-          return {
-            id,
-            label: list.name,
-            icon: <IconFromName name={list.name} />,
-            href: `/list/${list.slug}`,
-          };
+    .map(
+      (
+        id
+      ): {
+        id: ProjectNavTabId;
+        label: string;
+        icon: React.ReactNode;
+        href?: string;
+        hasDropdown?: boolean;
+      } | null => {
+        const builtIn = TABS.find((t) => t.id === id);
+        if (builtIn) return builtIn;
+        if (typeof id === "string" && id.startsWith("custom-")) {
+          const slug = id.slice(7);
+          const list = customLists.find((l) => l.slug === slug);
+          if (list)
+            return {
+              id,
+              label: list.name,
+              icon: <IconFromName name={list.name} />,
+              href: `/list/${list.slug}`,
+            };
+        }
+        return null;
       }
-      return null;
-    })
-    .filter(Boolean) as { id: ProjectNavTabId; label: string; icon: React.ReactNode; href?: string; hasDropdown?: boolean }[];
+    )
+    .filter(Boolean) as {
+    id: ProjectNavTabId;
+    label: string;
+    icon: React.ReactNode;
+    href?: string;
+    hasDropdown?: boolean;
+  }[];
 
   return (
     <header className="project-nav">
@@ -1091,7 +1114,17 @@ export function ProjectNavBar({
                 aria-label="Open menu"
                 title="Open menu"
               >
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                <svg
+                  width="24"
+                  height="24"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden
+                >
                   <line x1="4" y1="6" x2="20" y2="6" />
                   <line x1="4" y1="12" x2="20" y2="12" />
                   <line x1="4" y1="18" x2="20" y2="18" />
@@ -1117,7 +1150,10 @@ export function ProjectNavBar({
                   <h1 className="project-nav-project-name">
                     {projectName || "Project"}
                   </h1>
-                  <span className="project-nav-project-name-chevron" aria-hidden>
+                  <span
+                    className="project-nav-project-name-chevron"
+                    aria-hidden
+                  >
                     <IconChevronDown />
                   </span>
                 </button>
@@ -1148,13 +1184,13 @@ export function ProjectNavBar({
                             e.preventDefault();
                             const name = newProjectName.trim();
                             if (!name) return;
-                            void Promise.resolve(
-                              onCreateProject(name)
-                            ).then(() => {
-                              setShowCreateProjectInput(false);
-                              setNewProjectName("");
-                              setProjectSwitcherOpen(false);
-                            });
+                            void Promise.resolve(onCreateProject(name)).then(
+                              () => {
+                                setShowCreateProjectInput(false);
+                                setNewProjectName("");
+                                setProjectSwitcherOpen(false);
+                              }
+                            );
                           }}
                         >
                           <input
@@ -1163,9 +1199,7 @@ export function ProjectNavBar({
                             className="project-nav-project-switcher-create-input"
                             placeholder="Project name"
                             value={newProjectName}
-                            onChange={(e) =>
-                              setNewProjectName(e.target.value)
-                            }
+                            onChange={(e) => setNewProjectName(e.target.value)}
                             onBlur={() => {
                               if (!newProjectName.trim()) {
                                 setShowCreateProjectInput(false);
@@ -1278,9 +1312,7 @@ export function ProjectNavBar({
                         const title =
                           item.type === "issue" ? item.title : item.name;
                         const meta =
-                          item.type === "issue"
-                            ? item.status
-                            : item.pageLabel;
+                          item.type === "issue" ? item.status : item.pageLabel;
                         return (
                           <li key={key} role="option">
                             <Link
@@ -1321,7 +1353,10 @@ export function ProjectNavBar({
               </button>
             )}
             {hasToken !== null && (
-              <span className="project-nav-auth project-nav-auth-wrap" ref={authMenuRef}>
+              <span
+                className="project-nav-auth project-nav-auth-wrap"
+                ref={authMenuRef}
+              >
                 <button
                   type="button"
                   className={`project-nav-auth-btn${authMenuOpen ? " is-open" : ""}`}
@@ -1400,7 +1435,10 @@ export function ProjectNavBar({
                       setProjectSwitcherOpen(false);
                       if (tab.href === "/") {
                         try {
-                          sessionStorage.setItem(EXPLICIT_BOARD_SESSION_KEY, "1");
+                          sessionStorage.setItem(
+                            EXPLICIT_BOARD_SESSION_KEY,
+                            "1"
+                          );
                         } catch {
                           /* ignore */
                         }
@@ -1438,251 +1476,263 @@ export function ProjectNavBar({
           </div>
         </div>
         {showSettingsButton && (
-        <div ref={settingsMenuRef} className="project-nav-settings-wrap">
-          <button
-            type="button"
-            className="project-nav-add project-nav-settings-toggle-btn"
-            onClick={() => {
-              const next = !settingsButtonVisible;
-              setSettingsButtonVisible(next);
-              try {
-                localStorage.setItem(
-                  getSettingsButtonVisibleStorageKey(),
-                  next ? "1" : "0"
-                );
-              } catch {
-                /* ignore */
+          <div ref={settingsMenuRef} className="project-nav-settings-wrap">
+            <button
+              type="button"
+              className="project-nav-add project-nav-settings-toggle-btn"
+              onClick={() => {
+                const next = !settingsButtonVisible;
+                setSettingsButtonVisible(next);
+                try {
+                  localStorage.setItem(
+                    getSettingsButtonVisibleStorageKey(),
+                    next ? "1" : "0"
+                  );
+                } catch {
+                  /* ignore */
+                }
+                if (!next) setSettingsMenuOpen(false);
+              }}
+              aria-label={
+                settingsButtonVisible ? "Hide settings" : "Show settings"
               }
-              if (!next) setSettingsMenuOpen(false);
-            }}
-            aria-label={settingsButtonVisible ? "Hide settings" : "Show settings"}
-            title={settingsButtonVisible ? "Hide settings" : "Show settings"}
-            aria-expanded={settingsButtonVisible}
-          >
-            {settingsButtonVisible ? (
-              <IconChevronRight />
-            ) : (
-              <IconChevronLeft />
-            )}
-          </button>
-          {settingsButtonVisible && (
-          <button
-            type="button"
-            className={`project-nav-add project-nav-settings-btn${settingsMenuOpen ? " is-open" : ""}`}
-            onClick={() => {
-              const next = !settingsMenuOpen;
-              setSettingsMenuOpen(next);
-              if (!next) {
-                setShowTabsSectionOpen(false);
-                setReorderSectionOpen(false);
-                setAddSectionOpen(false);
-                setDeleteProjectSectionOpen(false);
-              }
-            }}
-            aria-label="Settings"
-            title="Settings"
-            aria-expanded={settingsMenuOpen}
-            aria-haspopup="true"
-          >
-            <IconSettings />
-          </button>
-          )}
-          {settingsButtonVisible && settingsMenuOpen && (
-            <div
-              className="project-nav-settings-menu"
-              role="menu"
-              aria-label="Settings"
+              title={settingsButtonVisible ? "Hide settings" : "Show settings"}
+              aria-expanded={settingsButtonVisible}
             >
-              {onDeleteAllIssuesClick && (
-                <button
-                  type="button"
-                  role="menuitem"
-                  className="project-nav-add-menu-item"
-                  disabled={deleteAllIssuesDisabled}
-                  onClick={() => {
-                    setSettingsMenuOpen(false);
-                    onDeleteAllIssuesClick();
-                  }}
-                  title={
-                    deleteAllIssuesDisabled
-                      ? "No issues to delete"
-                      : "Delete all issues"
+              {settingsButtonVisible ? (
+                <IconChevronRight />
+              ) : (
+                <IconChevronLeft />
+              )}
+            </button>
+            {settingsButtonVisible && (
+              <button
+                type="button"
+                className={`project-nav-add project-nav-settings-btn${settingsMenuOpen ? " is-open" : ""}`}
+                onClick={() => {
+                  const next = !settingsMenuOpen;
+                  setSettingsMenuOpen(next);
+                  if (!next) {
+                    setShowTabsSectionOpen(false);
+                    setReorderSectionOpen(false);
+                    setAddSectionOpen(false);
+                    setDeleteProjectSectionOpen(false);
                   }
-                  aria-label="Delete all issues"
-                >
-                  Delete all issues
-                </button>
-              )}
-              <button
-                type="button"
-                className={`project-nav-settings-section-toggle${reorderSectionOpen ? " is-open" : ""}`}
-                onClick={() => setReorderSectionOpen((o) => !o)}
-                aria-expanded={reorderSectionOpen}
-                aria-label="Reorder tabs"
-                title="Reorder tabs"
+                }}
+                aria-label="Settings"
+                title="Settings"
+                aria-expanded={settingsMenuOpen}
+                aria-haspopup="true"
               >
-                <IconReorder />
+                <IconSettings />
               </button>
-              {reorderSectionOpen && (
-                <ul className="project-nav-reorder-list" role="list">
-                  {(() => {
-                    const visibleTabs = tabOrder.filter(
-                      (id) => !hiddenSet.has(id)
-                    );
-                    return visibleTabs.map((id, visibleIdx) => {
-                      const builtIn = TABS.find((t) => t.id === id);
-                      const label =
-                        builtIn?.label ??
-                        (typeof id === "string" && id.startsWith("custom-")
-                          ? customLists.find((l) => getCustomListTabId(l.slug) === id)?.name ?? id
-                          : id);
-                      return (
-                        <li key={id} className="project-nav-reorder-item">
-                          <span className="project-nav-reorder-label">{label}</span>
-                          <span className="project-nav-reorder-actions">
-                            <button
-                              type="button"
-                              className="project-nav-reorder-btn"
-                              onClick={() => moveTabVisible(id, "up")}
-                              disabled={visibleIdx === 0}
-                              aria-label={`Move ${label} up`}
-                              title="Move up"
-                            >
-                              <IconChevronUp />
-                            </button>
-                          </span>
-                        </li>
-                      );
-                    });
-                  })()}
-                </ul>
-              )}
-              <button
-                type="button"
-                className={`project-nav-settings-section-toggle${showTabsSectionOpen ? " is-open" : ""}`}
-                onClick={() => setShowTabsSectionOpen((o) => !o)}
-                aria-expanded={showTabsSectionOpen}
-                aria-label="Filter tabs"
+            )}
+            {settingsButtonVisible && settingsMenuOpen && (
+              <div
+                className="project-nav-settings-menu"
+                role="menu"
+                aria-label="Settings"
               >
-                <IconFilter />
-              </button>
-              {showTabsSectionOpen && (
-              <ul className="project-nav-filter-list" role="list">
-                {[...tabOrder]
-                  .map((id) => {
-                    const builtIn = TABS.find((t) => t.id === id);
-                    const label =
-                      builtIn?.label ??
-                      (typeof id === "string" && id.startsWith("custom-")
-                        ? customLists.find((l) => getCustomListTabId(l.slug) === id)?.name ?? id
-                        : id);
-                    return { id, label };
-                  })
-                  .sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: "base" }))
-                  .map(({ id, label }) => {
-                    const visible = !hiddenSet.has(id);
-                    return (
-                      <li key={id} className="project-nav-filter-item">
-                        <label className="project-nav-filter-label">
-                          <input
-                            type="checkbox"
-                            checked={visible}
-                            onChange={() => {
-                              const next = visible
-                                ? [...hiddenTabIds, id]
-                                : hiddenTabIds.filter((h) => h !== id);
-                              setHiddenTabIds(next);
-                            }}
-                            aria-label={`${visible ? "Hide" : "Show"} ${label}`}
-                          />
-                          <span>{label}</span>
-                        </label>
-                      </li>
-                    );
-                  })}
-              </ul>
-              )}
-              <button
-                type="button"
-                className={`project-nav-settings-section-toggle project-nav-settings-section-header${addSectionOpen ? " is-open" : ""}`}
-                onClick={() => setAddSectionOpen((o) => !o)}
-                aria-expanded={addSectionOpen}
-                aria-label="Add"
-              >
-                <IconPlus />
-              </button>
-              {addSectionOpen && (
-              <ul className="project-nav-add-menu-list" role="list">
-                {onAddClick && (
-                  <li role="none">
-                    <button
-                      type="button"
-                      role="menuitem"
-                      className="project-nav-add-menu-item"
-                      onClick={() => {
-                        setSettingsMenuOpen(false);
-                        onAddClick();
-                      }}
-                    >
-                      Create Deck
-                    </button>
-                  </li>
-                )}
-                <li role="none">
+                {onDeleteAllIssuesClick && (
                   <button
                     type="button"
                     role="menuitem"
                     className="project-nav-add-menu-item"
+                    disabled={deleteAllIssuesDisabled}
                     onClick={() => {
                       setSettingsMenuOpen(false);
-                      setCreateListName("");
-                      setCreateListError(null);
-                      setCreateListModalOpen(true);
+                      onDeleteAllIssuesClick();
                     }}
+                    title={
+                      deleteAllIssuesDisabled
+                        ? "No issues to delete"
+                        : "Delete all issues"
+                    }
+                    aria-label="Delete all issues"
                   >
-                    New list…
+                    Delete all issues
                   </button>
-                </li>
-              </ul>
-              )}
-              {onDeleteProjectClick && (
-                <>
-                  <button
-                    type="button"
-                    className={`project-nav-settings-section-toggle project-nav-settings-section-header${deleteProjectSectionOpen ? " is-open" : ""}`}
-                    onClick={() => setDeleteProjectSectionOpen((o) => !o)}
-                    aria-expanded={deleteProjectSectionOpen}
-                    aria-label="Delete project"
-                    title="Delete project"
-                  >
-                    <IconTrash />
-                  </button>
-                  {deleteProjectSectionOpen && (
+                )}
+                <button
+                  type="button"
+                  className={`project-nav-settings-section-toggle${reorderSectionOpen ? " is-open" : ""}`}
+                  onClick={() => setReorderSectionOpen((o) => !o)}
+                  aria-expanded={reorderSectionOpen}
+                  aria-label="Reorder tabs"
+                  title="Reorder tabs"
+                >
+                  <IconReorder />
+                </button>
+                {reorderSectionOpen && (
+                  <ul className="project-nav-reorder-list" role="list">
+                    {(() => {
+                      const visibleTabs = tabOrder.filter(
+                        (id) => !hiddenSet.has(id)
+                      );
+                      return visibleTabs.map((id, visibleIdx) => {
+                        const builtIn = TABS.find((t) => t.id === id);
+                        const label =
+                          builtIn?.label ??
+                          (typeof id === "string" && id.startsWith("custom-")
+                            ? (customLists.find(
+                                (l) => getCustomListTabId(l.slug) === id
+                              )?.name ?? id)
+                            : id);
+                        return (
+                          <li key={id} className="project-nav-reorder-item">
+                            <span className="project-nav-reorder-label">
+                              {label}
+                            </span>
+                            <span className="project-nav-reorder-actions">
+                              <button
+                                type="button"
+                                className="project-nav-reorder-btn"
+                                onClick={() => moveTabVisible(id, "up")}
+                                disabled={visibleIdx === 0}
+                                aria-label={`Move ${label} up`}
+                                title="Move up"
+                              >
+                                <IconChevronUp />
+                              </button>
+                            </span>
+                          </li>
+                        );
+                      });
+                    })()}
+                  </ul>
+                )}
+                <button
+                  type="button"
+                  className={`project-nav-settings-section-toggle${showTabsSectionOpen ? " is-open" : ""}`}
+                  onClick={() => setShowTabsSectionOpen((o) => !o)}
+                  aria-expanded={showTabsSectionOpen}
+                  aria-label="Filter tabs"
+                >
+                  <IconFilter />
+                </button>
+                {showTabsSectionOpen && (
+                  <ul className="project-nav-filter-list" role="list">
+                    {[...tabOrder]
+                      .map((id) => {
+                        const builtIn = TABS.find((t) => t.id === id);
+                        const label =
+                          builtIn?.label ??
+                          (typeof id === "string" && id.startsWith("custom-")
+                            ? (customLists.find(
+                                (l) => getCustomListTabId(l.slug) === id
+                              )?.name ?? id)
+                            : id);
+                        return { id, label };
+                      })
+                      .sort((a, b) =>
+                        a.label.localeCompare(b.label, undefined, {
+                          sensitivity: "base",
+                        })
+                      )
+                      .map(({ id, label }) => {
+                        const visible = !hiddenSet.has(id);
+                        return (
+                          <li key={id} className="project-nav-filter-item">
+                            <label className="project-nav-filter-label">
+                              <input
+                                type="checkbox"
+                                checked={visible}
+                                onChange={() => {
+                                  const next = visible
+                                    ? [...hiddenTabIds, id]
+                                    : hiddenTabIds.filter((h) => h !== id);
+                                  setHiddenTabIds(next);
+                                }}
+                                aria-label={`${visible ? "Hide" : "Show"} ${label}`}
+                              />
+                              <span>{label}</span>
+                            </label>
+                          </li>
+                        );
+                      })}
+                  </ul>
+                )}
+                <button
+                  type="button"
+                  className={`project-nav-settings-section-toggle project-nav-settings-section-header${addSectionOpen ? " is-open" : ""}`}
+                  onClick={() => setAddSectionOpen((o) => !o)}
+                  aria-expanded={addSectionOpen}
+                  aria-label="Add"
+                >
+                  <IconPlus />
+                </button>
+                {addSectionOpen && (
+                  <ul className="project-nav-add-menu-list" role="list">
+                    {onAddClick && (
+                      <li role="none">
+                        <button
+                          type="button"
+                          role="menuitem"
+                          className="project-nav-add-menu-item"
+                          onClick={() => {
+                            setSettingsMenuOpen(false);
+                            onAddClick();
+                          }}
+                        >
+                          Create Deck
+                        </button>
+                      </li>
+                    )}
+                    <li role="none">
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className="project-nav-add-menu-item"
+                        onClick={() => {
+                          setSettingsMenuOpen(false);
+                          setCreateListName("");
+                          setCreateListError(null);
+                          setCreateListModalOpen(true);
+                        }}
+                      >
+                        New list…
+                      </button>
+                    </li>
+                  </ul>
+                )}
+                {onDeleteProjectClick && (
+                  <>
                     <button
                       type="button"
-                      role="menuitem"
-                      className="project-nav-add-menu-item project-nav-settings-delete-project"
-                      disabled={!selectedProjectId || !projects?.length}
-                      onClick={() => {
-                        setSettingsMenuOpen(false);
-                        setDeleteProjectSectionOpen(false);
-                        onDeleteProjectClick();
-                      }}
-                      title={
-                        !selectedProjectId || !projects?.length
-                          ? "No project to delete"
-                          : "Delete the Project"
-                      }
-                      aria-label="Delete the Project"
+                      className={`project-nav-settings-section-toggle project-nav-settings-section-header${deleteProjectSectionOpen ? " is-open" : ""}`}
+                      onClick={() => setDeleteProjectSectionOpen((o) => !o)}
+                      aria-expanded={deleteProjectSectionOpen}
+                      aria-label="Delete project"
+                      title="Delete project"
                     >
-                      Delete the Project
+                      <IconTrash />
                     </button>
-                  )}
-                </>
-              )}
-            </div>
-          )}
-        </div>
+                    {deleteProjectSectionOpen && (
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className="project-nav-add-menu-item project-nav-settings-delete-project"
+                        disabled={!selectedProjectId || !projects?.length}
+                        onClick={() => {
+                          setSettingsMenuOpen(false);
+                          setDeleteProjectSectionOpen(false);
+                          onDeleteProjectClick();
+                        }}
+                        title={
+                          !selectedProjectId || !projects?.length
+                            ? "No project to delete"
+                            : "Delete the Project"
+                        }
+                        aria-label="Delete the Project"
+                      >
+                        Delete the Project
+                      </button>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
+          </div>
         )}
       </nav>
 
@@ -1691,10 +1741,7 @@ export function ProjectNavBar({
           className="modal-overlay"
           onClick={() => setCreateListModalOpen(false)}
         >
-          <div
-            className="modal"
-            onClick={(e) => e.stopPropagation()}
-          >
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <h2>New list page</h2>
               <button
@@ -1724,10 +1771,7 @@ export function ProjectNavBar({
               }}
             >
               {createListError && (
-                <div
-                  className="error-banner"
-                  style={{ marginBottom: 16 }}
-                >
+                <div className="error-banner" style={{ marginBottom: 16 }}>
                   {createListError}
                 </div>
               )}

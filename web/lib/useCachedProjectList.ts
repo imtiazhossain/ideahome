@@ -33,7 +33,7 @@ export function useCachedProjectList<T extends { id: string }>({
 }: UseCachedProjectListOptions<T>): [
   T[],
   React.Dispatch<React.SetStateAction<T[]>>,
-  boolean
+  boolean,
 ] {
   const [items, setItems] = useState<T[]>([]);
   const [loading, setLoading] = useState(false);
@@ -100,10 +100,7 @@ export function useCachedProjectList<T extends { id: string }>({
   }, [listType, selectedProjectId, authenticated, fetchList]);
 
   useEffect(() => {
-    if (
-      !selectedProjectId ||
-      items.some((item) => item.id.startsWith("temp-"))
-    )
+    if (!selectedProjectId || items.some((item) => item.id.startsWith("temp-")))
       return;
     setList(listType, selectedProjectId, items);
   }, [listType, selectedProjectId, items]);

@@ -59,7 +59,11 @@ export function IconFromName({ name }: { name: string }) {
   if (known) {
     const { Icon } = known;
     return (
-      <span className="icon-from-name icon-from-name--svg" aria-hidden title={name}>
+      <span
+        className="icon-from-name icon-from-name--svg"
+        aria-hidden
+        title={name}
+      >
         <Icon />
       </span>
     );

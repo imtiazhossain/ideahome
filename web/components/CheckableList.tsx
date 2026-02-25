@@ -1,22 +1,21 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useRef } from "react";
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import { SectionLoadingSpinner } from "./SectionLoadingSpinner";
-
-const IconGrip = () => (
-  <svg
-    width="16"
-    height="16"
-    viewBox="0 0 24 24"
-    fill="currentColor"
-    aria-hidden
-  >
-    <circle cx="9" cy="6" r="1.5" />
-    <circle cx="15" cy="6" r="1.5" />
-    <circle cx="9" cy="12" r="1.5" />
-    <circle cx="15" cy="12" r="1.5" />
-    <circle cx="9" cy="18" r="1.5" />
-    <circle cx="15" cy="18" r="1.5" />
-  </svg>
-);
 
 const IconCheck = () => (
   <svg
@@ -31,6 +30,23 @@ const IconCheck = () => (
     aria-hidden
   >
     <polyline points="20 6 9 17 4 12" />
+  </svg>
+);
+
+const IconGrip = () => (
+  <svg
+    width="16"
+    height="16"
+    viewBox="0 0 24 24"
+    fill="currentColor"
+    aria-hidden
+  >
+    <circle cx="9" cy="6" r="1.5" />
+    <circle cx="9" cy="12" r="1.5" />
+    <circle cx="9" cy="18" r="1.5" />
+    <circle cx="15" cy="6" r="1.5" />
+    <circle cx="15" cy="12" r="1.5" />
+    <circle cx="15" cy="18" r="1.5" />
   </svg>
 );
 
@@ -56,6 +72,163 @@ export interface CheckableListProps {
   onReorder: (fromIndex: number, toIndex: number) => void;
 }
 
+interface SortableItemProps {
+  item: CheckableListItem;
+  index: number;
+  itemLabel: string;
+  isItemDisabled?: (item: CheckableListItem) => boolean;
+  isEditing: boolean;
+  editingValue: string;
+  onEditingValueChange: (value: string) => void;
+  onStartEdit: (index: number) => void;
+  onSaveEdit: () => void;
+  onCancelEdit: () => void;
+  onToggleDone: (index: number) => void;
+}
+
+function SortableItem({
+  item,
+  index,
+  itemLabel,
+  isItemDisabled,
+  isEditing,
+  editingValue,
+  onEditingValueChange,
+  onStartEdit,
+  onSaveEdit,
+  onCancelEdit,
+  onToggleDone,
+}: SortableItemProps) {
+  const disabled = isItemDisabled?.(item) ?? false;
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({
+    id: item.id,
+    disabled: isEditing,
+  });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  return (
+    <li
+      ref={setNodeRef}
+      style={style}
+      className={`features-list-item ${item.done ? "features-list-item--done" : ""} ${isDragging ? "features-list-item--dragging" : ""}`}
+    >
+      <span
+        className="features-list-drag-handle"
+        {...attributes}
+        {...listeners}
+        aria-label="Drag to reorder"
+        title="Drag to reorder"
+      >
+        <IconGrip />
+      </span>
+      {isEditing ? (
+        <>
+          <button
+            type="button"
+            className="features-list-done-toggle"
+            onClick={() => !disabled && onToggleDone(index)}
+            disabled={disabled}
+            aria-label={
+              item.done
+                ? `Mark "${item.name}" not done`
+                : `Mark "${item.name}" done`
+            }
+            title={item.done ? "Mark not done" : "Mark done"}
+          >
+            {item.done ? (
+              <span className="features-list-done-check" aria-hidden>
+                <IconCheck />
+              </span>
+            ) : (
+              <span className="features-list-done-empty" aria-hidden />
+            )}
+          </button>
+          <span className="features-list-input-wrap">
+            <span className="features-list-input-sizer" aria-hidden>
+              {editingValue || "\u00A0"}
+            </span>
+            <input
+              type="text"
+              value={editingValue}
+              onChange={(e) => onEditingValueChange(e.target.value)}
+              onBlur={onSaveEdit}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") onSaveEdit();
+                if (e.key === "Escape") onCancelEdit();
+              }}
+              className="features-list-input"
+              aria-label={`Edit ${itemLabel}`}
+              autoFocus
+            />
+          </span>
+          {item.done && (
+            <span className="features-list-done-badge" aria-label="Done">
+              Done
+            </span>
+          )}
+        </>
+      ) : (
+        <>
+          <button
+            type="button"
+            className="features-list-done-toggle"
+            onClick={() => !disabled && onToggleDone(index)}
+            disabled={disabled}
+            aria-label={
+              item.done
+                ? `Mark "${item.name}" not done`
+                : `Mark "${item.name}" done`
+            }
+            title={item.done ? "Mark not done" : "Mark done"}
+          >
+            {item.done ? (
+              <span className="features-list-done-check" aria-hidden>
+                <IconCheck />
+              </span>
+            ) : (
+              <span className="features-list-done-empty" aria-hidden />
+            )}
+          </button>
+          <span
+            className="features-list-label"
+            onClick={() => !disabled && onStartEdit(index)}
+            onKeyDown={(e) => {
+              if (!disabled && (e.key === "Enter" || e.key === " ")) {
+                e.preventDefault();
+                onStartEdit(index);
+              }
+            }}
+            role="button"
+            tabIndex={disabled ? -1 : 0}
+            aria-label={`Edit ${item.name}`}
+            title={`Edit "${item.name}"`}
+            style={{ cursor: disabled ? "default" : "pointer" }}
+          >
+            {item.name}
+          </span>
+          {item.done && (
+            <span className="features-list-done-badge" aria-label="Done">
+              Done
+            </span>
+          )}
+        </>
+      )}
+    </li>
+  );
+}
+
 export function CheckableList({
   items,
   itemLabel,
@@ -72,136 +245,34 @@ export function CheckableList({
   onReorder,
 }: CheckableListProps) {
   const listRef = useRef<HTMLUListElement>(null);
-  const dragRef = useRef<{
-    sourceIndex: number;
-    targetIndex: number;
-    startY: number;
-    itemTops: number[];
-    itemHeight: number;
-  } | null>(null);
-  const onReorderRef = useRef(onReorder);
-  onReorderRef.current = onReorder;
-  const [isDragging, setIsDragging] = useState(false);
 
-  const applyTransforms = (
-    sourceIdx: number,
-    targetIdx: number,
-    deltaY: number
-  ) => {
-    const ul = listRef.current;
-    if (!ul) return;
-    const children = Array.from(ul.children) as HTMLElement[];
-    const drag = dragRef.current;
-    if (!drag) return;
-    const h = drag.itemHeight;
-    const lo = Math.min(sourceIdx, targetIdx);
-    const hi = Math.max(sourceIdx, targetIdx);
-    const direction = targetIdx > sourceIdx ? -1 : 1;
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: { distance: 8 },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
 
-    for (let i = 0; i < children.length; i++) {
-      const el = children[i];
-      if (i === sourceIdx) {
-        el.style.transform = `translateY(${deltaY}px)`;
-        el.style.transition = "none";
-        el.style.zIndex = "10";
-        el.style.position = "relative";
-        el.style.boxShadow = "0 4px 12px rgba(0,0,0,0.15)";
-      } else if (i >= lo && i <= hi) {
-        el.style.transform = `translateY(${direction * h}px)`;
-        el.style.transition = "transform 0.2s cubic-bezier(0.2, 0, 0, 1)";
-        el.style.zIndex = "";
-        el.style.position = "";
-        el.style.boxShadow = "";
-      } else {
-        el.style.transform = "";
-        el.style.transition = "transform 0.2s cubic-bezier(0.2, 0, 0, 1)";
-        el.style.zIndex = "";
-        el.style.position = "";
-        el.style.boxShadow = "";
-      }
-    }
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+
+    const oldIndex = items.findIndex((i) => i.id === active.id);
+    const newIndex = items.findIndex((i) => i.id === over.id);
+    if (oldIndex === -1 || newIndex === -1) return;
+
+    onReorder(oldIndex, newIndex);
   };
 
-  const clearAllTransforms = () => {
-    const ul = listRef.current;
-    if (!ul) return;
-    Array.from(ul.children).forEach((child) => {
-      const el = child as HTMLElement;
-      el.style.transform = "";
-      el.style.transition = "";
-      el.style.zIndex = "";
-      el.style.position = "";
-      el.style.boxShadow = "";
-    });
+  const handleListClickCapture = (e: React.MouseEvent) => {
+    if (editingIndex == null) return;
+    const editedLi = listRef.current?.children[editingIndex] as HTMLElement;
+    const inputWrap = editedLi?.querySelector(".features-list-input-wrap");
+    if (inputWrap?.contains(e.target as Node)) return;
+    onSaveEdit();
   };
-
-  const handleGripPointerDown = (e: React.PointerEvent, index: number) => {
-    e.preventDefault();
-    const ul = listRef.current;
-    if (!ul) return;
-    const children = Array.from(ul.children) as HTMLElement[];
-    if (children.length === 0) return;
-
-    const itemTops = children.map((c) => c.getBoundingClientRect().top);
-    const firstRect = children[0].getBoundingClientRect();
-    const itemHeight = firstRect.height + 6;
-
-    dragRef.current = {
-      sourceIndex: index,
-      targetIndex: index,
-      startY: e.clientY,
-      itemTops,
-      itemHeight,
-    };
-    setIsDragging(true);
-  };
-
-  useEffect(() => {
-    if (!isDragging) return;
-
-    const onPointerMove = (e: PointerEvent) => {
-      const drag = dragRef.current;
-      if (!drag) return;
-
-      const deltaY = e.clientY - drag.startY;
-      const sourceIdx = drag.sourceIndex;
-      const h = drag.itemHeight;
-
-      let targetIdx = sourceIdx + Math.round(deltaY / h);
-      targetIdx = Math.max(0, Math.min(targetIdx, items.length - 1));
-      drag.targetIndex = targetIdx;
-
-      applyTransforms(sourceIdx, targetIdx, deltaY);
-    };
-
-    const onPointerUp = () => {
-      const drag = dragRef.current;
-      if (!drag) return;
-      const { sourceIndex, targetIndex } = drag;
-
-      clearAllTransforms();
-
-      if (sourceIndex !== targetIndex) {
-        onReorderRef.current(sourceIndex, targetIndex);
-      }
-
-      dragRef.current = null;
-      setIsDragging(false);
-    };
-
-    document.body.style.cursor = "grabbing";
-    document.body.style.userSelect = "none";
-    document.addEventListener("pointermove", onPointerMove);
-    document.addEventListener("pointerup", onPointerUp);
-    document.addEventListener("pointercancel", onPointerUp);
-    return () => {
-      document.body.style.cursor = "";
-      document.body.style.userSelect = "";
-      document.removeEventListener("pointermove", onPointerMove);
-      document.removeEventListener("pointerup", onPointerUp);
-      document.removeEventListener("pointercancel", onPointerUp);
-    };
-  }, [isDragging, items.length]);
 
   if (loading) {
     return <SectionLoadingSpinner />;
@@ -210,130 +281,39 @@ export function CheckableList({
     return <p className="tests-page-section-desc">{emptyMessage}</p>;
   }
 
+  const itemIds = items.map((i) => i.id);
+
   return (
-    <ul
-      ref={listRef}
-      className="features-list"
-      style={{ listStyle: "none", padding: 0, margin: "8px 0 0" }}
+    <DndContext
+      sensors={sensors}
+      collisionDetection={closestCenter}
+      onDragEnd={handleDragEnd}
     >
-      {items.map((item, index) => {
-        const disabled = isItemDisabled?.(item) ?? false;
-        return (
-          <li
-            key={item.id}
-            className={`features-list-item ${item.done ? "features-list-item--done" : ""}`}
-          >
-            {editingIndex === index ? (
-              <>
-                <button
-                  type="button"
-                  className="features-list-done-toggle"
-                  onClick={() => !disabled && onToggleDone(index)}
-                  disabled={disabled}
-                  aria-label={
-                    item.done
-                      ? `Mark "${item.name}" not done`
-                      : `Mark "${item.name}" done`
-                  }
-                  title={item.done ? "Mark not done" : "Mark done"}
-                >
-                  {item.done ? (
-                    <span className="features-list-done-check" aria-hidden>
-                      <IconCheck />
-                    </span>
-                  ) : (
-                    <span className="features-list-done-empty" aria-hidden />
-                  )}
-                </button>
-                <span
-                  className="features-list-grip"
-                  onPointerDown={(e) =>
-                    !disabled && handleGripPointerDown(e, index)
-                  }
-                  aria-label={`Drag to reorder: ${item.name}`}
-                  title="Drag to reorder"
-                >
-                  <IconGrip />
-                </span>
-                <input
-                  type="text"
-                  value={editingValue}
-                  onChange={(e) => onEditingValueChange(e.target.value)}
-                  onBlur={onSaveEdit}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") onSaveEdit();
-                    if (e.key === "Escape") onCancelEdit();
-                  }}
-                  className="project-nav-search"
-                  style={{ flex: 1, padding: "6px 10px", minWidth: 0 }}
-                  aria-label={`Edit ${itemLabel}`}
-                  autoFocus
-                />
-                {item.done && (
-                  <span className="features-list-done-badge" aria-label="Done">
-                    Done
-                  </span>
-                )}
-              </>
-            ) : (
-              <>
-                <button
-                  type="button"
-                  className="features-list-done-toggle"
-                  onClick={() => !disabled && onToggleDone(index)}
-                  disabled={disabled}
-                  aria-label={
-                    item.done
-                      ? `Mark "${item.name}" not done`
-                      : `Mark "${item.name}" done`
-                  }
-                  title={item.done ? "Mark not done" : "Mark done"}
-                >
-                  {item.done ? (
-                    <span className="features-list-done-check" aria-hidden>
-                      <IconCheck />
-                    </span>
-                  ) : (
-                    <span className="features-list-done-empty" aria-hidden />
-                  )}
-                </button>
-                <span
-                  className="features-list-grip"
-                  onPointerDown={(e) =>
-                    !disabled && handleGripPointerDown(e, index)
-                  }
-                  aria-label={`Drag to reorder: ${item.name}`}
-                  title="Drag to reorder"
-                >
-                  <IconGrip />
-                </span>
-                <span
-                  className="features-list-label"
-                  onClick={() => !disabled && onStartEdit(index)}
-                  onKeyDown={(e) => {
-                    if (!disabled && (e.key === "Enter" || e.key === " ")) {
-                      e.preventDefault();
-                      onStartEdit(index);
-                    }
-                  }}
-                  role="button"
-                  tabIndex={disabled ? -1 : 0}
-                  aria-label={`Edit ${item.name}`}
-                  title={`Edit "${item.name}"`}
-                  style={{ cursor: disabled ? "default" : "pointer" }}
-                >
-                  {item.name}
-                </span>
-                {item.done && (
-                  <span className="features-list-done-badge" aria-label="Done">
-                    Done
-                  </span>
-                )}
-              </>
-            )}
-          </li>
-        );
-      })}
-    </ul>
+      <SortableContext items={itemIds} strategy={verticalListSortingStrategy}>
+        <ul
+          ref={listRef}
+          className="features-list"
+          style={{ listStyle: "none", padding: 0, margin: "8px 0 0" }}
+          onClickCapture={handleListClickCapture}
+        >
+          {items.map((item, index) => (
+            <SortableItem
+              key={item.id}
+              item={item}
+              index={index}
+              itemLabel={itemLabel}
+              isItemDisabled={isItemDisabled}
+              isEditing={editingIndex === index}
+              editingValue={editingValue}
+              onEditingValueChange={onEditingValueChange}
+              onStartEdit={onStartEdit}
+              onSaveEdit={onSaveEdit}
+              onCancelEdit={onCancelEdit}
+              onToggleDone={onToggleDone}
+            />
+          ))}
+        </ul>
+      </SortableContext>
+    </DndContext>
   );
 }

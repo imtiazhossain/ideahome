@@ -16,8 +16,13 @@ function key(listType: ListCacheKey, projectId: string): string {
   return `${listType}:${projectId}`;
 }
 
-export function getList<T>(listType: ListCacheKey, projectId: string): T[] | undefined {
-  const entry = cache.get(key(listType, projectId)) as CacheEntry<T> | undefined;
+export function getList<T>(
+  listType: ListCacheKey,
+  projectId: string
+): T[] | undefined {
+  const entry = cache.get(key(listType, projectId)) as
+    | CacheEntry<T>
+    | undefined;
   return entry?.data;
 }
 

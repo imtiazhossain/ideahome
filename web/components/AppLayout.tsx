@@ -203,14 +203,11 @@ export function AppLayout({
             onSelectProject={setSelectedProjectId}
             onCreateProject={(name) => {
               void router.push(
-                "/?createProject=1&projectName=" +
-                  encodeURIComponent(name)
+                "/?createProject=1&projectName=" + encodeURIComponent(name)
               );
             }}
             onDeleteProjectClick={() => {
-              const current = projects.find(
-                (p) => p.id === selectedProjectId
-              );
+              const current = projects.find((p) => p.id === selectedProjectId);
               if (current) setProjectToDelete(current);
             }}
           />
@@ -220,10 +217,7 @@ export function AppLayout({
               className="modal-overlay"
               onClick={() => !projectDeleting && setProjectToDelete(null)}
             >
-              <div
-                className="modal"
-                onClick={(e) => e.stopPropagation()}
-              >
+              <div className="modal" onClick={(e) => e.stopPropagation()}>
                 <div className="modal-header">
                   <h2>Delete project</h2>
                   <button

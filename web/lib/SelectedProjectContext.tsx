@@ -44,7 +44,11 @@ const SelectedProjectContext = createContext<{
   setLastKnownProjectName: (name: string) => void;
 } | null>(null);
 
-export function SelectedProjectProvider({ children }: { children: React.ReactNode }) {
+export function SelectedProjectProvider({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   const [selectedProjectId, setSelectedProjectIdState] = useState<string>("");
   const [lastKnownProjectName, setLastKnownProjectName] = useState<string>("");
 
@@ -52,13 +56,16 @@ export function SelectedProjectProvider({ children }: { children: React.ReactNod
     setSelectedProjectIdState(getStoredSelectedProjectId());
   }, []);
 
-  const setSelectedProjectId = useCallback((id: string) => {
-    setSelectedProjectIdState((prev) => {
-      if (prev !== id) setLastKnownProjectName("");
-      return id;
-    });
-    setStoredSelectedProjectId(id);
-  }, [setLastKnownProjectName]);
+  const setSelectedProjectId = useCallback(
+    (id: string) => {
+      setSelectedProjectIdState((prev) => {
+        if (prev !== id) setLastKnownProjectName("");
+        return id;
+      });
+      setStoredSelectedProjectId(id);
+    },
+    [setLastKnownProjectName]
+  );
 
   return (
     <SelectedProjectContext.Provider
@@ -76,6 +83,9 @@ export function SelectedProjectProvider({ children }: { children: React.ReactNod
 
 export function useSelectedProject() {
   const ctx = useContext(SelectedProjectContext);
-  if (!ctx) throw new Error("useSelectedProject must be used within SelectedProjectProvider");
+  if (!ctx)
+    throw new Error(
+      "useSelectedProject must be used within SelectedProjectProvider"
+    );
   return ctx;
 }

@@ -9,7 +9,7 @@ import {
   type Feature,
 } from "../lib/api";
 import { createLegacyListStorage } from "../lib/legacyListStorage";
-import { reorder } from "../lib/utils";
+import { reorder, applyToggleDoneOrder } from "../lib/utils";
 import { useCachedProjectList } from "../lib/useCachedProjectList";
 import { useUndoList } from "../lib/useUndoList";
 import { useProjectLayout } from "../lib/useProjectLayout";
@@ -48,17 +48,21 @@ export default function FeaturesPage() {
     handleDeleteProject,
   } = layout;
   const { theme, toggleTheme } = useTheme();
-  const [features, setFeatures, featuresLoading] = useCachedProjectList<Feature>({
-    listType: "features",
-    selectedProjectId,
-    authenticated: isAuthenticated(),
-    fetchList: useCallback((projectId: string) => fetchFeatures(projectId), []),
-    legacyMigration: {
-      load: () => featuresLegacyStorage.load(),
-      create: createFeature,
-      clear: () => featuresLegacyStorage.clear(),
-    },
-  });
+  const [features, setFeatures, featuresLoading] =
+    useCachedProjectList<Feature>({
+      listType: "features",
+      selectedProjectId,
+      authenticated: isAuthenticated(),
+      fetchList: useCallback(
+        (projectId: string) => fetchFeatures(projectId),
+        []
+      ),
+      legacyMigration: {
+        load: () => featuresLegacyStorage.load(),
+        create: createFeature,
+        clear: () => featuresLegacyStorage.clear(),
+      },
+    });
   const [newFeature, setNewFeature] = useState("");
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [editingValue, setEditingValue] = useState("");
@@ -133,15 +137,13 @@ export default function FeaturesPage() {
     const newDone = !item.done;
     try {
       await updateFeature(item.id, { done: newDone });
+      let newIndex = 0;
       setFeatures((prev) => {
-        const next = [...prev];
-        next[index] = { ...next[index], done: newDone };
-        const without = next.filter((_, i) => i !== index);
-        return newDone ? [...without, next[index]] : [next[index], ...without];
+        const [reordered, idx] = applyToggleDoneOrder(prev, index, newDone);
+        newIndex = idx;
+        return reordered;
       });
-      if (editingIndex === index) {
-        setEditingIndex(newDone ? features.length - 1 : 0);
-      }
+      if (editingIndex === index) setEditingIndex(newIndex);
     } catch {
       setFeatures((prev) => [...prev]);
     }

@@ -403,14 +403,11 @@ export default function ExpensesPage() {
             onSelectProject={setSelectedProjectId}
             onCreateProject={(name) => {
               void router.push(
-                "/?createProject=1&projectName=" +
-                  encodeURIComponent(name)
+                "/?createProject=1&projectName=" + encodeURIComponent(name)
               );
             }}
             onDeleteProjectClick={() => {
-              const current = projects.find(
-                (p) => p.id === selectedProjectId
-              );
+              const current = projects.find((p) => p.id === selectedProjectId);
               if (current) setProjectToDelete(current);
             }}
           />
@@ -420,10 +417,7 @@ export default function ExpensesPage() {
               className="modal-overlay"
               onClick={() => !projectDeleting && setProjectToDelete(null)}
             >
-              <div
-                className="modal"
-                onClick={(e) => e.stopPropagation()}
-              >
+              <div className="modal" onClick={(e) => e.stopPropagation()}>
                 <div className="modal-header">
                   <h2>Delete project</h2>
                   <button
@@ -602,7 +596,7 @@ export default function ExpensesPage() {
                     <IconPlus />
                   </button>
                 </form>
-            </ProjectSectionGuard>
+              </ProjectSectionGuard>
             </section>
 
             <section className="tests-page-section">
@@ -618,98 +612,99 @@ export default function ExpensesPage() {
                 message="Select a project to see and manage expenses."
                 variant="list"
               >
-              {expensesLoading ? (
-                <p className="tests-page-section-desc">Loading…</p>
-              ) : expenses.length === 0 ? (
-                <p className="tests-page-section-desc">
-                  No expenses yet. Add one above.
-                </p>
-              ) : (
-                <ul
-                  className="features-list"
-                  style={{ listStyle: "none", padding: 0, margin: "8px 0 0" }}
-                >
-                  {expenses.map((item) => (
-                    <li
-                      key={item.id}
-                      className="features-list-item"
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "12px",
-                        flexWrap: "wrap",
-                        padding: "10px 0",
-                        borderBottom: "1px solid var(--border-color, #e5e7eb)",
-                      }}
-                    >
-                      <span style={{ fontWeight: 600, minWidth: "80px" }}>
-                        {formatCurrency(item.amount)}
-                      </span>
-                      <span style={{ flex: "1", minWidth: "120px" }}>
-                        {item.description}
-                      </span>
-                      <span
+                {expensesLoading ? (
+                  <p className="tests-page-section-desc">Loading…</p>
+                ) : expenses.length === 0 ? (
+                  <p className="tests-page-section-desc">
+                    No expenses yet. Add one above.
+                  </p>
+                ) : (
+                  <ul
+                    className="features-list"
+                    style={{ listStyle: "none", padding: 0, margin: "8px 0 0" }}
+                  >
+                    {expenses.map((item) => (
+                      <li
+                        key={item.id}
+                        className="features-list-item"
                         style={{
-                          color: "var(--text-muted, #6b7280)",
-                          fontSize: "0.9rem",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "12px",
+                          flexWrap: "wrap",
+                          padding: "10px 0",
+                          borderBottom:
+                            "1px solid var(--border-color, #e5e7eb)",
                         }}
                       >
-                        {item.date}
-                      </span>
-                      {editingCategoryId === item.id ? (
-                        <select
-                          value={item.category}
-                          onChange={(e) =>
-                            updateExpenseCategory(item.id, e.target.value)
-                          }
-                          onBlur={() => setEditingCategoryId(null)}
-                          autoFocus
-                          aria-label={`Edit category for ${item.description}`}
-                          className="project-nav-search"
+                        <span style={{ fontWeight: 600, minWidth: "80px" }}>
+                          {formatCurrency(item.amount)}
+                        </span>
+                        <span style={{ flex: "1", minWidth: "120px" }}>
+                          {item.description}
+                        </span>
+                        <span
                           style={{
-                            fontSize: "0.85rem",
-                            padding: "4px 8px",
-                            minWidth: "100px",
+                            color: "var(--text-muted, #6b7280)",
+                            fontSize: "0.9rem",
                           }}
                         >
-                          {CATEGORIES.map((c) => (
-                            <option key={c} value={c}>
-                              {c}
-                            </option>
-                          ))}
-                        </select>
-                      ) : (
+                          {item.date}
+                        </span>
+                        {editingCategoryId === item.id ? (
+                          <select
+                            value={item.category}
+                            onChange={(e) =>
+                              updateExpenseCategory(item.id, e.target.value)
+                            }
+                            onBlur={() => setEditingCategoryId(null)}
+                            autoFocus
+                            aria-label={`Edit category for ${item.description}`}
+                            className="project-nav-search"
+                            style={{
+                              fontSize: "0.85rem",
+                              padding: "4px 8px",
+                              minWidth: "100px",
+                            }}
+                          >
+                            {CATEGORIES.map((c) => (
+                              <option key={c} value={c}>
+                                {c}
+                              </option>
+                            ))}
+                          </select>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => setEditingCategoryId(item.id)}
+                            style={{
+                              fontSize: "0.85rem",
+                              background: "none",
+                              border: "none",
+                              cursor: "pointer",
+                              padding: "2px 4px",
+                              textAlign: "left",
+                              color: "var(--text)",
+                            }}
+                            title="Click to edit category"
+                            aria-label={`Edit category: ${item.category}`}
+                          >
+                            {item.category}
+                          </button>
+                        )}
                         <button
                           type="button"
-                          onClick={() => setEditingCategoryId(item.id)}
-                          style={{
-                            fontSize: "0.85rem",
-                            background: "none",
-                            border: "none",
-                            cursor: "pointer",
-                            padding: "2px 4px",
-                            textAlign: "left",
-                            color: "var(--text)",
-                          }}
-                          title="Click to edit category"
-                          aria-label={`Edit category: ${item.category}`}
+                          className="features-list-remove"
+                          onClick={() => removeExpense(item.id)}
+                          aria-label={`Remove ${item.description}`}
+                          title={`Remove "${item.description}"`}
                         >
-                          {item.category}
+                          <IconTrash />
                         </button>
-                      )}
-                      <button
-                        type="button"
-                        className="features-list-remove"
-                        onClick={() => removeExpense(item.id)}
-                        aria-label={`Remove ${item.description}`}
-                        title={`Remove "${item.description}"`}
-                      >
-                        <IconTrash />
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              )}
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </ProjectSectionGuard>
             </section>
           </div>

@@ -122,7 +122,10 @@ export function getCustomListItems(slug: string): CustomListItem[] {
   }
 }
 
-export function setCustomListItems(slug: string, items: CustomListItem[]): void {
+export function setCustomListItems(
+  slug: string,
+  items: CustomListItem[]
+): void {
   if (typeof window === "undefined") return;
   try {
     localStorage.setItem(getItemsKey(slug), JSON.stringify(items));

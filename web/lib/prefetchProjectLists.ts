@@ -1,9 +1,4 @@
-import {
-  fetchBugs,
-  fetchFeatures,
-  fetchIdeas,
-  fetchTodos,
-} from "./api";
+import { fetchBugs, fetchFeatures, fetchIdeas, fetchTodos } from "./api";
 import { getList, setList, type ListCacheKey } from "./listCache";
 
 const FETCHERS: {

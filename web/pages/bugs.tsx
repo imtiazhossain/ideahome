@@ -9,7 +9,7 @@ import {
   type Bug,
 } from "../lib/api";
 import { createLegacyListStorage } from "../lib/legacyListStorage";
-import { reorder } from "../lib/utils";
+import { reorder, applyToggleDoneOrder } from "../lib/utils";
 import { useCachedProjectList } from "../lib/useCachedProjectList";
 import { useUndoList } from "../lib/useUndoList";
 import { useProjectLayout } from "../lib/useProjectLayout";
@@ -133,15 +133,13 @@ export default function BugsPage() {
     const newDone = !item.done;
     try {
       await updateBug(item.id, { done: newDone });
+      let newIndex = 0;
       setBugs((prev) => {
-        const next = [...prev];
-        next[index] = { ...next[index], done: newDone };
-        const without = next.filter((_, i) => i !== index);
-        return newDone ? [...without, next[index]] : [next[index], ...without];
+        const [reordered, idx] = applyToggleDoneOrder(prev, index, newDone);
+        newIndex = idx;
+        return reordered;
       });
-      if (editingIndex === index) {
-        setEditingIndex(newDone ? bugs.length - 1 : 0);
-      }
+      if (editingIndex === index) setEditingIndex(newIndex);
     } catch {
       setBugs((prev) => [...prev]);
     }
