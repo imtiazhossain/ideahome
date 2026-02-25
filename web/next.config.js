@@ -20,6 +20,16 @@ const nextConfig = {
         { source: "/tests/:path*", destination: "/api/tests/:path*" },
         { source: "/auth", destination: "/api/auth" },
         { source: "/auth/:path*", destination: "/api/auth/:path*" },
+        { source: "/todos", destination: "/api/todos" },
+        { source: "/todos/:path*", destination: "/api/todos/:path*" },
+        { source: "/ideas", destination: "/api/ideas" },
+        { source: "/ideas/:path*", destination: "/api/ideas/:path*" },
+        { source: "/bugs", destination: "/api/bugs" },
+        { source: "/bugs/:path*", destination: "/api/bugs/:path*" },
+        { source: "/features", destination: "/api/features" },
+        { source: "/features/:path*", destination: "/api/features/:path*" },
+        { source: "/expenses", destination: "/api/expenses" },
+        { source: "/expenses/:path*", destination: "/api/expenses/:path*" },
       ];
     }
     const backend = process.env.BACKEND_URL || "http://localhost:3001";

@@ -98,6 +98,10 @@ The redirect URI your app sends to the OAuth provider must **exactly** match one
 
 After this, the redirect URI sent to the provider will match the one in the console and the mismatch error should stop.
 
+### "Failed to create todo (405)" or 405 on POST to /todos, /ideas, /bugs, /features, /expenses
+
+With `USE_BUILTIN_API=true`, Next.js rewrites must send those paths to the catch-all API route (`/api/todos`, etc.). If rewrites for `todos`, `ideas`, `bugs`, `features`, or `expenses` are missing from the built-in API block in `web/next.config.js`, POST requests hit the app with no handler and return 405. Ensure the latest `next.config.js` (including those rewrites) is deployed.
+
 ### "Load failed" or "Failed to load projects" on production (e.g. on mobile)
 
 The frontend is calling `http://localhost:3001` because `NEXT_PUBLIC_API_URL` is not set in Vercel. On a phone or another device, localhost is not your server, so the request fails.
