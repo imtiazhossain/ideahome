@@ -816,6 +816,11 @@ textarea {
   border-radius: var(--card-radius);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
   z-index: 100;
+  pointer-events: none;
+}
+
+.project-nav-auth-menu .project-nav-auth-menu-item {
+  pointer-events: auto;
 }
 
 .project-nav-auth-menu-item {
@@ -904,6 +909,15 @@ textarea {
   border-radius: var(--card-radius);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
   z-index: 100;
+  pointer-events: none;
+}
+
+.project-nav-project-switcher-menu .project-nav-project-switcher-item,
+.project-nav-project-switcher-menu .project-nav-project-switcher-item-create,
+.project-nav-project-switcher-menu .project-nav-project-switcher-create-form,
+.project-nav-project-switcher-menu .project-nav-project-switcher-create-form input,
+.project-nav-project-switcher-menu .project-nav-project-switcher-create-submit {
+  pointer-events: auto;
 }
 
 .project-nav-project-switcher-item {
@@ -1316,6 +1330,17 @@ textarea {
   display: flex;
   flex-direction: column;
   align-items: flex-end;
+  pointer-events: none;
+}
+
+.project-nav-settings-menu button,
+.project-nav-settings-menu a,
+.project-nav-settings-menu input,
+.project-nav-settings-menu [role="menuitem"],
+.project-nav-settings-menu .project-nav-settings-section-toggle,
+.project-nav-settings-menu .project-nav-reorder-btn,
+.project-nav-settings-menu .project-nav-add-menu-list a {
+  pointer-events: auto;
 }
 
 .project-nav-settings-menu .project-nav-reorder-list,
@@ -1615,6 +1640,13 @@ textarea {
   max-height: 320px;
   overflow-y: auto;
   z-index: 100;
+  /* Let clicks pass through empty area so tabs below remain clickable */
+  pointer-events: none;
+}
+
+.project-nav-search-results > li,
+.project-nav-search-results .project-nav-search-result-item {
+  pointer-events: auto;
 }
 
 .project-nav-search-results-loading {

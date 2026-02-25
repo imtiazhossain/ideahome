@@ -60,6 +60,9 @@ const LEGACY_TAB_ORDER_STORAGE_KEY = "ideahome-project-nav-tab-order";
 const HIDDEN_TABS_STORAGE_PREFIX = "ideahome-project-nav-tabs-hidden";
 const HIDDEN_TABS_LEGACY_KEY = "ideahome-project-nav-tabs-hidden";
 
+/** Set when user explicitly clicks Board tab; tells _app to skip redirect away from /. */
+export const EXPLICIT_BOARD_SESSION_KEY = "ideahome-explicit-board";
+
 function getTabOrderStorageKey(): string {
   return getUserScopedStorageKey(
     TAB_ORDER_STORAGE_PREFIX,
@@ -1339,6 +1342,23 @@ export function ProjectNavBar({
                     aria-current={activeTab === tab.id ? "page" : undefined}
                     data-tab-id={tab.id}
                     title={tab.label}
+                    onClick={() => {
+                      setProjectSearchOpen(false);
+                      setSettingsMenuOpen(false);
+                      setAuthMenuOpen(false);
+                      setProjectSwitcherOpen(false);
+                      if (tab.href === "/") {
+                        try {
+                          sessionStorage.setItem(EXPLICIT_BOARD_SESSION_KEY, "1");
+                        } catch {
+                          /* ignore */
+                        }
+                      }
+                      if (activeTab === tab.id) {
+                        const main = document.querySelector(".main-content");
+                        if (main) main.scrollTo({ top: 0, behavior: "smooth" });
+                      }
+                    }}
                   >
                     <span className="project-nav-tab-icon">{tab.icon}</span>
                     <span className="project-nav-tab-label">{tab.label}</span>
