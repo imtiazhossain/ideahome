@@ -638,6 +638,25 @@ function saveTabOrder(order: ProjectNavTabId[]) {
   }
 }
 
+/** Returns the href of the first visible tab (user's tab order, excluding hidden). */
+export function getFirstVisibleTabHref(): string {
+  if (typeof window === "undefined") return "/";
+  const tabOrder = loadTabOrder();
+  const hiddenSet = new Set(loadHiddenTabIds());
+  const customLists = getCustomLists();
+  for (const id of tabOrder) {
+    if (hiddenSet.has(id)) continue;
+    const builtIn = TABS.find((t) => t.id === id);
+    if (builtIn?.href) return builtIn.href;
+    if (typeof id === "string" && id.startsWith("custom-")) {
+      const slug = id.slice(7);
+      const list = customLists.find((l) => l.slug === slug);
+      if (list) return `/list/${list.slug}`;
+    }
+  }
+  return "/";
+}
+
 export interface ProjectNavBarProps {
   projectName: string;
   /** When set, the search box searches across the project (issues, etc.) and shows a dropdown. */
