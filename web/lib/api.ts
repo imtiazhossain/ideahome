@@ -25,14 +25,18 @@ function apiFetch(
   return fetch(input, { ...init, headers });
 }
 
-/** Throw an Error with the backend message when present, otherwise a default message. */
+/** Throw an Error with the backend message when present, otherwise a default message (includes status for debugging). */
 async function throwFromResponse(r: Response, defaultMessage: string): Promise<never> {
   let message = defaultMessage;
   try {
     const body = (await r.json()) as { message?: string };
-    if (typeof body?.message === "string" && body.message) message = body.message;
+    if (typeof body?.message === "string" && body.message) {
+      message = body.message;
+    } else if (r.status > 0) {
+      message = `${defaultMessage} (${r.status})`;
+    }
   } catch {
-    // ignore
+    if (r.status > 0) message = `${defaultMessage} (${r.status})`;
   }
   throw new Error(message);
 }
