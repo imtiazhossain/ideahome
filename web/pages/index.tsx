@@ -642,6 +642,7 @@ export default function Home() {
     setLastKnownProjectName,
   } = useSelectedProject();
   const [projects, setProjects] = useState<Project[]>([]);
+  const [projectsLoaded, setProjectsLoaded] = useState(false);
   const [issues, setIssues] = useState<Issue[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -1907,6 +1908,8 @@ export default function Home() {
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load projects");
+    } finally {
+      setProjectsLoaded(true);
     }
   };
 
@@ -2018,6 +2021,19 @@ export default function Home() {
       })
       .catch(() => {});
   }, [router.isReady, router.query.issueId]);
+
+  // When user has no projects, prompt them to add one at the beginning
+  const hasPromptedNoProjectsRef = useRef(false);
+  useEffect(() => {
+    if (
+      projectsLoaded &&
+      projects.length === 0 &&
+      !hasPromptedNoProjectsRef.current
+    ) {
+      hasPromptedNoProjectsRef.current = true;
+      setCreateProjectOpen(true);
+    }
+  }, [projectsLoaded, projects.length]);
 
   useEffect(() => {
     if (createOpen) {

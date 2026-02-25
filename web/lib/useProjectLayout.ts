@@ -67,6 +67,13 @@ export function useProjectLayout(): UseProjectLayoutReturn {
     loadProjects();
   }, [router]);
 
+  // When user has no projects, redirect to home where they can create one
+  useEffect(() => {
+    if (projectsLoaded && projects.length === 0 && router.pathname !== "/") {
+      router.replace("/");
+    }
+  }, [projectsLoaded, projects.length, router]);
+
   useEffect(() => {
     if (selectedProjectId) prefetchProjectLists(selectedProjectId);
   }, [selectedProjectId]);
