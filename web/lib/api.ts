@@ -307,6 +307,19 @@ export async function fetchTodos(projectId: string): Promise<Todo[]> {
   return r.json();
 }
 
+/** Search todos by name within a project. */
+export async function fetchTodoSearch(
+  projectId: string,
+  search: string
+): Promise<Todo[]> {
+  if (!search.trim()) return [];
+  const r = await apiFetch(
+    `${getApiBase()}/todos?projectId=${encodeURIComponent(projectId)}&search=${encodeURIComponent(search.trim())}`
+  );
+  if (!r.ok) throw new Error("Failed to search todos");
+  return r.json();
+}
+
 export async function createTodo(body: {
   projectId: string;
   name: string;
@@ -366,6 +379,19 @@ export async function fetchIdeas(projectId: string): Promise<Idea[]> {
     `${getApiBase()}/ideas?projectId=${encodeURIComponent(projectId)}`
   );
   if (!r.ok) throw new Error("Failed to fetch ideas");
+  return r.json();
+}
+
+/** Search ideas by name within a project. */
+export async function fetchIdeaSearch(
+  projectId: string,
+  search: string
+): Promise<Idea[]> {
+  if (!search.trim()) return [];
+  const r = await apiFetch(
+    `${getApiBase()}/ideas?projectId=${encodeURIComponent(projectId)}&search=${encodeURIComponent(search.trim())}`
+  );
+  if (!r.ok) throw new Error("Failed to search ideas");
   return r.json();
 }
 
@@ -433,6 +459,19 @@ export async function fetchBugs(projectId: string): Promise<Bug[]> {
   return r.json();
 }
 
+/** Search bugs by name within a project. */
+export async function fetchBugSearch(
+  projectId: string,
+  search: string
+): Promise<Bug[]> {
+  if (!search.trim()) return [];
+  const r = await apiFetch(
+    `${getApiBase()}/bugs?projectId=${encodeURIComponent(projectId)}&search=${encodeURIComponent(search.trim())}`
+  );
+  if (!r.ok) throw new Error("Failed to search bugs");
+  return r.json();
+}
+
 export async function createBug(body: {
   projectId: string;
   name: string;
@@ -492,6 +531,19 @@ export async function fetchFeatures(projectId: string): Promise<Feature[]> {
     `${getApiBase()}/features?projectId=${encodeURIComponent(projectId)}`
   );
   if (!r.ok) throw new Error("Failed to fetch features");
+  return r.json();
+}
+
+/** Search features by name within a project. */
+export async function fetchFeatureSearch(
+  projectId: string,
+  search: string
+): Promise<Feature[]> {
+  if (!search.trim()) return [];
+  const r = await apiFetch(
+    `${getApiBase()}/features?projectId=${encodeURIComponent(projectId)}&search=${encodeURIComponent(search.trim())}`
+  );
+  if (!r.ok) throw new Error("Failed to search features");
   return r.json();
 }
 

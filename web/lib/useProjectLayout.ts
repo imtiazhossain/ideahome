@@ -71,6 +71,24 @@ export function useProjectLayout(): UseProjectLayoutReturn {
     if (selectedProjectId) prefetchProjectLists(selectedProjectId);
   }, [selectedProjectId]);
 
+  // Sync projectId from URL when navigating from search (e.g. /todo?projectId=xxx)
+  useEffect(() => {
+    if (!router.isReady || !projectsLoaded) return;
+    const q = router.query.projectId;
+    if (typeof q !== "string" || !q) return;
+    const exists = projects.some((p) => p.id === q);
+    if (exists && q !== selectedProjectId) {
+      setSelectedProjectId(q);
+    }
+  }, [
+    router.isReady,
+    router.query.projectId,
+    projects,
+    projectsLoaded,
+    selectedProjectId,
+    setSelectedProjectId,
+  ]);
+
   useEffect(() => {
     if (!selectedProjectId) return;
     const name = projects.find((p) => p.id === selectedProjectId)?.name;

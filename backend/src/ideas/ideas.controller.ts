@@ -22,9 +22,10 @@ export class IdeasController {
   @Get()
   list(
     @Query("projectId") projectId: string,
+    @Query("search") search: string | undefined,
     @Req() req: Request & { user?: { sub: string } }
   ) {
-    return this.svc.list(projectId, req.user!.sub);
+    return this.svc.list(projectId, req.user!.sub, search);
   }
 
   @Post()

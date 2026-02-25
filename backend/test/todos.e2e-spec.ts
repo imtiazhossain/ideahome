@@ -94,6 +94,39 @@ describe("TodosController (e2e)", () => {
       });
   });
 
+  it("GET /todos?projectId=&search= filters by name", async () => {
+    await auth(
+      request(app.getHttpServer()).post("/todos").send({
+        projectId,
+        name: "Buy milk",
+        done: false,
+      })
+    ).expect(201);
+    await auth(
+      request(app.getHttpServer()).post("/todos").send({
+        projectId,
+        name: "Fix login bug",
+        done: false,
+      })
+    ).expect(201);
+    const allRes = await auth(
+      request(app.getHttpServer()).get(
+        `/todos?projectId=${projectId}&search=milk`
+      )
+    ).expect(200);
+    expect(allRes.body).toHaveLength(1);
+    expect(allRes.body[0].name).toBe("Buy milk");
+    const emptyRes = await auth(
+      request(app.getHttpServer()).get(
+        `/todos?projectId=${projectId}&search=nonexistent`
+      )
+    ).expect(200);
+    expect(emptyRes.body).toHaveLength(0);
+    await prisma.todo.deleteMany({
+      where: { projectId, name: { in: ["Buy milk", "Fix login bug"] } },
+    });
+  });
+
   it("PATCH /todos/:id updates todo", () => {
     return auth(
       request(app.getHttpServer()).patch(`/todos/${todoId}`).send({

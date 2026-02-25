@@ -3,12 +3,16 @@ import Link from "next/link";
 import { useRouter } from "next/router";
 import {
   AUTH_CHANGE_EVENT,
+  fetchBugSearch,
+  fetchFeatureSearch,
+  fetchIdeaSearch,
   fetchIssueSearch,
+  fetchTodoSearch,
   getStoredToken,
   getUserScopedStorageKey,
   logout,
 } from "../lib/api";
-import type { Issue } from "../lib/api";
+import type { Bug, Feature, Idea, Issue, Todo } from "../lib/api";
 import {
   addCustomList,
   getCustomListTabId,
@@ -648,7 +652,19 @@ export interface ProjectNavBarProps {
 }
 
 const PROJECT_SEARCH_DEBOUNCE_MS = 250;
-const PROJECT_SEARCH_MAX_RESULTS = 20;
+const PROJECT_SEARCH_MAX_ISSUES = 8;
+const PROJECT_SEARCH_MAX_PER_LIST = 4;
+
+type ProjectSearchResult =
+  | { type: "issue"; id: string; title: string; status?: string }
+  | {
+      type: "list";
+      id: string;
+      name: string;
+      page: string;
+      pageLabel: string;
+      projectId: string;
+    };
 
 export function ProjectNavBar({
   projectName,
@@ -674,7 +690,9 @@ export function ProjectNavBar({
   const filterMenuRef = useRef<HTMLDivElement>(null);
 
   const [projectSearchQuery, setProjectSearchQuery] = useState("");
-  const [projectSearchResults, setProjectSearchResults] = useState<Issue[]>([]);
+  const [projectSearchResults, setProjectSearchResults] = useState<
+    ProjectSearchResult[]
+  >([]);
   const [projectSearchOpen, setProjectSearchOpen] = useState(false);
   const [projectSearchLoading, setProjectSearchLoading] = useState(false);
   const projectSearchRef = useRef<HTMLDivElement>(null);
@@ -692,11 +710,67 @@ export function ProjectNavBar({
       return;
     }
     setProjectSearchLoading(true);
+    const q = projectSearchQuery.trim();
     const t = setTimeout(() => {
-      fetchIssueSearch(projectId, projectSearchQuery)
-        .then((list) =>
-          setProjectSearchResults(list.slice(0, PROJECT_SEARCH_MAX_RESULTS))
-        )
+      Promise.all([
+        fetchIssueSearch(projectId, q),
+        fetchTodoSearch(projectId, q),
+        fetchIdeaSearch(projectId, q),
+        fetchBugSearch(projectId, q),
+        fetchFeatureSearch(projectId, q),
+      ])
+        .then(([issues, todos, ideas, bugs, features]) => {
+          const results: ProjectSearchResult[] = [];
+          issues.slice(0, PROJECT_SEARCH_MAX_ISSUES).forEach((i: Issue) => {
+            results.push({
+              type: "issue",
+              id: i.id,
+              title: i.title,
+              status: i.status ?? undefined,
+            });
+          });
+          todos.slice(0, PROJECT_SEARCH_MAX_PER_LIST).forEach((item: Todo) => {
+            results.push({
+              type: "list",
+              id: item.id,
+              name: item.name,
+              page: "/todo",
+              pageLabel: "To-Do",
+              projectId: item.projectId,
+            });
+          });
+          ideas.slice(0, PROJECT_SEARCH_MAX_PER_LIST).forEach((item: Idea) => {
+            results.push({
+              type: "list",
+              id: item.id,
+              name: item.name,
+              page: "/ideas",
+              pageLabel: "Ideas",
+              projectId: item.projectId,
+            });
+          });
+          bugs.slice(0, PROJECT_SEARCH_MAX_PER_LIST).forEach((item: Bug) => {
+            results.push({
+              type: "list",
+              id: item.id,
+              name: item.name,
+              page: "/bugs",
+              pageLabel: "Bugs",
+              projectId: item.projectId,
+            });
+          });
+          features.slice(0, PROJECT_SEARCH_MAX_PER_LIST).forEach((item: Feature) => {
+            results.push({
+              type: "list",
+              id: item.id,
+              name: item.name,
+              page: "/features",
+              pageLabel: "Features",
+              projectId: item.projectId,
+            });
+          });
+          setProjectSearchResults(results);
+        })
         .catch(() => setProjectSearchResults([]))
         .finally(() => setProjectSearchLoading(false));
     }, PROJECT_SEARCH_DEBOUNCE_MS);
@@ -1064,29 +1138,45 @@ export function ProjectNavBar({
                         Searching…
                       </li>
                     ) : (
-                      projectSearchResults.map((issue) => (
-                        <li key={issue.id} role="option">
-                          <Link
-                            href={`/?issueId=${encodeURIComponent(issue.id)}`}
-                            prefetch={false}
-                            className="project-nav-search-result-item"
-                            onClick={() => {
-                              setProjectSearchOpen(false);
-                              setProjectSearchQuery("");
-                              setProjectSearchResults([]);
-                            }}
-                          >
-                            <span className="project-nav-search-result-title">
-                              {issue.title}
-                            </span>
-                            {issue.status && (
-                              <span className="project-nav-search-result-meta">
-                                {issue.status}
+                      projectSearchResults.map((item) => {
+                        const key =
+                          item.type === "issue"
+                            ? `issue-${item.id}`
+                            : `list-${item.page}-${item.id}`;
+                        const href =
+                          item.type === "issue"
+                            ? `/?issueId=${encodeURIComponent(item.id)}`
+                            : `${item.page}?projectId=${encodeURIComponent(item.projectId)}`;
+                        const title =
+                          item.type === "issue" ? item.title : item.name;
+                        const meta =
+                          item.type === "issue"
+                            ? item.status
+                            : item.pageLabel;
+                        return (
+                          <li key={key} role="option">
+                            <Link
+                              href={href}
+                              prefetch={false}
+                              className="project-nav-search-result-item"
+                              onClick={() => {
+                                setProjectSearchOpen(false);
+                                setProjectSearchQuery("");
+                                setProjectSearchResults([]);
+                              }}
+                            >
+                              <span className="project-nav-search-result-title">
+                                {title}
                               </span>
-                            )}
-                          </Link>
-                        </li>
-                      ))
+                              {meta && (
+                                <span className="project-nav-search-result-meta">
+                                  {meta}
+                                </span>
+                              )}
+                            </Link>
+                          </li>
+                        );
+                      })
                     )}
                   </ul>
                 )}
