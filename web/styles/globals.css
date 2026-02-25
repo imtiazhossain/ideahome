@@ -953,30 +953,6 @@ textarea {
   border-radius: 2px 2px 0 0;
 }
 
-.project-nav-tab-grip {
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 20px;
-  height: 20px;
-  margin: -2px 2px -2px -2px;
-  color: var(--text-muted);
-  cursor: grab;
-  border-radius: 4px;
-  touch-action: none;
-  user-select: none;
-}
-
-.project-nav-tab-grip:hover {
-  color: var(--text);
-  background: rgba(0, 0, 0, 0.06);
-}
-
-.project-nav-tab-grip:active {
-  cursor: grabbing;
-}
-
 .project-nav-tab-icon {
   display: flex;
   align-items: center;
@@ -1240,6 +1216,70 @@ textarea {
   margin-top: 4px;
   padding-top: 8px;
   border-top: 1px solid var(--border);
+}
+
+.project-nav-reorder-list {
+  list-style: none;
+  margin: 0;
+  padding: 6px 0;
+}
+
+.project-nav-reorder-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 14px;
+  margin: 0 0 2px;
+  border-radius: 6px;
+  transition: background 0.15s ease;
+}
+
+.project-nav-reorder-item:last-child {
+  margin-bottom: 0;
+}
+
+.project-nav-reorder-label {
+  font-size: 14px;
+  color: var(--text);
+  flex: 1;
+  min-width: 0;
+}
+
+.project-nav-reorder-actions {
+  display: flex;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.project-nav-reorder-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.project-nav-reorder-btn:hover:not(:disabled) {
+  background: var(--column-bg);
+  color: var(--text);
+}
+
+.project-nav-reorder-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.project-nav-reorder-btn svg {
+  width: 12px;
+  height: 12px;
 }
 
 .project-nav-filter-list {
