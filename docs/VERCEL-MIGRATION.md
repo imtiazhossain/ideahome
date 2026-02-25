@@ -77,6 +77,27 @@ Update your OAuth app settings:
 
 ## Troubleshooting
 
+### OAuth "redirect_uri_mismatch" (400) on production
+
+You see an error like: `OAuth token error: 400 { "error": "redirect_uri_mismatch", "error_description": "Bad Request" }` at `ideahome.vercel.app/login/callback`.
+
+The redirect URI your app sends to the OAuth provider must **exactly** match one of the URIs configured in the provider’s console. The app uses `BACKEND_URL` to build it: `{BACKEND_URL}/auth/{provider}/callback`.
+
+**Fix:**
+
+1. **Set backend URL on Vercel**  
+   In Vercel → Project → **Settings** → **Environment Variables**, set:
+   - `BACKEND_URL` = `https://ideahome.vercel.app` (or your real Vercel URL, no trailing slash).
+
+2. **Add the production callback in the OAuth provider** (for each provider you use):
+   - **Google**: [APIs & Credentials](https://console.cloud.google.com/apis/credentials) → your OAuth 2.0 Client ID → **Authorized redirect URIs** → add `https://ideahome.vercel.app/auth/google/callback`.
+   - **GitHub**: [OAuth Apps](https://github.com/settings/developers) → your app → **Authorization callback URL** = `https://ideahome.vercel.app/auth/github/callback` (GitHub allows one callback URL; use production for prod).
+   - **Apple**: [Apple Developer](https://developer.apple.com/account) → your Services ID → Sign in with Apple → **Return URLs** → add `https://ideahome.vercel.app/auth/apple/callback`.
+
+3. **Redeploy** after changing env vars so `BACKEND_URL` is applied.
+
+After this, the redirect URI sent to the provider will match the one in the console and the mismatch error should stop.
+
 ### "Load failed" or "Failed to load projects" on production (e.g. on mobile)
 
 The frontend is calling `http://localhost:3001` because `NEXT_PUBLIC_API_URL` is not set in Vercel. On a phone or another device, localhost is not your server, so the request fails.
