@@ -31,7 +31,7 @@ export interface AppLayoutProps {
   setEditingProjectName: (name: string) => void;
   saveProjectName: () => void;
   cancelEditProjectName: () => void;
-  projectNameInputRef: React.RefObject<HTMLInputElement>;
+  projectNameInputRef: React.RefObject<HTMLInputElement | null>;
   theme: string;
   toggleTheme: () => void;
   children: React.ReactNode;
@@ -108,7 +108,9 @@ export function AppLayout({
                     <div key={p.id} className="drawer-nav-item-row">
                       {editingProjectId === p.id ? (
                         <input
-                          ref={projectNameInputRef}
+                          ref={
+                            projectNameInputRef as React.RefObject<HTMLInputElement>
+                          }
                           type="text"
                           className="drawer-nav-item drawer-nav-item-input"
                           value={editingProjectName}

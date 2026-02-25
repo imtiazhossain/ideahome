@@ -313,7 +313,9 @@ export default function ExpensesPage() {
                     <div key={p.id} className="drawer-nav-item-row">
                       {editingProjectId === p.id ? (
                         <input
-                          ref={projectNameInputRef}
+                          ref={
+                            projectNameInputRef as React.RefObject<HTMLInputElement>
+                          }
                           type="text"
                           className="drawer-nav-item drawer-nav-item-input"
                           value={editingProjectName}
