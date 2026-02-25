@@ -64,6 +64,13 @@ export function AppLayout({
       <Head>
         <title>{title}</title>
       </Head>
+      {drawerOpen && (
+        <div
+          className="drawer-backdrop"
+          onClick={() => setDrawerOpen(false)}
+          aria-hidden
+        />
+      )}
       <div className="app-layout">
         <aside
           className={`drawer ${drawerOpen ? "drawer-open" : "drawer-closed"}`}
@@ -184,6 +191,7 @@ export function AppLayout({
             projectId={projectId}
             activeTab={activeTab}
             searchPlaceholder={searchPlaceholder}
+            onOpenDrawer={() => setDrawerOpen(true)}
           />
 
           {children}

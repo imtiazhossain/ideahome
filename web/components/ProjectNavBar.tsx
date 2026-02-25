@@ -551,6 +551,8 @@ export interface ProjectNavBarProps {
   searchValue?: string;
   onSearchChange?: (value: string) => void;
   onAddClick?: () => void;
+  /** Called when user taps the mobile menu button to open the sidebar. */
+  onOpenDrawer?: () => void;
 }
 
 const PROJECT_SEARCH_DEBOUNCE_MS = 250;
@@ -565,6 +567,7 @@ export function ProjectNavBar({
   searchValue = "",
   onSearchChange,
   onAddClick,
+  onOpenDrawer,
 }: ProjectNavBarProps) {
   const { tabOrder, setTabOrder } = useTabOrder();
   const [isDraggingTabId, setIsDraggingTabId] =
@@ -790,6 +793,21 @@ export function ProjectNavBar({
         <div className="project-nav-identity">
           <span className="project-nav-spaces">Spaces</span>
           <div className="project-nav-title-row">
+            {onOpenDrawer && (
+              <button
+                type="button"
+                className="project-nav-menu-btn"
+                onClick={onOpenDrawer}
+                aria-label="Open menu"
+                title="Open menu"
+              >
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                  <line x1="4" y1="6" x2="20" y2="6" />
+                  <line x1="4" y1="12" x2="20" y2="12" />
+                  <line x1="4" y1="18" x2="20" y2="18" />
+                </svg>
+              </button>
+            )}
             <span className="project-nav-project-icon" aria-hidden>
               <IconHome />
             </span>
