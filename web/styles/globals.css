@@ -3340,6 +3340,13 @@ a.automated-tests-chip-text:hover {
 }
 
 @media (max-width: 768px) {
+  /* Prevent iOS Safari zoom on input focus (zooms when font-size < 16px) */
+  input,
+  textarea,
+  select {
+    font-size: 16px !important;
+  }
+
   .drawer-backdrop {
     display: block;
     position: fixed;
