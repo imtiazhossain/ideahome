@@ -722,16 +722,21 @@ export function ProjectNavBar({
       Promise.allSettled(fetches)
         .then((settled) => {
           const [issuesRes, todosRes, ideasRes, bugsRes, featuresRes] = settled;
-          const issues =
-            issuesRes.status === "fulfilled" ? issuesRes.value : [];
-          const todos =
-            todosRes.status === "fulfilled" ? todosRes.value : [];
-          const ideas =
-            ideasRes.status === "fulfilled" ? ideasRes.value : [];
-          const bugs =
-            bugsRes.status === "fulfilled" ? bugsRes.value : [];
-          const features =
-            featuresRes.status === "fulfilled" ? featuresRes.value : [];
+          const issues = (issuesRes.status === "fulfilled"
+            ? issuesRes.value
+            : []) as Issue[];
+          const todos = (todosRes.status === "fulfilled"
+            ? todosRes.value
+            : []) as Todo[];
+          const ideas = (ideasRes.status === "fulfilled"
+            ? ideasRes.value
+            : []) as Idea[];
+          const bugs = (bugsRes.status === "fulfilled"
+            ? bugsRes.value
+            : []) as Bug[];
+          const features = (featuresRes.status === "fulfilled"
+            ? featuresRes.value
+            : []) as Feature[];
           if (
             issuesRes.status === "rejected" ||
             todosRes.status === "rejected" ||
