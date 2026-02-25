@@ -918,6 +918,27 @@ export function ProjectNavBar({
     [tabOrder, setTabOrder]
   );
 
+  /** Move tab within the visible-only list (for reorder UI). */
+  const moveTabVisible = useCallback(
+    (tabId: ProjectNavTabId, direction: "up" | "down") => {
+      const hidden = new Set(hiddenTabIds);
+      const visibleOrder = tabOrder.filter((id) => !hidden.has(id));
+      const visibleIdx = visibleOrder.indexOf(tabId);
+      if (visibleIdx === -1) return;
+      const swapVisibleIdx =
+        direction === "up" ? visibleIdx - 1 : visibleIdx + 1;
+      if (swapVisibleIdx < 0 || swapVisibleIdx >= visibleOrder.length) return;
+      const swapId = visibleOrder[swapVisibleIdx];
+      const idx = tabOrder.indexOf(tabId);
+      const swapIdx = tabOrder.indexOf(swapId);
+      if (idx === -1 || swapIdx === -1) return;
+      const next = [...tabOrder];
+      [next[idx], next[swapIdx]] = [next[swapIdx], next[idx]];
+      setTabOrder(next);
+    },
+    [tabOrder, setTabOrder, hiddenTabIds]
+  );
+
   const customLists = getCustomLists();
   const hiddenSet = new Set(hiddenTabIds);
   const orderedTabs = tabOrder
@@ -1218,41 +1239,36 @@ export function ProjectNavBar({
               </button>
               {reorderSectionOpen && (
                 <ul className="project-nav-reorder-list" role="list">
-                  {tabOrder.map((id, idx) => {
-                    const builtIn = TABS.find((t) => t.id === id);
-                    const label =
-                      builtIn?.label ??
-                      (typeof id === "string" && id.startsWith("custom-")
-                        ? customLists.find((l) => getCustomListTabId(l.slug) === id)?.name ?? id
-                        : id);
-                    return (
-                      <li key={id} className="project-nav-reorder-item">
-                        <span className="project-nav-reorder-label">{label}</span>
-                        <span className="project-nav-reorder-actions">
-                          <button
-                            type="button"
-                            className="project-nav-reorder-btn"
-                            onClick={() => moveTab(id, "up")}
-                            disabled={idx === 0}
-                            aria-label={`Move ${label} up`}
-                            title="Move up"
-                          >
-                            <IconChevronUp />
-                          </button>
-                          <button
-                            type="button"
-                            className="project-nav-reorder-btn"
-                            onClick={() => moveTab(id, "down")}
-                            disabled={idx === tabOrder.length - 1}
-                            aria-label={`Move ${label} down`}
-                            title="Move down"
-                          >
-                            <IconChevronDown />
-                          </button>
-                        </span>
-                      </li>
+                  {(() => {
+                    const visibleTabs = tabOrder.filter(
+                      (id) => !hiddenSet.has(id)
                     );
-                  })}
+                    return visibleTabs.map((id, visibleIdx) => {
+                      const builtIn = TABS.find((t) => t.id === id);
+                      const label =
+                        builtIn?.label ??
+                        (typeof id === "string" && id.startsWith("custom-")
+                          ? customLists.find((l) => getCustomListTabId(l.slug) === id)?.name ?? id
+                          : id);
+                      return (
+                        <li key={id} className="project-nav-reorder-item">
+                          <span className="project-nav-reorder-label">{label}</span>
+                          <span className="project-nav-reorder-actions">
+                            <button
+                              type="button"
+                              className="project-nav-reorder-btn"
+                              onClick={() => moveTabVisible(id, "up")}
+                              disabled={visibleIdx === 0}
+                              aria-label={`Move ${label} up`}
+                              title="Move up"
+                            >
+                              <IconChevronUp />
+                            </button>
+                          </span>
+                        </li>
+                      );
+                    });
+                  })()}
                 </ul>
               )}
               <button
