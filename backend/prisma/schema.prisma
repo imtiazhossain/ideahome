@@ -43,7 +43,63 @@ model Project {
   organization   Organization @relation(fields: [organizationId], references: [id])
   organizationId String
   issues         Issue[]
+  todos          Todo[]
+  ideas          Idea[]
+  bugs           Bug[]
+  features       Feature[]
+  expenses       Expense[]
   createdAt      DateTime @default(now())
+}
+
+model Todo {
+  id        String   @id @default(cuid())
+  name      String
+  done      Boolean  @default(false)
+  order     Int      @default(0)
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectId String
+  createdAt DateTime @default(now())
+}
+
+model Idea {
+  id        String   @id @default(cuid())
+  name      String
+  done      Boolean  @default(false)
+  order     Int      @default(0)
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectId String
+  createdAt DateTime @default(now())
+}
+
+model Bug {
+  id        String   @id @default(cuid())
+  name      String
+  done      Boolean  @default(false)
+  order     Int      @default(0)
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectId String
+  createdAt DateTime @default(now())
+}
+
+model Feature {
+  id        String   @id @default(cuid())
+  name      String
+  done      Boolean  @default(false)
+  order     Int      @default(0)
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectId String
+  createdAt DateTime @default(now())
+}
+
+model Expense {
+  id          String   @id @default(cuid())
+  amount      Float
+  description String
+  date        String   // YYYY-MM-DD
+  category    String   @default("Other")
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectId   String
+  createdAt   DateTime @default(now())
 }
 
 model Issue {

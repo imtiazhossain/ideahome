@@ -247,6 +247,317 @@ export async function deleteProject(id: string): Promise<void> {
   }
 }
 
+export type Todo = {
+  id: string;
+  name: string;
+  done: boolean;
+  order: number;
+  projectId: string;
+  createdAt: string;
+};
+
+export async function fetchTodos(projectId: string): Promise<Todo[]> {
+  const r = await apiFetch(
+    `${getApiBase()}/todos?projectId=${encodeURIComponent(projectId)}`
+  );
+  if (!r.ok) throw new Error("Failed to fetch todos");
+  return r.json();
+}
+
+export async function createTodo(body: {
+  projectId: string;
+  name: string;
+  done?: boolean;
+}): Promise<Todo> {
+  const r = await apiFetch(`${getApiBase()}/todos`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!r.ok) throw new Error("Failed to create todo");
+  return r.json();
+}
+
+export async function updateTodo(
+  id: string,
+  data: { name?: string; done?: boolean; order?: number }
+): Promise<Todo> {
+  const r = await apiFetch(`${getApiBase()}/todos/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  if (!r.ok) throw new Error("Failed to update todo");
+  return r.json();
+}
+
+export async function deleteTodo(id: string): Promise<void> {
+  const r = await apiFetch(`${getApiBase()}/todos/${id}`, { method: "DELETE" });
+  if (!r.ok) throw new Error("Failed to delete todo");
+}
+
+export async function reorderTodos(
+  projectId: string,
+  todoIds: string[]
+): Promise<Todo[]> {
+  const r = await apiFetch(`${getApiBase()}/todos/reorder`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ projectId, todoIds }),
+  });
+  if (!r.ok) throw new Error("Failed to reorder todos");
+  return r.json();
+}
+
+export type Idea = {
+  id: string;
+  name: string;
+  done: boolean;
+  order: number;
+  projectId: string;
+  createdAt: string;
+};
+
+export async function fetchIdeas(projectId: string): Promise<Idea[]> {
+  const r = await apiFetch(
+    `${getApiBase()}/ideas?projectId=${encodeURIComponent(projectId)}`
+  );
+  if (!r.ok) throw new Error("Failed to fetch ideas");
+  return r.json();
+}
+
+export async function createIdea(body: {
+  projectId: string;
+  name: string;
+  done?: boolean;
+}): Promise<Idea> {
+  const r = await apiFetch(`${getApiBase()}/ideas`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!r.ok) throw new Error("Failed to create idea");
+  return r.json();
+}
+
+export async function updateIdea(
+  id: string,
+  data: { name?: string; done?: boolean; order?: number }
+): Promise<Idea> {
+  const r = await apiFetch(`${getApiBase()}/ideas/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  if (!r.ok) throw new Error("Failed to update idea");
+  return r.json();
+}
+
+export async function deleteIdea(id: string): Promise<void> {
+  const r = await apiFetch(`${getApiBase()}/ideas/${id}`, {
+    method: "DELETE",
+  });
+  if (!r.ok) throw new Error("Failed to delete idea");
+}
+
+export async function reorderIdeas(
+  projectId: string,
+  ideaIds: string[]
+): Promise<Idea[]> {
+  const r = await apiFetch(`${getApiBase()}/ideas/reorder`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ projectId, ideaIds }),
+  });
+  if (!r.ok) throw new Error("Failed to reorder ideas");
+  return r.json();
+}
+
+export type Bug = {
+  id: string;
+  name: string;
+  done: boolean;
+  order: number;
+  projectId: string;
+  createdAt: string;
+};
+
+export async function fetchBugs(projectId: string): Promise<Bug[]> {
+  const r = await apiFetch(
+    `${getApiBase()}/bugs?projectId=${encodeURIComponent(projectId)}`
+  );
+  if (!r.ok) throw new Error("Failed to fetch bugs");
+  return r.json();
+}
+
+export async function createBug(body: {
+  projectId: string;
+  name: string;
+  done?: boolean;
+}): Promise<Bug> {
+  const r = await apiFetch(`${getApiBase()}/bugs`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!r.ok) throw new Error("Failed to create bug");
+  return r.json();
+}
+
+export async function updateBug(
+  id: string,
+  data: { name?: string; done?: boolean; order?: number }
+): Promise<Bug> {
+  const r = await apiFetch(`${getApiBase()}/bugs/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  if (!r.ok) throw new Error("Failed to update bug");
+  return r.json();
+}
+
+export async function deleteBug(id: string): Promise<void> {
+  const r = await apiFetch(`${getApiBase()}/bugs/${id}`, { method: "DELETE" });
+  if (!r.ok) throw new Error("Failed to delete bug");
+}
+
+export async function reorderBugs(
+  projectId: string,
+  bugIds: string[]
+): Promise<Bug[]> {
+  const r = await apiFetch(`${getApiBase()}/bugs/reorder`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ projectId, bugIds }),
+  });
+  if (!r.ok) throw new Error("Failed to reorder bugs");
+  return r.json();
+}
+
+export type Feature = {
+  id: string;
+  name: string;
+  done: boolean;
+  order: number;
+  projectId: string;
+  createdAt: string;
+};
+
+export async function fetchFeatures(projectId: string): Promise<Feature[]> {
+  const r = await apiFetch(
+    `${getApiBase()}/features?projectId=${encodeURIComponent(projectId)}`
+  );
+  if (!r.ok) throw new Error("Failed to fetch features");
+  return r.json();
+}
+
+export async function createFeature(body: {
+  projectId: string;
+  name: string;
+  done?: boolean;
+}): Promise<Feature> {
+  const r = await apiFetch(`${getApiBase()}/features`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!r.ok) throw new Error("Failed to create feature");
+  return r.json();
+}
+
+export async function updateFeature(
+  id: string,
+  data: { name?: string; done?: boolean; order?: number }
+): Promise<Feature> {
+  const r = await apiFetch(`${getApiBase()}/features/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  if (!r.ok) throw new Error("Failed to update feature");
+  return r.json();
+}
+
+export async function deleteFeature(id: string): Promise<void> {
+  const r = await apiFetch(`${getApiBase()}/features/${id}`, {
+    method: "DELETE",
+  });
+  if (!r.ok) throw new Error("Failed to delete feature");
+}
+
+export async function reorderFeatures(
+  projectId: string,
+  featureIds: string[]
+): Promise<Feature[]> {
+  const r = await apiFetch(`${getApiBase()}/features/reorder`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ projectId, featureIds }),
+  });
+  if (!r.ok) throw new Error("Failed to reorder features");
+  return r.json();
+}
+
+export type Expense = {
+  id: string;
+  amount: number;
+  description: string;
+  date: string;
+  category: string;
+  projectId: string;
+  createdAt: string;
+};
+
+export async function fetchExpenses(projectId: string): Promise<Expense[]> {
+  const r = await apiFetch(
+    `${getApiBase()}/expenses?projectId=${encodeURIComponent(projectId)}`
+  );
+  if (!r.ok) throw new Error("Failed to fetch expenses");
+  return r.json();
+}
+
+export async function createExpense(body: {
+  projectId: string;
+  amount: number;
+  description: string;
+  date: string;
+  category?: string;
+}): Promise<Expense> {
+  const r = await apiFetch(`${getApiBase()}/expenses`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!r.ok) throw new Error("Failed to create expense");
+  return r.json();
+}
+
+export async function updateExpense(
+  id: string,
+  data: {
+    amount?: number;
+    description?: string;
+    date?: string;
+    category?: string;
+  }
+): Promise<Expense> {
+  const r = await apiFetch(`${getApiBase()}/expenses/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  if (!r.ok) throw new Error("Failed to update expense");
+  return r.json();
+}
+
+export async function deleteExpense(id: string): Promise<void> {
+  const r = await apiFetch(`${getApiBase()}/expenses/${id}`, {
+    method: "DELETE",
+  });
+  if (!r.ok) throw new Error("Failed to delete expense");
+}
+
 export async function fetchUsers(): Promise<User[]> {
   const r = await apiFetch(`${getApiBase()}/users`);
   if (!r.ok) throw new Error("Failed to fetch users");

@@ -7,6 +7,11 @@ import { IssuesModule } from "./issues/issues.module";
 import { UsersModule } from "./users/users.module";
 import { OrganizationsModule } from "./organizations/organizations.module";
 import { TestsModule } from "./tests/tests.module";
+import { TodosModule } from "./todos/todos.module";
+import { IdeasModule } from "./ideas/ideas.module";
+import { BugsModule } from "./bugs/bugs.module";
+import { FeaturesModule } from "./features/features.module";
+import { ExpensesModule } from "./expenses/expenses.module";
 import { PrismaService } from "./prisma.service";
 
 @Module({
@@ -17,6 +22,11 @@ import { PrismaService } from "./prisma.service";
     UsersModule,
     OrganizationsModule,
     TestsModule,
+    TodosModule,
+    IdeasModule,
+    BugsModule,
+    FeaturesModule,
+    ExpensesModule,
   ],
   controllers: [AppController],
   providers: [AppService, PrismaService],

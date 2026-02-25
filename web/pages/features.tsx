@@ -3,10 +3,16 @@ import Head from "next/head";
 import Link from "next/link";
 import { useRouter } from "next/router";
 import {
+  createFeature,
+  deleteFeature,
+  fetchFeatures,
   fetchProjects,
   getUserScopedStorageKey,
   isAuthenticated,
+  reorderFeatures,
   updateProject,
+  updateFeature,
+  type Feature,
 } from "../lib/api";
 import { ProjectNavBar, DrawerCollapsedNav } from "../components/ProjectNavBar";
 import { useTheme } from "./_app";
@@ -61,8 +67,6 @@ const IconCheck = () => (
   </svg>
 );
 
-type FeatureItem = { name: string; done: boolean };
-
 const FEATURES_STORAGE_PREFIX = "ideahome-features-list";
 const LEGACY_FEATURES_STORAGE_KEY = "ideahome-features-list";
 
@@ -73,17 +77,13 @@ function getFeaturesStorageKey(): string {
   );
 }
 
-function loadStoredFeatures(): FeatureItem[] {
+function loadStoredFeaturesLegacy(): { name: string; done: boolean }[] {
   if (typeof window === "undefined") return [];
   try {
     const key = getFeaturesStorageKey();
     let raw = localStorage.getItem(key);
     if (!raw && key !== LEGACY_FEATURES_STORAGE_KEY) {
       raw = localStorage.getItem(LEGACY_FEATURES_STORAGE_KEY);
-      if (raw) {
-        localStorage.setItem(key, raw);
-        localStorage.removeItem(LEGACY_FEATURES_STORAGE_KEY);
-      }
     }
     if (!raw) return [];
     const parsed = JSON.parse(raw);
@@ -105,9 +105,11 @@ function loadStoredFeatures(): FeatureItem[] {
   }
 }
 
-function saveFeatures(features: FeatureItem[]) {
+function clearStoredFeaturesLegacy(): void {
   if (typeof window === "undefined") return;
-  localStorage.setItem(getFeaturesStorageKey(), JSON.stringify(features));
+  const key = getFeaturesStorageKey();
+  localStorage.removeItem(key);
+  localStorage.removeItem(LEGACY_FEATURES_STORAGE_KEY);
 }
 
 function reorder<T>(arr: T[], from: number, to: number): T[] {
@@ -126,11 +128,13 @@ export default function FeaturesPage() {
   const [editingProjectId, setEditingProjectId] = useState<string | null>(null);
   const [editingProjectName, setEditingProjectName] = useState("");
   const projectNameInputRef = useRef<HTMLInputElement>(null);
-  const [features, setFeatures] = useState<FeatureItem[]>([]);
+  const [features, setFeatures] = useState<Feature[]>([]);
+  const [featuresLoading, setFeaturesLoading] = useState(false);
   const [newFeature, setNewFeature] = useState("");
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [editingValue, setEditingValue] = useState("");
   const [isDragging, setIsDragging] = useState(false);
+  const migratedFromStorageRef = useRef(false);
 
   const listRef = useRef<HTMLUListElement>(null);
   const dragRef = useRef<{
@@ -140,7 +144,6 @@ export default function FeaturesPage() {
     itemTops: number[];
     itemHeight: number;
   } | null>(null);
-  const skipNextSaveRef = useRef(true);
 
   const loadProjects = () =>
     fetchProjects()
@@ -193,50 +196,111 @@ export default function FeaturesPage() {
   };
 
   useEffect(() => {
-    if (!isAuthenticated()) return;
-    setFeatures(loadStoredFeatures());
-  }, []);
-  useEffect(() => {
-    if (!isAuthenticated()) return;
-    if (skipNextSaveRef.current) {
-      skipNextSaveRef.current = false;
+    if (!isAuthenticated() || !selectedProjectId) {
+      setFeatures([]);
       return;
     }
-    saveFeatures(features);
-  }, [features]);
+    let cancelled = false;
+    setFeaturesLoading(true);
+    fetchFeatures(selectedProjectId)
+      .then((data) => {
+        if (cancelled) return;
+        setFeatures(data);
+        if (
+          !migratedFromStorageRef.current &&
+          data.length === 0 &&
+          loadStoredFeaturesLegacy().length > 0
+        ) {
+          migratedFromStorageRef.current = true;
+          const legacy = loadStoredFeaturesLegacy();
+          Promise.all(
+            legacy.map((item) =>
+              createFeature({
+                projectId: selectedProjectId,
+                name: item.name,
+                done: item.done,
+              })
+            )
+          )
+            .then((created) => {
+              if (cancelled) return;
+              setFeatures(created);
+              clearStoredFeaturesLegacy();
+            })
+            .catch(() => {});
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setFeatures([]);
+      })
+      .finally(() => {
+        if (!cancelled) setFeaturesLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedProjectId]);
 
-  const addFeature = (e: React.FormEvent) => {
+  const addFeature = async (e: React.FormEvent) => {
     e.preventDefault();
     const trimmed = newFeature.trim();
-    if (!trimmed) return;
-    setFeatures((prev) => {
-      const firstDoneIndex = prev.findIndex((f) => f.done);
-      if (firstDoneIndex === -1)
-        return [...prev, { name: trimmed, done: false }];
-      return [
-        ...prev.slice(0, firstDoneIndex),
-        { name: trimmed, done: false },
-        ...prev.slice(firstDoneIndex),
-      ];
-    });
-    setNewFeature("");
-  };
-
-  const toggleDone = (index: number) => {
-    const newDone = !features[index].done;
-    setFeatures((prev) => {
-      const item = { ...prev[index], done: newDone };
-      const without = prev.filter((_, i) => i !== index);
-      return newDone ? [...without, item] : [item, ...without];
-    });
-    if (editingIndex === index) {
-      setEditingIndex(newDone ? features.length - 1 : 0);
+    if (!trimmed || !selectedProjectId) return;
+    try {
+      const created = await createFeature({
+        projectId: selectedProjectId,
+        name: trimmed,
+        done: false,
+      });
+      const firstDoneIndex = features.findIndex((f) => f.done);
+      const inserted =
+        firstDoneIndex === -1
+          ? [...features, created]
+          : [
+              ...features.slice(0, firstDoneIndex),
+              created,
+              ...features.slice(firstDoneIndex),
+            ];
+      const reordered = await reorderFeatures(
+        selectedProjectId,
+        inserted.map((f) => f.id)
+      );
+      setFeatures(reordered);
+      setNewFeature("");
+    } catch {
+      // leave form value for retry
     }
   };
 
-  const removeFeature = (index: number) => {
-    setFeatures((prev) => prev.filter((_, i) => i !== index));
-    if (editingIndex === index) setEditingIndex(null);
+  const toggleDone = async (index: number) => {
+    const item = features[index];
+    const newDone = !item.done;
+    try {
+      await updateFeature(item.id, { done: newDone });
+      setFeatures((prev) => {
+        const next = [...prev];
+        next[index] = { ...next[index], done: newDone };
+        const without = next.filter((_, i) => i !== index);
+        return newDone ? [...without, next[index]] : [next[index], ...without];
+      });
+      if (editingIndex === index) {
+        setEditingIndex(newDone ? features.length - 1 : 0);
+      }
+    } catch {
+      setFeatures((prev) => [...prev]);
+    }
+  };
+
+  const removeFeature = async (index: number) => {
+    const item = features[index];
+    try {
+      await deleteFeature(item.id);
+      setFeatures((prev) => prev.filter((_, i) => i !== index));
+      if (editingIndex === index) setEditingIndex(null);
+      else if (editingIndex !== null && editingIndex > index)
+        setEditingIndex(editingIndex - 1);
+    } catch {
+      // keep in list
+    }
   };
 
   const startEdit = (index: number) => {
@@ -244,17 +308,23 @@ export default function FeaturesPage() {
     setEditingValue(features[index]?.name ?? "");
   };
 
-  const saveEdit = () => {
+  const saveEdit = async () => {
     if (editingIndex === null) return;
+    const item = features[editingIndex];
     const trimmed = editingValue.trim();
     if (trimmed) {
-      setFeatures((prev) => {
-        const next = [...prev];
-        next[editingIndex] = { ...next[editingIndex], name: trimmed };
-        return next;
-      });
+      try {
+        await updateFeature(item.id, { name: trimmed });
+        setFeatures((prev) => {
+          const next = [...prev];
+          next[editingIndex] = { ...next[editingIndex], name: trimmed };
+          return next;
+        });
+      } catch {
+        // keep previous name
+      }
     } else {
-      removeFeature(editingIndex);
+      await removeFeature(editingIndex);
     }
     setEditingIndex(null);
   };
@@ -354,15 +424,16 @@ export default function FeaturesPage() {
       applyTransforms(sourceIdx, targetIdx, deltaY);
     };
 
-    const onPointerUp = () => {
+    const onPointerUp = async () => {
       const drag = dragRef.current;
       if (!drag) return;
       const { sourceIndex, targetIndex } = drag;
 
       clearAllTransforms();
 
-      if (sourceIndex !== targetIndex) {
-        setFeatures((prev) => reorder(prev, sourceIndex, targetIndex));
+      if (sourceIndex !== targetIndex && selectedProjectId) {
+        const reordered = reorder(features, sourceIndex, targetIndex);
+        setFeatures(reordered);
         if (editingIndex !== null) {
           let newEditIndex = editingIndex;
           if (sourceIndex === editingIndex) newEditIndex = targetIndex;
@@ -371,6 +442,15 @@ export default function FeaturesPage() {
           else if (sourceIndex > editingIndex && targetIndex <= editingIndex)
             newEditIndex = editingIndex + 1;
           setEditingIndex(newEditIndex);
+        }
+        try {
+          const next = await reorderFeatures(
+            selectedProjectId,
+            reordered.map((f) => f.id)
+          );
+          setFeatures(next);
+        } catch {
+          setFeatures(features);
         }
       }
 
@@ -390,7 +470,7 @@ export default function FeaturesPage() {
       document.removeEventListener("pointerup", onPointerUp);
       document.removeEventListener("pointercancel", onPointerUp);
     };
-  }, [isDragging, features.length, editingIndex]);
+  }, [isDragging, features, selectedProjectId, editingIndex]);
 
   return (
     <>
@@ -538,8 +618,9 @@ export default function FeaturesPage() {
             <h1 className="tests-page-title">Features</h1>
 
             <section className="tests-page-section">
-              <form
-                onSubmit={addFeature}
+              {selectedProjectId ? (
+                <form
+                  onSubmit={addFeature}
                 className="features-add-form"
                 style={{
                   display: "flex",
@@ -567,6 +648,11 @@ export default function FeaturesPage() {
                   <IconPlus />
                 </button>
               </form>
+              ) : (
+                <p className="tests-page-section-desc">
+                  Select a project to add features.
+                </p>
+              )}
             </section>
 
             <section className="tests-page-section">
@@ -576,7 +662,13 @@ export default function FeaturesPage() {
                   {features.length}
                 </span>
               </h2>
-              {features.length === 0 ? (
+              {!selectedProjectId ? (
+                <p className="tests-page-section-desc">
+                  Select a project to see and manage features.
+                </p>
+              ) : featuresLoading ? (
+                <p className="tests-page-section-desc">Loading…</p>
+              ) : features.length === 0 ? (
                 <p className="tests-page-section-desc">
                   No features yet. Add one above.
                 </p>
@@ -588,7 +680,7 @@ export default function FeaturesPage() {
                 >
                   {features.map((item, index) => (
                     <li
-                      key={index}
+                      key={item.id}
                       className={`features-list-item ${item.done ? "features-list-item--done" : ""}`}
                     >
                       {editingIndex === index ? (

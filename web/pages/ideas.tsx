@@ -3,10 +3,16 @@ import Head from "next/head";
 import Link from "next/link";
 import { useRouter } from "next/router";
 import {
+  createIdea,
+  deleteIdea,
+  fetchIdeas,
   fetchProjects,
   getUserScopedStorageKey,
   isAuthenticated,
+  reorderIdeas,
   updateProject,
+  updateIdea,
+  type Idea,
 } from "../lib/api";
 import { ProjectNavBar, DrawerCollapsedNav } from "../components/ProjectNavBar";
 import { useTheme } from "./_app";
@@ -61,8 +67,6 @@ const IconCheck = () => (
   </svg>
 );
 
-type IdeaItem = { name: string; done: boolean };
-
 const IDEAS_STORAGE_PREFIX = "ideahome-ideas-list";
 const LEGACY_IDEAS_STORAGE_KEY = "ideahome-ideas-list";
 
@@ -73,17 +77,13 @@ function getIdeasStorageKey(): string {
   );
 }
 
-function loadStoredIdeas(): IdeaItem[] {
+function loadStoredIdeasLegacy(): { name: string; done: boolean }[] {
   if (typeof window === "undefined") return [];
   try {
     const key = getIdeasStorageKey();
     let raw = localStorage.getItem(key);
     if (!raw && key !== LEGACY_IDEAS_STORAGE_KEY) {
       raw = localStorage.getItem(LEGACY_IDEAS_STORAGE_KEY);
-      if (raw) {
-        localStorage.setItem(key, raw);
-        localStorage.removeItem(LEGACY_IDEAS_STORAGE_KEY);
-      }
     }
     if (!raw) return [];
     const parsed = JSON.parse(raw);
@@ -105,9 +105,11 @@ function loadStoredIdeas(): IdeaItem[] {
   }
 }
 
-function saveIdeas(ideas: IdeaItem[]) {
+function clearStoredIdeasLegacy(): void {
   if (typeof window === "undefined") return;
-  localStorage.setItem(getIdeasStorageKey(), JSON.stringify(ideas));
+  const key = getIdeasStorageKey();
+  localStorage.removeItem(key);
+  localStorage.removeItem(LEGACY_IDEAS_STORAGE_KEY);
 }
 
 function reorder<T>(arr: T[], from: number, to: number): T[] {
@@ -126,11 +128,13 @@ export default function IdeasPage() {
   const [editingProjectId, setEditingProjectId] = useState<string | null>(null);
   const [editingProjectName, setEditingProjectName] = useState("");
   const projectNameInputRef = useRef<HTMLInputElement>(null);
-  const [ideas, setIdeas] = useState<IdeaItem[]>([]);
+  const [ideas, setIdeas] = useState<Idea[]>([]);
+  const [ideasLoading, setIdeasLoading] = useState(false);
   const [newIdea, setNewIdea] = useState("");
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [editingValue, setEditingValue] = useState("");
   const [isDragging, setIsDragging] = useState(false);
+  const migratedFromStorageRef = useRef(false);
 
   const listRef = useRef<HTMLUListElement>(null);
   const dragRef = useRef<{
@@ -140,7 +144,6 @@ export default function IdeasPage() {
     itemTops: number[];
     itemHeight: number;
   } | null>(null);
-  const skipNextSaveRef = useRef(true);
 
   const loadProjects = () =>
     fetchProjects()
@@ -193,50 +196,111 @@ export default function IdeasPage() {
   };
 
   useEffect(() => {
-    if (!isAuthenticated()) return;
-    setIdeas(loadStoredIdeas());
-  }, []);
-  useEffect(() => {
-    if (!isAuthenticated()) return;
-    if (skipNextSaveRef.current) {
-      skipNextSaveRef.current = false;
+    if (!isAuthenticated() || !selectedProjectId) {
+      setIdeas([]);
       return;
     }
-    saveIdeas(ideas);
-  }, [ideas]);
+    let cancelled = false;
+    setIdeasLoading(true);
+    fetchIdeas(selectedProjectId)
+      .then((data) => {
+        if (cancelled) return;
+        setIdeas(data);
+        if (
+          !migratedFromStorageRef.current &&
+          data.length === 0 &&
+          loadStoredIdeasLegacy().length > 0
+        ) {
+          migratedFromStorageRef.current = true;
+          const legacy = loadStoredIdeasLegacy();
+          Promise.all(
+            legacy.map((item) =>
+              createIdea({
+                projectId: selectedProjectId,
+                name: item.name,
+                done: item.done,
+              })
+            )
+          )
+            .then((created) => {
+              if (cancelled) return;
+              setIdeas(created);
+              clearStoredIdeasLegacy();
+            })
+            .catch(() => {});
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setIdeas([]);
+      })
+      .finally(() => {
+        if (!cancelled) setIdeasLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedProjectId]);
 
-  const addIdea = (e: React.FormEvent) => {
+  const addIdea = async (e: React.FormEvent) => {
     e.preventDefault();
     const trimmed = newIdea.trim();
-    if (!trimmed) return;
-    setIdeas((prev) => {
-      const firstDoneIndex = prev.findIndex((i) => i.done);
-      if (firstDoneIndex === -1)
-        return [...prev, { name: trimmed, done: false }];
-      return [
-        ...prev.slice(0, firstDoneIndex),
-        { name: trimmed, done: false },
-        ...prev.slice(firstDoneIndex),
-      ];
-    });
-    setNewIdea("");
-  };
-
-  const toggleDone = (index: number) => {
-    const newDone = !ideas[index].done;
-    setIdeas((prev) => {
-      const item = { ...prev[index], done: newDone };
-      const without = prev.filter((_, i) => i !== index);
-      return newDone ? [...without, item] : [item, ...without];
-    });
-    if (editingIndex === index) {
-      setEditingIndex(newDone ? ideas.length - 1 : 0);
+    if (!trimmed || !selectedProjectId) return;
+    try {
+      const created = await createIdea({
+        projectId: selectedProjectId,
+        name: trimmed,
+        done: false,
+      });
+      const firstDoneIndex = ideas.findIndex((i) => i.done);
+      const inserted =
+        firstDoneIndex === -1
+          ? [...ideas, created]
+          : [
+              ...ideas.slice(0, firstDoneIndex),
+              created,
+              ...ideas.slice(firstDoneIndex),
+            ];
+      const reordered = await reorderIdeas(
+        selectedProjectId,
+        inserted.map((i) => i.id)
+      );
+      setIdeas(reordered);
+      setNewIdea("");
+    } catch {
+      // leave form value for retry
     }
   };
 
-  const removeIdea = (index: number) => {
-    setIdeas((prev) => prev.filter((_, i) => i !== index));
-    if (editingIndex === index) setEditingIndex(null);
+  const toggleDone = async (index: number) => {
+    const item = ideas[index];
+    const newDone = !item.done;
+    try {
+      await updateIdea(item.id, { done: newDone });
+      setIdeas((prev) => {
+        const next = [...prev];
+        next[index] = { ...next[index], done: newDone };
+        const without = next.filter((_, i) => i !== index);
+        return newDone ? [...without, next[index]] : [next[index], ...without];
+      });
+      if (editingIndex === index) {
+        setEditingIndex(newDone ? ideas.length - 1 : 0);
+      }
+    } catch {
+      setIdeas((prev) => [...prev]);
+    }
+  };
+
+  const removeIdea = async (index: number) => {
+    const item = ideas[index];
+    try {
+      await deleteIdea(item.id);
+      setIdeas((prev) => prev.filter((_, i) => i !== index));
+      if (editingIndex === index) setEditingIndex(null);
+      else if (editingIndex !== null && editingIndex > index)
+        setEditingIndex(editingIndex - 1);
+    } catch {
+      // keep in list
+    }
   };
 
   const startEdit = (index: number) => {
@@ -244,17 +308,23 @@ export default function IdeasPage() {
     setEditingValue(ideas[index]?.name ?? "");
   };
 
-  const saveEdit = () => {
+  const saveEdit = async () => {
     if (editingIndex === null) return;
+    const item = ideas[editingIndex];
     const trimmed = editingValue.trim();
     if (trimmed) {
-      setIdeas((prev) => {
-        const next = [...prev];
-        next[editingIndex] = { ...next[editingIndex], name: trimmed };
-        return next;
-      });
+      try {
+        await updateIdea(item.id, { name: trimmed });
+        setIdeas((prev) => {
+          const next = [...prev];
+          next[editingIndex] = { ...next[editingIndex], name: trimmed };
+          return next;
+        });
+      } catch {
+        // keep previous name
+      }
     } else {
-      removeIdea(editingIndex);
+      await removeIdea(editingIndex);
     }
     setEditingIndex(null);
   };
@@ -354,15 +424,16 @@ export default function IdeasPage() {
       applyTransforms(sourceIdx, targetIdx, deltaY);
     };
 
-    const onPointerUp = () => {
+    const onPointerUp = async () => {
       const drag = dragRef.current;
       if (!drag) return;
       const { sourceIndex, targetIndex } = drag;
 
       clearAllTransforms();
 
-      if (sourceIndex !== targetIndex) {
-        setIdeas((prev) => reorder(prev, sourceIndex, targetIndex));
+      if (sourceIndex !== targetIndex && selectedProjectId) {
+        const reordered = reorder(ideas, sourceIndex, targetIndex);
+        setIdeas(reordered);
         if (editingIndex !== null) {
           let newEditIndex = editingIndex;
           if (sourceIndex === editingIndex) newEditIndex = targetIndex;
@@ -371,6 +442,15 @@ export default function IdeasPage() {
           else if (sourceIndex > editingIndex && targetIndex <= editingIndex)
             newEditIndex = editingIndex + 1;
           setEditingIndex(newEditIndex);
+        }
+        try {
+          const next = await reorderIdeas(
+            selectedProjectId,
+            reordered.map((i) => i.id)
+          );
+          setIdeas(next);
+        } catch {
+          setIdeas(ideas);
         }
       }
 
@@ -390,7 +470,7 @@ export default function IdeasPage() {
       document.removeEventListener("pointerup", onPointerUp);
       document.removeEventListener("pointercancel", onPointerUp);
     };
-  }, [isDragging, ideas.length, editingIndex]);
+  }, [isDragging, ideas, selectedProjectId, editingIndex]);
 
   return (
     <>
@@ -538,35 +618,41 @@ export default function IdeasPage() {
             <h1 className="tests-page-title">Ideas</h1>
 
             <section className="tests-page-section">
-              <form
-                onSubmit={addIdea}
-                className="features-add-form"
-                style={{
-                  display: "flex",
-                  gap: "8px",
-                  flexWrap: "wrap",
-                  alignItems: "center",
-                  marginTop: "8px",
-                }}
-              >
-                <input
-                  type="text"
-                  value={newIdea}
-                  onChange={(e) => setNewIdea(e.target.value)}
-                  placeholder="Idea item"
-                  aria-label="New idea"
-                  className="project-nav-search"
-                  style={{ flex: "1", minWidth: "200px", padding: "8px 12px" }}
-                />
-                <button
-                  type="submit"
-                  className="project-nav-add"
-                  aria-label="Add idea"
-                  title="Add idea"
+              {selectedProjectId ? (
+                <form
+                  onSubmit={addIdea}
+                  className="features-add-form"
+                  style={{
+                    display: "flex",
+                    gap: "8px",
+                    flexWrap: "wrap",
+                    alignItems: "center",
+                    marginTop: "8px",
+                  }}
                 >
-                  <IconPlus />
-                </button>
-              </form>
+                  <input
+                    type="text"
+                    value={newIdea}
+                    onChange={(e) => setNewIdea(e.target.value)}
+                    placeholder="Idea item"
+                    aria-label="New idea"
+                    className="project-nav-search"
+                    style={{ flex: "1", minWidth: "200px", padding: "8px 12px" }}
+                  />
+                  <button
+                    type="submit"
+                    className="project-nav-add"
+                    aria-label="Add idea"
+                    title="Add idea"
+                  >
+                    <IconPlus />
+                  </button>
+                </form>
+              ) : (
+                <p className="tests-page-section-desc">
+                  Select a project to add ideas.
+                </p>
+              )}
             </section>
 
             <section className="tests-page-section">
@@ -576,7 +662,13 @@ export default function IdeasPage() {
                   {ideas.length}
                 </span>
               </h2>
-              {ideas.length === 0 ? (
+              {!selectedProjectId ? (
+                <p className="tests-page-section-desc">
+                  Select a project to see and manage ideas.
+                </p>
+              ) : ideasLoading ? (
+                <p className="tests-page-section-desc">Loading…</p>
+              ) : ideas.length === 0 ? (
                 <p className="tests-page-section-desc">
                   No items yet. Add one above.
                 </p>
@@ -588,7 +680,7 @@ export default function IdeasPage() {
                 >
                   {ideas.map((item, index) => (
                     <li
-                      key={index}
+                      key={item.id}
                       className={`features-list-item ${item.done ? "features-list-item--done" : ""}`}
                     >
                       {editingIndex === index ? (

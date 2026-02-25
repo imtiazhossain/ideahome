@@ -3,10 +3,16 @@ import Head from "next/head";
 import Link from "next/link";
 import { useRouter } from "next/router";
 import {
+  createTodo,
+  deleteTodo,
   fetchProjects,
+  fetchTodos,
   getUserScopedStorageKey,
   isAuthenticated,
+  reorderTodos,
   updateProject,
+  updateTodo,
+  type Todo,
 } from "../lib/api";
 import { ProjectNavBar, DrawerCollapsedNav } from "../components/ProjectNavBar";
 import { useTheme } from "./_app";
@@ -61,8 +67,6 @@ const IconCheck = () => (
   </svg>
 );
 
-type TodoItem = { name: string; done: boolean };
-
 const TODO_STORAGE_PREFIX = "ideahome-todo-list";
 const LEGACY_TODO_STORAGE_KEY = "ideahome-todo-list";
 
@@ -70,17 +74,14 @@ function getTodoStorageKey(): string {
   return getUserScopedStorageKey(TODO_STORAGE_PREFIX, LEGACY_TODO_STORAGE_KEY);
 }
 
-function loadStoredTodos(): TodoItem[] {
+/** One-time migration: load legacy localStorage todos (array of { name, done }). */
+function loadStoredTodosLegacy(): { name: string; done: boolean }[] {
   if (typeof window === "undefined") return [];
   try {
     const key = getTodoStorageKey();
     let raw = localStorage.getItem(key);
     if (!raw && key !== LEGACY_TODO_STORAGE_KEY) {
       raw = localStorage.getItem(LEGACY_TODO_STORAGE_KEY);
-      if (raw) {
-        localStorage.setItem(key, raw);
-        localStorage.removeItem(LEGACY_TODO_STORAGE_KEY);
-      }
     }
     if (!raw) return [];
     const parsed = JSON.parse(raw);
@@ -102,9 +103,11 @@ function loadStoredTodos(): TodoItem[] {
   }
 }
 
-function saveTodos(todos: TodoItem[]) {
+function clearStoredTodosLegacy(): void {
   if (typeof window === "undefined") return;
-  localStorage.setItem(getTodoStorageKey(), JSON.stringify(todos));
+  const key = getTodoStorageKey();
+  localStorage.removeItem(key);
+  localStorage.removeItem(LEGACY_TODO_STORAGE_KEY);
 }
 
 function reorder<T>(arr: T[], from: number, to: number): T[] {
@@ -123,11 +126,13 @@ export default function TodoPage() {
   const [editingProjectId, setEditingProjectId] = useState<string | null>(null);
   const [editingProjectName, setEditingProjectName] = useState("");
   const projectNameInputRef = useRef<HTMLInputElement>(null);
-  const [todos, setTodos] = useState<TodoItem[]>([]);
+  const [todos, setTodos] = useState<Todo[]>([]);
+  const [todosLoading, setTodosLoading] = useState(false);
   const [newTodo, setNewTodo] = useState("");
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [editingValue, setEditingValue] = useState("");
   const [isDragging, setIsDragging] = useState(false);
+  const migratedFromStorageRef = useRef(false);
 
   const listRef = useRef<HTMLUListElement>(null);
   const dragRef = useRef<{
@@ -137,7 +142,6 @@ export default function TodoPage() {
     itemTops: number[];
     itemHeight: number;
   } | null>(null);
-  const skipNextSaveRef = useRef(true);
 
   const loadProjects = () =>
     fetchProjects()
@@ -190,50 +194,112 @@ export default function TodoPage() {
   };
 
   useEffect(() => {
-    if (!isAuthenticated()) return;
-    setTodos(loadStoredTodos());
-  }, []);
-  useEffect(() => {
-    if (!isAuthenticated()) return;
-    if (skipNextSaveRef.current) {
-      skipNextSaveRef.current = false;
+    if (!isAuthenticated() || !selectedProjectId) {
+      setTodos([]);
       return;
     }
-    saveTodos(todos);
-  }, [todos]);
+    let cancelled = false;
+    setTodosLoading(true);
+    fetchTodos(selectedProjectId)
+      .then((data) => {
+        if (cancelled) return;
+        setTodos(data);
+        if (
+          !migratedFromStorageRef.current &&
+          data.length === 0 &&
+          loadStoredTodosLegacy().length > 0
+        ) {
+          migratedFromStorageRef.current = true;
+          const legacy = loadStoredTodosLegacy();
+          Promise.all(
+            legacy.map((item) =>
+              createTodo({
+                projectId: selectedProjectId,
+                name: item.name,
+                done: item.done,
+              })
+            )
+          )
+            .then((created) => {
+              if (cancelled) return;
+              setTodos(created);
+              clearStoredTodosLegacy();
+            })
+            .catch(() => {});
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setTodos([]);
+      })
+      .finally(() => {
+        if (!cancelled) setTodosLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedProjectId]);
 
-  const addTodo = (e: React.FormEvent) => {
+  const addTodo = async (e: React.FormEvent) => {
     e.preventDefault();
     const trimmed = newTodo.trim();
-    if (!trimmed) return;
-    setTodos((prev) => {
-      const firstDoneIndex = prev.findIndex((t) => t.done);
-      if (firstDoneIndex === -1)
-        return [...prev, { name: trimmed, done: false }];
-      return [
-        ...prev.slice(0, firstDoneIndex),
-        { name: trimmed, done: false },
-        ...prev.slice(firstDoneIndex),
-      ];
-    });
-    setNewTodo("");
-  };
-
-  const toggleDone = (index: number) => {
-    const newDone = !todos[index].done;
-    setTodos((prev) => {
-      const item = { ...prev[index], done: newDone };
-      const without = prev.filter((_, i) => i !== index);
-      return newDone ? [...without, item] : [item, ...without];
-    });
-    if (editingIndex === index) {
-      setEditingIndex(newDone ? todos.length - 1 : 0);
+    if (!trimmed || !selectedProjectId) return;
+    try {
+      const created = await createTodo({
+        projectId: selectedProjectId,
+        name: trimmed,
+        done: false,
+      });
+      const firstDoneIndex = todos.findIndex((t) => t.done);
+      const inserted =
+        firstDoneIndex === -1
+          ? [...todos, created]
+          : [
+              ...todos.slice(0, firstDoneIndex),
+              created,
+              ...todos.slice(firstDoneIndex),
+            ];
+      const reordered = await reorderTodos(
+        selectedProjectId,
+        inserted.map((t) => t.id)
+      );
+      setTodos(reordered);
+      setNewTodo("");
+    } catch {
+      // leave form value for retry
     }
   };
 
-  const removeTodo = (index: number) => {
-    setTodos((prev) => prev.filter((_, i) => i !== index));
-    if (editingIndex === index) setEditingIndex(null);
+  const toggleDone = async (index: number) => {
+    const item = todos[index];
+    const newDone = !item.done;
+    try {
+      await updateTodo(item.id, { done: newDone });
+      setTodos((prev) => {
+        const next = [...prev];
+        next[index] = { ...next[index], done: newDone };
+        const without = next.filter((_, i) => i !== index);
+        return newDone ? [...without, next[index]] : [next[index], ...without];
+      });
+      if (editingIndex === index) {
+        setEditingIndex(newDone ? todos.length - 1 : 0);
+      }
+    } catch {
+      // revert on error
+      setTodos((prev) => [...prev]);
+    }
+  };
+
+  const removeTodo = async (index: number) => {
+    const item = todos[index];
+    try {
+      await deleteTodo(item.id);
+      setTodos((prev) => prev.filter((_, i) => i !== index));
+      if (editingIndex === index) setEditingIndex(null);
+      else if (editingIndex !== null && editingIndex > index)
+        setEditingIndex(editingIndex - 1);
+    } catch {
+      // keep in list
+    }
   };
 
   const startEdit = (index: number) => {
@@ -241,17 +307,23 @@ export default function TodoPage() {
     setEditingValue(todos[index]?.name ?? "");
   };
 
-  const saveEdit = () => {
+  const saveEdit = async () => {
     if (editingIndex === null) return;
+    const item = todos[editingIndex];
     const trimmed = editingValue.trim();
     if (trimmed) {
-      setTodos((prev) => {
-        const next = [...prev];
-        next[editingIndex] = { ...next[editingIndex], name: trimmed };
-        return next;
-      });
+      try {
+        await updateTodo(item.id, { name: trimmed });
+        setTodos((prev) => {
+          const next = [...prev];
+          next[editingIndex] = { ...next[editingIndex], name: trimmed };
+          return next;
+        });
+      } catch {
+        // keep previous name
+      }
     } else {
-      removeTodo(editingIndex);
+      await removeTodo(editingIndex);
     }
     setEditingIndex(null);
   };
@@ -351,15 +423,16 @@ export default function TodoPage() {
       applyTransforms(sourceIdx, targetIdx, deltaY);
     };
 
-    const onPointerUp = () => {
+    const onPointerUp = async () => {
       const drag = dragRef.current;
       if (!drag) return;
       const { sourceIndex, targetIndex } = drag;
 
       clearAllTransforms();
 
-      if (sourceIndex !== targetIndex) {
-        setTodos((prev) => reorder(prev, sourceIndex, targetIndex));
+      if (sourceIndex !== targetIndex && selectedProjectId) {
+        const reordered = reorder(todos, sourceIndex, targetIndex);
+        setTodos(reordered);
         if (editingIndex !== null) {
           let newEditIndex = editingIndex;
           if (sourceIndex === editingIndex) newEditIndex = targetIndex;
@@ -368,6 +441,15 @@ export default function TodoPage() {
           else if (sourceIndex > editingIndex && targetIndex <= editingIndex)
             newEditIndex = editingIndex + 1;
           setEditingIndex(newEditIndex);
+        }
+        try {
+          const next = await reorderTodos(
+            selectedProjectId,
+            reordered.map((t) => t.id)
+          );
+          setTodos(next);
+        } catch {
+          setTodos(todos);
         }
       }
 
@@ -387,7 +469,7 @@ export default function TodoPage() {
       document.removeEventListener("pointerup", onPointerUp);
       document.removeEventListener("pointercancel", onPointerUp);
     };
-  }, [isDragging, todos.length, editingIndex]);
+  }, [isDragging, todos, selectedProjectId, editingIndex]);
 
   return (
     <>
@@ -535,35 +617,41 @@ export default function TodoPage() {
             <h1 className="tests-page-title">To-Do</h1>
 
             <section className="tests-page-section">
-              <form
-                onSubmit={addTodo}
-                className="features-add-form"
-                style={{
-                  display: "flex",
-                  gap: "8px",
-                  flexWrap: "wrap",
-                  alignItems: "center",
-                  marginTop: "8px",
-                }}
-              >
-                <input
-                  type="text"
-                  value={newTodo}
-                  onChange={(e) => setNewTodo(e.target.value)}
-                  placeholder="To-do item"
-                  aria-label="New to-do"
-                  className="project-nav-search"
-                  style={{ flex: "1", minWidth: "200px", padding: "8px 12px" }}
-                />
-                <button
-                  type="submit"
-                  className="project-nav-add"
-                  aria-label="Add to-do"
-                  title="Add to-do"
+              {selectedProjectId ? (
+                <form
+                  onSubmit={addTodo}
+                  className="features-add-form"
+                  style={{
+                    display: "flex",
+                    gap: "8px",
+                    flexWrap: "wrap",
+                    alignItems: "center",
+                    marginTop: "8px",
+                  }}
                 >
-                  <IconPlus />
-                </button>
-              </form>
+                  <input
+                    type="text"
+                    value={newTodo}
+                    onChange={(e) => setNewTodo(e.target.value)}
+                    placeholder="To-do item"
+                    aria-label="New to-do"
+                    className="project-nav-search"
+                    style={{ flex: "1", minWidth: "200px", padding: "8px 12px" }}
+                  />
+                  <button
+                    type="submit"
+                    className="project-nav-add"
+                    aria-label="Add to-do"
+                    title="Add to-do"
+                  >
+                    <IconPlus />
+                  </button>
+                </form>
+              ) : (
+                <p className="tests-page-section-desc">
+                  Select a project to add to-dos.
+                </p>
+              )}
             </section>
 
             <section className="tests-page-section">
@@ -573,7 +661,13 @@ export default function TodoPage() {
                   {todos.length}
                 </span>
               </h2>
-              {todos.length === 0 ? (
+              {!selectedProjectId ? (
+                <p className="tests-page-section-desc">
+                  Select a project to see and manage to-dos.
+                </p>
+              ) : todosLoading ? (
+                <p className="tests-page-section-desc">Loading…</p>
+              ) : todos.length === 0 ? (
                 <p className="tests-page-section-desc">
                   No items yet. Add one above.
                 </p>
@@ -585,7 +679,7 @@ export default function TodoPage() {
                 >
                   {todos.map((item, index) => (
                     <li
-                      key={index}
+                      key={item.id}
                       className={`features-list-item ${item.done ? "features-list-item--done" : ""}`}
                     >
                       {editingIndex === index ? (

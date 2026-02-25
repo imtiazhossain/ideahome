@@ -3,10 +3,16 @@ import Head from "next/head";
 import Link from "next/link";
 import { useRouter } from "next/router";
 import {
+  createBug,
+  deleteBug,
+  fetchBugs,
   fetchProjects,
   getUserScopedStorageKey,
   isAuthenticated,
+  reorderBugs,
   updateProject,
+  updateBug,
+  type Bug,
 } from "../lib/api";
 import { ProjectNavBar, DrawerCollapsedNav } from "../components/ProjectNavBar";
 import { useTheme } from "./_app";
@@ -61,8 +67,6 @@ const IconCheck = () => (
   </svg>
 );
 
-type BugItem = { name: string; done: boolean };
-
 const BUGS_STORAGE_PREFIX = "ideahome-bugs-list";
 const LEGACY_BUGS_STORAGE_KEY = "ideahome-bugs-list";
 
@@ -70,17 +74,13 @@ function getBugsStorageKey(): string {
   return getUserScopedStorageKey(BUGS_STORAGE_PREFIX, LEGACY_BUGS_STORAGE_KEY);
 }
 
-function loadStoredBugs(): BugItem[] {
+function loadStoredBugsLegacy(): { name: string; done: boolean }[] {
   if (typeof window === "undefined") return [];
   try {
     const key = getBugsStorageKey();
     let raw = localStorage.getItem(key);
     if (!raw && key !== LEGACY_BUGS_STORAGE_KEY) {
       raw = localStorage.getItem(LEGACY_BUGS_STORAGE_KEY);
-      if (raw) {
-        localStorage.setItem(key, raw);
-        localStorage.removeItem(LEGACY_BUGS_STORAGE_KEY);
-      }
     }
     if (!raw) return [];
     const parsed = JSON.parse(raw);
@@ -102,9 +102,11 @@ function loadStoredBugs(): BugItem[] {
   }
 }
 
-function saveBugs(bugs: BugItem[]) {
+function clearStoredBugsLegacy(): void {
   if (typeof window === "undefined") return;
-  localStorage.setItem(getBugsStorageKey(), JSON.stringify(bugs));
+  const key = getBugsStorageKey();
+  localStorage.removeItem(key);
+  localStorage.removeItem(LEGACY_BUGS_STORAGE_KEY);
 }
 
 function reorder<T>(arr: T[], from: number, to: number): T[] {
@@ -123,11 +125,13 @@ export default function BugsPage() {
   const [editingProjectId, setEditingProjectId] = useState<string | null>(null);
   const [editingProjectName, setEditingProjectName] = useState("");
   const projectNameInputRef = useRef<HTMLInputElement>(null);
-  const [bugs, setBugs] = useState<BugItem[]>([]);
+  const [bugs, setBugs] = useState<Bug[]>([]);
+  const [bugsLoading, setBugsLoading] = useState(false);
   const [newBug, setNewBug] = useState("");
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [editingValue, setEditingValue] = useState("");
   const [isDragging, setIsDragging] = useState(false);
+  const migratedFromStorageRef = useRef(false);
 
   const listRef = useRef<HTMLUListElement>(null);
   const dragRef = useRef<{
@@ -137,7 +141,6 @@ export default function BugsPage() {
     itemTops: number[];
     itemHeight: number;
   } | null>(null);
-  const skipNextSaveRef = useRef(true);
 
   const loadProjects = () =>
     fetchProjects()
@@ -190,50 +193,111 @@ export default function BugsPage() {
   };
 
   useEffect(() => {
-    if (!isAuthenticated()) return;
-    setBugs(loadStoredBugs());
-  }, []);
-  useEffect(() => {
-    if (!isAuthenticated()) return;
-    if (skipNextSaveRef.current) {
-      skipNextSaveRef.current = false;
+    if (!isAuthenticated() || !selectedProjectId) {
+      setBugs([]);
       return;
     }
-    saveBugs(bugs);
-  }, [bugs]);
+    let cancelled = false;
+    setBugsLoading(true);
+    fetchBugs(selectedProjectId)
+      .then((data) => {
+        if (cancelled) return;
+        setBugs(data);
+        if (
+          !migratedFromStorageRef.current &&
+          data.length === 0 &&
+          loadStoredBugsLegacy().length > 0
+        ) {
+          migratedFromStorageRef.current = true;
+          const legacy = loadStoredBugsLegacy();
+          Promise.all(
+            legacy.map((item) =>
+              createBug({
+                projectId: selectedProjectId,
+                name: item.name,
+                done: item.done,
+              })
+            )
+          )
+            .then((created) => {
+              if (cancelled) return;
+              setBugs(created);
+              clearStoredBugsLegacy();
+            })
+            .catch(() => {});
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setBugs([]);
+      })
+      .finally(() => {
+        if (!cancelled) setBugsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedProjectId]);
 
-  const addBug = (e: React.FormEvent) => {
+  const addBug = async (e: React.FormEvent) => {
     e.preventDefault();
     const trimmed = newBug.trim();
-    if (!trimmed) return;
-    setBugs((prev) => {
-      const firstDoneIndex = prev.findIndex((b) => b.done);
-      if (firstDoneIndex === -1)
-        return [...prev, { name: trimmed, done: false }];
-      return [
-        ...prev.slice(0, firstDoneIndex),
-        { name: trimmed, done: false },
-        ...prev.slice(firstDoneIndex),
-      ];
-    });
-    setNewBug("");
-  };
-
-  const toggleDone = (index: number) => {
-    const newDone = !bugs[index].done;
-    setBugs((prev) => {
-      const item = { ...prev[index], done: newDone };
-      const without = prev.filter((_, i) => i !== index);
-      return newDone ? [...without, item] : [item, ...without];
-    });
-    if (editingIndex === index) {
-      setEditingIndex(newDone ? bugs.length - 1 : 0);
+    if (!trimmed || !selectedProjectId) return;
+    try {
+      const created = await createBug({
+        projectId: selectedProjectId,
+        name: trimmed,
+        done: false,
+      });
+      const firstDoneIndex = bugs.findIndex((b) => b.done);
+      const inserted =
+        firstDoneIndex === -1
+          ? [...bugs, created]
+          : [
+              ...bugs.slice(0, firstDoneIndex),
+              created,
+              ...bugs.slice(firstDoneIndex),
+            ];
+      const reordered = await reorderBugs(
+        selectedProjectId,
+        inserted.map((b) => b.id)
+      );
+      setBugs(reordered);
+      setNewBug("");
+    } catch {
+      // leave form value for retry
     }
   };
 
-  const removeBug = (index: number) => {
-    setBugs((prev) => prev.filter((_, i) => i !== index));
-    if (editingIndex === index) setEditingIndex(null);
+  const toggleDone = async (index: number) => {
+    const item = bugs[index];
+    const newDone = !item.done;
+    try {
+      await updateBug(item.id, { done: newDone });
+      setBugs((prev) => {
+        const next = [...prev];
+        next[index] = { ...next[index], done: newDone };
+        const without = next.filter((_, i) => i !== index);
+        return newDone ? [...without, next[index]] : [next[index], ...without];
+      });
+      if (editingIndex === index) {
+        setEditingIndex(newDone ? bugs.length - 1 : 0);
+      }
+    } catch {
+      setBugs((prev) => [...prev]);
+    }
+  };
+
+  const removeBug = async (index: number) => {
+    const item = bugs[index];
+    try {
+      await deleteBug(item.id);
+      setBugs((prev) => prev.filter((_, i) => i !== index));
+      if (editingIndex === index) setEditingIndex(null);
+      else if (editingIndex !== null && editingIndex > index)
+        setEditingIndex(editingIndex - 1);
+    } catch {
+      // keep in list
+    }
   };
 
   const startEdit = (index: number) => {
@@ -241,17 +305,23 @@ export default function BugsPage() {
     setEditingValue(bugs[index]?.name ?? "");
   };
 
-  const saveEdit = () => {
+  const saveEdit = async () => {
     if (editingIndex === null) return;
+    const item = bugs[editingIndex];
     const trimmed = editingValue.trim();
     if (trimmed) {
-      setBugs((prev) => {
-        const next = [...prev];
-        next[editingIndex] = { ...next[editingIndex], name: trimmed };
-        return next;
-      });
+      try {
+        await updateBug(item.id, { name: trimmed });
+        setBugs((prev) => {
+          const next = [...prev];
+          next[editingIndex] = { ...next[editingIndex], name: trimmed };
+          return next;
+        });
+      } catch {
+        // keep previous name
+      }
     } else {
-      removeBug(editingIndex);
+      await removeBug(editingIndex);
     }
     setEditingIndex(null);
   };
@@ -351,15 +421,16 @@ export default function BugsPage() {
       applyTransforms(sourceIdx, targetIdx, deltaY);
     };
 
-    const onPointerUp = () => {
+    const onPointerUp = async () => {
       const drag = dragRef.current;
       if (!drag) return;
       const { sourceIndex, targetIndex } = drag;
 
       clearAllTransforms();
 
-      if (sourceIndex !== targetIndex) {
-        setBugs((prev) => reorder(prev, sourceIndex, targetIndex));
+      if (sourceIndex !== targetIndex && selectedProjectId) {
+        const reordered = reorder(bugs, sourceIndex, targetIndex);
+        setBugs(reordered);
         if (editingIndex !== null) {
           let newEditIndex = editingIndex;
           if (sourceIndex === editingIndex) newEditIndex = targetIndex;
@@ -368,6 +439,15 @@ export default function BugsPage() {
           else if (sourceIndex > editingIndex && targetIndex <= editingIndex)
             newEditIndex = editingIndex + 1;
           setEditingIndex(newEditIndex);
+        }
+        try {
+          const next = await reorderBugs(
+            selectedProjectId,
+            reordered.map((b) => b.id)
+          );
+          setBugs(next);
+        } catch {
+          setBugs(bugs);
         }
       }
 
@@ -387,7 +467,7 @@ export default function BugsPage() {
       document.removeEventListener("pointerup", onPointerUp);
       document.removeEventListener("pointercancel", onPointerUp);
     };
-  }, [isDragging, bugs.length, editingIndex]);
+  }, [isDragging, bugs, selectedProjectId, editingIndex]);
 
   return (
     <>
@@ -532,8 +612,9 @@ export default function BugsPage() {
             <h1 className="tests-page-title">Bugs</h1>
 
             <section className="tests-page-section">
-              <form
-                onSubmit={addBug}
+              {selectedProjectId ? (
+                <form
+                  onSubmit={addBug}
                 className="features-add-form"
                 style={{
                   display: "flex",
@@ -561,6 +642,11 @@ export default function BugsPage() {
                   <IconPlus />
                 </button>
               </form>
+              ) : (
+                <p className="tests-page-section-desc">
+                  Select a project to add bugs.
+                </p>
+              )}
             </section>
 
             <section className="tests-page-section">
@@ -570,7 +656,13 @@ export default function BugsPage() {
                   {bugs.length}
                 </span>
               </h2>
-              {bugs.length === 0 ? (
+              {!selectedProjectId ? (
+                <p className="tests-page-section-desc">
+                  Select a project to see and manage bugs.
+                </p>
+              ) : bugsLoading ? (
+                <p className="tests-page-section-desc">Loading…</p>
+              ) : bugs.length === 0 ? (
                 <p className="tests-page-section-desc">
                   No bugs yet. Add one above.
                 </p>
@@ -582,7 +674,7 @@ export default function BugsPage() {
                 >
                   {bugs.map((item, index) => (
                     <li
-                      key={index}
+                      key={item.id}
                       className={`features-list-item ${item.done ? "features-list-item--done" : ""}`}
                     >
                       {editingIndex === index ? (

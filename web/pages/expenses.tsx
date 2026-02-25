@@ -3,10 +3,15 @@ import Head from "next/head";
 import Link from "next/link";
 import { useRouter } from "next/router";
 import {
+  createExpense,
+  deleteExpense,
+  fetchExpenses,
   fetchProjects,
   getUserScopedStorageKey,
   isAuthenticated,
+  updateExpense,
   updateProject,
+  type Expense,
 } from "../lib/api";
 import { ProjectNavBar, DrawerCollapsedNav } from "../components/ProjectNavBar";
 import { useTheme } from "./_app";
@@ -47,14 +52,6 @@ const IconTrash = () => (
   </svg>
 );
 
-type ExpenseItem = {
-  id: string;
-  amount: number;
-  description: string;
-  date: string;
-  category: string;
-};
-
 const EXPENSES_STORAGE_PREFIX = "ideahome-expenses";
 const LEGACY_EXPENSES_KEY = "ideahome-expenses";
 const LEGACY_COSTS_KEY = "ideahome-costs-expenses";
@@ -64,26 +61,23 @@ function getExpensesStorageKey(): string {
   return getUserScopedStorageKey(EXPENSES_STORAGE_PREFIX, LEGACY_EXPENSES_KEY);
 }
 
-function loadStoredExpenses(): ExpenseItem[] {
+function loadStoredExpensesLegacy(): {
+  amount: number;
+  description: string;
+  date: string;
+  category: string;
+}[] {
   if (typeof window === "undefined") return [];
   try {
     const key = getExpensesStorageKey();
     let raw = localStorage.getItem(key);
-    let fromLegacy = false;
     if (!raw && key !== LEGACY_EXPENSES_KEY) {
-      raw = localStorage.getItem(LEGACY_EXPENSES_KEY);
-      if (!raw) raw = localStorage.getItem(LEGACY_COSTS_KEY);
-      fromLegacy = !!raw;
-      if (raw) {
-        localStorage.setItem(key, raw);
-        localStorage.removeItem(LEGACY_EXPENSES_KEY);
-        localStorage.removeItem(LEGACY_COSTS_KEY);
-      }
+      raw = localStorage.getItem(LEGACY_EXPENSES_KEY) ?? localStorage.getItem(LEGACY_COSTS_KEY);
     }
     if (!raw) return [];
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
-    const loaded = parsed.map((item: unknown) => {
+    return parsed.map((item: unknown) => {
       if (
         item &&
         typeof item === "object" &&
@@ -92,7 +86,6 @@ function loadStoredExpenses(): ExpenseItem[] {
       ) {
         const o = item as Record<string, unknown>;
         return {
-          id: typeof o.id === "string" ? o.id : crypto.randomUUID(),
           amount: Number(o.amount) || 0,
           description: String(o.description ?? ""),
           date:
@@ -103,25 +96,23 @@ function loadStoredExpenses(): ExpenseItem[] {
         };
       }
       return {
-        id: crypto.randomUUID(),
         amount: 0,
         description: "",
         date: new Date().toISOString().slice(0, 10),
         category: "Other",
       };
     });
-    if (fromLegacy && loaded.length > 0) {
-      localStorage.setItem(key, JSON.stringify(loaded));
-    }
-    return loaded;
   } catch {
     return [];
   }
 }
 
-function saveExpenses(expenses: ExpenseItem[]) {
+function clearStoredExpensesLegacy(): void {
   if (typeof window === "undefined") return;
-  localStorage.setItem(getExpensesStorageKey(), JSON.stringify(expenses));
+  const key = getExpensesStorageKey();
+  localStorage.removeItem(key);
+  localStorage.removeItem(LEGACY_EXPENSES_KEY);
+  localStorage.removeItem(LEGACY_COSTS_KEY);
 }
 
 function formatCurrency(amount: number): string {
@@ -140,7 +131,8 @@ export default function ExpensesPage() {
   const [editingProjectId, setEditingProjectId] = useState<string | null>(null);
   const [editingProjectName, setEditingProjectName] = useState("");
   const projectNameInputRef = useRef<HTMLInputElement>(null);
-  const [expenses, setExpenses] = useState<ExpenseItem[]>([]);
+  const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [expensesLoading, setExpensesLoading] = useState(false);
   const [amount, setAmount] = useState("");
   const [description, setDescription] = useState("");
   const [date, setDate] = useState("");
@@ -149,6 +141,7 @@ export default function ExpensesPage() {
   const [editingCategoryId, setEditingCategoryId] = useState<string | null>(
     null
   );
+  const migratedFromStorageRef = useRef(false);
 
   const loadProjects = () =>
     fetchProjects()
@@ -172,19 +165,53 @@ export default function ExpensesPage() {
     }
   }, [editingProjectId]);
 
-  const isFirstSaveRun = useRef(true);
   useEffect(() => {
-    if (!isAuthenticated()) return;
-    setExpenses(loadStoredExpenses());
-  }, []);
-  useEffect(() => {
-    if (!isAuthenticated()) return;
-    if (isFirstSaveRun.current) {
-      isFirstSaveRun.current = false;
+    if (!isAuthenticated() || !selectedProjectId) {
+      setExpenses([]);
       return;
     }
-    saveExpenses(expenses);
-  }, [expenses]);
+    let cancelled = false;
+    setExpensesLoading(true);
+    fetchExpenses(selectedProjectId)
+      .then((data) => {
+        if (cancelled) return;
+        setExpenses(data);
+        if (
+          !migratedFromStorageRef.current &&
+          data.length === 0 &&
+          loadStoredExpensesLegacy().length > 0
+        ) {
+          migratedFromStorageRef.current = true;
+          const legacy = loadStoredExpensesLegacy();
+          Promise.all(
+            legacy.map((item) =>
+              createExpense({
+                projectId: selectedProjectId,
+                amount: item.amount,
+                description: item.description,
+                date: item.date,
+                category: item.category,
+              })
+            )
+          )
+            .then((created) => {
+              if (cancelled) return;
+              setExpenses(created);
+              clearStoredExpensesLegacy();
+            })
+            .catch(() => {});
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setExpenses([]);
+      })
+      .finally(() => {
+        if (!cancelled) setExpensesLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedProjectId]);
 
   useEffect(() => {
     if (!date) setDate(new Date().toISOString().slice(0, 10));
@@ -218,7 +245,7 @@ export default function ExpensesPage() {
     setEditingProjectId(null);
   };
 
-  const addExpense = (e: React.FormEvent) => {
+  const addExpense = async (e: React.FormEvent) => {
     e.preventDefault();
     const num = parseFloat(amount.replace(/,/g, ""));
     if (Number.isNaN(num) || num <= 0) return;
@@ -227,30 +254,45 @@ export default function ExpensesPage() {
       descriptionInputRef.current?.focus();
       return;
     }
-    const newItem: ExpenseItem = {
-      id: crypto.randomUUID(),
-      amount: num,
-      description: desc,
-      date: date || new Date().toISOString().slice(0, 10),
-      category: category || "Other",
-    };
-    setExpenses((prev) => [newItem, ...prev]);
-    setAmount("");
-    setDescription("");
-    setDate(new Date().toISOString().slice(0, 10));
-    setCategory("Other");
-    descriptionInputRef.current?.focus();
+    if (!selectedProjectId) return;
+    try {
+      const created = await createExpense({
+        projectId: selectedProjectId,
+        amount: num,
+        description: desc,
+        date: date || new Date().toISOString().slice(0, 10),
+        category: category || "Other",
+      });
+      setExpenses((prev) => [created, ...prev]);
+      setAmount("");
+      setDescription("");
+      setDate(new Date().toISOString().slice(0, 10));
+      setCategory("Other");
+      descriptionInputRef.current?.focus();
+    } catch {
+      // leave form values for retry
+    }
   };
 
-  const removeExpense = (id: string) => {
-    setExpenses((prev) => prev.filter((e) => e.id !== id));
+  const removeExpense = async (id: string) => {
+    try {
+      await deleteExpense(id);
+      setExpenses((prev) => prev.filter((e) => e.id !== id));
+    } catch {
+      // keep in list
+    }
   };
 
-  const updateExpenseCategory = (id: string, newCategory: string) => {
-    setExpenses((prev) =>
-      prev.map((e) => (e.id === id ? { ...e, category: newCategory } : e))
-    );
-    setEditingCategoryId(null);
+  const updateExpenseCategory = async (id: string, newCategory: string) => {
+    try {
+      await updateExpense(id, { category: newCategory });
+      setExpenses((prev) =>
+        prev.map((e) => (e.id === id ? { ...e, category: newCategory } : e))
+      );
+      setEditingCategoryId(null);
+    } catch {
+      setEditingCategoryId(null);
+    }
   };
 
   const total = expenses.reduce((sum, e) => sum + e.amount, 0);
@@ -430,8 +472,9 @@ export default function ExpensesPage() {
             </section>
 
             <section className="tests-page-section">
-              <form
-                onSubmit={addExpense}
+              {selectedProjectId ? (
+                <form
+                  onSubmit={addExpense}
                 className="features-add-form"
                 style={{
                   display: "flex",
@@ -534,6 +577,11 @@ export default function ExpensesPage() {
                   <IconPlus />
                 </button>
               </form>
+              ) : (
+                <p className="tests-page-section-desc">
+                  Select a project to add expenses.
+                </p>
+              )}
             </section>
 
             <section className="tests-page-section">
@@ -543,7 +591,13 @@ export default function ExpensesPage() {
                   {expenses.length}
                 </span>
               </h2>
-              {expenses.length === 0 ? (
+              {!selectedProjectId ? (
+                <p className="tests-page-section-desc">
+                  Select a project to see and manage expenses.
+                </p>
+              ) : expensesLoading ? (
+                <p className="tests-page-section-desc">Loading…</p>
+              ) : expenses.length === 0 ? (
                 <p className="tests-page-section-desc">
                   No expenses yet. Add one above.
                 </p>
