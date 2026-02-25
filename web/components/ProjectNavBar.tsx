@@ -712,14 +712,46 @@ export function ProjectNavBar({
     setProjectSearchLoading(true);
     const q = projectSearchQuery.trim();
     const t = setTimeout(() => {
-      Promise.all([
+      const fetches = [
         fetchIssueSearch(projectId, q),
         fetchTodoSearch(projectId, q),
         fetchIdeaSearch(projectId, q),
         fetchBugSearch(projectId, q),
         fetchFeatureSearch(projectId, q),
-      ])
-        .then(([issues, todos, ideas, bugs, features]) => {
+      ];
+      Promise.allSettled(fetches)
+        .then((settled) => {
+          const [issuesRes, todosRes, ideasRes, bugsRes, featuresRes] = settled;
+          const issues =
+            issuesRes.status === "fulfilled" ? issuesRes.value : [];
+          const todos =
+            todosRes.status === "fulfilled" ? todosRes.value : [];
+          const ideas =
+            ideasRes.status === "fulfilled" ? ideasRes.value : [];
+          const bugs =
+            bugsRes.status === "fulfilled" ? bugsRes.value : [];
+          const features =
+            featuresRes.status === "fulfilled" ? featuresRes.value : [];
+          if (
+            issuesRes.status === "rejected" ||
+            todosRes.status === "rejected" ||
+            ideasRes.status === "rejected" ||
+            bugsRes.status === "rejected" ||
+            featuresRes.status === "rejected"
+          ) {
+            console.warn(
+              "[ProjectNavBar] Search partial failure:",
+              [
+                issuesRes.status === "rejected" && "issues",
+                todosRes.status === "rejected" && "todos",
+                ideasRes.status === "rejected" && "ideas",
+                bugsRes.status === "rejected" && "bugs",
+                featuresRes.status === "rejected" && "features",
+              ]
+                .filter(Boolean)
+                .join(", ")
+            );
+          }
           const results: ProjectSearchResult[] = [];
           issues.slice(0, PROJECT_SEARCH_MAX_ISSUES).forEach((i: Issue) => {
             results.push({
