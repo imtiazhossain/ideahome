@@ -5,7 +5,9 @@ packages:
 
 # Allow these dependencies to run lifecycle scripts (pnpm v10+)
 onlyBuiltDependencies:
+  - '@firebase/util'
   - '@nestjs/core'
   - '@prisma/client'
   - '@prisma/engines'
   - prisma
+  - protobufjs

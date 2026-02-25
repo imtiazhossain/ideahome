@@ -50,10 +50,7 @@ export default async function handler(
     cwd: string = root
   ): Promise<{ stdout: string; stderr: string; code: number }> =>
     new Promise((resolve) => {
-      const proc = spawn(cmd, args, {
-        cwd,
-        shell: true,
-      });
+      const proc = spawn(cmd, args, { cwd });
       let stdout = "";
       let stderr = "";
       proc.stdout?.on("data", (d) => (stdout += d.toString()));
