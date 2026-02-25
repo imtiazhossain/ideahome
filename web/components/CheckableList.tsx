@@ -225,39 +225,55 @@ export function CheckableList({
           >
             {editingIndex === index ? (
               <>
+                <button
+                  type="button"
+                  className="features-list-done-toggle"
+                  onClick={() => !disabled && onToggleDone(index)}
+                  disabled={disabled}
+                  aria-label={
+                    item.done
+                      ? `Mark "${item.name}" not done`
+                      : `Mark "${item.name}" done`
+                  }
+                  title={item.done ? "Mark not done" : "Mark done"}
+                >
+                  {item.done ? (
+                    <span className="features-list-done-check" aria-hidden>
+                      <IconCheck />
+                    </span>
+                  ) : (
+                    <span className="features-list-done-empty" aria-hidden />
+                  )}
+                </button>
+                <span
+                  className="features-list-grip"
+                  onPointerDown={(e) =>
+                    !disabled && handleGripPointerDown(e, index)
+                  }
+                  aria-label={`Drag to reorder: ${item.name}`}
+                  title="Drag to reorder"
+                >
+                  <IconGrip />
+                </span>
                 <input
                   type="text"
                   value={editingValue}
                   onChange={(e) => onEditingValueChange(e.target.value)}
-                  onBlur={(e) => {
-                    const next = e.relatedTarget as HTMLElement | null;
-                    const li = (e.target as HTMLElement).closest?.("li");
-                    if (
-                      next &&
-                      li?.contains(next) &&
-                      next.closest?.(".features-list-remove")
-                    )
-                      return;
-                    onSaveEdit();
-                  }}
+                  onBlur={onSaveEdit}
                   onKeyDown={(e) => {
                     if (e.key === "Enter") onSaveEdit();
                     if (e.key === "Escape") onCancelEdit();
                   }}
                   className="project-nav-search"
-                  style={{ flex: 1, padding: "6px 10px" }}
+                  style={{ flex: 1, padding: "6px 10px", minWidth: 0 }}
                   aria-label={`Edit ${itemLabel}`}
                   autoFocus
                 />
-                <button
-                  type="button"
-                  className="features-list-remove"
-                  onClick={onCancelEdit}
-                  aria-label="Cancel"
-                  title="Cancel"
-                >
-                  Cancel
-                </button>
+                {item.done && (
+                  <span className="features-list-done-badge" aria-label="Done">
+                    Done
+                  </span>
+                )}
               </>
             ) : (
               <>
