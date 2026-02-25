@@ -1,6 +1,14 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/router";
-import { reorder, applyToggleDoneOrder } from "../../lib/utils";
+import {
+  adjustEditingIndexAfterRemove,
+  adjustEditingIndexAfterReorder,
+  createOptimisticId,
+  indexForNewUncheckedItem,
+  insertUncheckedItem,
+  reorder,
+  applyToggleDoneOrder,
+} from "../../lib/utils";
 import {
   getCustomListBySlug,
   getCustomListItems,
@@ -16,11 +24,6 @@ import { AddItemForm } from "../../components/AddItemForm";
 import type { ProjectNavTabId } from "../../components/ProjectNavBar";
 import { IconUndo } from "../../components/IconUndo";
 import { useTheme } from "../_app";
-
-function nextOrder(items: CustomListItem[]): number {
-  const doneIndex = items.findIndex((i) => i.done);
-  return doneIndex === -1 ? items.length : doneIndex;
-}
 
 export default function CustomListPage() {
   const router = useRouter();
@@ -77,22 +80,16 @@ export default function CustomListPage() {
     const trimmed = newItem.trim();
     if (!trimmed || !list) return;
     pushHistory();
-    const newOrder = nextOrder(items);
     const newOne: CustomListItem = {
-      id: `local-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      id: createOptimisticId("local"),
       name: trimmed,
       done: false,
-      order: newOrder,
+      order: indexForNewUncheckedItem(items),
     };
-    const inserted =
-      newOrder === items.length
-        ? [...items, newOne]
-        : [...items.slice(0, newOrder), newOne, ...items.slice(newOrder)];
-    persistItems(inserted);
+    persistItems(insertUncheckedItem(items, newOne));
     setNewItem("");
   };
 
-  const isTempId = (id: string) => id.startsWith("local-");
 
   const toggleDone = (index: number) => {
     pushHistory();
@@ -110,9 +107,7 @@ export default function CustomListPage() {
   const removeItem = (index: number, skipHistory?: boolean) => {
     if (!skipHistory) pushHistory();
     setItems((prev) => prev.filter((_, i) => i !== index));
-    if (editingIndex === index) setEditingIndex(null);
-    else if (editingIndex !== null && editingIndex > index)
-      setEditingIndex(editingIndex - 1);
+    setEditingIndex(adjustEditingIndexAfterRemove(editingIndex, index));
   };
 
   const startEdit = (index: number) => {
@@ -142,15 +137,9 @@ export default function CustomListPage() {
     pushHistory();
     const reordered = reorder(items, fromIndex, toIndex);
     setItems(reordered);
-    if (editingIndex !== null) {
-      let newEditIndex = editingIndex;
-      if (fromIndex === editingIndex) newEditIndex = toIndex;
-      else if (fromIndex < editingIndex && toIndex >= editingIndex)
-        newEditIndex = editingIndex - 1;
-      else if (fromIndex > editingIndex && toIndex <= editingIndex)
-        newEditIndex = editingIndex + 1;
-      setEditingIndex(newEditIndex);
-    }
+    setEditingIndex(
+      adjustEditingIndexAfterReorder(editingIndex, fromIndex, toIndex)
+    );
   };
 
   if (!router.isReady) return null;
@@ -249,6 +238,7 @@ export default function CustomListPage() {
             onCancelEdit={cancelEdit}
             onToggleDone={toggleDone}
             onReorder={handleReorder}
+            onDelete={removeItem}
           />
         </section>
       </div>

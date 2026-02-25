@@ -1,4 +1,4 @@
-import React, { useRef } from "react";
+import React, { useRef, useState, useCallback } from "react";
 import {
   DndContext,
   closestCenter,
@@ -16,6 +16,7 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { SectionLoadingSpinner } from "./SectionLoadingSpinner";
+import { IconTrash } from "./IconTrash";
 
 const IconCheck = () => (
   <svg
@@ -70,6 +71,7 @@ export interface CheckableListProps {
   onCancelEdit: () => void;
   onToggleDone: (index: number) => void;
   onReorder: (fromIndex: number, toIndex: number) => void;
+  onDelete?: (index: number) => void;
 }
 
 interface SortableItemProps {
@@ -84,7 +86,11 @@ interface SortableItemProps {
   onSaveEdit: () => void;
   onCancelEdit: () => void;
   onToggleDone: (index: number) => void;
+  onDelete?: (index: number) => void;
 }
+
+const DELETE_BUTTON_WIDTH = 80;
+const SWIPE_THRESHOLD = 40;
 
 function SortableItem({
   item,
@@ -98,8 +104,14 @@ function SortableItem({
   onSaveEdit,
   onCancelEdit,
   onToggleDone,
+  onDelete,
 }: SortableItemProps) {
   const disabled = isItemDisabled?.(item) ?? false;
+  const [swipeOffset, setSwipeOffset] = useState(0);
+  const [isSwiping, setIsSwiping] = useState(false);
+  const startXRef = useRef(0);
+  const startOffsetRef = useRef(0);
+
   const {
     attributes,
     listeners,
@@ -112,27 +124,76 @@ function SortableItem({
     disabled: isEditing,
   });
 
+  const canSwipe = Boolean(onDelete) && !isEditing;
+
+  const handlePointerStart = useCallback(
+    (clientX: number) => {
+      if (!canSwipe) return;
+      startXRef.current = clientX;
+      startOffsetRef.current = swipeOffset;
+      setIsSwiping(true);
+    },
+    [canSwipe, swipeOffset]
+  );
+
+  const handlePointerMove = useCallback(
+    (clientX: number) => {
+      if (!canSwipe || !isSwiping) return;
+      const delta = clientX - startXRef.current;
+      const next = Math.min(0, Math.max(-DELETE_BUTTON_WIDTH, startOffsetRef.current + delta));
+      setSwipeOffset(next);
+    },
+    [canSwipe, isSwiping]
+  );
+
+  const handlePointerEnd = useCallback(() => {
+    if (!isSwiping) return;
+    setIsSwiping(false);
+    setSwipeOffset((prev) => (prev < -SWIPE_THRESHOLD ? -DELETE_BUTTON_WIDTH : 0));
+  }, [isSwiping]);
+
+  React.useEffect(() => {
+    if (!isSwiping) return;
+    const onMove = (e: PointerEvent) => handlePointerMove(e.clientX);
+    const onUp = () => handlePointerEnd();
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+    return () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+    };
+  }, [isSwiping, handlePointerMove, handlePointerEnd]);
+
+  const handleDeleteClick = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      onDelete?.(index);
+      setSwipeOffset(0);
+    },
+    [onDelete, index]
+  );
+
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
     opacity: isDragging ? 0.5 : 1,
   };
 
-  return (
-    <li
-      ref={setNodeRef}
-      style={style}
-      className={`features-list-item ${item.done ? "features-list-item--done" : ""} ${isDragging ? "features-list-item--dragging" : ""}`}
+  const dragHandle = (
+    <span
+      className="features-list-drag-handle"
+      {...attributes}
+      {...listeners}
+      aria-label="Drag to reorder"
+      title="Drag to reorder"
     >
-      <span
-        className="features-list-drag-handle"
-        {...attributes}
-        {...listeners}
-        aria-label="Drag to reorder"
-        title="Drag to reorder"
-      >
-        <IconGrip />
-      </span>
+      <IconGrip />
+    </span>
+  );
+
+  const mainContent = (
+    <>
       {isEditing ? (
         <>
           <button
@@ -225,6 +286,42 @@ function SortableItem({
           )}
         </>
       )}
+    </>
+  );
+
+  return (
+    <li
+      ref={setNodeRef}
+      style={style}
+      className={`features-list-item ${item.done ? "features-list-item--done" : ""} ${isDragging ? "features-list-item--dragging" : ""}`}
+    >
+      {dragHandle}
+      {canSwipe ? (
+        <div className="features-list-item-swipe-wrap">
+          <div className="features-list-item-swipe-actions">
+            <button
+              type="button"
+              className="features-list-item-swipe-delete"
+              onClick={handleDeleteClick}
+              aria-label={`Delete ${item.name}`}
+            >
+              <IconTrash />
+            </button>
+          </div>
+          <div
+            className="features-list-item-swipe-content"
+            style={{
+              transform: `translateX(${swipeOffset}px)`,
+              transition: isSwiping ? "none" : "transform 0.2s ease-out",
+            }}
+            onPointerDown={(e) => handlePointerStart(e.clientX)}
+          >
+            {mainContent}
+          </div>
+        </div>
+      ) : (
+        mainContent
+      )}
     </li>
   );
 }
@@ -243,6 +340,7 @@ export function CheckableList({
   onCancelEdit,
   onToggleDone,
   onReorder,
+  onDelete,
 }: CheckableListProps) {
   const listRef = useRef<HTMLUListElement>(null);
 
@@ -310,6 +408,7 @@ export function CheckableList({
               onSaveEdit={onSaveEdit}
               onCancelEdit={onCancelEdit}
               onToggleDone={onToggleDone}
+              onDelete={onDelete}
             />
           ))}
         </ul>

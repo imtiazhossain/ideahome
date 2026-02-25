@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { isOptimisticId } from "./utils";
 import { prefetchProjectLists } from "./prefetchProjectLists";
 import { getList, setList, type ListCacheKey } from "./listCache";
 
@@ -100,7 +101,7 @@ export function useCachedProjectList<T extends { id: string }>({
   }, [listType, selectedProjectId, authenticated, fetchList]);
 
   useEffect(() => {
-    if (!selectedProjectId || items.some((item) => item.id.startsWith("temp-")))
+    if (!selectedProjectId || items.some((item) => isOptimisticId(item.id)))
       return;
     setList(listType, selectedProjectId, items);
   }, [listType, selectedProjectId, items]);
