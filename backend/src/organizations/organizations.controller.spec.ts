@@ -10,6 +10,7 @@ describe("OrganizationsController", () => {
   const mockOrganizationsService = {
     listForUser: jest.fn(),
     create: jest.fn(),
+    ensureForUser: jest.fn(),
   };
 
   beforeEach(async () => {
@@ -46,13 +47,32 @@ describe("OrganizationsController", () => {
   });
 
   describe("create", () => {
-    it("should pass body to service.create()", async () => {
+    it("should pass user id and body to service.create()", async () => {
       const body = { name: "New Org" };
       const created = { id: "1", ...body };
       mockOrganizationsService.create.mockResolvedValue(created);
+      const req = { user: { sub: "user-1" } };
 
-      await expect(controller.create(body)).resolves.toEqual(created);
-      expect(mockOrganizationsService.create).toHaveBeenCalledWith(body);
+      await expect(controller.create(req as any, body)).resolves.toEqual(
+        created
+      );
+      expect(mockOrganizationsService.create).toHaveBeenCalledWith(
+        "user-1",
+        body
+      );
+    });
+  });
+
+  describe("ensure", () => {
+    it("should return org from service.ensureForUser()", async () => {
+      const org = { id: "org-1", name: "My Workspace" };
+      mockOrganizationsService.ensureForUser.mockResolvedValue(org);
+      const req = { user: { sub: "user-1" } };
+
+      await expect(controller.ensure(req as any)).resolves.toEqual(org);
+      expect(mockOrganizationsService.ensureForUser).toHaveBeenCalledWith(
+        "user-1"
+      );
     });
   });
 });

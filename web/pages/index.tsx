@@ -7,6 +7,7 @@ import {
   fetchIssue,
   fetchUsers,
   fetchOrganizations,
+  ensureOrganization,
   getStoredToken,
   isAuthenticated,
   isSkipLoginDev,
@@ -2245,6 +2246,16 @@ export default function Home() {
     }
     setProjectSubmitting(true);
     try {
+      if (organizations.length === 0) {
+        if (newOrgName.trim()) {
+          await createOrganization({ name: newOrgName.trim() });
+        } else {
+          await ensureOrganization();
+        }
+        const list = await fetchOrganizations();
+        setOrganizations(list);
+        if (list.length > 0) setNewProjectOrgId(list[0].id);
+      }
       const project = await createProject({ name: projectName });
       setProjects((prev) => [...prev, project]);
       setSelectedProjectId(project.id);
@@ -3774,7 +3785,7 @@ export default function Home() {
                       />
                       <span className="form-hint">
                         No organizations yet. Enter a name to create one with
-                        this project.
+                        this project, or leave blank for &quot;My Workspace&quot;.
                       </span>
                     </div>
                   ) : (

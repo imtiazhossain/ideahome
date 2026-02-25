@@ -26,7 +26,10 @@ function apiFetch(
 }
 
 /** Throw an Error with the backend message when present, otherwise a default message (includes status for debugging). */
-async function throwFromResponse(r: Response, defaultMessage: string): Promise<never> {
+async function throwFromResponse(
+  r: Response,
+  defaultMessage: string
+): Promise<never> {
   let message = defaultMessage;
   try {
     const body = (await r.json()) as { message?: string };
@@ -209,6 +212,15 @@ export async function createOrganization(body: {
     body: JSON.stringify(body),
   });
   if (!r.ok) throw new Error("Failed to create organization");
+  return r.json();
+}
+
+/** Ensure the user has an organization (creates "My Workspace" if none). Returns the org. */
+export async function ensureOrganization(): Promise<Organization> {
+  const r = await apiFetch(`${getApiBase()}/organizations/ensure`, {
+    method: "POST",
+  });
+  if (!r.ok) throw new Error("Failed to ensure organization");
   return r.json();
 }
 

@@ -7,6 +7,11 @@ import { StorageService } from "../storage.service";
 
 @Module({
   controllers: [IssuesController],
-  providers: [IssuesService, IssueCommentsService, PrismaService, StorageService],
+  providers: [
+    IssuesService,
+    IssueCommentsService,
+    PrismaService,
+    StorageService,
+  ],
 })
 export class IssuesModule {}

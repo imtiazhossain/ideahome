@@ -30,7 +30,10 @@ export default async function handler(
   const { default: nestHandler } = await import("backend/serverless");
 
   // Mutate req so NestJS/Express receives the path without /api prefix
-  const nodeReq = req as IncomingMessage & { url?: string; originalUrl?: string };
+  const nodeReq = req as IncomingMessage & {
+    url?: string;
+    originalUrl?: string;
+  };
   const savedUrl = nodeReq.url;
   const savedOriginalUrl = nodeReq.originalUrl;
   nodeReq.url = pathForNest;
@@ -40,7 +43,9 @@ export default async function handler(
       res.on("finish", () => resolve());
       res.on("close", () => resolve());
       res.on("error", reject);
-      nestHandler(req, res as unknown as import("express").Response).catch(reject);
+      nestHandler(req, res as unknown as import("express").Response).catch(
+        reject
+      );
     });
   } finally {
     nodeReq.url = savedUrl;

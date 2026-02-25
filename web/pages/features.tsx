@@ -1,21 +1,21 @@
-import React, { useEffect, useRef, useState } from "react";
-import { useRouter } from "next/router";
+import React, { useCallback, useState } from "react";
 import {
   createFeature,
   deleteFeature,
   fetchFeatures,
-  fetchProjects,
   isAuthenticated,
   reorderFeatures,
-  updateProject,
   updateFeature,
   type Feature,
 } from "../lib/api";
 import { createLegacyListStorage } from "../lib/legacyListStorage";
 import { reorder } from "../lib/utils";
+import { useCachedProjectList } from "../lib/useCachedProjectList";
+import { useProjectLayout } from "../lib/useProjectLayout";
 import { CheckableList } from "../components/CheckableList";
 import { AppLayout } from "../components/AppLayout";
 import { AddItemForm } from "../components/AddItemForm";
+import { ProjectSectionGuard } from "../components/ProjectSectionGuard";
 import { useTheme } from "./_app";
 
 const featuresLegacyStorage = createLegacyListStorage(
@@ -24,116 +24,37 @@ const featuresLegacyStorage = createLegacyListStorage(
 );
 
 export default function FeaturesPage() {
-  const router = useRouter();
-  const [projects, setProjects] = useState<{ id: string; name: string }[]>([]);
-  const [selectedProjectId, setSelectedProjectId] = useState<string>("");
-  const [drawerOpen, setDrawerOpen] = useState(false);
+  const layout = useProjectLayout();
+  const {
+    projects,
+    projectsLoaded,
+    selectedProjectId,
+    setSelectedProjectId,
+    drawerOpen,
+    setDrawerOpen,
+    editingProjectId,
+    setEditingProjectId,
+    editingProjectName,
+    setEditingProjectName,
+    projectNameInputRef,
+    saveProjectName,
+    cancelEditProjectName,
+  } = layout;
   const { theme, toggleTheme } = useTheme();
-  const [editingProjectId, setEditingProjectId] = useState<string | null>(null);
-  const [editingProjectName, setEditingProjectName] = useState("");
-  const projectNameInputRef = useRef<HTMLInputElement>(null);
-  const [features, setFeatures] = useState<Feature[]>([]);
-  const [featuresLoading, setFeaturesLoading] = useState(false);
+  const [features, setFeatures, featuresLoading] = useCachedProjectList<Feature>({
+    listType: "features",
+    selectedProjectId,
+    authenticated: isAuthenticated(),
+    fetchList: useCallback((projectId: string) => fetchFeatures(projectId), []),
+    legacyMigration: {
+      load: () => featuresLegacyStorage.load(),
+      create: createFeature,
+      clear: () => featuresLegacyStorage.clear(),
+    },
+  });
   const [newFeature, setNewFeature] = useState("");
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [editingValue, setEditingValue] = useState("");
-  const migratedFromStorageRef = useRef(false);
-
-  const loadProjects = () =>
-    fetchProjects()
-      .then((data) => {
-        setProjects(data);
-        if (data.length && !selectedProjectId) setSelectedProjectId(data[0].id);
-      })
-      .catch(() => {});
-
-  useEffect(() => {
-    if (!isAuthenticated()) {
-      router.replace("/login");
-      return;
-    }
-    loadProjects();
-  }, [router]);
-  useEffect(() => {
-    if (editingProjectId) {
-      projectNameInputRef.current?.focus();
-      projectNameInputRef.current?.select();
-    }
-  }, [editingProjectId]);
-
-  const saveProjectName = async () => {
-    if (!editingProjectId) return;
-    const name = editingProjectName.trim();
-    if (!name) {
-      setEditingProjectId(null);
-      return;
-    }
-    const prev = projects.find((x) => x.id === editingProjectId);
-    if (prev?.name === name) {
-      setEditingProjectId(null);
-      return;
-    }
-    try {
-      const updated = await updateProject(editingProjectId, { name });
-      setProjects((p) =>
-        p.map((x) => (x.id === editingProjectId ? updated : x))
-      );
-    } catch {
-      // Keep edit mode on error
-    } finally {
-      setEditingProjectId(null);
-    }
-  };
-
-  const cancelEditProjectName = () => {
-    setEditingProjectId(null);
-  };
-
-  useEffect(() => {
-    if (!isAuthenticated() || !selectedProjectId) {
-      setFeatures([]);
-      return;
-    }
-    let cancelled = false;
-    setFeaturesLoading(true);
-    fetchFeatures(selectedProjectId)
-      .then((data) => {
-        if (cancelled) return;
-        setFeatures(data);
-        if (
-          !migratedFromStorageRef.current &&
-          data.length === 0 &&
-          featuresLegacyStorage.load().length > 0
-        ) {
-          migratedFromStorageRef.current = true;
-          const legacy = featuresLegacyStorage.load();
-          Promise.all(
-            legacy.map((item) =>
-              createFeature({
-                projectId: selectedProjectId,
-                name: item.name,
-                done: item.done,
-              })
-            )
-          )
-            .then((created) => {
-              if (cancelled) return;
-              setFeatures(created);
-              featuresLegacyStorage.clear();
-            })
-            .catch(() => {});
-        }
-      })
-      .catch(() => {
-        if (!cancelled) setFeatures([]);
-      })
-      .finally(() => {
-        if (!cancelled) setFeaturesLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [selectedProjectId]);
 
   const isTempId = (id: string) => id.startsWith("temp-");
 
@@ -178,7 +99,10 @@ export default function FeaturesPage() {
           const withCreated = inserted.map((f) =>
             f.id === optimisticId ? created : f
           );
-          reorderFeatures(selectedProjectId, withCreated.map((f) => f.id))
+          reorderFeatures(
+            selectedProjectId,
+            withCreated.map((f) => f.id)
+          )
             .then(setFeatures)
             .catch(() => fetchFeatures(selectedProjectId).then(setFeatures));
         }
@@ -269,7 +193,10 @@ export default function FeaturesPage() {
         newEditIndex = editingIndex + 1;
       setEditingIndex(newEditIndex);
     }
-    reorderFeatures(selectedProjectId, reordered.map((f) => f.id))
+    reorderFeatures(
+      selectedProjectId,
+      reordered.map((f) => f.id)
+    )
       .then(setFeatures)
       .catch(() => setFeatures(features));
   };
@@ -303,7 +230,12 @@ export default function FeaturesPage() {
         <h1 className="tests-page-title">Features</h1>
 
         <section className="tests-page-section">
-          {selectedProjectId ? (
+          <ProjectSectionGuard
+            projectsLoaded={projectsLoaded}
+            selectedProjectId={selectedProjectId}
+            message="Select a project to add features."
+            variant="add"
+          >
             <AddItemForm
               value={newFeature}
               onChange={setNewFeature}
@@ -313,11 +245,7 @@ export default function FeaturesPage() {
               submitAriaLabel="Add feature"
               submitTitle="Add feature"
             />
-          ) : (
-            <p className="tests-page-section-desc">
-              Select a project to add features.
-            </p>
-          )}
+          </ProjectSectionGuard>
         </section>
 
         <section className="tests-page-section">
@@ -327,11 +255,12 @@ export default function FeaturesPage() {
               {features.length}
             </span>
           </h2>
-          {!selectedProjectId ? (
-            <p className="tests-page-section-desc">
-              Select a project to see and manage features.
-            </p>
-          ) : (
+          <ProjectSectionGuard
+            projectsLoaded={projectsLoaded}
+            selectedProjectId={selectedProjectId}
+            message="Select a project to see and manage features."
+            variant="list"
+          >
             <CheckableList
               items={features}
               itemLabel="feature"
@@ -348,7 +277,7 @@ export default function FeaturesPage() {
               onRemove={removeFeature}
               onReorder={handleReorder}
             />
-          )}
+          </ProjectSectionGuard>
         </section>
       </div>
     </AppLayout>

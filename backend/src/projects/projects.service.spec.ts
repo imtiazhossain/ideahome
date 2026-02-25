@@ -22,7 +22,9 @@ describe("ProjectsService", () => {
   };
 
   const mockAuthService = {
-    ensureUserOrganization: jest.fn().mockResolvedValue({ organizationId: "o1" }),
+    ensureUserOrganization: jest
+      .fn()
+      .mockResolvedValue({ organizationId: "o1" }),
   };
 
   beforeEach(async () => {

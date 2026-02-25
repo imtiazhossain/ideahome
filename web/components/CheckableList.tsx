@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
+import { SectionLoadingSpinner } from "./SectionLoadingSpinner";
 
 const IconGrip = () => (
   <svg
@@ -205,7 +206,7 @@ export function CheckableList({
   }, [isDragging, items.length]);
 
   if (loading) {
-    return <p className="tests-page-section-desc">Loading…</p>;
+    return <SectionLoadingSpinner />;
   }
   if (items.length === 0) {
     return <p className="tests-page-section-desc">{emptyMessage}</p>;
@@ -273,17 +274,11 @@ export function CheckableList({
                   title={item.done ? "Mark not done" : "Mark done"}
                 >
                   {item.done ? (
-                    <span
-                      className="features-list-done-check"
-                      aria-hidden
-                    >
+                    <span className="features-list-done-check" aria-hidden>
                       <IconCheck />
                     </span>
                   ) : (
-                    <span
-                      className="features-list-done-empty"
-                      aria-hidden
-                    />
+                    <span className="features-list-done-empty" aria-hidden />
                   )}
                 </button>
                 <span
@@ -298,10 +293,7 @@ export function CheckableList({
                 </span>
                 <span className="features-list-label">{item.name}</span>
                 {item.done && (
-                  <span
-                    className="features-list-done-badge"
-                    aria-label="Done"
-                  >
+                  <span className="features-list-done-badge" aria-label="Done">
                     Done
                   </span>
                 )}

@@ -1,21 +1,21 @@
-import React, { useEffect, useRef, useState } from "react";
-import { useRouter } from "next/router";
+import React, { useCallback, useState } from "react";
 import {
   createTodo,
   deleteTodo,
-  fetchProjects,
   fetchTodos,
   isAuthenticated,
   reorderTodos,
-  updateProject,
   updateTodo,
   type Todo,
 } from "../lib/api";
 import { createLegacyListStorage } from "../lib/legacyListStorage";
 import { reorder } from "../lib/utils";
+import { useCachedProjectList } from "../lib/useCachedProjectList";
+import { useProjectLayout } from "../lib/useProjectLayout";
 import { CheckableList } from "../components/CheckableList";
 import { AppLayout } from "../components/AppLayout";
 import { AddItemForm } from "../components/AddItemForm";
+import { ProjectSectionGuard } from "../components/ProjectSectionGuard";
 import { useTheme } from "./_app";
 
 const todoLegacyStorage = createLegacyListStorage(
@@ -24,117 +24,38 @@ const todoLegacyStorage = createLegacyListStorage(
 );
 
 export default function TodoPage() {
-  const router = useRouter();
-  const [projects, setProjects] = useState<{ id: string; name: string }[]>([]);
-  const [selectedProjectId, setSelectedProjectId] = useState<string>("");
-  const [drawerOpen, setDrawerOpen] = useState(false);
+  const layout = useProjectLayout();
+  const {
+    projects,
+    projectsLoaded,
+    selectedProjectId,
+    setSelectedProjectId,
+    drawerOpen,
+    setDrawerOpen,
+    editingProjectId,
+    setEditingProjectId,
+    editingProjectName,
+    setEditingProjectName,
+    projectNameInputRef,
+    saveProjectName,
+    cancelEditProjectName,
+  } = layout;
   const { theme, toggleTheme } = useTheme();
-  const [editingProjectId, setEditingProjectId] = useState<string | null>(null);
-  const [editingProjectName, setEditingProjectName] = useState("");
-  const projectNameInputRef = useRef<HTMLInputElement>(null);
-  const [todos, setTodos] = useState<Todo[]>([]);
-  const [todosLoading, setTodosLoading] = useState(false);
+  const [todos, setTodos, todosLoading] = useCachedProjectList<Todo>({
+    listType: "todos",
+    selectedProjectId,
+    authenticated: isAuthenticated(),
+    fetchList: useCallback((projectId: string) => fetchTodos(projectId), []),
+    legacyMigration: {
+      load: () => todoLegacyStorage.load(),
+      create: createTodo,
+      clear: () => todoLegacyStorage.clear(),
+    },
+  });
   const [newTodo, setNewTodo] = useState("");
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [editingValue, setEditingValue] = useState("");
   const [addError, setAddError] = useState<string | null>(null);
-  const migratedFromStorageRef = useRef(false);
-
-  const loadProjects = () =>
-    fetchProjects()
-      .then((data) => {
-        setProjects(data);
-        if (data.length && !selectedProjectId) setSelectedProjectId(data[0].id);
-      })
-      .catch(() => {});
-
-  useEffect(() => {
-    if (!isAuthenticated()) {
-      router.replace("/login");
-      return;
-    }
-    loadProjects();
-  }, [router]);
-  useEffect(() => {
-    if (editingProjectId) {
-      projectNameInputRef.current?.focus();
-      projectNameInputRef.current?.select();
-    }
-  }, [editingProjectId]);
-
-  const saveProjectName = async () => {
-    if (!editingProjectId) return;
-    const name = editingProjectName.trim();
-    if (!name) {
-      setEditingProjectId(null);
-      return;
-    }
-    const prev = projects.find((x) => x.id === editingProjectId);
-    if (prev?.name === name) {
-      setEditingProjectId(null);
-      return;
-    }
-    try {
-      const updated = await updateProject(editingProjectId, { name });
-      setProjects((p) =>
-        p.map((x) => (x.id === editingProjectId ? updated : x))
-      );
-    } catch {
-      // Keep edit mode on error
-    } finally {
-      setEditingProjectId(null);
-    }
-  };
-
-  const cancelEditProjectName = () => {
-    setEditingProjectId(null);
-  };
-
-  useEffect(() => {
-    if (!isAuthenticated() || !selectedProjectId) {
-      setTodos([]);
-      return;
-    }
-    let cancelled = false;
-    setTodosLoading(true);
-    fetchTodos(selectedProjectId)
-      .then((data) => {
-        if (cancelled) return;
-        setTodos(data);
-        if (
-          !migratedFromStorageRef.current &&
-          data.length === 0 &&
-          todoLegacyStorage.load().length > 0
-        ) {
-          migratedFromStorageRef.current = true;
-          const legacy = todoLegacyStorage.load();
-          Promise.all(
-            legacy.map((item) =>
-              createTodo({
-                projectId: selectedProjectId,
-                name: item.name,
-                done: item.done,
-              })
-            )
-          )
-            .then((created) => {
-              if (cancelled) return;
-              setTodos(created);
-              todoLegacyStorage.clear();
-            })
-            .catch(() => {});
-        }
-      })
-      .catch(() => {
-        if (!cancelled) setTodos([]);
-      })
-      .finally(() => {
-        if (!cancelled) setTodosLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [selectedProjectId]);
 
   const addTodo = (e: React.FormEvent) => {
     e.preventDefault();
@@ -178,7 +99,10 @@ export default function TodoPage() {
           const withCreated = inserted.map((t) =>
             t.id === optimisticId ? created : t
           );
-          reorderTodos(selectedProjectId, withCreated.map((t) => t.id))
+          reorderTodos(
+            selectedProjectId,
+            withCreated.map((t) => t.id)
+          )
             .then(setTodos)
             .catch(() => {
               fetchTodos(selectedProjectId).then(setTodos);
@@ -212,7 +136,6 @@ export default function TodoPage() {
         setEditingIndex(newDone ? todos.length - 1 : 0);
       }
     } catch {
-      // revert on error
       setTodos((prev) => [...prev]);
     }
   };
@@ -278,7 +201,10 @@ export default function TodoPage() {
         newEditIndex = editingIndex + 1;
       setEditingIndex(newEditIndex);
     }
-    reorderTodos(selectedProjectId, reordered.map((t) => t.id))
+    reorderTodos(
+      selectedProjectId,
+      reordered.map((t) => t.id)
+    )
       .then(setTodos)
       .catch(() => {
         fetchTodos(selectedProjectId).then(setTodos);
@@ -315,7 +241,12 @@ export default function TodoPage() {
         <h1 className="tests-page-title">To-Do</h1>
 
         <section className="tests-page-section">
-          {selectedProjectId ? (
+          <ProjectSectionGuard
+            projectsLoaded={projectsLoaded}
+            selectedProjectId={selectedProjectId}
+            message="Select a project to add to-dos."
+            variant="add"
+          >
             <AddItemForm
               value={newTodo}
               onChange={setNewTodo}
@@ -327,11 +258,7 @@ export default function TodoPage() {
               error={addError}
               onClearError={() => setAddError(null)}
             />
-          ) : (
-            <p className="tests-page-section-desc">
-              Select a project to add to-dos.
-            </p>
-          )}
+          </ProjectSectionGuard>
         </section>
 
         <section className="tests-page-section">
@@ -341,11 +268,12 @@ export default function TodoPage() {
               {todos.length}
             </span>
           </h2>
-          {!selectedProjectId ? (
-            <p className="tests-page-section-desc">
-              Select a project to see and manage to-dos.
-            </p>
-          ) : (
+          <ProjectSectionGuard
+            projectsLoaded={projectsLoaded}
+            selectedProjectId={selectedProjectId}
+            message="Select a project to see and manage to-dos."
+            variant="list"
+          >
             <CheckableList
               items={todos}
               itemLabel="to-do"
@@ -362,7 +290,7 @@ export default function TodoPage() {
               onRemove={removeTodo}
               onReorder={handleReorder}
             />
-          )}
+          </ProjectSectionGuard>
         </section>
       </div>
     </AppLayout>

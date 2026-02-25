@@ -155,7 +155,8 @@ describe("AuthController", () => {
       await controller.firebaseSession(res as any, "firebase-id-token");
       expect(mockStatus).toHaveBeenCalledWith(503);
       expect(mockJson).toHaveBeenCalledWith({
-        error: "Firebase is not configured. Set FIREBASE_PROJECT_ID and credentials.",
+        error:
+          "Firebase is not configured. Set FIREBASE_PROJECT_ID and credentials.",
       });
     });
 

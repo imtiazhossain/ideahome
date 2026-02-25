@@ -14,7 +14,15 @@ export class OrganizationsController {
   }
 
   @Post()
-  create(@Body() body: { name: string }) {
-    return this.svc.create(body);
+  create(
+    @Req() req: Request & { user?: { sub: string } },
+    @Body() body: { name: string }
+  ) {
+    return this.svc.create(req.user!.sub, body);
+  }
+
+  @Post("ensure")
+  ensure(@Req() req: Request & { user?: { sub: string } }) {
+    return this.svc.ensureForUser(req.user!.sub);
   }
 }

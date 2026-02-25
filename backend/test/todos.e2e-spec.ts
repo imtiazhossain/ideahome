@@ -66,11 +66,13 @@ describe("TodosController (e2e)", () => {
   });
 
   it("POST /todos creates a todo", () => {
-    return auth(request(app.getHttpServer()).post("/todos").send({
-      projectId,
-      name: "E2E todo item",
-      done: false,
-    }))
+    return auth(
+      request(app.getHttpServer()).post("/todos").send({
+        projectId,
+        name: "E2E todo item",
+        done: false,
+      })
+    )
       .expect(201)
       .expect((res: request.Response) => {
         expect(res.body).toHaveProperty("id");
@@ -107,10 +109,14 @@ describe("TodosController (e2e)", () => {
   });
 
   it("POST /todos/reorder reorders", () => {
-    return auth(request(app.getHttpServer()).post("/todos/reorder").send({
-      projectId,
-      todoIds: [todoId],
-    }))
+    return auth(
+      request(app.getHttpServer())
+        .post("/todos/reorder")
+        .send({
+          projectId,
+          todoIds: [todoId],
+        })
+    )
       .expect(201)
       .expect((res: request.Response) => {
         expect(Array.isArray(res.body)).toBe(true);
@@ -139,11 +145,11 @@ describe("TodosController (e2e)", () => {
       await createTestUserWithoutOrg(prisma);
     const authReq = (req: request.Test) =>
       req.set("Authorization", `Bearer ${noOrgToken}`);
-    await authReq(
-      request(app.getHttpServer()).get("/projects")
-    ).expect(200);
+    await authReq(request(app.getHttpServer()).get("/projects")).expect(200);
     const createRes = await authReq(
-      request(app.getHttpServer()).post("/projects").send({ name: "E2E No-Org Project" })
+      request(app.getHttpServer())
+        .post("/projects")
+        .send({ name: "E2E No-Org Project" })
     ).expect(201);
     const noOrgProjectId = createRes.body.id;
     await authReq(
@@ -157,11 +163,17 @@ describe("TodosController (e2e)", () => {
       where: { id: noOrgUserId },
       select: { organizationId: true },
     });
-    await prisma.todo.deleteMany({ where: { projectId: noOrgProjectId } }).catch(() => {});
-    await prisma.project.delete({ where: { id: noOrgProjectId } }).catch(() => {});
+    await prisma.todo
+      .deleteMany({ where: { projectId: noOrgProjectId } })
+      .catch(() => {});
+    await prisma.project
+      .delete({ where: { id: noOrgProjectId } })
+      .catch(() => {});
     await prisma.user.delete({ where: { id: noOrgUserId } }).catch(() => {});
     if (userBefore?.organizationId) {
-      await prisma.organization.delete({ where: { id: userBefore.organizationId } }).catch(() => {});
+      await prisma.organization
+        .delete({ where: { id: userBefore.organizationId } })
+        .catch(() => {});
     }
   });
 });

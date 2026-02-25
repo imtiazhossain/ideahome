@@ -149,7 +149,11 @@ describe("JwtAuthGuard", () => {
       email: "firebase@example.com",
       name: "Firebase User",
     });
-    const createdUser = { id: "db-user-id", email: "firebase@example.com", name: "Firebase User" };
+    const createdUser = {
+      id: "db-user-id",
+      email: "firebase@example.com",
+      name: "Firebase User",
+    };
     mockAuthService.findOrCreateUserByFirebase.mockResolvedValue(createdUser);
     const req: { headers: { authorization: string }; user?: unknown } = {
       headers: { authorization: "Bearer firebase-id-token" },
@@ -163,7 +167,9 @@ describe("JwtAuthGuard", () => {
 
     expect(await canActivate(ctx)).toBe(true);
     expect(req.user).toEqual({ sub: createdUser.id, email: createdUser.email });
-    expect(mockAuthService.ensureUserOrganization).toHaveBeenCalledWith(createdUser.id);
+    expect(mockAuthService.ensureUserOrganization).toHaveBeenCalledWith(
+      createdUser.id
+    );
   });
 
   describe("SKIP_AUTH_DEV", () => {

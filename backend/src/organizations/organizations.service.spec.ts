@@ -1,5 +1,6 @@
 import { Test, TestingModule } from "@nestjs/testing";
 import { OrganizationsService } from "./organizations.service";
+import { AuthService } from "../auth/auth.service";
 import { PrismaService } from "../prisma.service";
 
 describe("OrganizationsService", () => {
@@ -8,11 +9,17 @@ describe("OrganizationsService", () => {
   const mockPrisma = {
     user: {
       findUnique: jest.fn(),
+      update: jest.fn(),
     },
     organization: {
       findUnique: jest.fn(),
+      findUniqueOrThrow: jest.fn(),
       create: jest.fn(),
     },
+  };
+
+  const mockAuthService = {
+    ensureUserOrganization: jest.fn(),
   };
 
   beforeEach(async () => {
@@ -21,6 +28,7 @@ describe("OrganizationsService", () => {
       providers: [
         OrganizationsService,
         { provide: PrismaService, useValue: mockPrisma },
+        { provide: AuthService, useValue: mockAuthService },
       ],
     }).compile();
 
@@ -60,16 +68,36 @@ describe("OrganizationsService", () => {
   });
 
   describe("create", () => {
-    it("should create an organization", async () => {
+    it("should create an organization and assign user to it", async () => {
       const input = { name: "New Org" };
-      const expected = { id: "1", ...input };
+      const expected = { id: "org-1", ...input };
       mockPrisma.organization.create.mockResolvedValue(expected);
 
-      const result = await service.create(input);
+      const result = await service.create("user-1", input);
       expect(result).toEqual(expected);
       expect(mockPrisma.organization.create).toHaveBeenCalledWith({
-        data: input,
+        data: { name: input.name },
       });
+      expect(mockPrisma.user.update).toHaveBeenCalledWith({
+        where: { id: "user-1" },
+        data: { organizationId: "org-1" },
+      });
+    });
+  });
+
+  describe("ensureForUser", () => {
+    it("should return existing org when user has one", async () => {
+      mockAuthService.ensureUserOrganization.mockResolvedValue({
+        organizationId: "org-1",
+      });
+      const org = { id: "org-1", name: "My Workspace" };
+      mockPrisma.organization.findUniqueOrThrow.mockResolvedValue(org);
+
+      const result = await service.ensureForUser("user-1");
+      expect(result).toEqual(org);
+      expect(mockAuthService.ensureUserOrganization).toHaveBeenCalledWith(
+        "user-1"
+      );
     });
   });
 });

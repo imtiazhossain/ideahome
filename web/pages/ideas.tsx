@@ -1,21 +1,21 @@
-import React, { useEffect, useRef, useState } from "react";
-import { useRouter } from "next/router";
+import React, { useCallback, useState } from "react";
 import {
   createIdea,
   deleteIdea,
   fetchIdeas,
-  fetchProjects,
   isAuthenticated,
   reorderIdeas,
-  updateProject,
   updateIdea,
   type Idea,
 } from "../lib/api";
 import { createLegacyListStorage } from "../lib/legacyListStorage";
 import { reorder } from "../lib/utils";
+import { useCachedProjectList } from "../lib/useCachedProjectList";
+import { useProjectLayout } from "../lib/useProjectLayout";
 import { CheckableList } from "../components/CheckableList";
 import { AppLayout } from "../components/AppLayout";
 import { AddItemForm } from "../components/AddItemForm";
+import { ProjectSectionGuard } from "../components/ProjectSectionGuard";
 import { useTheme } from "./_app";
 
 const ideasLegacyStorage = createLegacyListStorage(
@@ -24,116 +24,37 @@ const ideasLegacyStorage = createLegacyListStorage(
 );
 
 export default function IdeasPage() {
-  const router = useRouter();
-  const [projects, setProjects] = useState<{ id: string; name: string }[]>([]);
-  const [selectedProjectId, setSelectedProjectId] = useState<string>("");
-  const [drawerOpen, setDrawerOpen] = useState(false);
+  const layout = useProjectLayout();
+  const {
+    projects,
+    projectsLoaded,
+    selectedProjectId,
+    setSelectedProjectId,
+    drawerOpen,
+    setDrawerOpen,
+    editingProjectId,
+    setEditingProjectId,
+    editingProjectName,
+    setEditingProjectName,
+    projectNameInputRef,
+    saveProjectName,
+    cancelEditProjectName,
+  } = layout;
   const { theme, toggleTheme } = useTheme();
-  const [editingProjectId, setEditingProjectId] = useState<string | null>(null);
-  const [editingProjectName, setEditingProjectName] = useState("");
-  const projectNameInputRef = useRef<HTMLInputElement>(null);
-  const [ideas, setIdeas] = useState<Idea[]>([]);
-  const [ideasLoading, setIdeasLoading] = useState(false);
+  const [ideas, setIdeas, ideasLoading] = useCachedProjectList<Idea>({
+    listType: "ideas",
+    selectedProjectId,
+    authenticated: isAuthenticated(),
+    fetchList: useCallback((projectId: string) => fetchIdeas(projectId), []),
+    legacyMigration: {
+      load: () => ideasLegacyStorage.load(),
+      create: createIdea,
+      clear: () => ideasLegacyStorage.clear(),
+    },
+  });
   const [newIdea, setNewIdea] = useState("");
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [editingValue, setEditingValue] = useState("");
-  const migratedFromStorageRef = useRef(false);
-
-  const loadProjects = () =>
-    fetchProjects()
-      .then((data) => {
-        setProjects(data);
-        if (data.length && !selectedProjectId) setSelectedProjectId(data[0].id);
-      })
-      .catch(() => {});
-
-  useEffect(() => {
-    if (!isAuthenticated()) {
-      router.replace("/login");
-      return;
-    }
-    loadProjects();
-  }, [router]);
-  useEffect(() => {
-    if (editingProjectId) {
-      projectNameInputRef.current?.focus();
-      projectNameInputRef.current?.select();
-    }
-  }, [editingProjectId]);
-
-  const saveProjectName = async () => {
-    if (!editingProjectId) return;
-    const name = editingProjectName.trim();
-    if (!name) {
-      setEditingProjectId(null);
-      return;
-    }
-    const prev = projects.find((x) => x.id === editingProjectId);
-    if (prev?.name === name) {
-      setEditingProjectId(null);
-      return;
-    }
-    try {
-      const updated = await updateProject(editingProjectId, { name });
-      setProjects((p) =>
-        p.map((x) => (x.id === editingProjectId ? updated : x))
-      );
-    } catch {
-      // Keep edit mode on error
-    } finally {
-      setEditingProjectId(null);
-    }
-  };
-
-  const cancelEditProjectName = () => {
-    setEditingProjectId(null);
-  };
-
-  useEffect(() => {
-    if (!isAuthenticated() || !selectedProjectId) {
-      setIdeas([]);
-      return;
-    }
-    let cancelled = false;
-    setIdeasLoading(true);
-    fetchIdeas(selectedProjectId)
-      .then((data) => {
-        if (cancelled) return;
-        setIdeas(data);
-        if (
-          !migratedFromStorageRef.current &&
-          data.length === 0 &&
-          ideasLegacyStorage.load().length > 0
-        ) {
-          migratedFromStorageRef.current = true;
-          const legacy = ideasLegacyStorage.load();
-          Promise.all(
-            legacy.map((item) =>
-              createIdea({
-                projectId: selectedProjectId,
-                name: item.name,
-                done: item.done,
-              })
-            )
-          )
-            .then((created) => {
-              if (cancelled) return;
-              setIdeas(created);
-              ideasLegacyStorage.clear();
-            })
-            .catch(() => {});
-        }
-      })
-      .catch(() => {
-        if (!cancelled) setIdeas([]);
-      })
-      .finally(() => {
-        if (!cancelled) setIdeasLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [selectedProjectId]);
 
   const isTempId = (id: string) => id.startsWith("temp-");
 
@@ -178,7 +99,10 @@ export default function IdeasPage() {
           const withCreated = inserted.map((i) =>
             i.id === optimisticId ? created : i
           );
-          reorderIdeas(selectedProjectId, withCreated.map((i) => i.id))
+          reorderIdeas(
+            selectedProjectId,
+            withCreated.map((i) => i.id)
+          )
             .then(setIdeas)
             .catch(() => fetchIdeas(selectedProjectId).then(setIdeas));
         }
@@ -269,7 +193,10 @@ export default function IdeasPage() {
         newEditIndex = editingIndex + 1;
       setEditingIndex(newEditIndex);
     }
-    reorderIdeas(selectedProjectId, reordered.map((i) => i.id))
+    reorderIdeas(
+      selectedProjectId,
+      reordered.map((i) => i.id)
+    )
       .then(setIdeas)
       .catch(() => setIdeas(ideas));
   };
@@ -303,7 +230,12 @@ export default function IdeasPage() {
         <h1 className="tests-page-title">Ideas</h1>
 
         <section className="tests-page-section">
-          {selectedProjectId ? (
+          <ProjectSectionGuard
+            projectsLoaded={projectsLoaded}
+            selectedProjectId={selectedProjectId}
+            message="Select a project to add ideas."
+            variant="add"
+          >
             <AddItemForm
               value={newIdea}
               onChange={setNewIdea}
@@ -313,11 +245,7 @@ export default function IdeasPage() {
               submitAriaLabel="Add idea"
               submitTitle="Add idea"
             />
-          ) : (
-            <p className="tests-page-section-desc">
-              Select a project to add ideas.
-            </p>
-          )}
+          </ProjectSectionGuard>
         </section>
 
         <section className="tests-page-section">
@@ -327,11 +255,12 @@ export default function IdeasPage() {
               {ideas.length}
             </span>
           </h2>
-          {!selectedProjectId ? (
-            <p className="tests-page-section-desc">
-              Select a project to see and manage ideas.
-            </p>
-          ) : (
+          <ProjectSectionGuard
+            projectsLoaded={projectsLoaded}
+            selectedProjectId={selectedProjectId}
+            message="Select a project to see and manage ideas."
+            variant="list"
+          >
             <CheckableList
               items={ideas}
               itemLabel="idea"
@@ -348,7 +277,7 @@ export default function IdeasPage() {
               onRemove={removeIdea}
               onReorder={handleReorder}
             />
-          )}
+          </ProjectSectionGuard>
         </section>
       </div>
     </AppLayout>

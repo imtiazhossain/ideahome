@@ -270,12 +270,15 @@ export class AuthController {
     }
     if (!this.firebase.isConfigured()) {
       return res.status(503).json({
-        error: "Firebase is not configured. Set FIREBASE_PROJECT_ID and credentials.",
+        error:
+          "Firebase is not configured. Set FIREBASE_PROJECT_ID and credentials.",
       });
     }
     const decoded = await this.firebase.verifyIdToken(idToken);
     if (!decoded) {
-      return res.status(401).json({ error: "Invalid or expired Firebase token" });
+      return res
+        .status(401)
+        .json({ error: "Invalid or expired Firebase token" });
     }
     const email = decoded.email ?? "";
     if (!email) {
@@ -287,6 +290,9 @@ export class AuthController {
       decoded.name
     );
     const token = this.authService.signToken(user);
-    return res.json({ token, user: { id: user.id, email: user.email, name: user.name } });
+    return res.json({
+      token,
+      user: { id: user.id, email: user.email, name: user.name },
+    });
   }
 }

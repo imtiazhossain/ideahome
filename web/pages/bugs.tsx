@@ -1,21 +1,21 @@
-import React, { useEffect, useRef, useState } from "react";
-import { useRouter } from "next/router";
+import React, { useCallback, useState } from "react";
 import {
   createBug,
   deleteBug,
   fetchBugs,
-  fetchProjects,
   isAuthenticated,
   reorderBugs,
-  updateProject,
   updateBug,
   type Bug,
 } from "../lib/api";
 import { createLegacyListStorage } from "../lib/legacyListStorage";
 import { reorder } from "../lib/utils";
+import { useCachedProjectList } from "../lib/useCachedProjectList";
+import { useProjectLayout } from "../lib/useProjectLayout";
 import { CheckableList } from "../components/CheckableList";
 import { AppLayout } from "../components/AppLayout";
 import { AddItemForm } from "../components/AddItemForm";
+import { ProjectSectionGuard } from "../components/ProjectSectionGuard";
 import { useTheme } from "./_app";
 
 const bugsLegacyStorage = createLegacyListStorage(
@@ -24,116 +24,37 @@ const bugsLegacyStorage = createLegacyListStorage(
 );
 
 export default function BugsPage() {
-  const router = useRouter();
-  const [projects, setProjects] = useState<{ id: string; name: string }[]>([]);
-  const [selectedProjectId, setSelectedProjectId] = useState<string>("");
-  const [drawerOpen, setDrawerOpen] = useState(false);
+  const layout = useProjectLayout();
+  const {
+    projects,
+    projectsLoaded,
+    selectedProjectId,
+    setSelectedProjectId,
+    drawerOpen,
+    setDrawerOpen,
+    editingProjectId,
+    setEditingProjectId,
+    editingProjectName,
+    setEditingProjectName,
+    projectNameInputRef,
+    saveProjectName,
+    cancelEditProjectName,
+  } = layout;
   const { theme, toggleTheme } = useTheme();
-  const [editingProjectId, setEditingProjectId] = useState<string | null>(null);
-  const [editingProjectName, setEditingProjectName] = useState("");
-  const projectNameInputRef = useRef<HTMLInputElement>(null);
-  const [bugs, setBugs] = useState<Bug[]>([]);
-  const [bugsLoading, setBugsLoading] = useState(false);
+  const [bugs, setBugs, bugsLoading] = useCachedProjectList<Bug>({
+    listType: "bugs",
+    selectedProjectId,
+    authenticated: isAuthenticated(),
+    fetchList: useCallback((projectId: string) => fetchBugs(projectId), []),
+    legacyMigration: {
+      load: () => bugsLegacyStorage.load(),
+      create: createBug,
+      clear: () => bugsLegacyStorage.clear(),
+    },
+  });
   const [newBug, setNewBug] = useState("");
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [editingValue, setEditingValue] = useState("");
-  const migratedFromStorageRef = useRef(false);
-
-  const loadProjects = () =>
-    fetchProjects()
-      .then((data) => {
-        setProjects(data);
-        if (data.length && !selectedProjectId) setSelectedProjectId(data[0].id);
-      })
-      .catch(() => {});
-
-  useEffect(() => {
-    if (!isAuthenticated()) {
-      router.replace("/login");
-      return;
-    }
-    loadProjects();
-  }, [router]);
-  useEffect(() => {
-    if (editingProjectId) {
-      projectNameInputRef.current?.focus();
-      projectNameInputRef.current?.select();
-    }
-  }, [editingProjectId]);
-
-  const saveProjectName = async () => {
-    if (!editingProjectId) return;
-    const name = editingProjectName.trim();
-    if (!name) {
-      setEditingProjectId(null);
-      return;
-    }
-    const prev = projects.find((x) => x.id === editingProjectId);
-    if (prev?.name === name) {
-      setEditingProjectId(null);
-      return;
-    }
-    try {
-      const updated = await updateProject(editingProjectId, { name });
-      setProjects((p) =>
-        p.map((x) => (x.id === editingProjectId ? updated : x))
-      );
-    } catch {
-      // Keep edit mode on error
-    } finally {
-      setEditingProjectId(null);
-    }
-  };
-
-  const cancelEditProjectName = () => {
-    setEditingProjectId(null);
-  };
-
-  useEffect(() => {
-    if (!isAuthenticated() || !selectedProjectId) {
-      setBugs([]);
-      return;
-    }
-    let cancelled = false;
-    setBugsLoading(true);
-    fetchBugs(selectedProjectId)
-      .then((data) => {
-        if (cancelled) return;
-        setBugs(data);
-        if (
-          !migratedFromStorageRef.current &&
-          data.length === 0 &&
-          bugsLegacyStorage.load().length > 0
-        ) {
-          migratedFromStorageRef.current = true;
-          const legacy = bugsLegacyStorage.load();
-          Promise.all(
-            legacy.map((item) =>
-              createBug({
-                projectId: selectedProjectId,
-                name: item.name,
-                done: item.done,
-              })
-            )
-          )
-            .then((created) => {
-              if (cancelled) return;
-              setBugs(created);
-              bugsLegacyStorage.clear();
-            })
-            .catch(() => {});
-        }
-      })
-      .catch(() => {
-        if (!cancelled) setBugs([]);
-      })
-      .finally(() => {
-        if (!cancelled) setBugsLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [selectedProjectId]);
 
   const isTempId = (id: string) => id.startsWith("temp-");
 
@@ -178,7 +99,10 @@ export default function BugsPage() {
           const withCreated = inserted.map((b) =>
             b.id === optimisticId ? created : b
           );
-          reorderBugs(selectedProjectId, withCreated.map((b) => b.id))
+          reorderBugs(
+            selectedProjectId,
+            withCreated.map((b) => b.id)
+          )
             .then(setBugs)
             .catch(() => fetchBugs(selectedProjectId).then(setBugs));
         }
@@ -269,7 +193,10 @@ export default function BugsPage() {
         newEditIndex = editingIndex + 1;
       setEditingIndex(newEditIndex);
     }
-    reorderBugs(selectedProjectId, reordered.map((b) => b.id))
+    reorderBugs(
+      selectedProjectId,
+      reordered.map((b) => b.id)
+    )
       .then(setBugs)
       .catch(() => setBugs(bugs));
   };
@@ -303,7 +230,12 @@ export default function BugsPage() {
         <h1 className="tests-page-title">Bugs</h1>
 
         <section className="tests-page-section">
-          {selectedProjectId ? (
+          <ProjectSectionGuard
+            projectsLoaded={projectsLoaded}
+            selectedProjectId={selectedProjectId}
+            message="Select a project to add bugs."
+            variant="add"
+          >
             <AddItemForm
               value={newBug}
               onChange={setNewBug}
@@ -313,11 +245,7 @@ export default function BugsPage() {
               submitAriaLabel="Add bug"
               submitTitle="Add bug"
             />
-          ) : (
-            <p className="tests-page-section-desc">
-              Select a project to add bugs.
-            </p>
-          )}
+          </ProjectSectionGuard>
         </section>
 
         <section className="tests-page-section">
@@ -327,11 +255,12 @@ export default function BugsPage() {
               {bugs.length}
             </span>
           </h2>
-          {!selectedProjectId ? (
-            <p className="tests-page-section-desc">
-              Select a project to see and manage bugs.
-            </p>
-          ) : (
+          <ProjectSectionGuard
+            projectsLoaded={projectsLoaded}
+            selectedProjectId={selectedProjectId}
+            message="Select a project to see and manage bugs."
+            variant="list"
+          >
             <CheckableList
               items={bugs}
               itemLabel="bug"
@@ -348,7 +277,7 @@ export default function BugsPage() {
               onRemove={removeBug}
               onReorder={handleReorder}
             />
-          )}
+          </ProjectSectionGuard>
         </section>
       </div>
     </AppLayout>

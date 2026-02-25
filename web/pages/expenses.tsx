@@ -1,19 +1,18 @@
 import React, { useEffect, useRef, useState } from "react";
 import Head from "next/head";
 import Link from "next/link";
-import { useRouter } from "next/router";
 import {
   createExpense,
   deleteExpense,
   fetchExpenses,
-  fetchProjects,
   getUserScopedStorageKey,
   isAuthenticated,
   updateExpense,
-  updateProject,
   type Expense,
 } from "../lib/api";
+import { useProjectLayout } from "../lib/useProjectLayout";
 import { ProjectNavBar, DrawerCollapsedNav } from "../components/ProjectNavBar";
+import { ProjectSectionGuard } from "../components/ProjectSectionGuard";
 import { useTheme } from "./_app";
 
 const IconPlus = () => (
@@ -72,7 +71,9 @@ function loadStoredExpensesLegacy(): {
     const key = getExpensesStorageKey();
     let raw = localStorage.getItem(key);
     if (!raw && key !== LEGACY_EXPENSES_KEY) {
-      raw = localStorage.getItem(LEGACY_EXPENSES_KEY) ?? localStorage.getItem(LEGACY_COSTS_KEY);
+      raw =
+        localStorage.getItem(LEGACY_EXPENSES_KEY) ??
+        localStorage.getItem(LEGACY_COSTS_KEY);
     }
     if (!raw) return [];
     const parsed = JSON.parse(raw);
@@ -123,14 +124,23 @@ function formatCurrency(amount: number): string {
 }
 
 export default function ExpensesPage() {
-  const router = useRouter();
-  const [projects, setProjects] = useState<{ id: string; name: string }[]>([]);
-  const [selectedProjectId, setSelectedProjectId] = useState<string>("");
-  const [drawerOpen, setDrawerOpen] = useState(false);
+  const layout = useProjectLayout();
+  const {
+    projects,
+    projectsLoaded,
+    selectedProjectId,
+    setSelectedProjectId,
+    drawerOpen,
+    setDrawerOpen,
+    editingProjectId,
+    setEditingProjectId,
+    editingProjectName,
+    setEditingProjectName,
+    projectNameInputRef,
+    saveProjectName,
+    cancelEditProjectName,
+  } = layout;
   const { theme, toggleTheme } = useTheme();
-  const [editingProjectId, setEditingProjectId] = useState<string | null>(null);
-  const [editingProjectName, setEditingProjectName] = useState("");
-  const projectNameInputRef = useRef<HTMLInputElement>(null);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [expensesLoading, setExpensesLoading] = useState(false);
   const [amount, setAmount] = useState("");
@@ -142,28 +152,6 @@ export default function ExpensesPage() {
     null
   );
   const migratedFromStorageRef = useRef(false);
-
-  const loadProjects = () =>
-    fetchProjects()
-      .then((data) => {
-        setProjects(data);
-        if (data.length && !selectedProjectId) setSelectedProjectId(data[0].id);
-      })
-      .catch(() => {});
-
-  useEffect(() => {
-    if (!isAuthenticated()) {
-      router.replace("/login");
-      return;
-    }
-    loadProjects();
-  }, [router]);
-  useEffect(() => {
-    if (editingProjectId) {
-      projectNameInputRef.current?.focus();
-      projectNameInputRef.current?.select();
-    }
-  }, [editingProjectId]);
 
   useEffect(() => {
     if (!isAuthenticated() || !selectedProjectId) {
@@ -216,34 +204,6 @@ export default function ExpensesPage() {
   useEffect(() => {
     if (!date) setDate(new Date().toISOString().slice(0, 10));
   }, []);
-
-  const saveProjectName = async () => {
-    if (!editingProjectId) return;
-    const name = editingProjectName.trim();
-    if (!name) {
-      setEditingProjectId(null);
-      return;
-    }
-    const prev = projects.find((x) => x.id === editingProjectId);
-    if (prev?.name === name) {
-      setEditingProjectId(null);
-      return;
-    }
-    try {
-      const updated = await updateProject(editingProjectId, { name });
-      setProjects((p) =>
-        p.map((x) => (x.id === editingProjectId ? updated : x))
-      );
-    } catch {
-      // keep edit mode on error
-    } finally {
-      setEditingProjectId(null);
-    }
-  };
-
-  const cancelEditProjectName = () => {
-    setEditingProjectId(null);
-  };
 
   const addExpense = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -472,116 +432,117 @@ export default function ExpensesPage() {
             </section>
 
             <section className="tests-page-section">
-              {selectedProjectId ? (
+              <ProjectSectionGuard
+                projectsLoaded={projectsLoaded}
+                selectedProjectId={selectedProjectId}
+                message="Select a project to add expenses."
+                variant="add"
+              >
                 <form
                   onSubmit={addExpense}
-                className="features-add-form"
-                style={{
-                  display: "flex",
-                  flexWrap: "wrap",
-                  gap: "8px",
-                  alignItems: "flex-end",
-                  marginTop: "8px",
-                }}
-              >
-                <div
+                  className="features-add-form"
                   style={{
                     display: "flex",
-                    flexDirection: "column",
-                    gap: "4px",
+                    flexWrap: "wrap",
+                    gap: "8px",
+                    alignItems: "flex-end",
+                    marginTop: "8px",
                   }}
                 >
-                  <label htmlFor="expenses-amount">Amount ($)</label>
-                  <input
-                    id="expenses-amount"
-                    type="text"
-                    inputMode="decimal"
-                    value={amount}
-                    onChange={(e) => setAmount(e.target.value)}
-                    placeholder="0.00"
-                    aria-label="Amount"
-                    className="project-nav-search"
-                    style={{ width: "100px", padding: "8px 12px" }}
-                  />
-                </div>
-                <div
-                  style={{
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: "4px",
-                    flex: "1",
-                    minWidth: "180px",
-                  }}
-                >
-                  <label htmlFor="expenses-description">Description</label>
-                  <input
-                    id="expenses-description"
-                    ref={descriptionInputRef}
-                    type="text"
-                    value={description}
-                    onChange={(e) => setDescription(e.target.value)}
-                    placeholder="What was this for?"
-                    aria-label="Description"
-                    className="project-nav-search"
-                    style={{ padding: "8px 12px" }}
-                  />
-                </div>
-                <div
-                  style={{
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: "4px",
-                  }}
-                >
-                  <label htmlFor="expenses-date">Date</label>
-                  <input
-                    id="expenses-date"
-                    type="date"
-                    value={date}
-                    onChange={(e) => setDate(e.target.value)}
-                    aria-label="Date"
-                    className="project-nav-search"
-                    style={{ padding: "8px 12px" }}
-                  />
-                </div>
-                <div
-                  style={{
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: "4px",
-                  }}
-                >
-                  <label htmlFor="expenses-category">Category</label>
-                  <select
-                    id="expenses-category"
-                    value={category}
-                    onChange={(e) => setCategory(e.target.value)}
-                    aria-label="Category"
-                    className="project-nav-search"
-                    style={{ padding: "8px 12px", minWidth: "120px" }}
+                  <div
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "4px",
+                    }}
                   >
-                    {CATEGORIES.map((c) => (
-                      <option key={c} value={c}>
-                        {c}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <button
-                  type="submit"
-                  className="project-nav-add"
-                  style={{ alignSelf: "flex-end" }}
-                  aria-label="Add expense"
-                  title="Add expense"
-                >
-                  <IconPlus />
-                </button>
-              </form>
-              ) : (
-                <p className="tests-page-section-desc">
-                  Select a project to add expenses.
-                </p>
-              )}
+                    <label htmlFor="expenses-amount">Amount ($)</label>
+                    <input
+                      id="expenses-amount"
+                      type="text"
+                      inputMode="decimal"
+                      value={amount}
+                      onChange={(e) => setAmount(e.target.value)}
+                      placeholder="0.00"
+                      aria-label="Amount"
+                      className="project-nav-search"
+                      style={{ width: "100px", padding: "8px 12px" }}
+                    />
+                  </div>
+                  <div
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "4px",
+                      flex: "1",
+                      minWidth: "180px",
+                    }}
+                  >
+                    <label htmlFor="expenses-description">Description</label>
+                    <input
+                      id="expenses-description"
+                      ref={descriptionInputRef}
+                      type="text"
+                      value={description}
+                      onChange={(e) => setDescription(e.target.value)}
+                      placeholder="What was this for?"
+                      aria-label="Description"
+                      className="project-nav-search"
+                      style={{ padding: "8px 12px" }}
+                    />
+                  </div>
+                  <div
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "4px",
+                    }}
+                  >
+                    <label htmlFor="expenses-date">Date</label>
+                    <input
+                      id="expenses-date"
+                      type="date"
+                      value={date}
+                      onChange={(e) => setDate(e.target.value)}
+                      aria-label="Date"
+                      className="project-nav-search"
+                      style={{ padding: "8px 12px" }}
+                    />
+                  </div>
+                  <div
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "4px",
+                    }}
+                  >
+                    <label htmlFor="expenses-category">Category</label>
+                    <select
+                      id="expenses-category"
+                      value={category}
+                      onChange={(e) => setCategory(e.target.value)}
+                      aria-label="Category"
+                      className="project-nav-search"
+                      style={{ padding: "8px 12px", minWidth: "120px" }}
+                    >
+                      {CATEGORIES.map((c) => (
+                        <option key={c} value={c}>
+                          {c}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <button
+                    type="submit"
+                    className="project-nav-add"
+                    style={{ alignSelf: "flex-end" }}
+                    aria-label="Add expense"
+                    title="Add expense"
+                  >
+                    <IconPlus />
+                  </button>
+                </form>
+            </ProjectSectionGuard>
             </section>
 
             <section className="tests-page-section">
@@ -591,11 +552,13 @@ export default function ExpensesPage() {
                   {expenses.length}
                 </span>
               </h2>
-              {!selectedProjectId ? (
-                <p className="tests-page-section-desc">
-                  Select a project to see and manage expenses.
-                </p>
-              ) : expensesLoading ? (
+              <ProjectSectionGuard
+                projectsLoaded={projectsLoaded}
+                selectedProjectId={selectedProjectId}
+                message="Select a project to see and manage expenses."
+                variant="list"
+              >
+              {expensesLoading ? (
                 <p className="tests-page-section-desc">Loading…</p>
               ) : expenses.length === 0 ? (
                 <p className="tests-page-section-desc">
@@ -687,6 +650,7 @@ export default function ExpensesPage() {
                   ))}
                 </ul>
               )}
+              </ProjectSectionGuard>
             </section>
           </div>
         </main>
