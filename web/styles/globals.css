@@ -1058,6 +1058,16 @@ textarea {
   color: var(--text);
 }
 
+.project-nav-add:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.project-nav-add:disabled:hover {
+  background: var(--column-bg);
+  color: var(--text-muted);
+}
+
 .project-nav-add-wrap {
   margin-left: 8px;
   flex-shrink: 0;

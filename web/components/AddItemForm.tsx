@@ -66,6 +66,7 @@ export function AddItemForm({
         className="project-nav-add"
         aria-label={submitAriaLabel}
         title={submitTitle}
+        disabled={!value.trim()}
       >
         <IconPlus />
       </button>
