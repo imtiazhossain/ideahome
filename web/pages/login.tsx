@@ -1,6 +1,5 @@
 import React from "react";
 import Head from "next/head";
-import Link from "next/link";
 
 export default function LoginPage() {
   return (
@@ -145,13 +144,6 @@ export default function LoginPage() {
               Sign in with Apple
             </a>
           </div>
-          <p
-            style={{ marginTop: 20, fontSize: 12, color: "var(--text-muted)" }}
-          >
-            <Link href="/" style={{ color: "var(--accent)" }}>
-              ← Back to app
-            </Link>
-          </p>
         </div>
       </div>
     </>
