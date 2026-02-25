@@ -49,6 +49,10 @@ export class JwtAuthGuard implements CanActivate {
               decoded.email ?? "",
               decoded.name
             );
+            if (!this.ensuredOrgUserIds.has(user.id)) {
+              await this.authService.ensureUserOrganization(user.id);
+              this.ensuredOrgUserIds.add(user.id);
+            }
             req.user = { sub: user.id, email: user.email };
             return true;
           }

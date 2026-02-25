@@ -142,6 +142,30 @@ describe("JwtAuthGuard", () => {
     await expect(canActivate(ctx)).rejects.toThrow("Invalid or expired token");
   });
 
+  it("should ensure user organization when Firebase token is valid", async () => {
+    mockFirebase.isConfigured.mockReturnValue(true);
+    mockFirebase.verifyIdToken.mockResolvedValue({
+      uid: "firebase-uid",
+      email: "firebase@example.com",
+      name: "Firebase User",
+    });
+    const createdUser = { id: "db-user-id", email: "firebase@example.com", name: "Firebase User" };
+    mockAuthService.findOrCreateUserByFirebase.mockResolvedValue(createdUser);
+    const req: { headers: { authorization: string }; user?: unknown } = {
+      headers: { authorization: "Bearer firebase-id-token" },
+    };
+    const ctx = {
+      switchToHttp: () => ({ getRequest: () => req }),
+    } as unknown as ExecutionContext;
+    mockVerify.mockImplementation(() => {
+      throw new Error("jwt invalid");
+    });
+
+    expect(await canActivate(ctx)).toBe(true);
+    expect(req.user).toEqual({ sub: createdUser.id, email: createdUser.email });
+    expect(mockAuthService.ensureUserOrganization).toHaveBeenCalledWith(createdUser.id);
+  });
+
   describe("SKIP_AUTH_DEV", () => {
     const devUser = { id: "dev-user-id", email: "dev@localhost" };
 
