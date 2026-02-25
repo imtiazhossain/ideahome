@@ -1,62 +1,26 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useRouter } from "next/router";
-import {
-  adjustEditingIndexAfterRemove,
-  adjustEditingIndexAfterReorder,
-  createOptimisticId,
-  indexForNewUncheckedItem,
-  insertUncheckedItem,
-  reorder,
-  applyToggleDoneOrder,
-} from "../../lib/utils";
 import {
   getCustomListBySlug,
   getCustomListItems,
   setCustomListItems,
+  getCustomListTabId,
   type CustomListItem,
 } from "../../lib/customLists";
 import { useProjectLayout } from "../../lib/useProjectLayout";
-import { getCustomListTabId } from "../../lib/customLists";
-import { useUndoList } from "../../lib/useUndoList";
-import { CheckableList } from "../../components/CheckableList";
-import { AppLayout } from "../../components/AppLayout";
-import { AddItemForm } from "../../components/AddItemForm";
-import type { ProjectNavTabId } from "../../components/ProjectNavBar";
-import { IconUndo } from "../../components/IconUndo";
 import { useTheme } from "../_app";
+import { useLocalCheckableList } from "../../lib/useLocalCheckableList";
+import { CheckableListPageShell } from "../../components/CheckableListPageShell";
 
 export default function CustomListPage() {
   const router = useRouter();
   const slug = typeof router.query.slug === "string" ? router.query.slug : "";
   const layout = useProjectLayout();
-  const {
-    projects,
-    projectsLoaded,
-    selectedProjectId,
-    setSelectedProjectId,
-    drawerOpen,
-    setDrawerOpen,
-    editingProjectId,
-    setEditingProjectId,
-    editingProjectName,
-    setEditingProjectName,
-    projectNameInputRef,
-    saveProjectName,
-    cancelEditProjectName,
-    projectToDelete,
-    setProjectToDelete,
-    projectDeleting,
-    handleDeleteProject,
-  } = layout;
-  const { theme, toggleTheme } = useTheme();
-
+  const theme = useTheme();
   const list = slug ? getCustomListBySlug(slug) : null;
+
   const [items, setItems] = useState<CustomListItem[]>([]);
-  const { pushHistory, undo, canUndo } = useUndoList(items, setItems, 20, slug);
   const [hydrated, setHydrated] = useState(false);
-  const [newItem, setNewItem] = useState("");
-  const [editingIndex, setEditingIndex] = useState<number | null>(null);
-  const [editingValue, setEditingValue] = useState("");
 
   useEffect(() => {
     if (!slug) return;
@@ -71,76 +35,12 @@ export default function CustomListPage() {
     setCustomListItems(slug, items);
   }, [slug, hydrated, items]);
 
-  const persistItems = useCallback((next: CustomListItem[]) => {
-    setItems(next);
-  }, []);
-
-  const addItem = (e: React.FormEvent) => {
-    e.preventDefault();
-    const trimmed = newItem.trim();
-    if (!trimmed || !list) return;
-    pushHistory();
-    const newOne: CustomListItem = {
-      id: createOptimisticId("local"),
-      name: trimmed,
-      done: false,
-      order: indexForNewUncheckedItem(items),
-    };
-    persistItems(insertUncheckedItem(items, newOne));
-    setNewItem("");
-  };
-
-
-  const toggleDone = (index: number) => {
-    pushHistory();
-    const item = items[index];
-    const newDone = !item.done;
-    let newIndex = 0;
-    setItems((prev) => {
-      const [reordered, idx] = applyToggleDoneOrder(prev, index, newDone);
-      newIndex = idx;
-      return reordered;
-    });
-    if (editingIndex === index) setEditingIndex(newIndex);
-  };
-
-  const removeItem = (index: number, skipHistory?: boolean) => {
-    if (!skipHistory) pushHistory();
-    setItems((prev) => prev.filter((_, i) => i !== index));
-    setEditingIndex(adjustEditingIndexAfterRemove(editingIndex, index));
-  };
-
-  const startEdit = (index: number) => {
-    setEditingIndex(index);
-    setEditingValue(items[index]?.name ?? "");
-  };
-
-  const saveEdit = () => {
-    if (editingIndex === null) return;
-    pushHistory();
-    const trimmed = editingValue.trim();
-    if (trimmed) {
-      setItems((prev) => {
-        const next = [...prev];
-        next[editingIndex] = { ...next[editingIndex], name: trimmed };
-        return next;
-      });
-    } else {
-      removeItem(editingIndex, true);
-    }
-    setEditingIndex(null);
-  };
-
-  const cancelEdit = () => setEditingIndex(null);
-
-  const handleReorder = (fromIndex: number, toIndex: number) => {
-    pushHistory();
-    const reordered = reorder(items, fromIndex, toIndex);
-    setItems(reordered);
-    setEditingIndex(
-      adjustEditingIndexAfterReorder(editingIndex, fromIndex, toIndex)
-    );
-  };
+  const listState = useLocalCheckableList({
+    items,
+    setItems,
+    resetKey: slug,
+    idPrefix: "local",
+  });
 
   if (!router.isReady) return null;
   if (slug && !list) {
@@ -159,89 +59,68 @@ export default function CustomListPage() {
 
   if (!list) return null;
 
-  const activeTab: ProjectNavTabId = getCustomListTabId(list.slug);
+  const activeTab = getCustomListTabId(list.slug);
+  const { theme: themeValue, toggleTheme } = theme;
 
   return (
-    <AppLayout
-      title={`${list.name} · Idea Home`}
-      activeTab={activeTab}
-      projectName={
-        projects.find((p) => p.id === selectedProjectId)?.name ??
-        (selectedProjectId ? "Project" : list.name)
-      }
-      projectId={selectedProjectId || undefined}
-      searchPlaceholder="Search"
-      drawerOpen={drawerOpen}
-      setDrawerOpen={setDrawerOpen}
-      projects={projects}
-      selectedProjectId={selectedProjectId}
-      setSelectedProjectId={setSelectedProjectId}
-      editingProjectId={editingProjectId}
-      setEditingProjectId={setEditingProjectId}
-      editingProjectName={editingProjectName}
-      setEditingProjectName={setEditingProjectName}
-      saveProjectName={saveProjectName}
-      cancelEditProjectName={cancelEditProjectName}
-      projectNameInputRef={projectNameInputRef}
-      theme={theme}
-      toggleTheme={toggleTheme}
-      projectToDelete={projectToDelete}
-      setProjectToDelete={setProjectToDelete}
-      projectDeleting={projectDeleting}
-      handleDeleteProject={handleDeleteProject}
-    >
-      <div className="tests-page-content">
-        <h1 className="tests-page-title">{list.name}</h1>
-
-        <section className="tests-page-section">
-          <AddItemForm
-            value={newItem}
-            onChange={setNewItem}
-            onSubmit={addItem}
-            placeholder="Add an item…"
-            ariaLabel="New item"
-            submitAriaLabel="Add item"
-            submitTitle="Add item"
-          />
-        </section>
-
-        <section className="tests-page-section">
-          <h2 className="tests-page-section-title">
-            List{" "}
-            <span className="tests-page-section-count" aria-label="Count">
-              {items.length}
-            </span>
-            {canUndo && (
-              <button
-                type="button"
-                className="tests-page-section-undo"
-                onClick={undo}
-                aria-label="Undo last change"
-                title="Undo"
-              >
-                <IconUndo />
-                Undo
-              </button>
-            )}
-          </h2>
-          <CheckableList
-            items={items}
-            itemLabel="item"
-            emptyMessage="No items yet. Add one above."
-            loading={!hydrated}
-            isItemDisabled={() => false}
-            editingIndex={editingIndex}
-            editingValue={editingValue}
-            onEditingValueChange={setEditingValue}
-            onStartEdit={startEdit}
-            onSaveEdit={saveEdit}
-            onCancelEdit={cancelEdit}
-            onToggleDone={toggleDone}
-            onReorder={handleReorder}
-            onDelete={removeItem}
-          />
-        </section>
-      </div>
-    </AppLayout>
+    <CheckableListPageShell
+      appLayoutProps={{
+        title: `${list.name} · Idea Home`,
+        activeTab,
+        projectName:
+          layout.projects.find((p) => p.id === layout.selectedProjectId)?.name ??
+          (layout.selectedProjectId ? "Project" : list.name),
+        projectId: layout.selectedProjectId || undefined,
+        searchPlaceholder: "Search",
+        drawerOpen: layout.drawerOpen,
+        setDrawerOpen: layout.setDrawerOpen,
+        projects: layout.projects,
+        selectedProjectId: layout.selectedProjectId ?? "",
+        setSelectedProjectId: layout.setSelectedProjectId,
+        editingProjectId: layout.editingProjectId,
+        setEditingProjectId: layout.setEditingProjectId,
+        editingProjectName: layout.editingProjectName,
+        setEditingProjectName: layout.setEditingProjectName,
+        saveProjectName: layout.saveProjectName,
+        cancelEditProjectName: layout.cancelEditProjectName,
+        projectNameInputRef: layout.projectNameInputRef,
+        theme: themeValue,
+        toggleTheme,
+        projectToDelete: layout.projectToDelete,
+        setProjectToDelete: layout.setProjectToDelete,
+        projectDeleting: layout.projectDeleting,
+        handleDeleteProject: layout.handleDeleteProject,
+      }}
+      pageTitle={list.name}
+      addFormProps={{
+        value: listState.newItem,
+        onChange: listState.setNewItem,
+        onSubmit: listState.addItem,
+        placeholder: "Add an item…",
+        ariaLabel: "New item",
+        submitAriaLabel: "Add item",
+        submitTitle: "Add item",
+      }}
+      listTitle="List"
+      itemCount={listState.items.length}
+      canUndo={listState.canUndo}
+      onUndo={listState.undo}
+      checkableListProps={{
+        items: listState.items,
+        itemLabel: "item",
+        emptyMessage: "No items yet. Add one above.",
+        loading: !hydrated,
+        isItemDisabled: () => false,
+        editingIndex: listState.editingIndex,
+        editingValue: listState.editingValue,
+        onEditingValueChange: listState.setEditingValue,
+        onStartEdit: listState.startEdit,
+        onSaveEdit: listState.saveEdit,
+        onCancelEdit: listState.cancelEdit,
+        onToggleDone: listState.toggleDone,
+        onReorder: listState.handleReorder,
+        onDelete: listState.removeItem,
+      }}
+    />
   );
 }
