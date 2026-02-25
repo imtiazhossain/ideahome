@@ -42,6 +42,10 @@ export default function BugsPage() {
     projectNameInputRef,
     saveProjectName,
     cancelEditProjectName,
+    projectToDelete,
+    setProjectToDelete,
+    projectDeleting,
+    handleDeleteProject,
   } = layout;
   const { theme, toggleTheme } = useTheme();
   const [bugs, setBugs, bugsLoading] = useCachedProjectList<Bug>({
@@ -236,6 +240,10 @@ export default function BugsPage() {
       projectNameInputRef={projectNameInputRef}
       theme={theme}
       toggleTheme={toggleTheme}
+      projectToDelete={projectToDelete}
+      setProjectToDelete={setProjectToDelete}
+      projectDeleting={projectDeleting}
+      handleDeleteProject={handleDeleteProject}
     >
       <div className="tests-page-content">
         <h1 className="tests-page-title">Bugs</h1>

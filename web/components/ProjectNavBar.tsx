@@ -390,6 +390,25 @@ const IconFilter = () => (
   </svg>
 );
 
+const IconTrash = () => (
+  <svg
+    width="16"
+    height="16"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden
+  >
+    <polyline points="3 6 5 6 21 6" />
+    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+    <line x1="10" y1="11" x2="10" y2="17" />
+    <line x1="14" y1="11" x2="14" y2="17" />
+  </svg>
+);
+
 const IconSettings = () => (
   <svg
     width="16"
@@ -705,7 +724,14 @@ export interface ProjectNavBarProps {
   projects?: { id: string; name: string }[];
   selectedProjectId?: string;
   onSelectProject?: (id: string) => void;
-  onCreateProject?: () => void;
+  /** Called when user submits a project name from the inline create form. Only called with non-empty name. */
+  onCreateProject?: (name: string) => void | Promise<void>;
+  /** Called when user clicks "Delete the Project" in settings. Opens delete modal in parent. */
+  onDeleteProjectClick?: () => void;
+  /** Called when user clicks "Delete all issues" in settings. Board page only. */
+  onDeleteAllIssuesClick?: () => void;
+  /** When onDeleteAllIssuesClick is provided, whether delete-all is disabled (e.g. loading or no issues). */
+  deleteAllIssuesDisabled?: boolean;
 }
 
 const PROJECT_SEARCH_DEBOUNCE_MS = 250;
@@ -737,6 +763,9 @@ export function ProjectNavBar({
   selectedProjectId,
   onSelectProject,
   onCreateProject,
+  onDeleteProjectClick,
+  onDeleteAllIssuesClick,
+  deleteAllIssuesDisabled,
 }: ProjectNavBarProps) {
   const router = useRouter();
   const { tabOrder, setTabOrder, hiddenTabIds, setHiddenTabIds } = useTabOrder();
@@ -744,6 +773,7 @@ export function ProjectNavBar({
   const [reorderSectionOpen, setReorderSectionOpen] = useState(false);
   const [showTabsSectionOpen, setShowTabsSectionOpen] = useState(false);
   const [addSectionOpen, setAddSectionOpen] = useState(false);
+  const [deleteProjectSectionOpen, setDeleteProjectSectionOpen] = useState(false);
   const settingsMenuRef = useRef<HTMLDivElement>(null);
   const [createListModalOpen, setCreateListModalOpen] = useState(false);
   const [createListName, setCreateListName] = useState("");
@@ -752,6 +782,15 @@ export function ProjectNavBar({
   const authMenuRef = useRef<HTMLDivElement>(null);
   const [projectSwitcherOpen, setProjectSwitcherOpen] = useState(false);
   const projectSwitcherRef = useRef<HTMLDivElement>(null);
+  const [showCreateProjectInput, setShowCreateProjectInput] = useState(false);
+  const [newProjectName, setNewProjectName] = useState("");
+  const createProjectInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (showCreateProjectInput) {
+      createProjectInputRef.current?.focus();
+    }
+  }, [showCreateProjectInput]);
 
   const [projectSearchQuery, setProjectSearchQuery] = useState("");
   const [projectSearchResults, setProjectSearchResults] = useState<
@@ -898,6 +937,10 @@ export function ProjectNavBar({
         !settingsMenuRef.current.contains(e.target as Node)
       ) {
         setSettingsMenuOpen(false);
+        setShowTabsSectionOpen(false);
+        setReorderSectionOpen(false);
+        setAddSectionOpen(false);
+        setDeleteProjectSectionOpen(false);
       }
       if (
         authMenuRef.current &&
@@ -910,6 +953,8 @@ export function ProjectNavBar({
         !projectSwitcherRef.current.contains(e.target as Node)
       ) {
         setProjectSwitcherOpen(false);
+        setShowCreateProjectInput(false);
+        setNewProjectName("");
       }
     };
     document.addEventListener("mousedown", handleClickOutside);
@@ -1041,20 +1086,69 @@ export function ProjectNavBar({
                         {p.name}
                       </button>
                     ))}
-                    {onCreateProject && (
-                      <button
-                        type="button"
-                        className="project-nav-project-switcher-item project-nav-project-switcher-item-create"
-                        role="menuitem"
-                        onClick={() => {
-                          onCreateProject();
-                          setProjectSwitcherOpen(false);
-                        }}
-                      >
-                        <IconPlus />
-                        Create new project
-                      </button>
-                    )}
+                    {onCreateProject &&
+                      (showCreateProjectInput ? (
+                        <form
+                          className="project-nav-project-switcher-create-form"
+                          onSubmit={(e) => {
+                            e.preventDefault();
+                            const name = newProjectName.trim();
+                            if (!name) return;
+                            void Promise.resolve(
+                              onCreateProject(name)
+                            ).then(() => {
+                              setShowCreateProjectInput(false);
+                              setNewProjectName("");
+                              setProjectSwitcherOpen(false);
+                            });
+                          }}
+                        >
+                          <input
+                            ref={createProjectInputRef}
+                            type="text"
+                            className="project-nav-project-switcher-create-input"
+                            placeholder="Project name"
+                            value={newProjectName}
+                            onChange={(e) =>
+                              setNewProjectName(e.target.value)
+                            }
+                            onBlur={() => {
+                              if (!newProjectName.trim()) {
+                                setShowCreateProjectInput(false);
+                              }
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === "Escape") {
+                                setShowCreateProjectInput(false);
+                                setNewProjectName("");
+                              }
+                            }}
+                            aria-label="Project name"
+                            autoFocus
+                          />
+                          <button
+                            type="submit"
+                            className="project-nav-project-switcher-create-submit"
+                            disabled={!newProjectName.trim()}
+                          >
+                            Create
+                          </button>
+                        </form>
+                      ) : (
+                        <button
+                          type="button"
+                          className="project-nav-project-switcher-item project-nav-project-switcher-item-create"
+                          role="menuitem"
+                          onMouseDown={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            setShowCreateProjectInput(true);
+                          }}
+                        >
+                          <IconPlus />
+                          Create new project
+                        </button>
+                      ))}
                   </div>
                 )}
               </div>
@@ -1287,6 +1381,7 @@ export function ProjectNavBar({
                 setShowTabsSectionOpen(false);
                 setReorderSectionOpen(false);
                 setAddSectionOpen(false);
+                setDeleteProjectSectionOpen(false);
               }
             }}
             aria-label="Settings"
@@ -1302,6 +1397,26 @@ export function ProjectNavBar({
               role="menu"
               aria-label="Settings"
             >
+              {onDeleteAllIssuesClick && (
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="project-nav-add-menu-item"
+                  disabled={deleteAllIssuesDisabled}
+                  onClick={() => {
+                    setSettingsMenuOpen(false);
+                    onDeleteAllIssuesClick();
+                  }}
+                  title={
+                    deleteAllIssuesDisabled
+                      ? "No issues to delete"
+                      : "Delete all issues"
+                  }
+                  aria-label="Delete all issues"
+                >
+                  Delete all issues
+                </button>
+              )}
               <button
                 type="button"
                 className={`project-nav-settings-section-toggle${reorderSectionOpen ? " is-open" : ""}`}
@@ -1433,6 +1548,41 @@ export function ProjectNavBar({
                   </button>
                 </li>
               </ul>
+              )}
+              {onDeleteProjectClick && (
+                <>
+                  <button
+                    type="button"
+                    className={`project-nav-settings-section-toggle project-nav-settings-section-header${deleteProjectSectionOpen ? " is-open" : ""}`}
+                    onClick={() => setDeleteProjectSectionOpen((o) => !o)}
+                    aria-expanded={deleteProjectSectionOpen}
+                    aria-label="Delete project"
+                    title="Delete project"
+                  >
+                    <IconTrash />
+                  </button>
+                  {deleteProjectSectionOpen && (
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className="project-nav-add-menu-item project-nav-settings-delete-project"
+                      disabled={!selectedProjectId || !projects?.length}
+                      onClick={() => {
+                        setSettingsMenuOpen(false);
+                        setDeleteProjectSectionOpen(false);
+                        onDeleteProjectClick();
+                      }}
+                      title={
+                        !selectedProjectId || !projects?.length
+                          ? "No project to delete"
+                          : "Delete the Project"
+                      }
+                      aria-label="Delete the Project"
+                    >
+                      Delete the Project
+                    </button>
+                  )}
+                </>
               )}
             </div>
           )}

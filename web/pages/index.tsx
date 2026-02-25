@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/router";
 import {
@@ -683,8 +683,6 @@ export default function Home() {
   const [issueDeleting, setIssueDeleting] = useState(false);
   const [deleteAllConfirmOpen, setDeleteAllConfirmOpen] = useState(false);
   const [deleteAllDeleting, setDeleteAllDeleting] = useState(false);
-  const [settingsMenuOpen, setSettingsMenuOpen] = useState(false);
-  const settingsMenuRef = useRef<HTMLDivElement>(null);
   const [editingProjectId, setEditingProjectId] = useState<string | null>(null);
   const [editingProjectName, setEditingProjectName] = useState("");
   const projectNameInputRef = useRef<HTMLInputElement>(null);
@@ -2005,6 +2003,33 @@ export default function Home() {
     setEditingProjectId(null);
   };
 
+  const handleCreateProjectWithName = useCallback(
+    async (name: string) => {
+      const trimmed = name.trim();
+      if (!trimmed) return;
+      setProjectCreateError(null);
+      setProjectSubmitting(true);
+      try {
+        if (organizations.length === 0) {
+          await ensureOrganization();
+          const list = await fetchOrganizations();
+          setOrganizations(list);
+        }
+        const project = await createProject({ name: trimmed });
+        setProjects((prev) => [...prev, project]);
+        setSelectedProjectId(project.id);
+        setLastKnownProjectName(project.name);
+      } catch (e) {
+        setProjectCreateError(
+          e instanceof Error ? e.message : "Failed to create project"
+        );
+      } finally {
+        setProjectSubmitting(false);
+      }
+    },
+    [organizations.length, setLastKnownProjectName]
+  );
+
   useEffect(() => {
     loadIssues();
   }, [selectedProjectId]);
@@ -2059,14 +2084,29 @@ export default function Home() {
   }, [createProjectOpen]);
 
   // Open create project modal when navigating with ?createProject=1 (e.g. from project switcher)
+  // When projectName is provided, create directly without opening modal
   useEffect(() => {
     if (!router.isReady) return;
     const q = router.query.createProject;
+    const nameParam = router.query.projectName;
+    const name =
+      typeof nameParam === "string" && nameParam.trim()
+        ? nameParam.trim()
+        : null;
     if (q === "1") {
-      setCreateProjectOpen(true);
       router.replace("/", undefined, { shallow: true });
+      if (name) {
+        void handleCreateProjectWithName(name);
+      } else {
+        setCreateProjectOpen(true);
+      }
     }
-  }, [router.isReady, router.query.createProject]);
+  }, [
+    router.isReady,
+    router.query.createProject,
+    router.query.projectName,
+    handleCreateProjectWithName,
+  ]);
 
   // Keep modal's project selection in sync when projects load (e.g. after opening)
   useEffect(() => {
@@ -2090,21 +2130,6 @@ export default function Home() {
     return () =>
       document.removeEventListener("mousedown", handleClickOutside, true);
   }, [automatedTestDropdownOpen]);
-
-  useEffect(() => {
-    if (!settingsMenuOpen) return;
-    const handleClickOutside = (e: MouseEvent) => {
-      if (
-        settingsMenuRef.current &&
-        !settingsMenuRef.current.contains(e.target as Node)
-      ) {
-        setSettingsMenuOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handleClickOutside, true);
-    return () =>
-      document.removeEventListener("mousedown", handleClickOutside, true);
-  }, [settingsMenuOpen]);
 
   useEffect(() => {
     if (!selectedIssue?.id) {
@@ -2304,6 +2329,7 @@ export default function Home() {
       const project = await createProject({ name: projectName });
       setProjects((prev) => [...prev, project]);
       setSelectedProjectId(project.id);
+      setLastKnownProjectName(project.name);
       setCreateProjectOpen(false);
       setNewProjectName("");
       setNewProjectOrgId("");
@@ -3253,44 +3279,6 @@ export default function Home() {
                 >
                   {theme === "light" ? "🌙" : "☀️"}
                 </button>
-                <div
-                  ref={settingsMenuRef}
-                  className="drawer-footer-settings-wrap"
-                >
-                  <button
-                    type="button"
-                    className={`drawer-footer-btn${settingsMenuOpen ? " is-active" : ""}`}
-                    aria-label="Settings & admin"
-                    aria-expanded={settingsMenuOpen}
-                    aria-haspopup="true"
-                    title="Settings & admin"
-                    onClick={() => setSettingsMenuOpen((v) => !v)}
-                  >
-                    ⚙
-                  </button>
-                  {settingsMenuOpen && (
-                    <div className="drawer-settings-menu" role="menu">
-                      <button
-                        type="button"
-                        className="drawer-settings-menu-item"
-                        role="menuitem"
-                        disabled={loading || issues.length === 0}
-                        onClick={() => {
-                          setSettingsMenuOpen(false);
-                          setDeleteAllConfirmOpen(true);
-                        }}
-                        title={
-                          issues.length === 0
-                            ? "No issues to delete"
-                            : "Delete all issues"
-                        }
-                        aria-label="Delete all issues"
-                      >
-                        🗑
-                      </button>
-                    </div>
-                  )}
-                </div>
               </div>
             </>
           ) : (
@@ -3320,7 +3308,15 @@ export default function Home() {
             projects={projects}
             selectedProjectId={selectedProjectId || undefined}
             onSelectProject={setSelectedProjectId}
-            onCreateProject={() => setCreateProjectOpen(true)}
+            onCreateProject={handleCreateProjectWithName}
+            onDeleteProjectClick={() => {
+              const current = projects.find(
+                (p) => p.id === selectedProjectId
+              );
+              if (current) setProjectToDelete(current);
+            }}
+            onDeleteAllIssuesClick={() => setDeleteAllConfirmOpen(true)}
+            deleteAllIssuesDisabled={loading || issues.length === 0}
           />
 
           {error && (

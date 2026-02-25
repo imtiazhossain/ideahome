@@ -525,7 +525,8 @@ textarea {
   left: 50%;
   transform: translateX(-50%);
   margin-bottom: 4px;
-  width: 48px;
+  min-width: 48px;
+  width: max-content;
   padding: 6px 0;
   background: #171717;
   border: 1px solid #262626;
@@ -563,6 +564,12 @@ textarea {
 
 .drawer-settings-menu-item:hover:disabled {
   background: transparent;
+}
+
+.drawer-settings-menu-item-text {
+  font-size: 14px;
+  padding: 0 12px;
+  justify-content: flex-start;
 }
 
 .drawer-nav-suite {
@@ -934,6 +941,60 @@ textarea {
   height: 14px;
 }
 
+.project-nav-project-switcher-create-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 14px;
+  margin-top: 4px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.project-nav-project-switcher-create-input {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 14px;
+  font-family: inherit;
+  background: var(--bg);
+  color: var(--text);
+  box-sizing: border-box;
+}
+
+.project-nav-project-switcher-create-input:focus {
+  outline: none;
+  border-color: var(--primary, #3182ce);
+}
+
+.project-nav-project-switcher-create-input::placeholder {
+  color: var(--text-muted);
+}
+
+.project-nav-project-switcher-create-submit {
+  width: 100%;
+  padding: 8px 12px;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  font-family: inherit;
+  background: var(--primary);
+  color: white;
+  cursor: pointer;
+  transition: opacity 0.15s ease;
+}
+
+.project-nav-project-switcher-create-submit:hover:not(:disabled) {
+  opacity: 0.9;
+}
+
+.project-nav-project-switcher-create-submit:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .project-nav-icon-btn {
   width: 32px;
   height: 32px;
@@ -1247,6 +1308,16 @@ textarea {
   border-radius: var(--card-radius);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
   z-index: 100;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.project-nav-settings-menu .project-nav-reorder-list,
+.project-nav-settings-menu .project-nav-filter-list,
+.project-nav-settings-menu .project-nav-add-menu-list,
+.project-nav-settings-menu .project-nav-add-menu-item {
+  align-self: stretch;
 }
 .project-nav-settings-menu::-webkit-scrollbar {
   display: none;
@@ -1318,6 +1389,18 @@ textarea {
   margin-top: 4px;
   padding-top: 8px;
   border-top: 1px solid var(--border);
+}
+
+.project-nav-trash-menu {
+  min-width: 160px;
+}
+
+.project-nav-trash-menu-item {
+  color: var(--text);
+}
+
+.project-nav-trash-menu-item:hover:not(:disabled) {
+  color: var(--danger, #c53030);
 }
 
 .project-nav-reorder-list {
@@ -1456,6 +1539,10 @@ textarea {
 
 .project-nav-add-menu-item:hover {
   background: var(--column-bg);
+}
+
+.project-nav-settings-delete-project:hover:not(:disabled) {
+  color: var(--danger, #c53030);
 }
 
 .project-nav-filter {

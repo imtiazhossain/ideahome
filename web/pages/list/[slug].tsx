@@ -40,6 +40,10 @@ export default function CustomListPage() {
     projectNameInputRef,
     saveProjectName,
     cancelEditProjectName,
+    projectToDelete,
+    setProjectToDelete,
+    projectDeleting,
+    handleDeleteProject,
   } = layout;
   const { theme, toggleTheme } = useTheme();
 
@@ -199,6 +203,10 @@ export default function CustomListPage() {
       projectNameInputRef={projectNameInputRef}
       theme={theme}
       toggleTheme={toggleTheme}
+      projectToDelete={projectToDelete}
+      setProjectToDelete={setProjectToDelete}
+      projectDeleting={projectDeleting}
+      handleDeleteProject={handleDeleteProject}
     >
       <div className="tests-page-content">
         <h1 className="tests-page-title">{list.name}</h1>

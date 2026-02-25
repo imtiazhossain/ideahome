@@ -35,6 +35,10 @@ export interface AppLayoutProps {
   projectNameInputRef: React.RefObject<HTMLInputElement | null>;
   theme: string;
   toggleTheme: () => void;
+  projectToDelete: { id: string; name: string } | null;
+  setProjectToDelete: (p: { id: string; name: string } | null) => void;
+  projectDeleting: boolean;
+  handleDeleteProject: () => Promise<void>;
   children: React.ReactNode;
 }
 
@@ -58,6 +62,10 @@ export function AppLayout({
   projectNameInputRef,
   theme,
   toggleTheme,
+  projectToDelete,
+  setProjectToDelete,
+  projectDeleting,
+  handleDeleteProject,
   children,
 }: AppLayoutProps) {
   const router = useRouter();
@@ -173,13 +181,6 @@ export function AppLayout({
                 >
                   {theme === "light" ? "🌙" : "☀️"}
                 </button>
-                <button
-                  type="button"
-                  className="drawer-footer-btn"
-                  aria-label="Settings"
-                >
-                  ⚙
-                </button>
               </div>
             </>
           ) : (
@@ -200,8 +201,65 @@ export function AppLayout({
             projects={projects}
             selectedProjectId={selectedProjectId}
             onSelectProject={setSelectedProjectId}
-            onCreateProject={() => router.push("/?createProject=1")}
+            onCreateProject={(name) => {
+              void router.push(
+                "/?createProject=1&projectName=" +
+                  encodeURIComponent(name)
+              );
+            }}
+            onDeleteProjectClick={() => {
+              const current = projects.find(
+                (p) => p.id === selectedProjectId
+              );
+              if (current) setProjectToDelete(current);
+            }}
           />
+
+          {projectToDelete && (
+            <div
+              className="modal-overlay"
+              onClick={() => !projectDeleting && setProjectToDelete(null)}
+            >
+              <div
+                className="modal"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="modal-header">
+                  <h2>Delete project</h2>
+                  <button
+                    type="button"
+                    className="modal-close"
+                    onClick={() => !projectDeleting && setProjectToDelete(null)}
+                    aria-label="Close"
+                  >
+                    ×
+                  </button>
+                </div>
+                <p style={{ margin: "0 0 16px", color: "var(--text-muted)" }}>
+                  Delete &quot;{projectToDelete.name}&quot;? This will
+                  permanently remove the project and all its issues.
+                </p>
+                <div className="modal-actions">
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    onClick={() => !projectDeleting && setProjectToDelete(null)}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    style={{ background: "var(--danger, #c53030)" }}
+                    onClick={handleDeleteProject}
+                    disabled={projectDeleting}
+                  >
+                    {projectDeleting ? "Deleting…" : "Delete"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
 
           {children}
         </main>

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/router";
 import {
+  deleteProject,
   fetchProjects,
   isAuthenticated,
   updateProject,
@@ -25,6 +26,10 @@ export interface UseProjectLayoutReturn {
   saveProjectName: () => Promise<void>;
   cancelEditProjectName: () => void;
   loadProjects: () => Promise<void>;
+  projectToDelete: { id: string; name: string } | null;
+  setProjectToDelete: (p: { id: string; name: string } | null) => void;
+  projectDeleting: boolean;
+  handleDeleteProject: () => Promise<void>;
 }
 
 export function useProjectLayout(): UseProjectLayoutReturn {
@@ -40,6 +45,11 @@ export function useProjectLayout(): UseProjectLayoutReturn {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [editingProjectId, setEditingProjectId] = useState<string | null>(null);
   const [editingProjectName, setEditingProjectName] = useState("");
+  const [projectToDelete, setProjectToDelete] = useState<{
+    id: string;
+    name: string;
+  } | null>(null);
+  const [projectDeleting, setProjectDeleting] = useState(false);
   const projectNameInputRef = useRef<HTMLInputElement>(null);
 
   const selectedProjectIdRef = useRef(selectedProjectId);
@@ -137,6 +147,26 @@ export function useProjectLayout(): UseProjectLayoutReturn {
     setEditingProjectId(null);
   };
 
+  const handleDeleteProject = useCallback(async () => {
+    if (!projectToDelete) return;
+    setProjectDeleting(true);
+    try {
+      await deleteProject(projectToDelete.id);
+      setProjectToDelete(null);
+      if (selectedProjectId === projectToDelete.id) {
+        setSelectedProjectId("");
+      }
+      await loadProjects();
+    } finally {
+      setProjectDeleting(false);
+    }
+  }, [
+    projectToDelete,
+    selectedProjectId,
+    setSelectedProjectId,
+    loadProjects,
+  ]);
+
   const projectDisplayName =
     projects.find((p) => p.id === selectedProjectId)?.name ??
     (selectedProjectId && lastKnownProjectName
@@ -163,5 +193,9 @@ export function useProjectLayout(): UseProjectLayoutReturn {
     saveProjectName,
     cancelEditProjectName,
     loadProjects,
+    projectToDelete,
+    setProjectToDelete,
+    projectDeleting,
+    handleDeleteProject,
   };
 }

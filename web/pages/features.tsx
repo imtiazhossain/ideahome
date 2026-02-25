@@ -42,6 +42,10 @@ export default function FeaturesPage() {
     projectNameInputRef,
     saveProjectName,
     cancelEditProjectName,
+    projectToDelete,
+    setProjectToDelete,
+    projectDeleting,
+    handleDeleteProject,
   } = layout;
   const { theme, toggleTheme } = useTheme();
   const [features, setFeatures, featuresLoading] = useCachedProjectList<Feature>({
@@ -236,6 +240,10 @@ export default function FeaturesPage() {
       projectNameInputRef={projectNameInputRef}
       theme={theme}
       toggleTheme={toggleTheme}
+      projectToDelete={projectToDelete}
+      setProjectToDelete={setProjectToDelete}
+      projectDeleting={projectDeleting}
+      handleDeleteProject={handleDeleteProject}
     >
       <div className="tests-page-content">
         <h1 className="tests-page-title">Features</h1>

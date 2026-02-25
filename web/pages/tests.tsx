@@ -500,13 +500,6 @@ export default function TestsPage() {
                 >
                   {theme === "light" ? "🌙" : "☀️"}
                 </button>
-                <button
-                  type="button"
-                  className="drawer-footer-btn"
-                  aria-label="Settings"
-                >
-                  ⚙
-                </button>
               </div>
             </>
           ) : (
@@ -535,7 +528,18 @@ export default function TestsPage() {
             projects={projects}
             selectedProjectId={selectedProjectId || undefined}
             onSelectProject={setSelectedProjectId}
-            onCreateProject={() => router.push("/?createProject=1")}
+            onCreateProject={(name) => {
+              void router.push(
+                "/?createProject=1&projectName=" +
+                  encodeURIComponent(name)
+              );
+            }}
+            onDeleteProjectClick={() => {
+              const current = projects.find(
+                (p) => p.id === selectedProjectId
+              );
+              if (current) setProjectToDelete(current);
+            }}
           />
 
           <div className="tests-page-content">
