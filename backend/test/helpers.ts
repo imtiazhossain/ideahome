@@ -26,3 +26,12 @@ export async function createTestUserWithOrg(prisma: PrismaClient) {
   const token = createTestToken({ sub: user.id, email: user.email });
   return { token, userId: user.id, orgId: org.id };
 }
+
+/** Create a test user without an organization (e.g. to test guard ensuring org on first request). */
+export async function createTestUserWithoutOrg(prisma: PrismaClient) {
+  const user = await prisma.user.create({
+    data: { email: `e2e-no-org-${Date.now()}@example.com` },
+  });
+  const token = createTestToken({ sub: user.id, email: user.email });
+  return { token, userId: user.id };
+}

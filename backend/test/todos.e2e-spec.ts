@@ -3,7 +3,7 @@ import { INestApplication } from "@nestjs/common";
 import request from "supertest";
 import { AppModule } from "../src/app.module";
 import { PrismaService } from "../src/prisma.service";
-import { createTestUserWithOrg } from "./helpers";
+import { createTestUserWithOrg, createTestUserWithoutOrg } from "./helpers";
 
 describe("TodosController (e2e)", () => {
   let app: INestApplication;
@@ -132,5 +132,36 @@ describe("TodosController (e2e)", () => {
       .expect((res: request.Response) => {
         expect(res.body).toHaveLength(0);
       });
+  });
+
+  it("user without organization gets one on first request and can create todo", async () => {
+    const { token: noOrgToken, userId: noOrgUserId } =
+      await createTestUserWithoutOrg(prisma);
+    const authReq = (req: request.Test) =>
+      req.set("Authorization", `Bearer ${noOrgToken}`);
+    await authReq(
+      request(app.getHttpServer()).get("/projects")
+    ).expect(200);
+    const createRes = await authReq(
+      request(app.getHttpServer()).post("/projects").send({ name: "E2E No-Org Project" })
+    ).expect(201);
+    const noOrgProjectId = createRes.body.id;
+    await authReq(
+      request(app.getHttpServer()).post("/todos").send({
+        projectId: noOrgProjectId,
+        name: "Todo after org ensured",
+        done: false,
+      })
+    ).expect(201);
+    const userBefore = await prisma.user.findUnique({
+      where: { id: noOrgUserId },
+      select: { organizationId: true },
+    });
+    await prisma.todo.deleteMany({ where: { projectId: noOrgProjectId } }).catch(() => {});
+    await prisma.project.delete({ where: { id: noOrgProjectId } }).catch(() => {});
+    await prisma.user.delete({ where: { id: noOrgUserId } }).catch(() => {});
+    if (userBefore?.organizationId) {
+      await prisma.organization.delete({ where: { id: userBefore.organizationId } }).catch(() => {});
+    }
   });
 });

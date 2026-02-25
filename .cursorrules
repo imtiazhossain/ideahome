@@ -63,7 +63,8 @@ with the pattern
 ## Core Principles
 - **Simplicity First**: Make every change as simple as possible. Impact minimal code.
 - **No Laziness**: Find root causes. No temporary fixes. Senior developer standards.
-- **Minimat Impact**: Changes should only touch what's necessary. Avoid introducing bugs.
+- **Minimal Impact**: Changes should only touch what's necessary. Avoid introducing bugs.
+- **Reduce Redundancy**: Minimize duplication without breaking behavior. Extract shared React components for repeated UI and logic; use shared utilities/hooks for common behavior. Prefer one source of truth. Refactor when you see the same pattern in two or more places, but verify existing behavior is preserved. Use existing shared pieces (e.g. `web/components/AppLayout`, `AddItemForm`, `IconPlus`; `web/lib/utils`, `legacyListStorage`) as the single source of truth — do not duplicate their behavior in pages.
 
 - **Database**: Restart the database when needed — e.g. after Prisma schema changes, when the DB is in a bad or unknown state, or before running e2e tests. Use `pnpm db:reset` (full restart + migrate) or `pnpm db:down` then `pnpm db:up` then `pnpm db:migrate` as appropriate.
 - **Backend restart**: When the backend needs to be restarted (e.g. after code or env changes, or when it’s stuck), automatically kill any running backend process (e.g. on port 3001 or the dev:backend process) and start it again with `pnpm dev:backend`. Do not ask or prompt the user — just perform the kill and restart.

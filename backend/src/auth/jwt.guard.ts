@@ -34,6 +34,10 @@ export class JwtAuthGuard implements CanActivate {
           token,
           process.env.JWT_SECRET || "dev-secret"
         ) as { sub?: string; email?: string };
+        if (payload.sub && !this.ensuredOrgUserIds.has(payload.sub)) {
+          await this.authService.ensureUserOrganization(payload.sub);
+          this.ensuredOrgUserIds.add(payload.sub);
+        }
         req.user = { sub: payload.sub, email: payload.email };
         return true;
       } catch {
