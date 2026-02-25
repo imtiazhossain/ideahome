@@ -701,6 +701,11 @@ export interface ProjectNavBarProps {
   onAddClick?: () => void;
   /** Called when user taps the mobile menu button to open the sidebar. */
   onOpenDrawer?: () => void;
+  /** When provided, the project name becomes clickable and shows a switcher dropdown. */
+  projects?: { id: string; name: string }[];
+  selectedProjectId?: string;
+  onSelectProject?: (id: string) => void;
+  onCreateProject?: () => void;
 }
 
 const PROJECT_SEARCH_DEBOUNCE_MS = 250;
@@ -728,6 +733,10 @@ export function ProjectNavBar({
   onSearchChange,
   onAddClick,
   onOpenDrawer,
+  projects,
+  selectedProjectId,
+  onSelectProject,
+  onCreateProject,
 }: ProjectNavBarProps) {
   const router = useRouter();
   const { tabOrder, setTabOrder, hiddenTabIds, setHiddenTabIds } = useTabOrder();
@@ -741,6 +750,8 @@ export function ProjectNavBar({
   const [createListError, setCreateListError] = useState<string | null>(null);
   const [authMenuOpen, setAuthMenuOpen] = useState(false);
   const authMenuRef = useRef<HTMLDivElement>(null);
+  const [projectSwitcherOpen, setProjectSwitcherOpen] = useState(false);
+  const projectSwitcherRef = useRef<HTMLDivElement>(null);
 
   const [projectSearchQuery, setProjectSearchQuery] = useState("");
   const [projectSearchResults, setProjectSearchResults] = useState<
@@ -894,6 +905,12 @@ export function ProjectNavBar({
       ) {
         setAuthMenuOpen(false);
       }
+      if (
+        projectSwitcherRef.current &&
+        !projectSwitcherRef.current.contains(e.target as Node)
+      ) {
+        setProjectSwitcherOpen(false);
+      }
     };
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
@@ -985,9 +1002,67 @@ export function ProjectNavBar({
             <span className="project-nav-project-icon" aria-hidden>
               <IconHome />
             </span>
-            <h1 className="project-nav-project-name">
-              {projectName || "Project"}
-            </h1>
+            {projects && onSelectProject ? (
+              <div
+                className="project-nav-project-switcher-wrap"
+                ref={projectSwitcherRef}
+              >
+                <button
+                  type="button"
+                  className={`project-nav-project-name-btn${projectSwitcherOpen ? " is-open" : ""}`}
+                  onClick={() => setProjectSwitcherOpen((o) => !o)}
+                  aria-label="Switch project"
+                  aria-expanded={projectSwitcherOpen}
+                  aria-haspopup="true"
+                >
+                  <h1 className="project-nav-project-name">
+                    {projectName || "Project"}
+                  </h1>
+                  <span className="project-nav-project-name-chevron" aria-hidden>
+                    <IconChevronDown />
+                  </span>
+                </button>
+                {projectSwitcherOpen && (
+                  <div
+                    className="project-nav-project-switcher-menu"
+                    role="menu"
+                  >
+                    {projects.map((p) => (
+                      <button
+                        key={p.id}
+                        type="button"
+                        className={`project-nav-project-switcher-item${selectedProjectId === p.id ? " is-selected" : ""}`}
+                        role="menuitem"
+                        onClick={() => {
+                          onSelectProject(p.id);
+                          setProjectSwitcherOpen(false);
+                        }}
+                      >
+                        {p.name}
+                      </button>
+                    ))}
+                    {onCreateProject && (
+                      <button
+                        type="button"
+                        className="project-nav-project-switcher-item project-nav-project-switcher-item-create"
+                        role="menuitem"
+                        onClick={() => {
+                          onCreateProject();
+                          setProjectSwitcherOpen(false);
+                        }}
+                      >
+                        <IconPlus />
+                        Create new project
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <h1 className="project-nav-project-name">
+                {projectName || "Project"}
+              </h1>
+            )}
             <div
               className="project-nav-search-wrap"
               ref={projectSearchRef}

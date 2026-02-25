@@ -2058,6 +2058,16 @@ export default function Home() {
     }
   }, [createProjectOpen]);
 
+  // Open create project modal when navigating with ?createProject=1 (e.g. from project switcher)
+  useEffect(() => {
+    if (!router.isReady) return;
+    const q = router.query.createProject;
+    if (q === "1") {
+      setCreateProjectOpen(true);
+      router.replace("/", undefined, { shallow: true });
+    }
+  }, [router.isReady, router.query.createProject]);
+
   // Keep modal's project selection in sync when projects load (e.g. after opening)
   useEffect(() => {
     if (createOpen && projects.length > 0 && !selectedProjectId) {
@@ -3307,6 +3317,10 @@ export default function Home() {
             activeTab="board"
             searchPlaceholder="Search project"
             onAddClick={() => setCreateOpen(true)}
+            projects={projects}
+            selectedProjectId={selectedProjectId || undefined}
+            onSelectProject={setSelectedProjectId}
+            onCreateProject={() => setCreateProjectOpen(true)}
           />
 
           {error && (

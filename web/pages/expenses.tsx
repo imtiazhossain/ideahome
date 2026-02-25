@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import Head from "next/head";
 import Link from "next/link";
+import { useRouter } from "next/router";
 import {
   createExpense,
   deleteExpense,
@@ -124,6 +125,7 @@ function formatCurrency(amount: number): string {
 }
 
 export default function ExpensesPage() {
+  const router = useRouter();
   const layout = useProjectLayout();
   const {
     projects,
@@ -395,12 +397,14 @@ export default function ExpensesPage() {
 
         <main className="main-content">
           <ProjectNavBar
-            projectName={
-              projectDisplayName
-            }
+            projectName={projectDisplayName}
             projectId={selectedProjectId || undefined}
             activeTab="expenses"
             searchPlaceholder="Search project"
+            projects={projects}
+            selectedProjectId={selectedProjectId || undefined}
+            onSelectProject={setSelectedProjectId}
+            onCreateProject={() => router.push("/?createProject=1")}
           />
 
           <div className="tests-page-content">

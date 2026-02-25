@@ -1,6 +1,7 @@
 import React from "react";
 import Head from "next/head";
 import Link from "next/link";
+import { useRouter } from "next/router";
 import { ProjectNavBar, DrawerCollapsedNav } from "./ProjectNavBar";
 import type { ProjectNavTabId } from "./ProjectNavBar";
 
@@ -59,6 +60,7 @@ export function AppLayout({
   toggleTheme,
   children,
 }: AppLayoutProps) {
+  const router = useRouter();
   return (
     <>
       <Head>
@@ -195,6 +197,10 @@ export function AppLayout({
             activeTab={activeTab}
             searchPlaceholder={searchPlaceholder}
             onOpenDrawer={() => setDrawerOpen(true)}
+            projects={projects}
+            selectedProjectId={selectedProjectId}
+            onSelectProject={setSelectedProjectId}
+            onCreateProject={() => router.push("/?createProject=1")}
           />
 
           {children}

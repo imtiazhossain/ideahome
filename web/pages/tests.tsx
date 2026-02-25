@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import Head from "next/head";
 import Link from "next/link";
+import { useRouter } from "next/router";
 import {
   getApiBase,
   fetchProjects,
@@ -137,6 +138,7 @@ async function fetchUiTestsList(options?: {
 }
 
 export default function TestsPage() {
+  const router = useRouter();
   const {
     selectedProjectId,
     setSelectedProjectId,
@@ -530,6 +532,10 @@ export default function TestsPage() {
             projectId={selectedProjectId || undefined}
             activeTab="tests"
             searchPlaceholder="Search project"
+            projects={projects}
+            selectedProjectId={selectedProjectId || undefined}
+            onSelectProject={setSelectedProjectId}
+            onCreateProject={() => router.push("/?createProject=1")}
           />
 
           <div className="tests-page-content">
