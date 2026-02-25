@@ -241,38 +241,62 @@ export default function IdeasPage() {
     };
   }, [selectedProjectId]);
 
-  const addIdea = async (e: React.FormEvent) => {
+  const isTempId = (id: string) => id.startsWith("temp-");
+
+  const addIdea = (e: React.FormEvent) => {
     e.preventDefault();
     const trimmed = newIdea.trim();
     if (!trimmed || !selectedProjectId) return;
-    try {
-      const created = await createIdea({
-        projectId: selectedProjectId,
-        name: trimmed,
-        done: false,
+    const firstDoneIndex = ideas.findIndex((i) => i.done);
+    const optimisticId = `temp-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const optimistic: Idea = {
+      id: optimisticId,
+      name: trimmed,
+      done: false,
+      order: firstDoneIndex === -1 ? ideas.length : firstDoneIndex,
+      projectId: selectedProjectId,
+      createdAt: new Date().toISOString(),
+    };
+    const inserted =
+      firstDoneIndex === -1
+        ? [...ideas, optimistic]
+        : [
+            ...ideas.slice(0, firstDoneIndex),
+            optimistic,
+            ...ideas.slice(firstDoneIndex),
+          ];
+    setIdeas(inserted);
+    setNewIdea("");
+    createIdea({
+      projectId: selectedProjectId,
+      name: trimmed,
+      done: false,
+    })
+      .then((created) => {
+        setIdeas((prev) => {
+          const idx = prev.findIndex((i) => i.id === optimisticId);
+          if (idx === -1) return [...prev, created];
+          const next = [...prev];
+          next[idx] = created;
+          return next;
+        });
+        if (firstDoneIndex >= 0) {
+          const withCreated = inserted.map((i) =>
+            i.id === optimisticId ? created : i
+          );
+          reorderIdeas(selectedProjectId, withCreated.map((i) => i.id))
+            .then(setIdeas)
+            .catch(() => fetchIdeas(selectedProjectId).then(setIdeas));
+        }
+      })
+      .catch(() => {
+        setIdeas((prev) => prev.filter((i) => i.id !== optimisticId));
       });
-      const firstDoneIndex = ideas.findIndex((i) => i.done);
-      const inserted =
-        firstDoneIndex === -1
-          ? [...ideas, created]
-          : [
-              ...ideas.slice(0, firstDoneIndex),
-              created,
-              ...ideas.slice(firstDoneIndex),
-            ];
-      const reordered = await reorderIdeas(
-        selectedProjectId,
-        inserted.map((i) => i.id)
-      );
-      setIdeas(reordered);
-      setNewIdea("");
-    } catch {
-      // leave form value for retry
-    }
   };
 
   const toggleDone = async (index: number) => {
     const item = ideas[index];
+    if (isTempId(item.id)) return;
     const newDone = !item.done;
     try {
       await updateIdea(item.id, { done: newDone });
@@ -290,20 +314,25 @@ export default function IdeasPage() {
     }
   };
 
-  const removeIdea = async (index: number) => {
+  const removeIdea = (index: number) => {
     const item = ideas[index];
-    try {
-      await deleteIdea(item.id);
-      setIdeas((prev) => prev.filter((_, i) => i !== index));
-      if (editingIndex === index) setEditingIndex(null);
-      else if (editingIndex !== null && editingIndex > index)
-        setEditingIndex(editingIndex - 1);
-    } catch {
-      // keep in list
-    }
+    if (isTempId(item.id)) return;
+    const removed = { ...item };
+    setIdeas((prev) => prev.filter((_, i) => i !== index));
+    if (editingIndex === index) setEditingIndex(null);
+    else if (editingIndex !== null && editingIndex > index)
+      setEditingIndex(editingIndex - 1);
+    deleteIdea(item.id).catch(() => {
+      setIdeas((prev) => [
+        ...prev.slice(0, index),
+        removed,
+        ...prev.slice(index),
+      ]);
+    });
   };
 
   const startEdit = (index: number) => {
+    if (isTempId(ideas[index]?.id ?? "")) return;
     setEditingIndex(index);
     setEditingValue(ideas[index]?.name ?? "");
   };
@@ -311,6 +340,7 @@ export default function IdeasPage() {
   const saveEdit = async () => {
     if (editingIndex === null) return;
     const item = ideas[editingIndex];
+    if (isTempId(item.id)) return;
     const trimmed = editingValue.trim();
     if (trimmed) {
       try {
@@ -324,7 +354,7 @@ export default function IdeasPage() {
         // keep previous name
       }
     } else {
-      await removeIdea(editingIndex);
+      removeIdea(editingIndex);
     }
     setEditingIndex(null);
   };

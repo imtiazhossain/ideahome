@@ -25,6 +25,18 @@ function apiFetch(
   return fetch(input, { ...init, headers });
 }
 
+/** Throw an Error with the backend message when present, otherwise a default message. */
+async function throwFromResponse(r: Response, defaultMessage: string): Promise<never> {
+  let message = defaultMessage;
+  try {
+    const body = (await r.json()) as { message?: string };
+    if (typeof body?.message === "string" && body.message) message = body.message;
+  } catch {
+    // ignore
+  }
+  throw new Error(message);
+}
+
 /** When true, app does not redirect to login (use with backend SKIP_AUTH_DEV in local dev). */
 export function isSkipLoginDev(): boolean {
   return process.env.NEXT_PUBLIC_SKIP_LOGIN_DEV === "true";
@@ -274,7 +286,7 @@ export async function createTodo(body: {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
-  if (!r.ok) throw new Error("Failed to create todo");
+  if (!r.ok) await throwFromResponse(r, "Failed to create todo");
   return r.json();
 }
 

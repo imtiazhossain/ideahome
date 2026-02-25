@@ -238,38 +238,62 @@ export default function BugsPage() {
     };
   }, [selectedProjectId]);
 
-  const addBug = async (e: React.FormEvent) => {
+  const isTempId = (id: string) => id.startsWith("temp-");
+
+  const addBug = (e: React.FormEvent) => {
     e.preventDefault();
     const trimmed = newBug.trim();
     if (!trimmed || !selectedProjectId) return;
-    try {
-      const created = await createBug({
-        projectId: selectedProjectId,
-        name: trimmed,
-        done: false,
+    const firstDoneIndex = bugs.findIndex((b) => b.done);
+    const optimisticId = `temp-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const optimistic: Bug = {
+      id: optimisticId,
+      name: trimmed,
+      done: false,
+      order: firstDoneIndex === -1 ? bugs.length : firstDoneIndex,
+      projectId: selectedProjectId,
+      createdAt: new Date().toISOString(),
+    };
+    const inserted =
+      firstDoneIndex === -1
+        ? [...bugs, optimistic]
+        : [
+            ...bugs.slice(0, firstDoneIndex),
+            optimistic,
+            ...bugs.slice(firstDoneIndex),
+          ];
+    setBugs(inserted);
+    setNewBug("");
+    createBug({
+      projectId: selectedProjectId,
+      name: trimmed,
+      done: false,
+    })
+      .then((created) => {
+        setBugs((prev) => {
+          const idx = prev.findIndex((b) => b.id === optimisticId);
+          if (idx === -1) return [...prev, created];
+          const next = [...prev];
+          next[idx] = created;
+          return next;
+        });
+        if (firstDoneIndex >= 0) {
+          const withCreated = inserted.map((b) =>
+            b.id === optimisticId ? created : b
+          );
+          reorderBugs(selectedProjectId, withCreated.map((b) => b.id))
+            .then(setBugs)
+            .catch(() => fetchBugs(selectedProjectId).then(setBugs));
+        }
+      })
+      .catch(() => {
+        setBugs((prev) => prev.filter((b) => b.id !== optimisticId));
       });
-      const firstDoneIndex = bugs.findIndex((b) => b.done);
-      const inserted =
-        firstDoneIndex === -1
-          ? [...bugs, created]
-          : [
-              ...bugs.slice(0, firstDoneIndex),
-              created,
-              ...bugs.slice(firstDoneIndex),
-            ];
-      const reordered = await reorderBugs(
-        selectedProjectId,
-        inserted.map((b) => b.id)
-      );
-      setBugs(reordered);
-      setNewBug("");
-    } catch {
-      // leave form value for retry
-    }
   };
 
   const toggleDone = async (index: number) => {
     const item = bugs[index];
+    if (isTempId(item.id)) return;
     const newDone = !item.done;
     try {
       await updateBug(item.id, { done: newDone });
@@ -287,20 +311,25 @@ export default function BugsPage() {
     }
   };
 
-  const removeBug = async (index: number) => {
+  const removeBug = (index: number) => {
     const item = bugs[index];
-    try {
-      await deleteBug(item.id);
-      setBugs((prev) => prev.filter((_, i) => i !== index));
-      if (editingIndex === index) setEditingIndex(null);
-      else if (editingIndex !== null && editingIndex > index)
-        setEditingIndex(editingIndex - 1);
-    } catch {
-      // keep in list
-    }
+    if (isTempId(item.id)) return;
+    const removed = { ...item };
+    setBugs((prev) => prev.filter((_, i) => i !== index));
+    if (editingIndex === index) setEditingIndex(null);
+    else if (editingIndex !== null && editingIndex > index)
+      setEditingIndex(editingIndex - 1);
+    deleteBug(item.id).catch(() => {
+      setBugs((prev) => [
+        ...prev.slice(0, index),
+        removed,
+        ...prev.slice(index),
+      ]);
+    });
   };
 
   const startEdit = (index: number) => {
+    if (isTempId(bugs[index]?.id ?? "")) return;
     setEditingIndex(index);
     setEditingValue(bugs[index]?.name ?? "");
   };
@@ -308,6 +337,7 @@ export default function BugsPage() {
   const saveEdit = async () => {
     if (editingIndex === null) return;
     const item = bugs[editingIndex];
+    if (isTempId(item.id)) return;
     const trimmed = editingValue.trim();
     if (trimmed) {
       try {
@@ -321,7 +351,7 @@ export default function BugsPage() {
         // keep previous name
       }
     } else {
-      await removeBug(editingIndex);
+      removeBug(editingIndex);
     }
     setEditingIndex(null);
   };

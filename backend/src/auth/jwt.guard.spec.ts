@@ -13,7 +13,10 @@ describe("JwtAuthGuard", () => {
   let guard: JwtAuthGuard;
   let mockPrisma: { user: { findUnique: jest.Mock; findFirst: jest.Mock } };
   let mockFirebase: { isConfigured: jest.Mock; verifyIdToken: jest.Mock };
-  let mockAuthService: { findOrCreateUserByFirebase: jest.Mock };
+  let mockAuthService: {
+    findOrCreateUserByFirebase: jest.Mock;
+    ensureUserOrganization: jest.Mock;
+  };
   const mockVerify = jwt.verify as jest.MockedFunction<typeof jwt.verify>;
 
   function createMockContext(
@@ -38,6 +41,7 @@ describe("JwtAuthGuard", () => {
     };
     mockAuthService = {
       findOrCreateUserByFirebase: jest.fn(),
+      ensureUserOrganization: jest.fn().mockResolvedValue(undefined),
     };
     guard = new JwtAuthGuard(
       mockPrisma as unknown as PrismaService,
@@ -154,6 +158,9 @@ describe("JwtAuthGuard", () => {
       expect(await canActivate(ctx)).toBe(true);
       expect(req.user).toEqual({ sub: devUser.id, email: devUser.email });
       expect(mockVerify).not.toHaveBeenCalled();
+      expect(mockAuthService.ensureUserOrganization).toHaveBeenCalledWith(
+        devUser.id
+      );
     });
 
     it("should allow invalid token and set req.user when SKIP_AUTH_DEV and user exists", async () => {
@@ -171,6 +178,9 @@ describe("JwtAuthGuard", () => {
 
       expect(await canActivate(ctx)).toBe(true);
       expect(req.user).toEqual({ sub: devUser.id, email: devUser.email });
+      expect(mockAuthService.ensureUserOrganization).toHaveBeenCalledWith(
+        devUser.id
+      );
     });
 
     it("should use DEV_USER_ID when set", async () => {
@@ -197,6 +207,9 @@ describe("JwtAuthGuard", () => {
         select: { id: true, email: true },
       });
       expect(mockPrisma.user.findFirst).not.toHaveBeenCalled();
+      expect(mockAuthService.ensureUserOrganization).toHaveBeenCalledWith(
+        "custom-dev-id"
+      );
     });
 
     it("should throw when SKIP_AUTH_DEV but no user in DB", async () => {

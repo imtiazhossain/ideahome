@@ -132,6 +132,7 @@ export default function TodoPage() {
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [editingValue, setEditingValue] = useState("");
   const [isDragging, setIsDragging] = useState(false);
+  const [addError, setAddError] = useState<string | null>(null);
   const migratedFromStorageRef = useRef(false);
 
   const listRef = useRef<HTMLUListElement>(null);
@@ -239,38 +240,69 @@ export default function TodoPage() {
     };
   }, [selectedProjectId]);
 
-  const addTodo = async (e: React.FormEvent) => {
+  const addTodo = (e: React.FormEvent) => {
     e.preventDefault();
+    setAddError(null);
     const trimmed = newTodo.trim();
     if (!trimmed || !selectedProjectId) return;
-    try {
-      const created = await createTodo({
-        projectId: selectedProjectId,
-        name: trimmed,
-        done: false,
+    const firstDoneIndex = todos.findIndex((t) => t.done);
+    const optimisticId = `temp-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const optimistic: Todo = {
+      id: optimisticId,
+      name: trimmed,
+      done: false,
+      order: firstDoneIndex === -1 ? todos.length : firstDoneIndex,
+      projectId: selectedProjectId,
+      createdAt: new Date().toISOString(),
+    };
+    const inserted =
+      firstDoneIndex === -1
+        ? [...todos, optimistic]
+        : [
+            ...todos.slice(0, firstDoneIndex),
+            optimistic,
+            ...todos.slice(firstDoneIndex),
+          ];
+    setTodos(inserted);
+    setNewTodo("");
+    createTodo({
+      projectId: selectedProjectId,
+      name: trimmed,
+      done: false,
+    })
+      .then((created) => {
+        setTodos((prev) => {
+          const idx = prev.findIndex((t) => t.id === optimisticId);
+          if (idx === -1) return [...prev, created];
+          const next = [...prev];
+          next[idx] = created;
+          return next;
+        });
+        if (firstDoneIndex >= 0) {
+          const withCreated = inserted.map((t) =>
+            t.id === optimisticId ? created : t
+          );
+          reorderTodos(selectedProjectId, withCreated.map((t) => t.id))
+            .then(setTodos)
+            .catch(() => {
+              fetchTodos(selectedProjectId).then(setTodos);
+              setAddError("Order could not be saved. Item was added.");
+            });
+        }
+      })
+      .catch((err) => {
+        setTodos((prev) => prev.filter((t) => t.id !== optimisticId));
+        setAddError(
+          err instanceof Error ? err.message : "Failed to add item. Try again."
+        );
       });
-      const firstDoneIndex = todos.findIndex((t) => t.done);
-      const inserted =
-        firstDoneIndex === -1
-          ? [...todos, created]
-          : [
-              ...todos.slice(0, firstDoneIndex),
-              created,
-              ...todos.slice(firstDoneIndex),
-            ];
-      const reordered = await reorderTodos(
-        selectedProjectId,
-        inserted.map((t) => t.id)
-      );
-      setTodos(reordered);
-      setNewTodo("");
-    } catch {
-      // leave form value for retry
-    }
   };
+
+  const isTempId = (id: string) => id.startsWith("temp-");
 
   const toggleDone = async (index: number) => {
     const item = todos[index];
+    if (isTempId(item.id)) return;
     const newDone = !item.done;
     try {
       await updateTodo(item.id, { done: newDone });
@@ -289,20 +321,25 @@ export default function TodoPage() {
     }
   };
 
-  const removeTodo = async (index: number) => {
+  const removeTodo = (index: number) => {
     const item = todos[index];
-    try {
-      await deleteTodo(item.id);
-      setTodos((prev) => prev.filter((_, i) => i !== index));
-      if (editingIndex === index) setEditingIndex(null);
-      else if (editingIndex !== null && editingIndex > index)
-        setEditingIndex(editingIndex - 1);
-    } catch {
-      // keep in list
-    }
+    if (isTempId(item.id)) return;
+    const removed = { ...item };
+    setTodos((prev) => prev.filter((_, i) => i !== index));
+    if (editingIndex === index) setEditingIndex(null);
+    else if (editingIndex !== null && editingIndex > index)
+      setEditingIndex(editingIndex - 1);
+    deleteTodo(item.id).catch(() => {
+      setTodos((prev) => [
+        ...prev.slice(0, index),
+        removed,
+        ...prev.slice(index),
+      ]);
+    });
   };
 
   const startEdit = (index: number) => {
+    if (isTempId(todos[index]?.id ?? "")) return;
     setEditingIndex(index);
     setEditingValue(todos[index]?.name ?? "");
   };
@@ -310,6 +347,7 @@ export default function TodoPage() {
   const saveEdit = async () => {
     if (editingIndex === null) return;
     const item = todos[editingIndex];
+    if (isTempId(item.id)) return;
     const trimmed = editingValue.trim();
     if (trimmed) {
       try {
@@ -323,7 +361,7 @@ export default function TodoPage() {
         // keep previous name
       }
     } else {
-      await removeTodo(editingIndex);
+      removeTodo(editingIndex);
     }
     setEditingIndex(null);
   };
@@ -629,10 +667,26 @@ export default function TodoPage() {
                     marginTop: "8px",
                   }}
                 >
+                  {addError && (
+                    <p
+                      role="alert"
+                      style={{
+                        width: "100%",
+                        margin: "0 0 4px",
+                        fontSize: 14,
+                        color: "var(--trend-down)",
+                      }}
+                    >
+                      {addError}
+                    </p>
+                  )}
                   <input
                     type="text"
                     value={newTodo}
-                    onChange={(e) => setNewTodo(e.target.value)}
+                    onChange={(e) => {
+                      setNewTodo(e.target.value);
+                      if (addError) setAddError(null);
+                    }}
                     placeholder="To-do item"
                     aria-label="New to-do"
                     className="project-nav-search"

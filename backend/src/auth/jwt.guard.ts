@@ -11,6 +11,8 @@ import { AuthService } from "./auth.service";
 
 @Injectable()
 export class JwtAuthGuard implements CanActivate {
+  private readonly ensuredOrgUserIds = new Set<string>();
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly firebase: FirebaseService,
@@ -50,6 +52,10 @@ export class JwtAuthGuard implements CanActivate {
         if (process.env.SKIP_AUTH_DEV === "true") {
           const devUser = await this.resolveDevUser();
           if (devUser) {
+            if (!this.ensuredOrgUserIds.has(devUser.id)) {
+              await this.authService.ensureUserOrganization(devUser.id);
+              this.ensuredOrgUserIds.add(devUser.id);
+            }
             req.user = { sub: devUser.id, email: devUser.email };
             return true;
           }
@@ -61,6 +67,10 @@ export class JwtAuthGuard implements CanActivate {
     if (process.env.SKIP_AUTH_DEV === "true") {
       const devUser = await this.resolveDevUser();
       if (devUser) {
+        if (!this.ensuredOrgUserIds.has(devUser.id)) {
+          await this.authService.ensureUserOrganization(devUser.id);
+          this.ensuredOrgUserIds.add(devUser.id);
+        }
         req.user = { sub: devUser.id, email: devUser.email };
         return true;
       }

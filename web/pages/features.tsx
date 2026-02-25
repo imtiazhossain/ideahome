@@ -241,38 +241,62 @@ export default function FeaturesPage() {
     };
   }, [selectedProjectId]);
 
-  const addFeature = async (e: React.FormEvent) => {
+  const isTempId = (id: string) => id.startsWith("temp-");
+
+  const addFeature = (e: React.FormEvent) => {
     e.preventDefault();
     const trimmed = newFeature.trim();
     if (!trimmed || !selectedProjectId) return;
-    try {
-      const created = await createFeature({
-        projectId: selectedProjectId,
-        name: trimmed,
-        done: false,
+    const firstDoneIndex = features.findIndex((f) => f.done);
+    const optimisticId = `temp-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const optimistic: Feature = {
+      id: optimisticId,
+      name: trimmed,
+      done: false,
+      order: firstDoneIndex === -1 ? features.length : firstDoneIndex,
+      projectId: selectedProjectId,
+      createdAt: new Date().toISOString(),
+    };
+    const inserted =
+      firstDoneIndex === -1
+        ? [...features, optimistic]
+        : [
+            ...features.slice(0, firstDoneIndex),
+            optimistic,
+            ...features.slice(firstDoneIndex),
+          ];
+    setFeatures(inserted);
+    setNewFeature("");
+    createFeature({
+      projectId: selectedProjectId,
+      name: trimmed,
+      done: false,
+    })
+      .then((created) => {
+        setFeatures((prev) => {
+          const idx = prev.findIndex((f) => f.id === optimisticId);
+          if (idx === -1) return [...prev, created];
+          const next = [...prev];
+          next[idx] = created;
+          return next;
+        });
+        if (firstDoneIndex >= 0) {
+          const withCreated = inserted.map((f) =>
+            f.id === optimisticId ? created : f
+          );
+          reorderFeatures(selectedProjectId, withCreated.map((f) => f.id))
+            .then(setFeatures)
+            .catch(() => fetchFeatures(selectedProjectId).then(setFeatures));
+        }
+      })
+      .catch(() => {
+        setFeatures((prev) => prev.filter((f) => f.id !== optimisticId));
       });
-      const firstDoneIndex = features.findIndex((f) => f.done);
-      const inserted =
-        firstDoneIndex === -1
-          ? [...features, created]
-          : [
-              ...features.slice(0, firstDoneIndex),
-              created,
-              ...features.slice(firstDoneIndex),
-            ];
-      const reordered = await reorderFeatures(
-        selectedProjectId,
-        inserted.map((f) => f.id)
-      );
-      setFeatures(reordered);
-      setNewFeature("");
-    } catch {
-      // leave form value for retry
-    }
   };
 
   const toggleDone = async (index: number) => {
     const item = features[index];
+    if (isTempId(item.id)) return;
     const newDone = !item.done;
     try {
       await updateFeature(item.id, { done: newDone });
@@ -290,20 +314,25 @@ export default function FeaturesPage() {
     }
   };
 
-  const removeFeature = async (index: number) => {
+  const removeFeature = (index: number) => {
     const item = features[index];
-    try {
-      await deleteFeature(item.id);
-      setFeatures((prev) => prev.filter((_, i) => i !== index));
-      if (editingIndex === index) setEditingIndex(null);
-      else if (editingIndex !== null && editingIndex > index)
-        setEditingIndex(editingIndex - 1);
-    } catch {
-      // keep in list
-    }
+    if (isTempId(item.id)) return;
+    const removed = { ...item };
+    setFeatures((prev) => prev.filter((_, i) => i !== index));
+    if (editingIndex === index) setEditingIndex(null);
+    else if (editingIndex !== null && editingIndex > index)
+      setEditingIndex(editingIndex - 1);
+    deleteFeature(item.id).catch(() => {
+      setFeatures((prev) => [
+        ...prev.slice(0, index),
+        removed,
+        ...prev.slice(index),
+      ]);
+    });
   };
 
   const startEdit = (index: number) => {
+    if (isTempId(features[index]?.id ?? "")) return;
     setEditingIndex(index);
     setEditingValue(features[index]?.name ?? "");
   };
@@ -311,6 +340,7 @@ export default function FeaturesPage() {
   const saveEdit = async () => {
     if (editingIndex === null) return;
     const item = features[editingIndex];
+    if (isTempId(item.id)) return;
     const trimmed = editingValue.trim();
     if (trimmed) {
       try {
@@ -324,7 +354,7 @@ export default function FeaturesPage() {
         // keep previous name
       }
     } else {
-      await removeFeature(editingIndex);
+      removeFeature(editingIndex);
     }
     setEditingIndex(null);
   };
