@@ -11,7 +11,9 @@ import {
 import { createLegacyListStorage } from "../lib/legacyListStorage";
 import { reorder } from "../lib/utils";
 import { useCachedProjectList } from "../lib/useCachedProjectList";
+import { useUndoList } from "../lib/useUndoList";
 import { useProjectLayout } from "../lib/useProjectLayout";
+import { IconUndo } from "../components/IconUndo";
 import { CheckableList } from "../components/CheckableList";
 import { AppLayout } from "../components/AppLayout";
 import { AddItemForm } from "../components/AddItemForm";
@@ -30,6 +32,7 @@ export default function TodoPage() {
     projectsLoaded,
     selectedProjectId,
     setSelectedProjectId,
+    projectDisplayName,
     drawerOpen,
     setDrawerOpen,
     editingProjectId,
@@ -56,12 +59,19 @@ export default function TodoPage() {
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [editingValue, setEditingValue] = useState("");
   const [addError, setAddError] = useState<string | null>(null);
+  const { pushHistory, undo, canUndo } = useUndoList(
+    todos,
+    (items) => setTodos(items),
+    20,
+    selectedProjectId ?? undefined
+  );
 
   const addTodo = (e: React.FormEvent) => {
     e.preventDefault();
     setAddError(null);
     const trimmed = newTodo.trim();
     if (!trimmed || !selectedProjectId) return;
+    pushHistory();
     const firstDoneIndex = todos.findIndex((t) => t.done);
     const optimisticId = `temp-${Date.now()}-${Math.random().toString(36).slice(2)}`;
     const optimistic: Todo = {
@@ -123,6 +133,7 @@ export default function TodoPage() {
   const toggleDone = async (index: number) => {
     const item = todos[index];
     if (isTempId(item.id)) return;
+    pushHistory();
     const newDone = !item.done;
     try {
       await updateTodo(item.id, { done: newDone });
@@ -140,9 +151,10 @@ export default function TodoPage() {
     }
   };
 
-  const removeTodo = (index: number) => {
+  const removeTodo = (index: number, skipHistory?: boolean) => {
     const item = todos[index];
     if (isTempId(item.id)) return;
+    if (!skipHistory) pushHistory();
     const removed = { ...item };
     setTodos((prev) => prev.filter((_, i) => i !== index));
     if (editingIndex === index) setEditingIndex(null);
@@ -167,6 +179,7 @@ export default function TodoPage() {
     if (editingIndex === null) return;
     const item = todos[editingIndex];
     if (isTempId(item.id)) return;
+    pushHistory();
     const trimmed = editingValue.trim();
     if (trimmed) {
       try {
@@ -180,7 +193,7 @@ export default function TodoPage() {
         // keep previous name
       }
     } else {
-      removeTodo(editingIndex);
+      removeTodo(editingIndex, true);
     }
     setEditingIndex(null);
   };
@@ -190,6 +203,7 @@ export default function TodoPage() {
   };
 
   const handleReorder = (fromIndex: number, toIndex: number) => {
+    pushHistory();
     const reordered = reorder(todos, fromIndex, toIndex);
     setTodos(reordered);
     if (editingIndex !== null) {
@@ -216,10 +230,7 @@ export default function TodoPage() {
     <AppLayout
       title="To-Do · Idea Home"
       activeTab="todo"
-      projectName={
-        projects.find((p) => p.id === selectedProjectId)?.name ??
-        (selectedProjectId ? "Project" : "Select a project")
-      }
+      projectName={projectDisplayName}
       projectId={selectedProjectId || undefined}
       searchPlaceholder="Search project"
       drawerOpen={drawerOpen}
@@ -267,6 +278,18 @@ export default function TodoPage() {
             <span className="tests-page-section-count" aria-label="Count">
               {todos.length}
             </span>
+            {canUndo && (
+              <button
+                type="button"
+                className="tests-page-section-undo"
+                onClick={undo}
+                aria-label="Undo last change"
+                title="Undo"
+              >
+                <IconUndo />
+                Undo
+              </button>
+            )}
           </h2>
           <ProjectSectionGuard
             projectsLoaded={projectsLoaded}
@@ -287,7 +310,6 @@ export default function TodoPage() {
               onSaveEdit={saveEdit}
               onCancelEdit={cancelEdit}
               onToggleDone={toggleDone}
-              onRemove={removeTodo}
               onReorder={handleReorder}
             />
           </ProjectSectionGuard>

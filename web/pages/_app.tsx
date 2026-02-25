@@ -7,6 +7,7 @@ import React, {
 } from "react";
 import type { AppProps } from "next/app";
 import { TabOrderProvider } from "../components/ProjectNavBar";
+import { SelectedProjectProvider } from "../lib/SelectedProjectContext";
 import "../styles/globals.css";
 
 type Theme = "light" | "dark";
@@ -55,9 +56,11 @@ export function useTheme() {
 export default function App({ Component, pageProps }: AppProps) {
   return (
     <ThemeProvider>
-      <TabOrderProvider>
-        <Component {...pageProps} />
-      </TabOrderProvider>
+      <SelectedProjectProvider>
+        <TabOrderProvider>
+          <Component {...pageProps} />
+        </TabOrderProvider>
+      </SelectedProjectProvider>
     </ThemeProvider>
   );
 }

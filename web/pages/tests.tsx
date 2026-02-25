@@ -10,6 +10,7 @@ import {
   type RunUiTestResult,
 } from "../lib/api";
 import { ProjectNavBar, DrawerCollapsedNav } from "../components/ProjectNavBar";
+import { useSelectedProject } from "../lib/SelectedProjectContext";
 
 const DURATION_SUFFIX = /^ \(\d+(\.\d+)?(ms|s)\)$/;
 
@@ -136,8 +137,13 @@ async function fetchUiTestsList(options?: {
 }
 
 export default function TestsPage() {
+  const {
+    selectedProjectId,
+    setSelectedProjectId,
+    lastKnownProjectName,
+    setLastKnownProjectName,
+  } = useSelectedProject();
   const [projects, setProjects] = useState<{ id: string; name: string }[]>([]);
-  const [selectedProjectId, setSelectedProjectId] = useState<string>("");
   const [drawerOpen, setDrawerOpen] = useState(false);
   const { theme, toggleTheme } = useTheme();
   const [projectToDelete, setProjectToDelete] = useState<{
@@ -247,17 +253,30 @@ export default function TestsPage() {
     }
   };
 
+  const selectedProjectIdRef = useRef(selectedProjectId);
+  selectedProjectIdRef.current = selectedProjectId;
+
   const loadProjects = () =>
     fetchProjects()
       .then((data) => {
         setProjects(data);
-        if (data.length && !selectedProjectId) setSelectedProjectId(data[0].id);
+        if (data.length) {
+          const current = selectedProjectIdRef.current;
+          const exists = data.some((p) => p.id === current);
+          if (!exists) setSelectedProjectId(data[0].id);
+        }
       })
       .catch(() => {});
 
   useEffect(() => {
     loadProjects();
   }, []);
+
+  useEffect(() => {
+    if (!selectedProjectId) return;
+    const name = projects.find((p) => p.id === selectedProjectId)?.name;
+    if (name) setLastKnownProjectName(name);
+  }, [projects, selectedProjectId, setLastKnownProjectName]);
 
   useEffect(() => {
     if (editingProjectId) {
@@ -500,7 +519,13 @@ export default function TestsPage() {
           <ProjectNavBar
             projectName={
               projects.find((p) => p.id === selectedProjectId)?.name ??
-              (selectedProjectId ? "Project" : "Select a project")
+              (selectedProjectId && lastKnownProjectName
+                ? lastKnownProjectName
+                : selectedProjectId
+                  ? "Project"
+                  : projects.length
+                    ? "Select a project"
+                    : "Project")
             }
             projectId={selectedProjectId || undefined}
             activeTab="tests"

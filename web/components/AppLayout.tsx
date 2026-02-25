@@ -98,6 +98,7 @@ export function AppLayout({
                     <Link
                       key={href}
                       href={href}
+                      prefetch={false}
                       className={`drawer-nav-item ${activeTab === tabId ? "is-selected" : ""}`}
                     >
                       {label}

@@ -15,12 +15,16 @@ function authHeaders(): Record<string, string> {
   return t ? { Authorization: `Bearer ${t}` } : {};
 }
 
+/** Header sent on all API requests so Next.js rewrites only proxy these (not page navigation). */
+export const API_REQUEST_HEADER = "X-Ideahome-Api";
+
 /** fetch that includes JWT when present (for SSO). */
 function apiFetch(
   input: RequestInfo | URL,
   init?: RequestInit
 ): Promise<Response> {
   const headers = new Headers(init?.headers);
+  headers.set(API_REQUEST_HEADER, "1");
   Object.entries(authHeaders()).forEach(([k, v]) => headers.set(k, v));
   return fetch(input, { ...init, headers });
 }
@@ -54,14 +58,24 @@ export function getStoredToken(): string | null {
   return localStorage.getItem(AUTH_TOKEN_KEY);
 }
 
+/** Custom event dispatched when auth token changes (login/logout). */
+export const AUTH_CHANGE_EVENT = "ideahome-auth-change";
+
+function dispatchAuthChange(): void {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new CustomEvent(AUTH_CHANGE_EVENT));
+}
+
 export function setStoredToken(token: string): void {
   if (typeof window === "undefined") return;
   localStorage.setItem(AUTH_TOKEN_KEY, token);
+  dispatchAuthChange();
 }
 
 export function clearStoredToken(): void {
   if (typeof window === "undefined") return;
   localStorage.removeItem(AUTH_TOKEN_KEY);
+  dispatchAuthChange();
 }
 
 /** Decode JWT payload to get user id (sub). Used for user-scoped localStorage keys. */
@@ -100,6 +114,7 @@ export const USER_SAVED_DATA_STORAGE_KEYS = [
   "ideahome-expenses",
   "ideahome-costs-expenses",
   "ideahome-project-nav-tab-order",
+  "ideahome-project-nav-tabs-hidden",
 ] as const;
 
 export function clearUserSavedData(): void {

@@ -1,10 +1,11 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/router";
 import {
   fetchProjects,
   isAuthenticated,
   updateProject,
 } from "./api";
+import { useSelectedProject } from "./SelectedProjectContext";
 import { prefetchProjectLists } from "./prefetchProjectLists";
 
 export interface UseProjectLayoutReturn {
@@ -12,6 +13,8 @@ export interface UseProjectLayoutReturn {
   projectsLoaded: boolean;
   selectedProjectId: string;
   setSelectedProjectId: (id: string) => void;
+  /** Project name for nav header; avoids "Select a project" flash during loading. */
+  projectDisplayName: string;
   drawerOpen: boolean;
   setDrawerOpen: (open: boolean | ((prev: boolean) => boolean)) => void;
   editingProjectId: string | null;
@@ -26,22 +29,35 @@ export interface UseProjectLayoutReturn {
 
 export function useProjectLayout(): UseProjectLayoutReturn {
   const router = useRouter();
+  const {
+    selectedProjectId,
+    setSelectedProjectId,
+    lastKnownProjectName,
+    setLastKnownProjectName,
+  } = useSelectedProject();
   const [projects, setProjects] = useState<{ id: string; name: string }[]>([]);
   const [projectsLoaded, setProjectsLoaded] = useState(false);
-  const [selectedProjectId, setSelectedProjectId] = useState<string>("");
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [editingProjectId, setEditingProjectId] = useState<string | null>(null);
   const [editingProjectName, setEditingProjectName] = useState("");
   const projectNameInputRef = useRef<HTMLInputElement>(null);
 
-  const loadProjects = () =>
-    fetchProjects()
+  const selectedProjectIdRef = useRef(selectedProjectId);
+  selectedProjectIdRef.current = selectedProjectId;
+
+  const loadProjects = useCallback(() => {
+    return fetchProjects()
       .then((data) => {
         setProjects(data);
-        if (data.length && !selectedProjectId) setSelectedProjectId(data[0].id);
+        if (data.length) {
+          const current = selectedProjectIdRef.current;
+          const exists = data.some((p) => p.id === current);
+          if (!exists) setSelectedProjectId(data[0].id);
+        }
       })
       .catch(() => {})
       .finally(() => setProjectsLoaded(true));
+  }, [setSelectedProjectId]);
 
   useEffect(() => {
     if (!isAuthenticated()) {
@@ -54,6 +70,12 @@ export function useProjectLayout(): UseProjectLayoutReturn {
   useEffect(() => {
     if (selectedProjectId) prefetchProjectLists(selectedProjectId);
   }, [selectedProjectId]);
+
+  useEffect(() => {
+    if (!selectedProjectId) return;
+    const name = projects.find((p) => p.id === selectedProjectId)?.name;
+    if (name) setLastKnownProjectName(name);
+  }, [projects, selectedProjectId, setLastKnownProjectName]);
 
   useEffect(() => {
     if (editingProjectId) {
@@ -90,11 +112,22 @@ export function useProjectLayout(): UseProjectLayoutReturn {
     setEditingProjectId(null);
   };
 
+  const projectDisplayName =
+    projects.find((p) => p.id === selectedProjectId)?.name ??
+    (selectedProjectId && lastKnownProjectName
+      ? lastKnownProjectName
+      : selectedProjectId
+        ? "Project"
+        : projectsLoaded && projects.length
+          ? "Select a project"
+          : "Project");
+
   return {
     projects,
     projectsLoaded,
     selectedProjectId,
     setSelectedProjectId,
+    projectDisplayName,
     drawerOpen,
     setDrawerOpen,
     editingProjectId,

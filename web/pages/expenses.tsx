@@ -130,6 +130,7 @@ export default function ExpensesPage() {
     projectsLoaded,
     selectedProjectId,
     setSelectedProjectId,
+    projectDisplayName,
     drawerOpen,
     setDrawerOpen,
     editingProjectId,
@@ -395,8 +396,7 @@ export default function ExpensesPage() {
         <main className="main-content">
           <ProjectNavBar
             projectName={
-              projects.find((p) => p.id === selectedProjectId)?.name ??
-              (selectedProjectId ? "Project" : "Select a project")
+              projectDisplayName
             }
             projectId={selectedProjectId || undefined}
             activeTab="expenses"

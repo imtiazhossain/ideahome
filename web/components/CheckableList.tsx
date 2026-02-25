@@ -53,7 +53,6 @@ export interface CheckableListProps {
   onSaveEdit: () => void;
   onCancelEdit: () => void;
   onToggleDone: (index: number) => void;
-  onRemove: (index: number) => void;
   onReorder: (fromIndex: number, toIndex: number) => void;
 }
 
@@ -70,7 +69,6 @@ export function CheckableList({
   onSaveEdit,
   onCancelEdit,
   onToggleDone,
-  onRemove,
   onReorder,
 }: CheckableListProps) {
   const listRef = useRef<HTMLUListElement>(null);
@@ -231,6 +229,17 @@ export function CheckableList({
                   type="text"
                   value={editingValue}
                   onChange={(e) => onEditingValueChange(e.target.value)}
+                  onBlur={(e) => {
+                    const next = e.relatedTarget as HTMLElement | null;
+                    const li = (e.target as HTMLElement).closest?.("li");
+                    if (
+                      next &&
+                      li?.contains(next) &&
+                      next.closest?.(".features-list-remove")
+                    )
+                      return;
+                    onSaveEdit();
+                  }}
                   onKeyDown={(e) => {
                     if (e.key === "Enter") onSaveEdit();
                     if (e.key === "Escape") onCancelEdit();
@@ -240,15 +249,6 @@ export function CheckableList({
                   aria-label={`Edit ${itemLabel}`}
                   autoFocus
                 />
-                <button
-                  type="button"
-                  className="features-list-save"
-                  onClick={onSaveEdit}
-                  aria-label="Save"
-                  title="Save"
-                >
-                  Save
-                </button>
                 <button
                   type="button"
                   className="features-list-remove"
@@ -291,32 +291,28 @@ export function CheckableList({
                 >
                   <IconGrip />
                 </span>
-                <span className="features-list-label">{item.name}</span>
+                <span
+                  className="features-list-label"
+                  onClick={() => !disabled && onStartEdit(index)}
+                  onKeyDown={(e) => {
+                    if (!disabled && (e.key === "Enter" || e.key === " ")) {
+                      e.preventDefault();
+                      onStartEdit(index);
+                    }
+                  }}
+                  role="button"
+                  tabIndex={disabled ? -1 : 0}
+                  aria-label={`Edit ${item.name}`}
+                  title={`Edit "${item.name}"`}
+                  style={{ cursor: disabled ? "default" : "pointer" }}
+                >
+                  {item.name}
+                </span>
                 {item.done && (
                   <span className="features-list-done-badge" aria-label="Done">
                     Done
                   </span>
                 )}
-                <button
-                  type="button"
-                  className="features-list-edit"
-                  onClick={() => onStartEdit(index)}
-                  disabled={disabled}
-                  aria-label={`Edit ${item.name}`}
-                  title={`Edit "${item.name}"`}
-                >
-                  Edit
-                </button>
-                <button
-                  type="button"
-                  className="features-list-remove"
-                  onClick={() => !disabled && onRemove(index)}
-                  disabled={disabled}
-                  aria-label={`Remove ${item.name}`}
-                  title={`Remove "${item.name}"`}
-                >
-                  Remove
-                </button>
               </>
             )}
           </li>

@@ -1,12 +1,20 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
+import { useRouter } from "next/router";
 import {
+  AUTH_CHANGE_EVENT,
   fetchIssueSearch,
   getStoredToken,
   getUserScopedStorageKey,
   logout,
 } from "../lib/api";
 import type { Issue } from "../lib/api";
+import {
+  addCustomList,
+  getCustomListTabId,
+  getCustomLists,
+} from "../lib/customLists";
+import { IconFromName } from "./IconFromName";
 
 const TAB_GAP = 2;
 
@@ -29,11 +37,20 @@ const IconGrip = () => (
 
 const TAB_ORDER_STORAGE_PREFIX = "ideahome-project-nav-tab-order";
 const LEGACY_TAB_ORDER_STORAGE_KEY = "ideahome-project-nav-tab-order";
+const HIDDEN_TABS_STORAGE_PREFIX = "ideahome-project-nav-tabs-hidden";
+const HIDDEN_TABS_LEGACY_KEY = "ideahome-project-nav-tabs-hidden";
 
 function getTabOrderStorageKey(): string {
   return getUserScopedStorageKey(
     TAB_ORDER_STORAGE_PREFIX,
     LEGACY_TAB_ORDER_STORAGE_KEY
+  );
+}
+
+function getHiddenTabsStorageKey(): string {
+  return getUserScopedStorageKey(
+    HIDDEN_TABS_STORAGE_PREFIX,
+    HIDDEN_TABS_LEGACY_KEY
   );
 }
 
@@ -337,6 +354,21 @@ const IconExpenses = () => (
     <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
   </svg>
 );
+const IconFilter = () => (
+  <svg
+    width="16"
+    height="16"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden
+  >
+    <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
+  </svg>
+);
 
 const IconTodo = () => (
   <svg
@@ -402,7 +434,8 @@ export type ProjectNavTabId =
   | "development"
   | "expenses"
   | "code"
-  | "pages";
+  | "pages"
+  | `custom-${string}`;
 
 const TABS: {
   id: ProjectNavTabId;
@@ -437,9 +470,34 @@ const TABS: {
   { id: "pages", label: "Pages", icon: <IconPages /> },
 ];
 
+function loadHiddenTabIds(): ProjectNavTabId[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = localStorage.getItem(getHiddenTabsStorageKey());
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as string[];
+    const valid = parsed.filter((id): id is ProjectNavTabId =>
+      typeof id === "string" && (TABS.some((t) => t.id === id) || id.startsWith("custom-"))
+    );
+    return valid;
+  } catch {
+    return [];
+  }
+}
+
+function saveHiddenTabIds(ids: ProjectNavTabId[]) {
+  try {
+    localStorage.setItem(getHiddenTabsStorageKey(), JSON.stringify(ids));
+  } catch {
+    // ignore
+  }
+}
+
 const TabOrderContext = React.createContext<{
   tabOrder: ProjectNavTabId[];
   setTabOrder: (order: ProjectNavTabId[]) => void;
+  hiddenTabIds: ProjectNavTabId[];
+  setHiddenTabIds: (ids: ProjectNavTabId[]) => void;
 } | null>(null);
 
 export function useTabOrder() {
@@ -448,18 +506,38 @@ export function useTabOrder() {
   return ctx;
 }
 
+function loadFilterState() {
+  return { tabOrder: loadTabOrder(), hiddenTabIds: loadHiddenTabIds() };
+}
+
 export function TabOrderProvider({ children }: { children: React.ReactNode }) {
   const [tabOrder, setTabOrderState] =
     useState<ProjectNavTabId[]>(DEFAULT_TAB_ORDER);
+  const [hiddenTabIds, setHiddenTabIdsState] = useState<ProjectNavTabId[]>([]);
+
   useEffect(() => {
-    setTabOrderState(loadTabOrder());
+    const apply = () => {
+      const { tabOrder: order, hiddenTabIds: hidden } = loadFilterState();
+      setTabOrderState(order);
+      setHiddenTabIdsState(hidden);
+    };
+    apply();
+    const onAuthChange = () => apply();
+    window.addEventListener(AUTH_CHANGE_EVENT, onAuthChange);
+    return () => window.removeEventListener(AUTH_CHANGE_EVENT, onAuthChange);
   }, []);
   const setTabOrder = useCallback((order: ProjectNavTabId[]) => {
     setTabOrderState(order);
     saveTabOrder(order);
   }, []);
+  const setHiddenTabIds = useCallback((ids: ProjectNavTabId[]) => {
+    setHiddenTabIdsState(ids);
+    saveHiddenTabIds(ids);
+  }, []);
   return (
-    <TabOrderContext.Provider value={{ tabOrder, setTabOrder }}>
+    <TabOrderContext.Provider
+      value={{ tabOrder, setTabOrder, hiddenTabIds, setHiddenTabIds }}
+    >
       {children}
     </TabOrderContext.Provider>
   );
@@ -474,8 +552,10 @@ export function DrawerCollapsedNav({
   activeTab,
   onExpand,
 }: DrawerCollapsedNavProps) {
-  const { tabOrder } = useTabOrder();
+  const { tabOrder, hiddenTabIds } = useTabOrder();
+  const hiddenSet = new Set(hiddenTabIds);
   const drawerTabs = tabOrder
+    .filter((id) => !hiddenSet.has(id))
     .map((id) => TABS.find((t) => t.id === id))
     .filter((t): t is (typeof TABS)[number] => Boolean(t && t.href));
   return (
@@ -494,6 +574,7 @@ export function DrawerCollapsedNav({
           <Link
             key={tab.id}
             href={tab.href!}
+            prefetch={false}
             className={`drawer-collapsed-item ${activeTab === tab.id ? "is-selected" : ""}`}
             title={tab.label}
             aria-label={tab.label}
@@ -523,11 +604,22 @@ function loadTabOrder(): ProjectNavTabId[] {
     }
     if (!raw) return DEFAULT_TAB_ORDER;
     const parsed = JSON.parse(raw) as string[];
-    const valid = parsed.filter((id): id is ProjectNavTabId =>
-      TABS.some((t) => t.id === id)
+    const customLists = getCustomLists();
+    const customIds = new Set(
+      customLists.map((l) => getCustomListTabId(l.slug))
     );
-    const missing = TABS.filter((t) => !valid.includes(t.id)).map((t) => t.id);
-    return valid.length ? [...valid, ...missing] : DEFAULT_TAB_ORDER;
+    const isValidId = (id: string): id is ProjectNavTabId =>
+      TABS.some((t) => t.id === id) || customIds.has(id);
+    const valid = parsed.filter(isValidId);
+    const missingBuiltIn = TABS.filter(
+      (t) => !valid.includes(t.id)
+    ).map((t) => t.id);
+    const missingCustom = customLists
+      .map((l) => getCustomListTabId(l.slug))
+      .filter((id) => !valid.includes(id));
+    return valid.length
+      ? [...valid, ...missingBuiltIn, ...missingCustom]
+      : DEFAULT_TAB_ORDER;
   } catch {
     return DEFAULT_TAB_ORDER;
   }
@@ -569,9 +661,17 @@ export function ProjectNavBar({
   onAddClick,
   onOpenDrawer,
 }: ProjectNavBarProps) {
-  const { tabOrder, setTabOrder } = useTabOrder();
+  const router = useRouter();
+  const { tabOrder, setTabOrder, hiddenTabIds, setHiddenTabIds } = useTabOrder();
   const [isDraggingTabId, setIsDraggingTabId] =
     useState<ProjectNavTabId | null>(null);
+  const [addMenuOpen, setAddMenuOpen] = useState(false);
+  const addMenuRef = useRef<HTMLDivElement>(null);
+  const [createListModalOpen, setCreateListModalOpen] = useState(false);
+  const [createListName, setCreateListName] = useState("");
+  const [createListError, setCreateListError] = useState<string | null>(null);
+  const [filterMenuOpen, setFilterMenuOpen] = useState(false);
+  const filterMenuRef = useRef<HTMLDivElement>(null);
 
   const [projectSearchQuery, setProjectSearchQuery] = useState("");
   const [projectSearchResults, setProjectSearchResults] = useState<Issue[]>([]);
@@ -611,6 +711,18 @@ export function ProjectNavBar({
       ) {
         setProjectSearchOpen(false);
       }
+      if (
+        addMenuRef.current &&
+        !addMenuRef.current.contains(e.target as Node)
+      ) {
+        setAddMenuOpen(false);
+      }
+      if (
+        filterMenuRef.current &&
+        !filterMenuRef.current.contains(e.target as Node)
+      ) {
+        setFilterMenuOpen(false);
+      }
     };
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
@@ -620,10 +732,14 @@ export function ProjectNavBar({
   const draggingTabIdRef = useRef<ProjectNavTabId | null>(null);
   const dragStartXRef = useRef(0);
   const tabsContainerRef = useRef<HTMLDivElement>(null);
+  const tabsScrollRef = useRef<HTMLDivElement>(null);
+  const scrollDirectionRef = useRef(0);
+  const scrollRafRef = useRef<number | null>(null);
   const dragRef = useRef<{
     sourceIndex: number;
     targetIndex: number;
     startX: number;
+    scrollStart: number;
     slotWidth: number;
     tabIds: ProjectNavTabId[];
   } | null>(null);
@@ -676,11 +792,13 @@ export function ProjectNavBar({
     const draggedRect = tabEls[sourceIndex].getBoundingClientRect();
     const slotWidth = Math.max(draggedRect.width + TAB_GAP, 40);
     const startX = dragStartXRef.current;
+    const scrollStart = tabsScrollRef.current?.scrollLeft ?? 0;
 
     dragRef.current = {
       sourceIndex,
       targetIndex: sourceIndex,
       startX,
+      scrollStart,
       slotWidth,
       tabIds: [...tabOrder],
     };
@@ -688,17 +806,19 @@ export function ProjectNavBar({
     const applyTransforms = (
       sourceIdx: number,
       targetIdx: number,
-      deltaX: number
+      deltaX: number,
+      scrollDelta: number
     ) => {
       if (!container) return;
       const tabs = Array.from(container.children) as HTMLElement[];
       const lo = Math.min(sourceIdx, targetIdx);
       const hi = Math.max(sourceIdx, targetIdx);
       const direction = targetIdx > sourceIdx ? -1 : 1;
+      const dragTranslateX = deltaX + scrollDelta;
 
       tabs.forEach((el, i) => {
         if (i === sourceIdx) {
-          el.style.transform = `translateX(${deltaX}px)`;
+          el.style.transform = `translateX(${dragTranslateX}px)`;
           el.style.transition = "none";
           el.style.zIndex = "10";
           el.style.position = "relative";
@@ -719,30 +839,61 @@ export function ProjectNavBar({
       });
     };
 
-    applyTransforms(sourceIndex, sourceIndex, 0);
+    applyTransforms(sourceIndex, sourceIndex, 0, 0);
+
+    const SCROLL_EDGE_PX = 48;
+    const SCROLL_SPEED_PX = 10;
+
+    const scrollLoop = () => {
+      const dir = scrollDirectionRef.current;
+      const scrollEl = tabsScrollRef.current;
+      if (dir !== 0 && scrollEl) {
+        scrollEl.scrollLeft += SCROLL_SPEED_PX * dir;
+      }
+      scrollRafRef.current = requestAnimationFrame(scrollLoop);
+    };
+
+    scrollRafRef.current = requestAnimationFrame(scrollLoop);
 
     const onPointerMove = (e: PointerEvent) => {
       const drag = dragRef.current;
       if (!drag) return;
       const deltaX = e.clientX - drag.startX;
+      const scrollDelta = (tabsScrollRef.current?.scrollLeft ?? 0) - drag.scrollStart;
       const { sourceIndex: srcIdx, slotWidth: sw, tabIds } = drag;
-      let targetIdx = srcIdx + Math.round(deltaX / sw);
+      let targetIdx = srcIdx + Math.round((deltaX + scrollDelta) / sw);
       targetIdx = Math.max(0, Math.min(targetIdx, tabIds.length - 1));
       drag.targetIndex = targetIdx;
-      applyTransforms(srcIdx, targetIdx, deltaX);
+      applyTransforms(srcIdx, targetIdx, deltaX, scrollDelta);
+
+      const scrollEl = tabsScrollRef.current;
+      if (scrollEl) {
+        const r = scrollEl.getBoundingClientRect();
+        if (e.clientX <= r.left + SCROLL_EDGE_PX) {
+          scrollDirectionRef.current = -1;
+        } else if (e.clientX >= r.right - SCROLL_EDGE_PX) {
+          scrollDirectionRef.current = 1;
+        } else {
+          scrollDirectionRef.current = 0;
+        }
+      }
     };
 
     const onPointerUp = () => {
       const drag = dragRef.current;
       const dragId = draggingTabIdRef.current;
+      let didReorder = false;
       if (drag && dragId) {
         clearAllTransforms();
         const dropId = drag.tabIds[drag.targetIndex];
         if (dropId && drag.sourceIndex !== drag.targetIndex) {
           applyReorder(dragId, dropId);
+          didReorder = true;
         }
       }
-      dragJustEndedRef.current = true;
+      // Only suppress the next click when we actually reordered; otherwise
+      // a press-and-release on the grip would eat the next tab click.
+      dragJustEndedRef.current = didReorder;
       draggingTabIdRef.current = null;
       dragRef.current = null;
       setIsDraggingTabId(null);
@@ -756,6 +907,11 @@ export function ProjectNavBar({
     document.addEventListener("pointercancel", onPointerUp, capture);
 
     return () => {
+      scrollDirectionRef.current = 0;
+      if (scrollRafRef.current != null) {
+        cancelAnimationFrame(scrollRafRef.current);
+        scrollRafRef.current = null;
+      }
       document.body.style.cursor = "";
       document.body.style.userSelect = "";
       document.removeEventListener("pointermove", onPointerMove, capture);
@@ -767,10 +923,31 @@ export function ProjectNavBar({
 
   const onGripPointerDown = useCallback(
     (e: React.PointerEvent, tabId: ProjectNavTabId) => {
-      e.preventDefault();
-      e.stopPropagation();
-      dragStartXRef.current = e.clientX;
-      setIsDraggingTabId(tabId);
+      // Don't preventDefault on pointerdown - allow simple taps to navigate.
+      // Only start drag when the user actually moves past a threshold.
+      const startX = e.clientX;
+      const startY = e.clientY;
+      const threshold = 5;
+
+      const onMove = (e2: PointerEvent) => {
+        const dx = Math.abs(e2.clientX - startX);
+        const dy = Math.abs(e2.clientY - startY);
+        if (dx > threshold || dy > threshold) {
+          e2.preventDefault();
+          dragStartXRef.current = e2.clientX;
+          setIsDraggingTabId(tabId);
+          document.removeEventListener("pointermove", onMove, true);
+          document.removeEventListener("pointerup", onUp, true);
+        }
+      };
+
+      const onUp = () => {
+        document.removeEventListener("pointermove", onMove, true);
+        document.removeEventListener("pointerup", onUp, true);
+      };
+
+      document.addEventListener("pointermove", onMove, true);
+      document.addEventListener("pointerup", onUp, true);
     },
     []
   );
@@ -783,9 +960,27 @@ export function ProjectNavBar({
     }
   }, []);
 
+  const customLists = getCustomLists();
+  const hiddenSet = new Set(hiddenTabIds);
   const orderedTabs = tabOrder
-    .map((id) => TABS.find((t) => t.id === id))
-    .filter(Boolean) as typeof TABS;
+    .filter((id) => !hiddenSet.has(id))
+    .map((id): { id: ProjectNavTabId; label: string; icon: React.ReactNode; href?: string; hasDropdown?: boolean } | null => {
+      const builtIn = TABS.find((t) => t.id === id);
+      if (builtIn) return builtIn;
+      if (typeof id === "string" && id.startsWith("custom-")) {
+        const slug = id.slice(7);
+        const list = customLists.find((l) => l.slug === slug);
+        if (list)
+          return {
+            id,
+            label: list.name,
+            icon: <IconFromName name={list.name} />,
+            href: `/list/${list.slug}`,
+          };
+      }
+      return null;
+    })
+    .filter(Boolean) as { id: ProjectNavTabId; label: string; icon: React.ReactNode; href?: string; hasDropdown?: boolean }[];
 
   return (
     <header className="project-nav">
@@ -873,6 +1068,7 @@ export function ProjectNavBar({
                         <li key={issue.id} role="option">
                           <Link
                             href={`/?issueId=${encodeURIComponent(issue.id)}`}
+                            prefetch={false}
                             className="project-nav-search-result-item"
                             onClick={() => {
                               setProjectSearchOpen(false);
@@ -920,6 +1116,7 @@ export function ProjectNavBar({
                 ) : (
                   <Link
                     href="/login"
+                    prefetch={false}
                     className="project-nav-auth-link"
                     aria-label="Sign in"
                   >
@@ -935,76 +1132,258 @@ export function ProjectNavBar({
         className={`project-nav-tabs-wrap${isDraggingTabId ? " is-dragging" : ""}`}
         aria-label="Project views"
       >
-        <div
-          className="project-nav-tabs"
-          onClickCapture={suppressClickIfDragEnded}
-        >
-          <div ref={tabsContainerRef} className="project-nav-tabs-inner">
-            {orderedTabs.map((tab) =>
-              tab.href ? (
-                <Link
-                  key={tab.id}
-                  href={tab.href}
-                  className={`project-nav-tab ${activeTab === tab.id ? "is-active" : ""} ${isDraggingTabId === tab.id ? "is-dragging" : ""}`}
-                  aria-current={activeTab === tab.id ? "page" : undefined}
-                  data-tab-id={tab.id}
-                  title="Click to open; drag grip to reorder"
-                  draggable={false}
-                  onDragStart={(e) => e.preventDefault()}
-                >
-                  <span
-                    className="project-nav-tab-grip"
-                    onPointerDown={(e) => onGripPointerDown(e, tab.id)}
-                    aria-label={`Drag to reorder: ${tab.label}`}
-                    title="Drag to reorder"
+        <div ref={tabsScrollRef} className="project-nav-tabs-scroll">
+          <div
+            className="project-nav-tabs"
+            onClickCapture={suppressClickIfDragEnded}
+          >
+            <div ref={tabsContainerRef} className="project-nav-tabs-inner">
+              {orderedTabs.map((tab) =>
+                tab.href ? (
+                  <Link
+                    key={tab.id}
+                    href={tab.href}
+                    prefetch={false}
+                    className={`project-nav-tab ${activeTab === tab.id ? "is-active" : ""} ${isDraggingTabId === tab.id ? "is-dragging" : ""}`}
+                    aria-current={activeTab === tab.id ? "page" : undefined}
+                    data-tab-id={tab.id}
+                    title="Click to open; drag grip to reorder"
+                    draggable={false}
+                    onDragStart={(e) => e.preventDefault()}
                   >
-                    <IconGrip />
-                  </span>
-                  <span className="project-nav-tab-icon">{tab.icon}</span>
-                  <span className="project-nav-tab-label">{tab.label}</span>
-                </Link>
-              ) : (
-                <button
-                  key={tab.id}
-                  type="button"
-                  className={`project-nav-tab ${activeTab === tab.id ? "is-active" : ""} ${isDraggingTabId === tab.id ? "is-dragging" : ""}`}
-                  onClick={() => onTabChange?.(tab.id)}
-                  aria-current={activeTab === tab.id ? "page" : undefined}
-                  data-tab-id={tab.id}
-                  title="Click to open; drag grip to reorder"
-                  draggable={false}
-                  onDragStart={(e) => e.preventDefault()}
-                >
-                  <span
-                    className="project-nav-tab-grip"
-                    onPointerDown={(e) => onGripPointerDown(e, tab.id)}
-                    aria-label={`Drag to reorder: ${tab.label}`}
-                    title="Drag to reorder"
-                  >
-                    <IconGrip />
-                  </span>
-                  <span className="project-nav-tab-icon">{tab.icon}</span>
-                  <span className="project-nav-tab-label">{tab.label}</span>
-                  {tab.hasDropdown && (
-                    <span className="project-nav-tab-chevron" aria-hidden>
-                      <IconChevronDown />
+                    <span
+                      className="project-nav-tab-grip"
+                      onPointerDown={(e) => onGripPointerDown(e, tab.id)}
+                      aria-label={`Drag to reorder: ${tab.label}`}
+                      title="Drag to reorder"
+                    >
+                      <IconGrip />
                     </span>
-                  )}
-                </button>
-              )
-            )}
+                    <span className="project-nav-tab-icon">{tab.icon}</span>
+                    <span className="project-nav-tab-label">{tab.label}</span>
+                  </Link>
+                ) : (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    className={`project-nav-tab ${activeTab === tab.id ? "is-active" : ""} ${isDraggingTabId === tab.id ? "is-dragging" : ""}`}
+                    onClick={() => onTabChange?.(tab.id)}
+                    aria-current={activeTab === tab.id ? "page" : undefined}
+                    data-tab-id={tab.id}
+                    title="Click to open; drag grip to reorder"
+                    draggable={false}
+                    onDragStart={(e) => e.preventDefault()}
+                  >
+                    <span
+                      className="project-nav-tab-grip"
+                      onPointerDown={(e) => onGripPointerDown(e, tab.id)}
+                      aria-label={`Drag to reorder: ${tab.label}`}
+                      title="Drag to reorder"
+                    >
+                      <IconGrip />
+                    </span>
+                    <span className="project-nav-tab-icon">{tab.icon}</span>
+                    <span className="project-nav-tab-label">{tab.label}</span>
+                    {tab.hasDropdown && (
+                      <span className="project-nav-tab-chevron" aria-hidden>
+                        <IconChevronDown />
+                      </span>
+                    )}
+                  </button>
+                )
+              )}
+            </div>
           </div>
+        </div>
+        <div
+          ref={filterMenuRef}
+          className="project-nav-filter-wrap"
+          style={{ position: "relative" }}
+        >
+          <button
+            type="button"
+            className={`project-nav-add project-nav-filter-btn${filterMenuOpen ? " is-open" : ""}`}
+            onClick={() => setFilterMenuOpen((open) => !open)}
+            aria-label="Show or hide tabs"
+            title="Show or hide tabs"
+            aria-expanded={filterMenuOpen}
+            aria-haspopup="true"
+          >
+            <IconFilter />
+          </button>
+          {filterMenuOpen && (
+            <div
+              className="project-nav-add-menu project-nav-filter-menu"
+              role="dialog"
+              aria-label="Tab visibility"
+            >
+              <div className="project-nav-filter-menu-header">Show tabs</div>
+              <ul className="project-nav-filter-list" role="list">
+                {[...tabOrder]
+                  .map((id) => {
+                    const builtIn = TABS.find((t) => t.id === id);
+                    const label =
+                      builtIn?.label ??
+                      (typeof id === "string" && id.startsWith("custom-")
+                        ? customLists.find((l) => getCustomListTabId(l.slug) === id)?.name ?? id
+                        : id);
+                    return { id, label };
+                  })
+                  .sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: "base" }))
+                  .map(({ id, label }) => {
+                    const visible = !hiddenSet.has(id);
+                    return (
+                      <li key={id} className="project-nav-filter-item">
+                        <label className="project-nav-filter-label">
+                          <input
+                            type="checkbox"
+                            checked={visible}
+                            onChange={() => {
+                              const next = visible
+                                ? [...hiddenTabIds, id]
+                                : hiddenTabIds.filter((h) => h !== id);
+                              setHiddenTabIds(next);
+                            }}
+                            aria-label={`${visible ? "Hide" : "Show"} ${label}`}
+                          />
+                          <span>{label}</span>
+                        </label>
+                      </li>
+                    );
+                  })}
+              </ul>
+            </div>
+          )}
+        </div>
+        <div
+          ref={addMenuRef}
+          className="project-nav-add-wrap"
+          style={{ position: "relative" }}
+        >
           <button
             type="button"
             className="project-nav-add"
-            onClick={onAddClick}
+            onClick={() => setAddMenuOpen((open) => !open)}
             aria-label="Add"
             title="Add"
+            aria-expanded={addMenuOpen}
+            aria-haspopup="true"
           >
             <IconPlus />
           </button>
+          {addMenuOpen && (
+            <ul
+              className="project-nav-add-menu"
+              role="menu"
+              aria-label="Add options"
+            >
+              {onAddClick && (
+                <li role="none">
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="project-nav-add-menu-item"
+                    onClick={() => {
+                      setAddMenuOpen(false);
+                      onAddClick();
+                    }}
+                  >
+                    Create Deck
+                  </button>
+                </li>
+              )}
+              <li role="none">
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="project-nav-add-menu-item"
+                  onClick={() => {
+                    setAddMenuOpen(false);
+                    setCreateListName("");
+                    setCreateListError(null);
+                    setCreateListModalOpen(true);
+                  }}
+                >
+                  New list…
+                </button>
+              </li>
+            </ul>
+          )}
         </div>
       </nav>
+
+      {createListModalOpen && (
+        <div
+          className="modal-overlay"
+          onClick={() => setCreateListModalOpen(false)}
+        >
+          <div
+            className="modal"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="modal-header">
+              <h2>New list page</h2>
+              <button
+                type="button"
+                className="modal-close"
+                onClick={() => setCreateListModalOpen(false)}
+                aria-label="Close"
+              >
+                ×
+              </button>
+            </div>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                setCreateListError(null);
+                const name = createListName.trim();
+                if (!name) {
+                  setCreateListError("Enter a name for the list.");
+                  return;
+                }
+                const list = addCustomList(name);
+                const newTabId = getCustomListTabId(list.slug);
+                setTabOrder([...tabOrder, newTabId]);
+                setCreateListModalOpen(false);
+                setCreateListName("");
+                router.push(`/list/${list.slug}`);
+              }}
+            >
+              {createListError && (
+                <div
+                  className="error-banner"
+                  style={{ marginBottom: 16 }}
+                >
+                  {createListError}
+                </div>
+              )}
+              <div className="form-group">
+                <label htmlFor="create-list-name">Page name</label>
+                <input
+                  id="create-list-name"
+                  type="text"
+                  value={createListName}
+                  onChange={(e) => setCreateListName(e.target.value)}
+                  placeholder="e.g. Reading list"
+                  autoFocus
+                />
+              </div>
+              <div className="modal-actions">
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => setCreateListModalOpen(false)}
+                >
+                  Cancel
+                </button>
+                <button type="submit" className="btn btn-primary">
+                  Create
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </header>
   );
 }

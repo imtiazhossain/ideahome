@@ -11,7 +11,9 @@ import {
 import { createLegacyListStorage } from "../lib/legacyListStorage";
 import { reorder } from "../lib/utils";
 import { useCachedProjectList } from "../lib/useCachedProjectList";
+import { useUndoList } from "../lib/useUndoList";
 import { useProjectLayout } from "../lib/useProjectLayout";
+import { IconUndo } from "../components/IconUndo";
 import { CheckableList } from "../components/CheckableList";
 import { AppLayout } from "../components/AppLayout";
 import { AddItemForm } from "../components/AddItemForm";
@@ -30,6 +32,7 @@ export default function IdeasPage() {
     projectsLoaded,
     selectedProjectId,
     setSelectedProjectId,
+    projectDisplayName,
     drawerOpen,
     setDrawerOpen,
     editingProjectId,
@@ -55,6 +58,12 @@ export default function IdeasPage() {
   const [newIdea, setNewIdea] = useState("");
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [editingValue, setEditingValue] = useState("");
+  const { pushHistory, undo, canUndo } = useUndoList(
+    ideas,
+    (items) => setIdeas(items),
+    20,
+    selectedProjectId ?? undefined
+  );
 
   const isTempId = (id: string) => id.startsWith("temp-");
 
@@ -62,6 +71,7 @@ export default function IdeasPage() {
     e.preventDefault();
     const trimmed = newIdea.trim();
     if (!trimmed || !selectedProjectId) return;
+    pushHistory();
     const firstDoneIndex = ideas.findIndex((i) => i.done);
     const optimisticId = `temp-${Date.now()}-${Math.random().toString(36).slice(2)}`;
     const optimistic: Idea = {
@@ -115,6 +125,7 @@ export default function IdeasPage() {
   const toggleDone = async (index: number) => {
     const item = ideas[index];
     if (isTempId(item.id)) return;
+    pushHistory();
     const newDone = !item.done;
     try {
       await updateIdea(item.id, { done: newDone });
@@ -132,9 +143,10 @@ export default function IdeasPage() {
     }
   };
 
-  const removeIdea = (index: number) => {
+  const removeIdea = (index: number, skipHistory?: boolean) => {
     const item = ideas[index];
     if (isTempId(item.id)) return;
+    if (!skipHistory) pushHistory();
     const removed = { ...item };
     setIdeas((prev) => prev.filter((_, i) => i !== index));
     if (editingIndex === index) setEditingIndex(null);
@@ -159,6 +171,7 @@ export default function IdeasPage() {
     if (editingIndex === null) return;
     const item = ideas[editingIndex];
     if (isTempId(item.id)) return;
+    pushHistory();
     const trimmed = editingValue.trim();
     if (trimmed) {
       try {
@@ -172,7 +185,7 @@ export default function IdeasPage() {
         // keep previous name
       }
     } else {
-      removeIdea(editingIndex);
+      removeIdea(editingIndex, true);
     }
     setEditingIndex(null);
   };
@@ -182,6 +195,7 @@ export default function IdeasPage() {
   };
 
   const handleReorder = (fromIndex: number, toIndex: number) => {
+    pushHistory();
     const reordered = reorder(ideas, fromIndex, toIndex);
     setIdeas(reordered);
     if (editingIndex !== null) {
@@ -205,10 +219,7 @@ export default function IdeasPage() {
     <AppLayout
       title="Ideas · Idea Home"
       activeTab="ideas"
-      projectName={
-        projects.find((p) => p.id === selectedProjectId)?.name ??
-        (selectedProjectId ? "Project" : "Select a project")
-      }
+      projectName={projectDisplayName}
       projectId={selectedProjectId || undefined}
       searchPlaceholder="Search project"
       drawerOpen={drawerOpen}
@@ -254,6 +265,18 @@ export default function IdeasPage() {
             <span className="tests-page-section-count" aria-label="Count">
               {ideas.length}
             </span>
+            {canUndo && (
+              <button
+                type="button"
+                className="tests-page-section-undo"
+                onClick={undo}
+                aria-label="Undo last change"
+                title="Undo"
+              >
+                <IconUndo />
+                Undo
+              </button>
+            )}
           </h2>
           <ProjectSectionGuard
             projectsLoaded={projectsLoaded}
@@ -274,7 +297,6 @@ export default function IdeasPage() {
               onSaveEdit={saveEdit}
               onCancelEdit={cancelEdit}
               onToggleDone={toggleDone}
-              onRemove={removeIdea}
               onReorder={handleReorder}
             />
           </ProjectSectionGuard>

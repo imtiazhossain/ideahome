@@ -52,6 +52,7 @@ import {
 } from "../lib/api";
 import { uiTests, testNameToSlug } from "../lib/ui-tests";
 import { ProjectNavBar, DrawerCollapsedNav } from "../components/ProjectNavBar";
+import { useSelectedProject } from "../lib/SelectedProjectContext";
 import { useTheme } from "./_app";
 
 function AutoResizeTextarea({
@@ -634,8 +635,13 @@ function IssueCard({
 export default function Home() {
   const router = useRouter();
   const [authResolved, setAuthResolved] = useState(false);
+  const {
+    selectedProjectId,
+    setSelectedProjectId,
+    lastKnownProjectName,
+    setLastKnownProjectName,
+  } = useSelectedProject();
   const [projects, setProjects] = useState<Project[]>([]);
-  const [selectedProjectId, setSelectedProjectId] = useState<string>("");
   const [issues, setIssues] = useState<Issue[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -1887,11 +1893,18 @@ export default function Home() {
     }
   };
 
+  const selectedProjectIdRef = useRef(selectedProjectId);
+  selectedProjectIdRef.current = selectedProjectId;
+
   const loadProjects = async () => {
     try {
       const data = await fetchProjects();
       setProjects(data);
-      if (data.length && !selectedProjectId) setSelectedProjectId(data[0].id);
+      if (data.length) {
+        const current = selectedProjectIdRef.current;
+        const exists = data.some((p) => p.id === current);
+        if (!exists) setSelectedProjectId(data[0].id);
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load projects");
     }
@@ -1947,6 +1960,12 @@ export default function Home() {
       clearInterval(interval);
     };
   }, [authResolved, router]);
+
+  useEffect(() => {
+    if (!selectedProjectId) return;
+    const name = projects.find((p) => p.id === selectedProjectId)?.name;
+    if (name) setLastKnownProjectName(name);
+  }, [projects, selectedProjectId, setLastKnownProjectName]);
 
   useEffect(() => {
     if (editingProjectId) {
@@ -3260,7 +3279,13 @@ export default function Home() {
           <ProjectNavBar
             projectName={
               projects.find((p) => p.id === selectedProjectId)?.name ??
-              (selectedProjectId ? "Project" : "Select a project")
+              (selectedProjectId && lastKnownProjectName
+                ? lastKnownProjectName
+                : selectedProjectId
+                  ? "Project"
+                  : projects.length
+                    ? "Select a project"
+                    : "Project")
             }
             projectId={selectedProjectId || undefined}
             activeTab="board"

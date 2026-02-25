@@ -401,7 +401,7 @@ textarea {
   padding: 8px 12px;
   border: 1px solid var(--border);
   border-radius: 6px;
-  background: var(--input-bg, var(--card-bg));
+  background: var(--input-bg, var(--bg-card));
   color: var(--text);
   font-size: 14px;
   font-family: inherit;
@@ -828,12 +828,20 @@ textarea {
 
 .project-nav-tabs-wrap {
   margin-top: 12px;
+  display: flex;
+  align-items: center;
+  overflow: visible;
+}
+
+.project-nav-tabs-scroll {
+  flex: 1;
+  min-width: 0;
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
   -ms-overflow-style: none;
 }
-.project-nav-tabs-wrap::-webkit-scrollbar {
+.project-nav-tabs-scroll::-webkit-scrollbar {
   display: none;
 }
 
@@ -938,6 +946,26 @@ textarea {
   color: inherit;
 }
 
+.icon-from-name {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  color: #fff;
+  font-size: 9px;
+  font-weight: 600;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.icon-from-name--svg {
+  border-radius: 0;
+  background: none;
+  color: currentColor;
+}
+
 .project-nav-tab-label {
   line-height: 1.2;
 }
@@ -961,7 +989,7 @@ textarea {
   margin-top: 4px;
   min-width: 180px;
   padding: 6px 0;
-  background: var(--card-bg, #fff);
+  background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: 8px;
   box-shadow: var(--box-shadow);
@@ -1006,8 +1034,6 @@ textarea {
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  margin-left: 8px;
-  flex-shrink: 0;
   transition:
     background 0.15s ease,
     color 0.15s ease;
@@ -1016,6 +1042,132 @@ textarea {
 .project-nav-add:hover {
   background: var(--border);
   color: var(--text);
+}
+
+.project-nav-add-wrap {
+  margin-left: 8px;
+  flex-shrink: 0;
+}
+
+.project-nav-filter-wrap {
+  margin-left: 4px;
+  flex-shrink: 0;
+}
+
+/* Match filter button appearance to add button */
+.project-nav-filter-wrap .project-nav-filter-btn {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border-radius: 8px;
+  background: var(--column-bg);
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.project-nav-filter-wrap .project-nav-filter-btn:hover {
+  background: var(--border);
+  color: var(--text);
+}
+
+.project-nav-filter-btn.is-open {
+  background: var(--border);
+  color: var(--text);
+}
+
+.project-nav-filter-menu {
+  max-height: 60vh;
+  overflow-y: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.project-nav-filter-menu::-webkit-scrollbar {
+  display: none;
+}
+
+.project-nav-filter-menu-header {
+  padding: 8px 14px 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  border-bottom: 1px solid var(--border);
+}
+
+.project-nav-filter-list {
+  list-style: none;
+  margin: 0;
+  padding: 6px 0;
+}
+
+.project-nav-filter-item {
+  margin: 0 0 2px;
+}
+
+.project-nav-filter-item:last-child {
+  margin-bottom: 0;
+}
+
+.project-nav-filter-label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 400;
+  color: var(--text);
+  margin: 0;
+  border-radius: 6px;
+  transition: background 0.15s ease;
+}
+
+.project-nav-filter-label:hover {
+  background: var(--column-bg);
+}
+
+.project-nav-filter-label input[type="checkbox"] {
+  margin: 0;
+  flex-shrink: 0;
+}
+
+.project-nav-add-menu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin: 4px 0 0;
+  padding: 6px 0;
+  min-width: 180px;
+  list-style: none;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--card-radius);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  z-index: 100;
+}
+
+.project-nav-add-menu-item {
+  display: block;
+  width: 100%;
+  padding: 10px 14px;
+  text-align: left;
+  border: none;
+  background: none;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 400;
+  cursor: pointer;
+  text-decoration: none;
+  box-sizing: border-box;
+  border-radius: 6px;
+  transition: background 0.15s ease;
+}
+
+.project-nav-add-menu-item:hover {
+  background: var(--column-bg);
 }
 
 .project-nav-filter {
@@ -2385,6 +2537,27 @@ a.automated-tests-chip-text:hover {
 .tests-page-section-refresh:disabled {
   opacity: 0.7;
   cursor: not-allowed;
+}
+
+.tests-page-section-undo {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  padding: 4px 10px;
+  font-size: 13px;
+  color: var(--text-muted);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: color 0.15s ease, background 0.15s ease, border-color 0.15s ease;
+}
+
+.tests-page-section-undo:hover {
+  color: var(--text);
+  background: var(--column-bg);
+  border-color: var(--border-strong);
 }
 
 .tests-page-section-refresh-icon--spin {

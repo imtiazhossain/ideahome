@@ -11,11 +11,13 @@ import {
 import { createLegacyListStorage } from "../lib/legacyListStorage";
 import { reorder } from "../lib/utils";
 import { useCachedProjectList } from "../lib/useCachedProjectList";
+import { useUndoList } from "../lib/useUndoList";
 import { useProjectLayout } from "../lib/useProjectLayout";
 import { CheckableList } from "../components/CheckableList";
 import { AppLayout } from "../components/AppLayout";
 import { AddItemForm } from "../components/AddItemForm";
 import { ProjectSectionGuard } from "../components/ProjectSectionGuard";
+import { IconUndo } from "../components/IconUndo";
 import { useTheme } from "./_app";
 
 const featuresLegacyStorage = createLegacyListStorage(
@@ -30,6 +32,7 @@ export default function FeaturesPage() {
     projectsLoaded,
     selectedProjectId,
     setSelectedProjectId,
+    projectDisplayName,
     drawerOpen,
     setDrawerOpen,
     editingProjectId,
@@ -55,6 +58,12 @@ export default function FeaturesPage() {
   const [newFeature, setNewFeature] = useState("");
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [editingValue, setEditingValue] = useState("");
+  const { pushHistory, undo, canUndo } = useUndoList(
+    features,
+    (items) => setFeatures(items),
+    20,
+    selectedProjectId ?? undefined
+  );
 
   const isTempId = (id: string) => id.startsWith("temp-");
 
@@ -62,6 +71,7 @@ export default function FeaturesPage() {
     e.preventDefault();
     const trimmed = newFeature.trim();
     if (!trimmed || !selectedProjectId) return;
+    pushHistory();
     const firstDoneIndex = features.findIndex((f) => f.done);
     const optimisticId = `temp-${Date.now()}-${Math.random().toString(36).slice(2)}`;
     const optimistic: Feature = {
@@ -115,6 +125,7 @@ export default function FeaturesPage() {
   const toggleDone = async (index: number) => {
     const item = features[index];
     if (isTempId(item.id)) return;
+    pushHistory();
     const newDone = !item.done;
     try {
       await updateFeature(item.id, { done: newDone });
@@ -132,9 +143,10 @@ export default function FeaturesPage() {
     }
   };
 
-  const removeFeature = (index: number) => {
+  const removeFeature = (index: number, skipHistory?: boolean) => {
     const item = features[index];
     if (isTempId(item.id)) return;
+    if (!skipHistory) pushHistory();
     const removed = { ...item };
     setFeatures((prev) => prev.filter((_, i) => i !== index));
     if (editingIndex === index) setEditingIndex(null);
@@ -159,6 +171,7 @@ export default function FeaturesPage() {
     if (editingIndex === null) return;
     const item = features[editingIndex];
     if (isTempId(item.id)) return;
+    pushHistory();
     const trimmed = editingValue.trim();
     if (trimmed) {
       try {
@@ -172,7 +185,7 @@ export default function FeaturesPage() {
         // keep previous name
       }
     } else {
-      removeFeature(editingIndex);
+      removeFeature(editingIndex, true);
     }
     setEditingIndex(null);
   };
@@ -182,6 +195,7 @@ export default function FeaturesPage() {
   };
 
   const handleReorder = (fromIndex: number, toIndex: number) => {
+    pushHistory();
     const reordered = reorder(features, fromIndex, toIndex);
     setFeatures(reordered);
     if (editingIndex !== null) {
@@ -205,10 +219,7 @@ export default function FeaturesPage() {
     <AppLayout
       title="Features · Idea Home"
       activeTab="list"
-      projectName={
-        projects.find((p) => p.id === selectedProjectId)?.name ??
-        (selectedProjectId ? "Project" : "Select a project")
-      }
+      projectName={projectDisplayName}
       projectId={selectedProjectId || undefined}
       searchPlaceholder="Search project"
       drawerOpen={drawerOpen}
@@ -254,6 +265,18 @@ export default function FeaturesPage() {
             <span className="tests-page-section-count" aria-label="Count">
               {features.length}
             </span>
+            {canUndo && (
+              <button
+                type="button"
+                className="tests-page-section-undo"
+                onClick={undo}
+                aria-label="Undo last change"
+                title="Undo"
+              >
+                <IconUndo />
+                Undo
+              </button>
+            )}
           </h2>
           <ProjectSectionGuard
             projectsLoaded={projectsLoaded}
@@ -274,7 +297,6 @@ export default function FeaturesPage() {
               onSaveEdit={saveEdit}
               onCancelEdit={cancelEdit}
               onToggleDone={toggleDone}
-              onRemove={removeFeature}
               onReorder={handleReorder}
             />
           </ProjectSectionGuard>
