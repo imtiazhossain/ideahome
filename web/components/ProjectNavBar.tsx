@@ -59,6 +59,8 @@ const TAB_ORDER_STORAGE_PREFIX = "ideahome-project-nav-tab-order";
 const LEGACY_TAB_ORDER_STORAGE_KEY = "ideahome-project-nav-tab-order";
 const HIDDEN_TABS_STORAGE_PREFIX = "ideahome-project-nav-tabs-hidden";
 const HIDDEN_TABS_LEGACY_KEY = "ideahome-project-nav-tabs-hidden";
+const SETTINGS_BUTTON_VISIBLE_PREFIX = "ideahome-project-nav-settings-visible";
+const SETTINGS_BUTTON_VISIBLE_LEGACY_KEY = "ideahome-project-nav-settings-visible";
 
 /** Set when user explicitly clicks Board tab; tells _app to skip redirect away from /. */
 export const EXPLICIT_BOARD_SESSION_KEY = "ideahome-explicit-board";
@@ -74,6 +76,13 @@ function getHiddenTabsStorageKey(): string {
   return getUserScopedStorageKey(
     HIDDEN_TABS_STORAGE_PREFIX,
     HIDDEN_TABS_LEGACY_KEY
+  );
+}
+
+function getSettingsButtonVisibleStorageKey(): string {
+  return getUserScopedStorageKey(
+    SETTINGS_BUTTON_VISIBLE_PREFIX,
+    SETTINGS_BUTTON_VISIBLE_LEGACY_KEY
   );
 }
 
@@ -306,6 +315,36 @@ const IconChevronDown = () => (
     aria-hidden
   >
     <polyline points="6 9 12 15 18 9" />
+  </svg>
+);
+const IconChevronLeft = () => (
+  <svg
+    width="12"
+    height="12"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden
+  >
+    <polyline points="15 18 9 12 15 6" />
+  </svg>
+);
+const IconChevronRight = () => (
+  <svg
+    width="12"
+    height="12"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden
+  >
+    <polyline points="9 18 15 12 9 6" />
   </svg>
 );
 const IconPlus = () => (
@@ -735,6 +774,8 @@ export interface ProjectNavBarProps {
   onDeleteAllIssuesClick?: () => void;
   /** When onDeleteAllIssuesClick is provided, whether delete-all is disabled (e.g. loading or no issues). */
   deleteAllIssuesDisabled?: boolean;
+  /** When false, hides the settings button. Default true. */
+  showSettingsButton?: boolean;
 }
 
 const PROJECT_SEARCH_DEBOUNCE_MS = 250;
@@ -769,9 +810,11 @@ export function ProjectNavBar({
   onDeleteProjectClick,
   onDeleteAllIssuesClick,
   deleteAllIssuesDisabled,
+  showSettingsButton = true,
 }: ProjectNavBarProps) {
   const router = useRouter();
   const { tabOrder, setTabOrder, hiddenTabIds, setHiddenTabIds } = useTabOrder();
+  const [settingsButtonVisible, setSettingsButtonVisible] = useState(true);
   const [settingsMenuOpen, setSettingsMenuOpen] = useState(false);
   const [reorderSectionOpen, setReorderSectionOpen] = useState(false);
   const [showTabsSectionOpen, setShowTabsSectionOpen] = useState(false);
@@ -811,6 +854,14 @@ export function ProjectNavBar({
     const handler = () => setHasToken(!!getStoredToken());
     window.addEventListener(AUTH_CHANGE_EVENT, handler);
     return () => window.removeEventListener(AUTH_CHANGE_EVENT, handler);
+  }, []);
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem(getSettingsButtonVisibleStorageKey());
+      setSettingsButtonVisible(stored !== "0");
+    } catch {
+      /* ignore */
+    }
   }, []);
   const handleLogout = useCallback(() => {
     setAuthMenuOpen(false);
@@ -1386,11 +1437,35 @@ export function ProjectNavBar({
             </div>
           </div>
         </div>
-        <div
-          ref={settingsMenuRef}
-          className="project-nav-settings-wrap"
-          style={{ position: "relative" }}
-        >
+        {showSettingsButton && (
+        <div ref={settingsMenuRef} className="project-nav-settings-wrap">
+          <button
+            type="button"
+            className="project-nav-add project-nav-settings-toggle-btn"
+            onClick={() => {
+              const next = !settingsButtonVisible;
+              setSettingsButtonVisible(next);
+              try {
+                localStorage.setItem(
+                  getSettingsButtonVisibleStorageKey(),
+                  next ? "1" : "0"
+                );
+              } catch {
+                /* ignore */
+              }
+              if (!next) setSettingsMenuOpen(false);
+            }}
+            aria-label={settingsButtonVisible ? "Hide settings" : "Show settings"}
+            title={settingsButtonVisible ? "Hide settings" : "Show settings"}
+            aria-expanded={settingsButtonVisible}
+          >
+            {settingsButtonVisible ? (
+              <IconChevronRight />
+            ) : (
+              <IconChevronLeft />
+            )}
+          </button>
+          {settingsButtonVisible && (
           <button
             type="button"
             className={`project-nav-add project-nav-settings-btn${settingsMenuOpen ? " is-open" : ""}`}
@@ -1411,7 +1486,8 @@ export function ProjectNavBar({
           >
             <IconSettings />
           </button>
-          {settingsMenuOpen && (
+          )}
+          {settingsButtonVisible && settingsMenuOpen && (
             <div
               className="project-nav-settings-menu"
               role="menu"
@@ -1607,6 +1683,7 @@ export function ProjectNavBar({
             </div>
           )}
         </div>
+        )}
       </nav>
 
       {createListModalOpen && (

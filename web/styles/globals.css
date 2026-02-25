@@ -1253,6 +1253,29 @@ textarea {
 .project-nav-settings-wrap {
   margin-left: 8px;
   flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 0;
+  position: relative;
+}
+
+.project-nav-settings-wrap .project-nav-settings-toggle-btn {
+  width: 24px;
+  height: 32px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.project-nav-settings-wrap .project-nav-settings-toggle-btn:hover {
+  background: var(--border);
+  color: var(--text);
 }
 
 .project-nav-settings-wrap .project-nav-settings-btn {
