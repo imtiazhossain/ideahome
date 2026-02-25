@@ -766,7 +766,6 @@ textarea {
   flex-shrink: 0;
 }
 
-.project-nav-auth-link,
 .project-nav-auth-btn {
   display: inline-flex;
   align-items: center;
@@ -781,13 +780,52 @@ textarea {
   border-radius: 6px;
 }
 
-.project-nav-auth-link:hover,
 .project-nav-auth-btn:hover {
   color: var(--accent);
 }
 
 .project-nav-auth-btn {
   font-family: inherit;
+}
+
+.project-nav-auth-wrap {
+  position: relative;
+}
+
+.project-nav-auth-menu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin: 4px 0 0;
+  padding: 6px 0;
+  min-width: 160px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--card-radius);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  z-index: 100;
+}
+
+.project-nav-auth-menu-item {
+  display: block;
+  width: 100%;
+  padding: 10px 14px;
+  text-align: left;
+  border: none;
+  background: none;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 400;
+  cursor: pointer;
+  text-decoration: none;
+  box-sizing: border-box;
+  border-radius: 6px;
+  transition: background 0.15s ease;
+  font-family: inherit;
+}
+
+.project-nav-auth-menu-item:hover {
+  background: var(--column-bg);
 }
 
 .project-nav-project-icon {

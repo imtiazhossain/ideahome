@@ -12,6 +12,7 @@ import {
   getUserScopedStorageKey,
   logout,
 } from "../lib/api";
+import { useTheme } from "../lib/ThemeContext";
 import type { Bug, Feature, Idea, Issue, Todo } from "../lib/api";
 import {
   addCustomList,
@@ -688,6 +689,8 @@ export function ProjectNavBar({
   const [createListError, setCreateListError] = useState<string | null>(null);
   const [filterMenuOpen, setFilterMenuOpen] = useState(false);
   const filterMenuRef = useRef<HTMLDivElement>(null);
+  const [authMenuOpen, setAuthMenuOpen] = useState(false);
+  const authMenuRef = useRef<HTMLDivElement>(null);
 
   const [projectSearchQuery, setProjectSearchQuery] = useState("");
   const [projectSearchResults, setProjectSearchResults] = useState<
@@ -697,10 +700,17 @@ export function ProjectNavBar({
   const [projectSearchLoading, setProjectSearchLoading] = useState(false);
   const projectSearchRef = useRef<HTMLDivElement>(null);
   const [hasToken, setHasToken] = useState<boolean | null>(null);
+  const { theme, toggleTheme } = useTheme();
   useEffect(() => {
     setHasToken(!!getStoredToken());
   }, []);
+  useEffect(() => {
+    const handler = () => setHasToken(!!getStoredToken());
+    window.addEventListener(AUTH_CHANGE_EVENT, handler);
+    return () => window.removeEventListener(AUTH_CHANGE_EVENT, handler);
+  }, []);
   const handleLogout = useCallback(() => {
+    setAuthMenuOpen(false);
     logout("/login");
   }, []);
 
@@ -833,6 +843,12 @@ export function ProjectNavBar({
         !filterMenuRef.current.contains(e.target as Node)
       ) {
         setFilterMenuOpen(false);
+      }
+      if (
+        authMenuRef.current &&
+        !authMenuRef.current.contains(e.target as Node)
+      ) {
+        setAuthMenuOpen(false);
       }
     };
     document.addEventListener("mousedown", handleClickOutside);
@@ -1230,27 +1246,58 @@ export function ProjectNavBar({
               </button>
             )}
             {hasToken !== null && (
-              <span className="project-nav-auth">
-                {hasToken ? (
-                  <button
-                    type="button"
-                    className="project-nav-auth-btn"
-                    onClick={handleLogout}
-                    aria-label="Log out"
-                    title="Log out"
-                  >
-                    <IconProfile />
-                  </button>
-                ) : (
-                  <Link
-                    href="/login"
-                    prefetch={false}
-                    className="project-nav-auth-link"
-                    aria-label="Sign in"
-                    title="Sign in"
-                  >
-                    <IconProfile />
-                  </Link>
+              <span className="project-nav-auth project-nav-auth-wrap" ref={authMenuRef}>
+                <button
+                  type="button"
+                  className={`project-nav-auth-btn${authMenuOpen ? " is-open" : ""}`}
+                  onClick={() => setAuthMenuOpen((o) => !o)}
+                  aria-label={hasToken ? "Account menu" : "Sign in"}
+                  title={hasToken ? "Account menu" : "Sign in"}
+                  aria-expanded={authMenuOpen}
+                  aria-haspopup="true"
+                >
+                  <IconProfile />
+                </button>
+                {authMenuOpen && (
+                  <div className="project-nav-auth-menu" role="menu">
+                    <button
+                      type="button"
+                      className="project-nav-auth-menu-item"
+                      role="menuitem"
+                      onClick={() => {
+                        toggleTheme();
+                        setAuthMenuOpen(false);
+                      }}
+                      aria-label={
+                        theme === "light"
+                          ? "Switch to dark theme"
+                          : "Switch to light theme"
+                      }
+                    >
+                      {theme === "light" ? "🌙" : "☀️"}{" "}
+                      {theme === "light" ? "Dark mode" : "Light mode"}
+                    </button>
+                    {hasToken ? (
+                      <button
+                        type="button"
+                        className="project-nav-auth-menu-item"
+                        role="menuitem"
+                        onClick={handleLogout}
+                      >
+                        Log out
+                      </button>
+                    ) : (
+                      <Link
+                        href="/login"
+                        prefetch={false}
+                        className="project-nav-auth-menu-item"
+                        role="menuitem"
+                        onClick={() => setAuthMenuOpen(false)}
+                      >
+                        Log in
+                      </Link>
+                    )}
+                  </div>
                 )}
               </span>
             )}
