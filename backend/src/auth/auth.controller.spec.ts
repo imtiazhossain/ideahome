@@ -88,7 +88,7 @@ describe("AuthController", () => {
       mockPrisma.user.create.mockResolvedValue(user);
 
       const res = mockRes();
-      await controller.callback({} as any, res as any, {
+      await controller.callback(res as any, {
         code: "code",
         state: "mock-state",
       });
@@ -113,7 +113,7 @@ describe("AuthController", () => {
       mockPrisma.user.create.mockResolvedValue(user);
 
       const res = mockRes();
-      await controller.callback({} as any, res as any, {
+      await controller.callback(res as any, {
         code: "code",
         state: "mock-state",
       });
@@ -131,7 +131,7 @@ describe("AuthController", () => {
       __setUserinfoResponse({});
       const res = mockRes();
       await controller.login(res as any);
-      await controller.callback({} as any, res as any, {
+      await controller.callback(res as any, {
         code: "code",
         state: "mock-state",
       });

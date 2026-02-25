@@ -45,15 +45,11 @@ export class FirebaseService implements OnModuleInit {
     if (!this.app) return null;
     try {
       const decoded = await this.app.auth().verifyIdToken(idToken);
-      const name =
-        decoded.name ??
-        ((decoded as Record<string, unknown>).display_name as
-          | string
-          | undefined);
+      const payload = decoded as { uid: string; email?: string; name?: string; display_name?: string };
       return {
-        uid: decoded.uid,
-        email: decoded.email ?? undefined,
-        name: name ?? undefined,
+        uid: payload.uid,
+        email: payload.email ?? undefined,
+        name: payload.name ?? payload.display_name ?? undefined,
       };
     } catch {
       return null;

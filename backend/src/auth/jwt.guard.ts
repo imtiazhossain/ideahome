@@ -8,6 +8,7 @@ import * as jwt from "jsonwebtoken";
 import { PrismaService } from "../prisma.service";
 import { FirebaseService } from "./firebase.service";
 import { AuthService } from "./auth.service";
+import { getJwtSecret } from "./jwt-secret";
 
 @Injectable()
 export class JwtAuthGuard implements CanActivate {
@@ -21,9 +22,11 @@ export class JwtAuthGuard implements CanActivate {
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const req = context.switchToHttp().getRequest();
-    const auth = req.headers["authorization"] || req.headers["Authorization"];
+    const auth = req.headers["authorization"] ?? req.headers["Authorization"];
+    let hadAuth = false;
 
     if (auth) {
+      hadAuth = true;
       const parts = (Array.isArray(auth) ? auth[0] : auth).split(" ");
       if (parts.length !== 2 || parts[0] !== "Bearer") {
         throw new UnauthorizedException("Invalid Authorization format");
@@ -32,11 +35,10 @@ export class JwtAuthGuard implements CanActivate {
       try {
         const payload = jwt.verify(
           token,
-          process.env.JWT_SECRET || "dev-secret"
+          getJwtSecret()
         ) as { sub?: string; email?: string };
-        if (payload.sub && !this.ensuredOrgUserIds.has(payload.sub)) {
-          await this.authService.ensureUserOrganization(payload.sub);
-          this.ensuredOrgUserIds.add(payload.sub);
+        if (payload.sub) {
+          await this.ensureUserAndOrg(payload.sub);
         }
         req.user = { sub: payload.sub, email: payload.email };
         return true;
@@ -49,42 +51,35 @@ export class JwtAuthGuard implements CanActivate {
               decoded.email ?? "",
               decoded.name
             );
-            if (!this.ensuredOrgUserIds.has(user.id)) {
-              await this.authService.ensureUserOrganization(user.id);
-              this.ensuredOrgUserIds.add(user.id);
-            }
+            await this.ensureUserAndOrg(user.id);
             req.user = { sub: user.id, email: user.email };
             return true;
           }
         }
-        if (process.env.SKIP_AUTH_DEV === "true") {
-          const devUser = await this.resolveDevUser();
-          if (devUser) {
-            if (!this.ensuredOrgUserIds.has(devUser.id)) {
-              await this.authService.ensureUserOrganization(devUser.id);
-              this.ensuredOrgUserIds.add(devUser.id);
-            }
-            req.user = { sub: devUser.id, email: devUser.email };
-            return true;
-          }
-        }
-        throw new UnauthorizedException("Invalid or expired token");
       }
     }
 
-    if (process.env.SKIP_AUTH_DEV === "true") {
-      const devUser = await this.resolveDevUser();
-      if (devUser) {
-        if (!this.ensuredOrgUserIds.has(devUser.id)) {
-          await this.authService.ensureUserOrganization(devUser.id);
-          this.ensuredOrgUserIds.add(devUser.id);
-        }
-        req.user = { sub: devUser.id, email: devUser.email };
-        return true;
-      }
+    const devUser = await this.tryDevUser();
+    if (devUser) {
+      await this.ensureUserAndOrg(devUser.id);
+      req.user = { sub: devUser.id, email: devUser.email };
+      return true;
     }
 
-    throw new UnauthorizedException("Missing Authorization header");
+    throw new UnauthorizedException(
+      hadAuth ? "Invalid or expired token" : "Missing Authorization header"
+    );
+  }
+
+  private async tryDevUser(): Promise<{ id: string; email: string } | null> {
+    if (process.env.SKIP_AUTH_DEV !== "true") return null;
+    return this.resolveDevUser();
+  }
+
+  private async ensureUserAndOrg(userId: string): Promise<void> {
+    if (this.ensuredOrgUserIds.has(userId)) return;
+    await this.authService.ensureUserOrganization(userId);
+    this.ensuredOrgUserIds.add(userId);
   }
 
   private async resolveDevUser(): Promise<{

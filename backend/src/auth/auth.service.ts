@@ -2,12 +2,9 @@ import { Injectable } from "@nestjs/common";
 import * as crypto from "crypto";
 import * as jwt from "jsonwebtoken";
 import { PrismaService } from "../prisma.service";
+import { getJwtSecret } from "./jwt-secret";
 
 const STATE_TTL_MS = 10 * 60 * 1000; // 10 minutes
-
-function getStateSecret(): string {
-  return process.env.JWT_SECRET ?? "dev-secret";
-}
 
 export type SsoProfile = {
   providerId: string;
@@ -62,7 +59,7 @@ export class AuthService {
     const payloadStr = JSON.stringify(payload);
     const b64 = Buffer.from(payloadStr, "utf8").toString("base64url");
     const sig = crypto
-      .createHmac("sha256", getStateSecret())
+      .createHmac("sha256", getJwtSecret())
       .update(payloadStr)
       .digest("base64url");
     return `${b64}.${sig}`;
@@ -81,7 +78,7 @@ export class AuthService {
       return null;
     }
     const expectedSig = crypto
-      .createHmac("sha256", getStateSecret())
+      .createHmac("sha256", getJwtSecret())
       .update(payloadStr)
       .digest("base64url");
     if (sig !== expectedSig) return null;
@@ -188,7 +185,7 @@ export class AuthService {
   signToken(user: { id: string; email: string }): string {
     return jwt.sign(
       { sub: user.id, email: user.email },
-      process.env.JWT_SECRET ?? "dev-secret",
+      getJwtSecret(),
       { expiresIn: "7d" }
     );
   }

@@ -54,12 +54,11 @@ export class TodosService {
     body: { projectId: string; name: string; done?: boolean }
   ) {
     await this.verifyProjectAccess(body.projectId, userId);
-    const maxOrder = await this.prisma.todo
-      .aggregate({
-        where: { projectId: body.projectId },
-        _max: { order: true },
-      })
-      .then((r) => r._max.order ?? -1);
+    const agg = await this.prisma.todo.aggregate({
+      where: { projectId: body.projectId },
+      _max: { order: true },
+    });
+    const maxOrder = agg._max.order ?? -1;
     return this.prisma.todo.create({
       data: {
         projectId: body.projectId,

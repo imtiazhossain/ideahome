@@ -324,6 +324,11 @@ textarea {
   max-height: 40vh;
   white-space: pre-wrap;
   word-break: break-word;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.drawer-api-result-output::-webkit-scrollbar {
+  display: none;
 }
 
 .drawer-nav {
@@ -2047,6 +2052,11 @@ textarea {
   padding: 24px;
   align-items: flex-start;
   justify-content: center;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.modal-overlay--scrollable::-webkit-scrollbar {
+  display: none;
 }
 
 .modal {
@@ -2682,6 +2692,11 @@ a.automated-tests-chip-text:hover {
   border: 1px solid var(--border);
   max-height: 200px;
   overflow: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.coverage-page-output::-webkit-scrollbar {
+  display: none;
 }
 
 .coverage-page-output-close {
@@ -2723,6 +2738,11 @@ a.automated-tests-chip-text:hover {
   background: var(--bg-page);
   max-height: 240px;
   overflow: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.coverage-page-gaps::-webkit-scrollbar {
+  display: none;
 }
 
 .coverage-page-gaps-title {
@@ -3404,6 +3424,11 @@ a.automated-tests-chip-text:hover {
   border: 1px solid var(--border);
   max-height: 40vh;
   overflow: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.api-tests-page-result::-webkit-scrollbar {
+  display: none;
 }
 
 .api-tests-page-result--running {

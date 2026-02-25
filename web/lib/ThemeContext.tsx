@@ -14,14 +14,14 @@ const ThemeContext = createContext<{
 } | null>(null);
 
 function getStoredTheme(): Theme {
-  if (typeof window === "undefined") return "light";
+  if (typeof window === "undefined") return "dark";
   const stored = localStorage.getItem("theme");
   if (stored === "dark" || stored === "light") return stored;
-  return "light";
+  return "dark";
 }
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [theme, setTheme] = useState<Theme>("light");
+  const [theme, setTheme] = useState<Theme>("dark");
 
   useEffect(() => {
     setTheme(getStoredTheme());

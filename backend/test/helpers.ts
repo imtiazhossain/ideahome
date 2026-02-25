@@ -1,7 +1,6 @@
 import * as jwt from "jsonwebtoken";
 import { PrismaClient } from "@prisma/client";
-
-const secret = process.env.JWT_SECRET || "dev-secret";
+import { getJwtSecret } from "../src/auth/jwt-secret";
 
 export function createTestToken(
   payload: { sub: string; email?: string } = {
@@ -9,7 +8,7 @@ export function createTestToken(
     email: "test@example.com",
   }
 ): string {
-  return jwt.sign(payload, secret, { expiresIn: "1h" });
+  return jwt.sign(payload, getJwtSecret(), { expiresIn: "1h" });
 }
 
 /** Create a test user with a personal org; returns token and ids for e2e. */
