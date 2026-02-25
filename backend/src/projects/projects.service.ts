@@ -1,26 +1,25 @@
-import {
-  ForbiddenException,
-  Injectable,
-  NotFoundException,
-} from "@nestjs/common";
+import { Injectable, NotFoundException } from "@nestjs/common";
 import { PrismaClientKnownRequestError } from "@prisma/client/runtime/library";
+import { AuthService } from "../auth/auth.service";
 import { PrismaService } from "../prisma.service";
 
 @Injectable()
 export class ProjectsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly authService: AuthService
+  ) {}
 
+  /** Resolves the user's organization id, ensuring one exists (creates "My Workspace" if missing). */
   private async getOrgIdForUser(userId: string): Promise<string> {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
       select: { organizationId: true },
     });
-    if (!user?.organizationId) {
-      throw new ForbiddenException(
-        "User has no organization. Complete login again to create one."
-      );
-    }
-    return user.organizationId;
+    if (!user) throw new NotFoundException("User not found");
+    if (user.organizationId) return user.organizationId;
+    const withOrg = await this.authService.ensureUserOrganization(userId);
+    return withOrg.organizationId!;
   }
 
   async list(userId: string) {

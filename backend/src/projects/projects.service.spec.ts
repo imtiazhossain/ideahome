@@ -1,6 +1,7 @@
 import { Test, TestingModule } from "@nestjs/testing";
 import { NotFoundException } from "@nestjs/common";
 import { PrismaClientKnownRequestError } from "@prisma/client/runtime/library";
+import { AuthService } from "../auth/auth.service";
 import { ProjectsService } from "./projects.service";
 import { PrismaService } from "../prisma.service";
 
@@ -20,12 +21,18 @@ describe("ProjectsService", () => {
     },
   };
 
+  const mockAuthService = {
+    ensureUserOrganization: jest.fn().mockResolvedValue({ organizationId: "o1" }),
+  };
+
   beforeEach(async () => {
     jest.clearAllMocks();
+    mockPrisma.user.findUnique.mockResolvedValue({ organizationId: "o1" });
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         ProjectsService,
         { provide: PrismaService, useValue: mockPrisma },
+        { provide: AuthService, useValue: mockAuthService },
       ],
     }).compile();
 
@@ -101,6 +108,26 @@ describe("ProjectsService", () => {
       expect(result).toEqual(expected);
       expect(mockPrisma.project.create).toHaveBeenCalledWith({
         data: { name: input.name, organizationId: "o1" },
+      });
+      expect(mockAuthService.ensureUserOrganization).not.toHaveBeenCalled();
+    });
+
+    it("should ensure user org when missing then create project", async () => {
+      mockPrisma.user.findUnique.mockResolvedValue({ organizationId: null });
+      mockAuthService.ensureUserOrganization.mockResolvedValue({
+        organizationId: "new-org",
+      });
+      const input = { name: "New Project" };
+      const expected = { id: "1", ...input, organizationId: "new-org" };
+      mockPrisma.project.create.mockResolvedValue(expected);
+
+      const result = await service.create("user-1", input);
+      expect(result).toEqual(expected);
+      expect(mockAuthService.ensureUserOrganization).toHaveBeenCalledWith(
+        "user-1"
+      );
+      expect(mockPrisma.project.create).toHaveBeenCalledWith({
+        data: { name: input.name, organizationId: "new-org" },
       });
     });
   });

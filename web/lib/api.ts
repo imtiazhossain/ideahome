@@ -225,7 +225,7 @@ export async function createProject(body: { name: string }): Promise<Project> {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
-  if (!r.ok) throw new Error("Failed to create project");
+  if (!r.ok) await throwFromResponse(r, "Failed to create project");
   return r.json();
 }
 
