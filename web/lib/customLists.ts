@@ -72,7 +72,7 @@ export function getCustomListBySlug(slug: string): CustomList | undefined {
   return getCustomLists().find((l) => l.slug === slug);
 }
 
-export function getCustomListTabId(slug: string): string {
+export function getCustomListTabId(slug: string): `custom-${string}` {
   return `custom-${slug}`;
 }
 

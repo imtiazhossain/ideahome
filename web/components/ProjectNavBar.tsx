@@ -605,7 +605,7 @@ function loadTabOrder(): ProjectNavTabId[] {
     if (!raw) return DEFAULT_TAB_ORDER;
     const parsed = JSON.parse(raw) as string[];
     const customLists = getCustomLists();
-    const customIds = new Set(
+    const customIds = new Set<string>(
       customLists.map((l) => getCustomListTabId(l.slug))
     );
     const isValidId = (id: string): id is ProjectNavTabId =>
