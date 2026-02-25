@@ -1110,8 +1110,9 @@ export function ProjectNavBar({
                     className="project-nav-auth-btn"
                     onClick={handleLogout}
                     aria-label="Log out"
+                    title="Log out"
                   >
-                    Log out
+                    <IconProfile />
                   </button>
                 ) : (
                   <Link
@@ -1119,6 +1120,7 @@ export function ProjectNavBar({
                     prefetch={false}
                     className="project-nav-auth-link"
                     aria-label="Sign in"
+                    title="Sign in"
                   >
                     <IconProfile />
                   </Link>
