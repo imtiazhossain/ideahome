@@ -37,14 +37,13 @@ In **Vercel** → **Project** → **Settings** → **Environment Variables**, ad
 | `JWT_SECRET` | Random string | Generate with `openssl rand -hex 32` |
 | `BACKEND_URL` | `https://your-app.vercel.app` | Same as app URL (API is same origin) |
 | `FRONTEND_URL` | `https://your-app.vercel.app` | Your Vercel deployment URL |
+| `NEXT_PUBLIC_API_URL` | `https://your-app.vercel.app` | **Required.** Same as app URL. Without it, the app calls `localhost` and shows "Load failed" on production (e.g. on mobile). |
 | `GOOGLE_CLIENT_ID` | From Google Cloud | For Google SSO |
 | `GOOGLE_CLIENT_SECRET` | From Google Cloud | For Google SSO |
 | `GITHUB_CLIENT_ID` | From GitHub | Optional – for GitHub SSO |
 | `GITHUB_CLIENT_SECRET` | From GitHub | Optional |
 | `APPLE_CLIENT_ID` | From Apple | Optional – for Apple SSO |
 | `APPLE_*` | Various | Optional – see backend/docs/SSO-SETUP.md |
-
-For `NEXT_PUBLIC_API_URL`, set it to your Vercel URL (e.g. `https://your-app.vercel.app`) so the frontend uses the same origin.
 
 ### 4. Database Migrations
 
@@ -77,6 +76,12 @@ Update your OAuth app settings:
 4. Deploy
 
 ## Troubleshooting
+
+### "Load failed" or "Failed to load projects" on production (e.g. on mobile)
+
+The frontend is calling `http://localhost:3001` because `NEXT_PUBLIC_API_URL` is not set in Vercel. On a phone or another device, localhost is not your server, so the request fails.
+
+**Fix:** In Vercel → Project → **Settings** → **Environment Variables**, add `NEXT_PUBLIC_API_URL` = `https://ideahome.vercel.app` (or your actual Vercel URL). Apply to Production (and Preview if needed), then redeploy.
 
 ### "We could not find your Prisma schema at `prisma/schema.prisma`" (postinstall warn)
 

@@ -45,6 +45,7 @@ playwright/.cache
 
 # Backend (NestJS / Prisma)
 backend/dist
+backend/uploads
 *.sqlite
 *.sqlite-journal
 
