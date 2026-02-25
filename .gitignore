@@ -46,6 +46,7 @@ playwright/.cache
 # Backend (NestJS / Prisma)
 backend/dist
 backend/uploads
+backend/firebase-service-account.json
 *.sqlite
 *.sqlite-journal
 

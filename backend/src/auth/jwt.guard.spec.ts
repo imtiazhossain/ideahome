@@ -1,6 +1,8 @@
 import { ExecutionContext, UnauthorizedException } from "@nestjs/common";
 import { JwtAuthGuard } from "./jwt.guard";
 import { PrismaService } from "../prisma.service";
+import { FirebaseService } from "./firebase.service";
+import { AuthService } from "./auth.service";
 import * as jwt from "jsonwebtoken";
 
 jest.mock("jsonwebtoken", () => ({
@@ -10,6 +12,8 @@ jest.mock("jsonwebtoken", () => ({
 describe("JwtAuthGuard", () => {
   let guard: JwtAuthGuard;
   let mockPrisma: { user: { findUnique: jest.Mock; findFirst: jest.Mock } };
+  let mockFirebase: { isConfigured: jest.Mock; verifyIdToken: jest.Mock };
+  let mockAuthService: { findOrCreateUserByFirebase: jest.Mock };
   const mockVerify = jwt.verify as jest.MockedFunction<typeof jwt.verify>;
 
   function createMockContext(
@@ -28,8 +32,20 @@ describe("JwtAuthGuard", () => {
         findFirst: jest.fn().mockResolvedValue(null),
       },
     };
-    guard = new JwtAuthGuard(mockPrisma as unknown as PrismaService);
+    mockFirebase = {
+      isConfigured: jest.fn().mockReturnValue(false),
+      verifyIdToken: jest.fn().mockResolvedValue(null),
+    };
+    mockAuthService = {
+      findOrCreateUserByFirebase: jest.fn(),
+    };
+    guard = new JwtAuthGuard(
+      mockPrisma as unknown as PrismaService,
+      mockFirebase as unknown as FirebaseService,
+      mockAuthService as unknown as AuthService
+    );
     jest.clearAllMocks();
+    mockFirebase.isConfigured.mockReturnValue(false);
     delete process.env.JWT_SECRET;
     delete process.env.SKIP_AUTH_DEV;
     delete process.env.DEV_USER_ID;

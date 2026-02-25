@@ -1,7 +1,8 @@
-import { Controller, Get, Query, Req, Res } from "@nestjs/common";
+import { Body, Controller, Get, Post, Query, Req, Res } from "@nestjs/common";
 import { Request, Response } from "express";
 import { PrismaService } from "../prisma.service";
 import { AuthService } from "./auth.service";
+import { FirebaseService } from "./firebase.service";
 import * as jwt from "jsonwebtoken";
 
 const verifierStore = new Map<string, string>();
@@ -10,7 +11,8 @@ const verifierStore = new Map<string, string>();
 export class AuthController {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly authService: AuthService
+    private readonly authService: AuthService,
+    private readonly firebase: FirebaseService
   ) {}
 
   @Get("login")
@@ -255,5 +257,36 @@ export class AuthController {
       const base = this.authService.getFrontendCallbackUrl("");
       return res.redirect(`${base}?error=${err}`);
     }
+  }
+
+  /** Exchange a Firebase ID token for a backend JWT and user. Body: { idToken: string }. */
+  @Post("firebase-session")
+  async firebaseSession(
+    @Res() res: Response,
+    @Body("idToken") idToken: string
+  ) {
+    if (!idToken || typeof idToken !== "string") {
+      return res.status(400).json({ error: "idToken required" });
+    }
+    if (!this.firebase.isConfigured()) {
+      return res.status(503).json({
+        error: "Firebase is not configured. Set FIREBASE_PROJECT_ID and credentials.",
+      });
+    }
+    const decoded = await this.firebase.verifyIdToken(idToken);
+    if (!decoded) {
+      return res.status(401).json({ error: "Invalid or expired Firebase token" });
+    }
+    const email = decoded.email ?? "";
+    if (!email) {
+      return res.status(400).json({ error: "Firebase token missing email" });
+    }
+    const user = await this.authService.findOrCreateUserByFirebase(
+      decoded.uid,
+      email,
+      decoded.name
+    );
+    const token = this.authService.signToken(user);
+    return res.json({ token, user: { id: user.id, email: user.email, name: user.name } });
   }
 }

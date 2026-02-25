@@ -7,7 +7,9 @@
     ".": "./dist/main.js",
     "./serverless": "./dist/serverless.js"
   },
-  "engines": { "node": ">=18" },
+  "engines": {
+    "node": ">=18"
+  },
   "scripts": {
     "postinstall": "prisma generate",
     "dev": "ts-node-dev --respawn --transpile-only src/main.ts",
@@ -28,6 +30,7 @@
     "@nestjs/platform-express": "^9.0.0",
     "@prisma/client": "^4.0.0",
     "@vercel/blob": "^0.25.0",
+    "firebase-admin": "^13.6.1",
     "jsonwebtoken": "^9.0.0",
     "openid-client": "^6.8.2",
     "reflect-metadata": "^0.1.13",

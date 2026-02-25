@@ -127,8 +127,21 @@ export class AuthService {
     return { ...user, organizationId: org.id };
   }
 
+  async findOrCreateUserByFirebase(
+    uid: string,
+    email: string,
+    name?: string | null
+  ): Promise<{ id: string; email: string; name: string | null }> {
+    const profile: SsoProfile = {
+      providerId: uid,
+      email,
+      name: name ?? null,
+    };
+    return this.findOrCreateUserBySso("firebase", profile);
+  }
+
   async findOrCreateUserBySso(
-    provider: "google" | "github" | "apple",
+    provider: "google" | "github" | "apple" | "firebase",
     profile: SsoProfile
   ): Promise<{ id: string; email: string; name: string | null }> {
     const existing = await this.prisma.account.findUnique({

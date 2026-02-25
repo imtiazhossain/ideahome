@@ -6,10 +6,16 @@ import {
 } from "@nestjs/common";
 import * as jwt from "jsonwebtoken";
 import { PrismaService } from "../prisma.service";
+import { FirebaseService } from "./firebase.service";
+import { AuthService } from "./auth.service";
 
 @Injectable()
 export class JwtAuthGuard implements CanActivate {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly firebase: FirebaseService,
+    private readonly authService: AuthService
+  ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const req = context.switchToHttp().getRequest();
@@ -29,6 +35,18 @@ export class JwtAuthGuard implements CanActivate {
         req.user = { sub: payload.sub, email: payload.email };
         return true;
       } catch {
+        if (this.firebase.isConfigured()) {
+          const decoded = await this.firebase.verifyIdToken(token);
+          if (decoded) {
+            const user = await this.authService.findOrCreateUserByFirebase(
+              decoded.uid,
+              decoded.email ?? "",
+              decoded.name
+            );
+            req.user = { sub: user.id, email: user.email };
+            return true;
+          }
+        }
         if (process.env.SKIP_AUTH_DEV === "true") {
           const devUser = await this.resolveDevUser();
           if (devUser) {
