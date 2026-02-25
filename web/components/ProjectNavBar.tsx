@@ -375,6 +375,23 @@ const IconFilter = () => (
   </svg>
 );
 
+const IconSettings = () => (
+  <svg
+    width="16"
+    height="16"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden
+  >
+    <circle cx="12" cy="12" r="3" />
+    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+  </svg>
+);
+
 const IconTodo = () => (
   <svg
     width="16"
@@ -701,13 +718,13 @@ export function ProjectNavBar({
   const { tabOrder, setTabOrder, hiddenTabIds, setHiddenTabIds } = useTabOrder();
   const [isDraggingTabId, setIsDraggingTabId] =
     useState<ProjectNavTabId | null>(null);
-  const [addMenuOpen, setAddMenuOpen] = useState(false);
-  const addMenuRef = useRef<HTMLDivElement>(null);
+  const [settingsMenuOpen, setSettingsMenuOpen] = useState(false);
+  const [showTabsSectionOpen, setShowTabsSectionOpen] = useState(false);
+  const [addSectionOpen, setAddSectionOpen] = useState(false);
+  const settingsMenuRef = useRef<HTMLDivElement>(null);
   const [createListModalOpen, setCreateListModalOpen] = useState(false);
   const [createListName, setCreateListName] = useState("");
   const [createListError, setCreateListError] = useState<string | null>(null);
-  const [filterMenuOpen, setFilterMenuOpen] = useState(false);
-  const filterMenuRef = useRef<HTMLDivElement>(null);
   const [authMenuOpen, setAuthMenuOpen] = useState(false);
   const authMenuRef = useRef<HTMLDivElement>(null);
 
@@ -852,16 +869,10 @@ export function ProjectNavBar({
         setProjectSearchOpen(false);
       }
       if (
-        addMenuRef.current &&
-        !addMenuRef.current.contains(e.target as Node)
+        settingsMenuRef.current &&
+        !settingsMenuRef.current.contains(e.target as Node)
       ) {
-        setAddMenuOpen(false);
-      }
-      if (
-        filterMenuRef.current &&
-        !filterMenuRef.current.contains(e.target as Node)
-      ) {
-        setFilterMenuOpen(false);
+        setSettingsMenuOpen(false);
       }
       if (
         authMenuRef.current &&
@@ -1391,28 +1402,44 @@ export function ProjectNavBar({
           </div>
         </div>
         <div
-          ref={filterMenuRef}
-          className="project-nav-filter-wrap"
+          ref={settingsMenuRef}
+          className="project-nav-settings-wrap"
           style={{ position: "relative" }}
         >
           <button
             type="button"
-            className={`project-nav-add project-nav-filter-btn${filterMenuOpen ? " is-open" : ""}`}
-            onClick={() => setFilterMenuOpen((open) => !open)}
-            aria-label="Show or hide tabs"
-            title="Show or hide tabs"
-            aria-expanded={filterMenuOpen}
+            className={`project-nav-add project-nav-settings-btn${settingsMenuOpen ? " is-open" : ""}`}
+            onClick={() => {
+              const next = !settingsMenuOpen;
+              setSettingsMenuOpen(next);
+              if (!next) {
+                setShowTabsSectionOpen(false);
+                setAddSectionOpen(false);
+              }
+            }}
+            aria-label="Settings"
+            title="Settings"
+            aria-expanded={settingsMenuOpen}
             aria-haspopup="true"
           >
-            <IconFilter />
+            <IconSettings />
           </button>
-          {filterMenuOpen && (
+          {settingsMenuOpen && (
             <div
-              className="project-nav-add-menu project-nav-filter-menu"
-              role="dialog"
-              aria-label="Tab visibility"
+              className="project-nav-settings-menu"
+              role="menu"
+              aria-label="Settings"
             >
-              <div className="project-nav-filter-menu-header">Show tabs</div>
+              <button
+                type="button"
+                className={`project-nav-settings-section-toggle${showTabsSectionOpen ? " is-open" : ""}`}
+                onClick={() => setShowTabsSectionOpen((o) => !o)}
+                aria-expanded={showTabsSectionOpen}
+                aria-label="Filter tabs"
+              >
+                <IconFilter />
+              </button>
+              {showTabsSectionOpen && (
               <ul className="project-nav-filter-list" role="list">
                 {[...tabOrder]
                   .map((id) => {
@@ -1447,62 +1474,51 @@ export function ProjectNavBar({
                     );
                   })}
               </ul>
-            </div>
-          )}
-        </div>
-        <div
-          ref={addMenuRef}
-          className="project-nav-add-wrap"
-          style={{ position: "relative" }}
-        >
-          <button
-            type="button"
-            className="project-nav-add"
-            onClick={() => setAddMenuOpen((open) => !open)}
-            aria-label="Add"
-            title="Add"
-            aria-expanded={addMenuOpen}
-            aria-haspopup="true"
-          >
-            <IconPlus />
-          </button>
-          {addMenuOpen && (
-            <ul
-              className="project-nav-add-menu"
-              role="menu"
-              aria-label="Add options"
-            >
-              {onAddClick && (
+              )}
+              <button
+                type="button"
+                className={`project-nav-settings-section-toggle project-nav-settings-section-header${addSectionOpen ? " is-open" : ""}`}
+                onClick={() => setAddSectionOpen((o) => !o)}
+                aria-expanded={addSectionOpen}
+                aria-label="Add"
+              >
+                <IconPlus />
+              </button>
+              {addSectionOpen && (
+              <ul className="project-nav-add-menu-list" role="list">
+                {onAddClick && (
+                  <li role="none">
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className="project-nav-add-menu-item"
+                      onClick={() => {
+                        setSettingsMenuOpen(false);
+                        onAddClick();
+                      }}
+                    >
+                      Create Deck
+                    </button>
+                  </li>
+                )}
                 <li role="none">
                   <button
                     type="button"
                     role="menuitem"
                     className="project-nav-add-menu-item"
                     onClick={() => {
-                      setAddMenuOpen(false);
-                      onAddClick();
+                      setSettingsMenuOpen(false);
+                      setCreateListName("");
+                      setCreateListError(null);
+                      setCreateListModalOpen(true);
                     }}
                   >
-                    Create Deck
+                    New list…
                   </button>
                 </li>
+              </ul>
               )}
-              <li role="none">
-                <button
-                  type="button"
-                  role="menuitem"
-                  className="project-nav-add-menu-item"
-                  onClick={() => {
-                    setAddMenuOpen(false);
-                    setCreateListName("");
-                    setCreateListError(null);
-                    setCreateListModalOpen(true);
-                  }}
-                >
-                  New list…
-                </button>
-              </li>
-            </ul>
+            </div>
           )}
         </div>
       </nav>

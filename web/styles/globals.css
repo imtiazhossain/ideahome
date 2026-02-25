@@ -1092,6 +1092,33 @@ textarea {
   flex-shrink: 0;
 }
 
+.project-nav-settings-wrap {
+  margin-left: 8px;
+  flex-shrink: 0;
+}
+
+.project-nav-settings-wrap .project-nav-settings-btn {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border-radius: 8px;
+  background: var(--column-bg);
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.project-nav-settings-wrap .project-nav-settings-btn:hover {
+  background: var(--border);
+  color: var(--text);
+}
+
+.project-nav-settings-btn.is-open {
+  background: var(--border);
+  color: var(--text);
+}
+
 /* Match filter button appearance to add button */
 .project-nav-filter-wrap .project-nav-filter-btn {
   width: 32px;
@@ -1125,6 +1152,41 @@ textarea {
   display: none;
 }
 
+.project-nav-settings-menu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin: 4px 0 0;
+  padding: 6px;
+  width: fit-content;
+  min-width: 0;
+  max-height: 60vh;
+  overflow-y: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--card-radius);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  z-index: 100;
+}
+.project-nav-settings-menu::-webkit-scrollbar {
+  display: none;
+}
+
+.project-nav-settings-section-header {
+  margin-top: 4px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+
+.project-nav-add-menu-list {
+  list-style: none;
+  margin: 0;
+  padding: 6px 0;
+  min-width: max-content;
+}
+
 .project-nav-filter-menu-header {
   padding: 8px 14px 6px;
   font-size: 12px;
@@ -1133,6 +1195,51 @@ textarea {
   text-transform: uppercase;
   letter-spacing: 0.02em;
   border-bottom: 1px solid var(--border);
+}
+
+.project-nav-settings-header-with-icon {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.project-nav-settings-header-with-icon svg {
+  flex-shrink: 0;
+  opacity: 0.8;
+}
+
+.project-nav-settings-section-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: auto;
+  min-width: 28px;
+  min-height: 28px;
+  padding: 4px 6px;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.project-nav-settings-section-toggle:hover {
+  background: var(--column-bg);
+  color: var(--text);
+}
+
+.project-nav-settings-section-toggle svg {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  opacity: 0.9;
+}
+
+.project-nav-settings-section-toggle.project-nav-settings-section-header {
+  margin-top: 4px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
 }
 
 .project-nav-filter-list {
@@ -1202,6 +1309,7 @@ textarea {
   box-sizing: border-box;
   border-radius: 6px;
   transition: background 0.15s ease;
+  white-space: nowrap;
 }
 
 .project-nav-add-menu-item:hover {
