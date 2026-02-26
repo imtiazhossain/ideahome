@@ -3663,7 +3663,8 @@ a.automated-tests-chip-text:hover {
   border-radius: 12px;
   margin-bottom: 8px;
   border: 1px solid var(--border);
-  touch-action: none;
+  /* Allow vertical scrolling when touching list rows on mobile. */
+  touch-action: pan-y;
   transition: border-color 0.15s ease, transform 0.15s ease;
 }
 
@@ -3735,6 +3736,7 @@ a.automated-tests-chip-text:hover {
   transition: color 0.15s ease, background 0.15s ease;
   line-height: 0;
   margin-left: auto;
+  touch-action: none;
 }
 
 .features-list-drag-handle svg {
