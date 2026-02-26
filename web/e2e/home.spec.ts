@@ -1,6 +1,13 @@
 import { test, expect } from "@playwright/test";
 import { deleteTestProjectsByNames } from "./helpers";
 
+// Ensure / stays on Board (avoids redirect to first tab like /todo).
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript(() => {
+    sessionStorage.setItem("ideahome-explicit-board", "1");
+  });
+});
+
 // Close the page after each test so the browser can shut down when the run finishes.
 test.afterEach(async ({ page }) => {
   await page.close();
@@ -26,9 +33,9 @@ test.describe("Idea Home home", () => {
     await test.step("Verify drawer title is Idea Home", async () => {
       await expect(page.locator(".drawer-title")).toHaveText("Idea Home");
     });
-    await test.step("Verify Add button and New project button are visible", async () => {
+    await test.step("Verify Create Deck and New project button are visible", async () => {
       await expect(
-        page.locator(".project-nav").getByRole("button", { name: "Add" })
+        page.locator(".project-nav").getByRole("button", { name: "Create Deck" })
       ).toBeVisible();
       await expect(
         page.getByRole("button", { name: "+ New project" })
@@ -277,7 +284,7 @@ test.describe("Create Deck", () => {
     await page.goto("/");
     await page
       .locator(".project-nav")
-      .getByRole("button", { name: "Add" })
+      .getByRole("button", { name: "Create Deck" })
       .click();
   });
 
@@ -466,7 +473,7 @@ test.describe("Issue detail", () => {
     }
     const addBtn = page
       .locator(".project-nav")
-      .getByRole("button", { name: "Add" });
+      .getByRole("button", { name: "Create Deck" });
     await expect(addBtn).toBeVisible({ timeout: 15000 });
     await addBtn.click();
     const createDeckModal = page

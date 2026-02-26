@@ -18,6 +18,10 @@ export class FirebaseService implements OnModuleInit {
     if (!projectId && !saJson && !adcPath) return;
 
     try {
+      if (admin.apps.length > 0) {
+        this.app = admin.app();
+        return;
+      }
       if (saJson) {
         const credential = admin.credential.cert(
           JSON.parse(saJson) as admin.ServiceAccount

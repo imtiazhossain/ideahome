@@ -2407,6 +2407,36 @@ textarea {
   border-color: var(--danger, #c53030);
 }
 
+.btn-icon-sm {
+  padding: 2px 4px;
+  min-width: 20px;
+  font-size: 10px;
+}
+
+.btn-icon-sm-hint {
+  padding: 2px 4px;
+  min-width: 20px;
+  font-size: 11px;
+}
+
+.btn-icon.btn-sm {
+  font-size: 12px;
+}
+
+/* Small text / compact buttons. */
+.text-sm {
+  font-size: 12px;
+}
+
+/* Flex row for comment block items (screenshot, recording, file links with remove button). */
+.comment-block-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 4px 0;
+  flex-wrap: wrap;
+}
+
 .test-cases-list {
   display: flex;
   flex-direction: column;

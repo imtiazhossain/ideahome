@@ -1,6 +1,4 @@
 import React, { useEffect, useRef, useState } from "react";
-import Head from "next/head";
-import Link from "next/link";
 import { useRouter } from "next/router";
 import {
   createExpense,
@@ -11,10 +9,12 @@ import {
   updateExpense,
   type Expense,
 } from "../lib/api";
+import { formatCurrency } from "../lib/utils";
 import { useProjectLayout } from "../lib/useProjectLayout";
+import { AppLayout } from "../components/AppLayout";
 import { IconPlus } from "../components/IconPlus";
 import { IconTrash } from "../components/IconTrash";
-import { ProjectNavBar, DrawerCollapsedNav } from "../components/ProjectNavBar";
+import { LoadingMessage } from "../components/LoadingMessage";
 import { ProjectSectionGuard } from "../components/ProjectSectionGuard";
 import { useTheme } from "./_app";
 
@@ -81,13 +81,6 @@ function clearStoredExpensesLegacy(): void {
   localStorage.removeItem(key);
   localStorage.removeItem(LEGACY_EXPENSES_KEY);
   localStorage.removeItem(LEGACY_COSTS_KEY);
-}
-
-function formatCurrency(amount: number): string {
-  return new Intl.NumberFormat(undefined, {
-    style: "currency",
-    currency: "USD",
-  }).format(amount);
 }
 
 export default function ExpensesPage() {
@@ -236,192 +229,32 @@ export default function ExpensesPage() {
   }, {});
 
   return (
-    <>
-      <Head>
-        <title>Expenses · Idea Home</title>
-      </Head>
-      <div className="app-layout">
-        <aside
-          className={`drawer ${drawerOpen ? "drawer-open" : "drawer-closed"}`}
-        >
-          {drawerOpen ? (
-            <>
-              <div className="drawer-logo" aria-hidden>
-                IH
-              </div>
-              <div className="drawer-header">
-                <div className="drawer-title">Idea Home</div>
-                <button
-                  type="button"
-                  className="drawer-toggle"
-                  onClick={() => setDrawerOpen((o) => !o)}
-                  aria-label="Collapse sidebar"
-                  title="Collapse sidebar"
-                >
-                  ◀
-                </button>
-              </div>
-              <div className="drawer-content">
-                <nav className="drawer-nav">
-                  <Link href="/" className="drawer-nav-item">
-                    Dashboard
-                  </Link>
-                  <Link href="/tests" className="drawer-nav-item">
-                    Tests
-                  </Link>
-                  <Link href="/features" className="drawer-nav-item">
-                    Features
-                  </Link>
-                  <Link href="/bugs" className="drawer-nav-item">
-                    Bugs
-                  </Link>
-                  <Link
-                    href="/expenses"
-                    className="drawer-nav-item is-selected"
-                  >
-                    Expenses
-                  </Link>
-                  <div className="drawer-nav-label">Projects</div>
-                  {projects.map((p) => (
-                    <div key={p.id} className="drawer-nav-item-row">
-                      {editingProjectId === p.id ? (
-                        <input
-                          ref={
-                            projectNameInputRef as React.RefObject<HTMLInputElement>
-                          }
-                          type="text"
-                          className="drawer-nav-item drawer-nav-item-input"
-                          value={editingProjectName}
-                          onChange={(e) =>
-                            setEditingProjectName(e.target.value)
-                          }
-                          onBlur={saveProjectName}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") saveProjectName();
-                            if (e.key === "Escape") cancelEditProjectName();
-                          }}
-                          onClick={(e) => e.stopPropagation()}
-                          aria-label="Project name"
-                        />
-                      ) : (
-                        <button
-                          type="button"
-                          className={`drawer-nav-item ${selectedProjectId === p.id ? "is-selected" : ""}`}
-                          onClick={() => setSelectedProjectId(p.id)}
-                          onDoubleClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            setEditingProjectId(p.id);
-                            setEditingProjectName(p.name);
-                          }}
-                          title="Double-click to edit name"
-                        >
-                          {p.name}
-                        </button>
-                      )}
-                    </div>
-                  ))}
-                </nav>
-              </div>
-              <div className="drawer-footer">
-                <button
-                  type="button"
-                  className="drawer-footer-btn"
-                  aria-label="Feedback"
-                >
-                  💬
-                </button>
-                <button
-                  type="button"
-                  className="drawer-footer-btn"
-                  aria-label={
-                    theme === "light"
-                      ? "Switch to dark theme"
-                      : "Switch to light theme"
-                  }
-                  onClick={toggleTheme}
-                  title={
-                    theme === "light"
-                      ? "Switch to dark theme"
-                      : "Switch to light theme"
-                  }
-                >
-                  {theme === "light" ? "🌙" : "☀️"}
-                </button>
-              </div>
-            </>
-          ) : (
-            <DrawerCollapsedNav
-              activeTab="expenses"
-              onExpand={() => setDrawerOpen(true)}
-            />
-          )}
-        </aside>
-
-        <main className="main-content">
-          <ProjectNavBar
-            projectName={projectDisplayName}
-            projectId={selectedProjectId || undefined}
-            activeTab="expenses"
-            searchPlaceholder="Search project"
-            projects={projects}
-            selectedProjectId={selectedProjectId || undefined}
-            onSelectProject={setSelectedProjectId}
-            onCreateProject={(name) => {
-              void router.push(
-                "/?createProject=1&projectName=" + encodeURIComponent(name)
-              );
-            }}
-            onDeleteProjectClick={() => {
-              const current = projects.find((p) => p.id === selectedProjectId);
-              if (current) setProjectToDelete(current);
-            }}
-          />
-
-          {projectToDelete && (
-            <div
-              className="modal-overlay"
-              onClick={() => !projectDeleting && setProjectToDelete(null)}
-            >
-              <div className="modal" onClick={(e) => e.stopPropagation()}>
-                <div className="modal-header">
-                  <h2>Delete project</h2>
-                  <button
-                    type="button"
-                    className="modal-close"
-                    onClick={() => !projectDeleting && setProjectToDelete(null)}
-                    aria-label="Close"
-                  >
-                    ×
-                  </button>
-                </div>
-                <p style={{ margin: "0 0 16px", color: "var(--text-muted)" }}>
-                  Delete &quot;{projectToDelete.name}&quot;? This will
-                  permanently remove the project and all its issues.
-                </p>
-                <div className="modal-actions">
-                  <button
-                    type="button"
-                    className="btn btn-secondary"
-                    onClick={() => !projectDeleting && setProjectToDelete(null)}
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btn-primary"
-                    style={{ background: "var(--danger, #c53030)" }}
-                    onClick={handleDeleteProject}
-                    disabled={projectDeleting}
-                  >
-                    {projectDeleting ? "Deleting…" : "Delete"}
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-
-          <div className="tests-page-content">
+    <AppLayout
+      title="Expenses · Idea Home"
+      activeTab="expenses"
+      projectName={projectDisplayName}
+      projectId={selectedProjectId || undefined}
+      searchPlaceholder="Search project"
+      drawerOpen={drawerOpen}
+      setDrawerOpen={setDrawerOpen}
+      projects={projects}
+      selectedProjectId={selectedProjectId ?? ""}
+      setSelectedProjectId={setSelectedProjectId}
+      editingProjectId={editingProjectId}
+      setEditingProjectId={setEditingProjectId}
+      editingProjectName={editingProjectName}
+      setEditingProjectName={setEditingProjectName}
+      saveProjectName={saveProjectName}
+      cancelEditProjectName={cancelEditProjectName}
+      projectNameInputRef={projectNameInputRef}
+      theme={theme}
+      toggleTheme={toggleTheme}
+      projectToDelete={projectToDelete}
+      setProjectToDelete={setProjectToDelete}
+      projectDeleting={projectDeleting}
+      handleDeleteProject={handleDeleteProject}
+    >
+      <div className="tests-page-content">
             <h1 className="tests-page-title">Expenses</h1>
 
             <section className="tests-page-section">
@@ -579,7 +412,9 @@ export default function ExpensesPage() {
                 variant="list"
               >
                 {expensesLoading ? (
-                  <p className="tests-page-section-desc">Loading…</p>
+                  <LoadingMessage
+                    className="tests-page-section-desc"
+                  />
                 ) : expenses.length === 0 ? (
                   <p className="tests-page-section-desc">
                     No expenses yet. Add one above.
@@ -674,8 +509,6 @@ export default function ExpensesPage() {
               </ProjectSectionGuard>
             </section>
           </div>
-        </main>
-      </div>
-    </>
+    </AppLayout>
   );
 }

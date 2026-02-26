@@ -86,6 +86,18 @@ describe("OrganizationsService", () => {
   });
 
   describe("ensureForUser", () => {
+    it("should throw when ensureUserOrganization returns user without organizationId", async () => {
+      mockAuthService.ensureUserOrganization.mockResolvedValue({
+        id: "u1",
+        email: "u@x.com",
+        name: null,
+        organizationId: null,
+      });
+
+      await expect(
+        service.ensureForUser("u1")
+      ).rejects.toThrow("Unexpected: no organization after ensure");
+    });
     it("should return existing org when user has one", async () => {
       mockAuthService.ensureUserOrganization.mockResolvedValue({
         organizationId: "org-1",

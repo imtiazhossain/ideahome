@@ -46,6 +46,7 @@ import {
   IconTimeline,
   IconTodo,
 } from "./icons";
+import { ErrorBanner } from "./ErrorBanner";
 import { IconFromName } from "./IconFromName";
 import { IconPlus } from "./IconPlus";
 import { IconTrash } from "./IconTrash";
@@ -1325,9 +1326,10 @@ export function ProjectNavBar({
               }}
             >
               {createListError && (
-                <div className="error-banner" style={{ marginBottom: 16 }}>
-                  {createListError}
-                </div>
+                <ErrorBanner
+                  message={createListError}
+                  style={{ marginBottom: 16 }}
+                />
               )}
               <div className="form-group">
                 <label htmlFor="create-list-name">Page name</label>

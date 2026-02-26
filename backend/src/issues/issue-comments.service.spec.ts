@@ -3,8 +3,15 @@ import { NotFoundException } from "@nestjs/common";
 import { IssueCommentsService } from "./issue-comments.service";
 import { IssuesService } from "./issues.service";
 import { PrismaService } from "../prisma.service";
+import { StorageService } from "../storage.service";
 
 const TEST_USER_ID = "user-1";
+
+const mockStorageService = {
+  upload: jest.fn().mockResolvedValue({ url: "uploads/test/file" }),
+  delete: jest.fn().mockResolvedValue(undefined),
+  isFullUrl: jest.fn().mockReturnValue(false),
+};
 
 jest.mock("fs/promises", () => ({
   mkdir: jest.fn().mockResolvedValue(undefined),
@@ -46,6 +53,7 @@ describe("IssueCommentsService", () => {
         IssueCommentsService,
         { provide: PrismaService, useValue: mockPrisma },
         { provide: IssuesService, useValue: mockIssuesService },
+        { provide: StorageService, useValue: mockStorageService },
       ],
     }).compile();
 
@@ -348,7 +356,7 @@ describe("IssueCommentsService", () => {
       ).rejects.toThrow(NotFoundException);
     });
 
-    it("should unlink file when attachment media exists on disk", async () => {
+    it("should delete file when attachment media exists on disk", async () => {
       const attachment = {
         id: "a1",
         commentId: "c1",
@@ -358,7 +366,6 @@ describe("IssueCommentsService", () => {
       mockPrisma.commentAttachment.findFirst.mockResolvedValue(attachment);
       mockPrisma.commentAttachment.delete.mockResolvedValue(attachment);
       mockPrisma.issueComment.findUnique.mockResolvedValue(comment);
-      require("fs").existsSync.mockReturnValue(true);
 
       const result = await service.removeAttachment(
         "issue-1",
@@ -367,7 +374,9 @@ describe("IssueCommentsService", () => {
         TEST_USER_ID
       );
       expect(result).toEqual(comment);
-      expect(require("fs/promises").unlink).toHaveBeenCalled();
+      expect(mockStorageService.delete).toHaveBeenCalledWith(
+        "uploads/screenshots/x.png"
+      );
     });
   });
 

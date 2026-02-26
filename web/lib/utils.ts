@@ -61,6 +61,113 @@ export function insertUncheckedItem<T extends { done: boolean }>(
     : [...items.slice(0, insertAt), newItem, ...items.slice(insertAt)];
 }
 
+/**
+ * Compute display name for the selected project (avoids "Select a project" flash during loading).
+ */
+export function getProjectDisplayName(
+  projects: { id: string; name: string }[],
+  selectedProjectId: string,
+  lastKnownProjectName?: string,
+  projectsLoaded = true
+): string {
+  const found = projects.find((p) => p.id === selectedProjectId)?.name;
+  if (found) return found;
+  if (selectedProjectId && lastKnownProjectName) return lastKnownProjectName;
+  if (selectedProjectId) return "Project";
+  return projectsLoaded && projects.length
+    ? "Select a project"
+    : "Project";
+}
+
+/** Parse test cases from stored string (JSON array or legacy plain text). */
+export function parseTestCases(raw: string | null | undefined): string[] {
+  if (!raw) return [""];
+  try {
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed) && parsed.length > 0) return parsed.map(String);
+  } catch {
+    // not JSON — treat legacy plain-text value as a single test case
+  }
+  return [raw];
+}
+
+/** Serialize test cases to string for storage. */
+export function serializeTestCases(cases: string[]): string | null {
+  if (cases.length === 0) return null;
+  if (cases.length === 1 && cases[0].trim() === "") return null;
+  return JSON.stringify(cases);
+}
+
+/** Parse automated test names from stored string (JSON array or legacy single value). */
+export function parseAutomatedTests(raw: string | null | undefined): string[] {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) return parsed.map(String);
+  } catch {
+    // not JSON — treat as single test name
+  }
+  return raw ? [raw] : [];
+}
+
+/** Serialize automated test names to string for storage. */
+export function serializeAutomatedTests(tests: string[]): string | null {
+  if (tests.length === 0) return null;
+  return JSON.stringify(tests);
+}
+
+/**
+ * Infer recording kind from video URL filename (e.g. -audio.webm, -camera.webm, -screen.webm).
+ */
+export function getRecordingKindFromUrl(
+  url: string
+): "audio" | "camera" | "screen" | null {
+  if (url.includes("-audio.webm")) return "audio";
+  if (url.includes("-camera.webm")) return "camera";
+  if (url.includes("-screen.webm")) return "screen";
+  return null;
+}
+
+/**
+ * Resolve recording kind from recording object (URL, mediaType, recordingType).
+ */
+export function getRecordingKind(rec: {
+  videoUrl?: string | null;
+  mediaType?: string | null;
+  recordingType?: string | null;
+}): "audio" | "screen" | "camera" {
+  const url = rec.videoUrl ?? "";
+  const fromUrl = getRecordingKindFromUrl(url);
+  const isAudio = rec.mediaType === "audio" || fromUrl === "audio";
+  if (isAudio) return "audio";
+  const rt = rec.recordingType;
+  const fromRec =
+    rt === "screen" || rt === "camera" ? rt : undefined;
+  const result =
+    (fromUrl as "screen" | "camera" | null) ?? fromRec ?? "screen";
+  return result as "audio" | "screen" | "camera";
+}
+
+/**
+ * Default display label for a recording by kind and index.
+ */
+export function getRecordingDisplayLabel(
+  kind: "audio" | "screen" | "camera",
+  index: number
+): string {
+  if (kind === "audio") return `Audio Recording ${index}`;
+  if (kind === "camera") return `Camera Recording ${index}`;
+  return `Screen Recording ${index}`;
+}
+
+/** Format number as USD currency. */
+export function formatCurrency(amount: number): string {
+  return new Intl.NumberFormat(undefined, {
+    style: "currency",
+    currency: "USD",
+  }).format(amount);
+}
+
 /** Reorder array: move item from index `from` to index `to`. */
 export function reorder<T>(arr: T[], from: number, to: number): T[] {
   const copy = [...arr];

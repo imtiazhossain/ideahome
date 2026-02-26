@@ -45,6 +45,19 @@ describe("ProjectsService", () => {
     expect(service).toBeDefined();
   });
 
+  describe("getOrgIdForUser", () => {
+    it("should throw NotFoundException when user not found", async () => {
+      mockPrisma.user.findUnique.mockResolvedValue(null);
+
+      await expect(service.list("user-missing")).rejects.toThrow(
+        NotFoundException
+      );
+      await expect(service.list("user-missing")).rejects.toThrow(
+        "User not found"
+      );
+    });
+  });
+
   describe("list", () => {
     it("should return projects for user's org", async () => {
       const expected = [{ id: "1", name: "Project 1", organizationId: "o1" }];

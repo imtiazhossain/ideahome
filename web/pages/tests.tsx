@@ -1,116 +1,20 @@
 import React, { useEffect, useRef, useState } from "react";
-import Head from "next/head";
 import Link from "next/link";
 import { useRouter } from "next/router";
 import {
   getApiBase,
-  fetchProjects,
-  updateProject,
-  deleteProject,
   runUiTest,
   type RunUiTestResult,
 } from "../lib/api";
-import { ProjectNavBar, DrawerCollapsedNav } from "../components/ProjectNavBar";
-import { useSelectedProject } from "../lib/SelectedProjectContext";
-
-const DURATION_SUFFIX = /^ \(\d+(\.\d+)?(ms|s)\)$/;
-
-/** Strip ANSI escape codes and put each step on its own line. */
-function stripAnsi(text: string): string {
-  let out = text
-    .replace(/\x1b\[[\d]*E/g, "\n")
-    .replace(/\x1b\[[?]?[\d;]*[A-Za-z]/g, "")
-    .replace(/\x1b\][^\x07]*\x07/g, "")
-    .replace(/\x1b[PX^_][^\x1b]*/g, "")
-    .replace(/\s*\[\d*E\]\s*/g, "\n")
-    .replace(/\s*\[\d+[A-Za-z]\s*/g, " ")
-    .replace(/\s*\[\d+;\d*[A-Za-z]\s*/g, " ");
-  out = out
-    .replace(/(\))\s+(\d+\.\d+\s+)/g, "$1\n$2")
-    .replace(/(\))\s+(1\s+\[)/g, "$1\n$2");
-  return out
-    .split("\n")
-    .map((line) => line.replace(/\s{2,}/g, " ").trim())
-    .join("\n");
-}
-
-/** Keep only the line that shows run time when the same step appears twice (with and without duration). */
-function dedupeStepLines(text: string): string {
-  const lines = text.split("\n");
-  const kept: string[] = [];
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-    const next = lines[i + 1];
-    const nextIsSameWithDuration =
-      next != null &&
-      next.startsWith(line) &&
-      DURATION_SUFFIX.test(next.slice(line.length));
-    if (nextIsSameWithDuration) continue;
-    kept.push(line);
-  }
-  return kept.join("\n");
-}
-
-/** Remove redundant "1.N test title › " prefix from step lines so only step name and duration show. */
-function shortenStepLines(text: string): string {
-  return text
-    .split("\n")
-    .map((line) => line.replace(/^\d+\.\d+ .+? › /, ""))
-    .join("\n");
-}
-
-/** Add "✓ " before each step line (lines ending with (Nms) or (N.Ns), excluding "N passed" summary). */
-function prefixStepLinesWithDash(text: string): string {
-  return text
-    .split("\n")
-    .map((line) => {
-      if (
-        /\(\d+(\.\d+)?(ms|s)\)$/.test(line.trim()) &&
-        !/^\d+ (passed|failed) /.test(line.trim())
-      ) {
-        return "✓ " + line;
-      }
-      return line;
-    })
-    .join("\n");
-}
-
-/**
- * Extract step lines from Playwright list reporter output (printSteps: true, PLAYWRIGHT_FORCE_TTY=1).
- * Step lines are indented and typically contain " › " (step path) and/or end with "(Nms)" duration.
- */
-function parseStepsFromOutput(output: string): string[] {
-  const steps: string[] = [];
-  for (const line of output.split("\n")) {
-    const trimmed = line.trim();
-    if (!trimmed) continue;
-    // Skip summary lines
-    if (
-      /^Running \d+ test/.test(trimmed) ||
-      /^\d+ passed/.test(trimmed) ||
-      /^\d+ failed/.test(trimmed)
-    )
-      continue;
-    // Skip test result line (✓/× at start of line)
-    if (
-      /^[✓×]\s/.test(trimmed) ||
-      /^ok\s/.test(trimmed) ||
-      /^x\s/.test(trimmed)
-    )
-      continue;
-    // Step lines: indented, often "N.N  title › step (duration)" or "  title › step (123ms)"
-    const isIndented = /^  /.test(line);
-    const looksLikeStep =
-      / › .*\(\d+(\.\d+)?(ms|s)\)/.test(trimmed) ||
-      (/^[\d.]+\s+/.test(trimmed) && /\(\d+(\.\d+)?(ms|s)\)/.test(trimmed));
-    if (isIndented && (looksLikeStep || /^[\d.]+\s+/.test(trimmed))) {
-      // Normalize: remove leading "N.N  " so we show "test › step (duration)" or step text
-      const withoutIndex = trimmed.replace(/^\d+(\.\d+)?\s+/, "");
-      steps.push(withoutIndex);
-    }
-  }
-  return steps;
-}
+import {
+  dedupeStepLines,
+  parseStepsFromOutput,
+  prefixStepLinesWithDash,
+  shortenStepLines,
+  stripAnsi,
+} from "../lib/playwright-output";
+import { AppLayout } from "../components/AppLayout";
+import { useProjectLayout } from "../lib/useProjectLayout";
 import {
   uiTests as uiTestsInitial,
   testNameToSlug,
@@ -139,23 +43,28 @@ async function fetchUiTestsList(options?: {
 
 export default function TestsPage() {
   const router = useRouter();
+  const layout = useProjectLayout();
   const {
+    projects,
+    projectsLoaded,
     selectedProjectId,
     setSelectedProjectId,
-    lastKnownProjectName,
-    setLastKnownProjectName,
-  } = useSelectedProject();
-  const [projects, setProjects] = useState<{ id: string; name: string }[]>([]);
-  const [drawerOpen, setDrawerOpen] = useState(false);
+    projectDisplayName,
+    drawerOpen,
+    setDrawerOpen,
+    editingProjectId,
+    setEditingProjectId,
+    editingProjectName,
+    setEditingProjectName,
+    projectNameInputRef,
+    saveProjectName,
+    cancelEditProjectName,
+    projectToDelete,
+    setProjectToDelete,
+    projectDeleting,
+    handleDeleteProject,
+  } = layout;
   const { theme, toggleTheme } = useTheme();
-  const [projectToDelete, setProjectToDelete] = useState<{
-    id: string;
-    name: string;
-  } | null>(null);
-  const [projectDeleting, setProjectDeleting] = useState(false);
-  const [editingProjectId, setEditingProjectId] = useState<string | null>(null);
-  const [editingProjectName, setEditingProjectName] = useState("");
-  const projectNameInputRef = useRef<HTMLInputElement>(null);
 
   const [uiTestsList, setUiTestsList] = useState<UITestFile[]>(uiTestsInitial);
   const [uiTestsLoading, setUiTestsLoading] = useState(false);
@@ -255,82 +164,6 @@ export default function TestsPage() {
     }
   };
 
-  const selectedProjectIdRef = useRef(selectedProjectId);
-  selectedProjectIdRef.current = selectedProjectId;
-
-  const loadProjects = () =>
-    fetchProjects()
-      .then((data) => {
-        setProjects(data);
-        if (data.length) {
-          const current = selectedProjectIdRef.current;
-          const exists = data.some((p) => p.id === current);
-          if (!exists) setSelectedProjectId(data[0].id);
-        }
-      })
-      .catch(() => {});
-
-  useEffect(() => {
-    loadProjects();
-  }, []);
-
-  useEffect(() => {
-    if (!selectedProjectId) return;
-    const name = projects.find((p) => p.id === selectedProjectId)?.name;
-    if (name) setLastKnownProjectName(name);
-  }, [projects, selectedProjectId, setLastKnownProjectName]);
-
-  useEffect(() => {
-    if (editingProjectId) {
-      projectNameInputRef.current?.focus();
-      projectNameInputRef.current?.select();
-    }
-  }, [editingProjectId]);
-
-  const saveProjectName = async () => {
-    if (!editingProjectId) return;
-    const name = editingProjectName.trim();
-    if (!name) {
-      setEditingProjectId(null);
-      return;
-    }
-    const prev = projects.find((x) => x.id === editingProjectId);
-    if (prev?.name === name) {
-      setEditingProjectId(null);
-      return;
-    }
-    try {
-      const updated = await updateProject(editingProjectId, { name });
-      setProjects((p) =>
-        p.map((x) => (x.id === editingProjectId ? updated : x))
-      );
-    } catch {
-      // Keep edit mode on error
-    } finally {
-      setEditingProjectId(null);
-    }
-  };
-
-  const cancelEditProjectName = () => {
-    setEditingProjectId(null);
-  };
-
-  const handleDeleteProject = async () => {
-    if (!projectToDelete) return;
-    setProjectDeleting(true);
-    try {
-      await deleteProject(projectToDelete.id);
-      setProjectToDelete(null);
-      if (selectedProjectId === projectToDelete.id) {
-        const remaining = projects.filter((x) => x.id !== projectToDelete.id);
-        setSelectedProjectId(remaining[0]?.id ?? "");
-      }
-      await loadProjects();
-    } finally {
-      setProjectDeleting(false);
-    }
-  };
-
   useEffect(() => {
     const frames = runTestStreamScreenshots;
     if (frames.length <= 1 || runTestStreamActive) return;
@@ -373,173 +206,33 @@ export default function TestsPage() {
   };
 
   return (
-    <>
-      <Head>
-        <title>Tests · Idea Home</title>
-      </Head>
-      <div className="app-layout">
-        <aside
-          className={`drawer ${drawerOpen ? "drawer-open" : "drawer-closed"}`}
-        >
-          {drawerOpen ? (
-            <>
-              <div className="drawer-logo" aria-hidden>
-                IH
-              </div>
-              <div className="drawer-header">
-                <div className="drawer-title">Idea Home</div>
-                <button
-                  type="button"
-                  className="drawer-toggle"
-                  onClick={() => setDrawerOpen((o) => !o)}
-                  aria-label="Collapse sidebar"
-                  title="Collapse sidebar"
-                >
-                  ◀
-                </button>
-              </div>
-              <div className="drawer-content">
-                <nav className="drawer-nav">
-                  <Link href="/" className="drawer-nav-item">
-                    Dashboard
-                  </Link>
-                  <Link href="/tests" className="drawer-nav-item is-selected">
-                    Tests
-                  </Link>
-                  <div className="drawer-nav-label">Projects</div>
-                  {projects.map((p) => (
-                    <div key={p.id} className="drawer-nav-item-row">
-                      {editingProjectId === p.id ? (
-                        <input
-                          ref={
-                            projectNameInputRef as React.RefObject<HTMLInputElement>
-                          }
-                          type="text"
-                          className="drawer-nav-item drawer-nav-item-input"
-                          value={editingProjectName}
-                          onChange={(e) =>
-                            setEditingProjectName(e.target.value)
-                          }
-                          onBlur={saveProjectName}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") saveProjectName();
-                            if (e.key === "Escape") cancelEditProjectName();
-                          }}
-                          onClick={(e) => e.stopPropagation()}
-                          aria-label="Project name"
-                        />
-                      ) : (
-                        <button
-                          type="button"
-                          className={`drawer-nav-item ${selectedProjectId === p.id ? "is-selected" : ""}`}
-                          onClick={() => setSelectedProjectId(p.id)}
-                          onDoubleClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            setEditingProjectId(p.id);
-                            setEditingProjectName(p.name);
-                          }}
-                          title="Double-click to edit name"
-                        >
-                          {p.name}
-                        </button>
-                      )}
-                      <button
-                        type="button"
-                        className="drawer-nav-item-delete"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setProjectToDelete(p);
-                        }}
-                        aria-label={`Delete ${p.name}`}
-                        title={`Delete project "${p.name}"`}
-                      >
-                        <svg
-                          width="14"
-                          height="14"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="2"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          aria-hidden="true"
-                        >
-                          <polyline points="3 6 5 6 21 6" />
-                          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-                          <line x1="10" y1="11" x2="10" y2="17" />
-                          <line x1="14" y1="11" x2="14" y2="17" />
-                        </svg>
-                      </button>
-                    </div>
-                  ))}
-                </nav>
-              </div>
-              <div className="drawer-footer">
-                <button
-                  type="button"
-                  className="drawer-footer-btn"
-                  aria-label="Feedback"
-                >
-                  💬
-                </button>
-                <button
-                  type="button"
-                  className="drawer-footer-btn"
-                  aria-label={
-                    theme === "light"
-                      ? "Switch to dark theme"
-                      : "Switch to light theme"
-                  }
-                  onClick={toggleTheme}
-                  title={
-                    theme === "light"
-                      ? "Switch to dark theme"
-                      : "Switch to light theme"
-                  }
-                >
-                  {theme === "light" ? "🌙" : "☀️"}
-                </button>
-              </div>
-            </>
-          ) : (
-            <DrawerCollapsedNav
-              activeTab="tests"
-              onExpand={() => setDrawerOpen(true)}
-            />
-          )}
-        </aside>
-
-        <main className="main-content">
-          <ProjectNavBar
-            projectName={
-              projects.find((p) => p.id === selectedProjectId)?.name ??
-              (selectedProjectId && lastKnownProjectName
-                ? lastKnownProjectName
-                : selectedProjectId
-                  ? "Project"
-                  : projects.length
-                    ? "Select a project"
-                    : "Project")
-            }
-            projectId={selectedProjectId || undefined}
-            activeTab="tests"
-            searchPlaceholder="Search project"
-            projects={projects}
-            selectedProjectId={selectedProjectId || undefined}
-            onSelectProject={setSelectedProjectId}
-            onCreateProject={(name) => {
-              void router.push(
-                "/?createProject=1&projectName=" + encodeURIComponent(name)
-              );
-            }}
-            onDeleteProjectClick={() => {
-              const current = projects.find((p) => p.id === selectedProjectId);
-              if (current) setProjectToDelete(current);
-            }}
-          />
-
-          <div className="tests-page-content">
+    <AppLayout
+      title="Tests · Idea Home"
+      activeTab="tests"
+      projectName={projectDisplayName}
+      projectId={selectedProjectId || undefined}
+      searchPlaceholder="Search project"
+      drawerOpen={drawerOpen}
+      setDrawerOpen={setDrawerOpen}
+      projects={projects}
+      selectedProjectId={selectedProjectId ?? ""}
+      setSelectedProjectId={setSelectedProjectId}
+      editingProjectId={editingProjectId}
+      setEditingProjectId={setEditingProjectId}
+      editingProjectName={editingProjectName}
+      setEditingProjectName={setEditingProjectName}
+      saveProjectName={saveProjectName}
+      cancelEditProjectName={cancelEditProjectName}
+      projectNameInputRef={projectNameInputRef}
+      theme={theme}
+      toggleTheme={toggleTheme}
+      projectToDelete={projectToDelete}
+      setProjectToDelete={setProjectToDelete}
+      projectDeleting={projectDeleting}
+      handleDeleteProject={handleDeleteProject}
+      showDeletePerProject
+    >
+      <div className="tests-page-content">
             <h1 className="tests-page-title">Tests</h1>
 
             <section className="tests-page-section">
@@ -817,8 +510,6 @@ export default function TestsPage() {
               </nav>
             </section>
           </div>
-        </main>
-      </div>
 
       {runTestModal && (
         <div className="modal-overlay" onClick={closeRunTestModal}>
@@ -1359,53 +1050,6 @@ export default function TestsPage() {
           </div>
         </div>
       )}
-
-      {projectToDelete && (
-        <div
-          className="modal-overlay"
-          onClick={() => !projectDeleting && setProjectToDelete(null)}
-        >
-          <div
-            className="modal"
-            onClick={(e) => e.stopPropagation()}
-            style={{ maxWidth: 400 }}
-          >
-            <div className="modal-header">
-              <h2>Delete project</h2>
-              <button
-                type="button"
-                className="modal-close"
-                onClick={() => !projectDeleting && setProjectToDelete(null)}
-                aria-label="Close"
-              >
-                ×
-              </button>
-            </div>
-            <p style={{ margin: "0 0 16px", color: "var(--text-muted)" }}>
-              Delete &quot;{projectToDelete.name}&quot;? This will permanently
-              remove the project and all its issues.
-            </p>
-            <div className="modal-actions">
-              <button
-                type="button"
-                className="btn btn-secondary"
-                onClick={() => !projectDeleting && setProjectToDelete(null)}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                className="btn btn-primary"
-                style={{ background: "var(--danger, #c53030)" }}
-                onClick={handleDeleteProject}
-                disabled={projectDeleting}
-              >
-                {projectDeleting ? "Deleting…" : "Delete"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </>
+    </AppLayout>
   );
 }

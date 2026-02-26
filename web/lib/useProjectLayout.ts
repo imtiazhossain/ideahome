@@ -6,6 +6,7 @@ import {
   isAuthenticated,
   updateProject,
 } from "./api";
+import { getProjectDisplayName } from "./utils";
 import { useSelectedProject } from "./SelectedProjectContext";
 import { prefetchProjectLists } from "./prefetchProjectLists";
 
@@ -162,15 +163,12 @@ export function useProjectLayout(): UseProjectLayoutReturn {
     }
   }, [projectToDelete, selectedProjectId, setSelectedProjectId, loadProjects]);
 
-  const projectDisplayName =
-    projects.find((p) => p.id === selectedProjectId)?.name ??
-    (selectedProjectId && lastKnownProjectName
-      ? lastKnownProjectName
-      : selectedProjectId
-        ? "Project"
-        : projectsLoaded && projects.length
-          ? "Select a project"
-          : "Project");
+  const projectDisplayName = getProjectDisplayName(
+    projects,
+    selectedProjectId,
+    lastKnownProjectName,
+    projectsLoaded
+  );
 
   return {
     projects,

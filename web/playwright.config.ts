@@ -14,7 +14,7 @@ export default defineConfig({
   workers: process.env.CI ? 1 : undefined,
   reporter: "html",
   use: {
-    baseURL: process.env.PLAYWRIGHT_BASE_URL || "http://localhost:3000",
+    baseURL: process.env.PLAYWRIGHT_BASE_URL || "http://localhost:3099",
     trace: "on-first-retry",
     screenshot: "only-on-failure",
     headless: true,
@@ -25,9 +25,13 @@ export default defineConfig({
     { name: "webkit", use: { ...devices["Desktop Safari"], headless: true } },
   ],
   webServer: {
-    command: "pnpm dev",
-    url: process.env.PLAYWRIGHT_BASE_URL || "http://localhost:3000",
-    reuseExistingServer: true,
+    command: "node node_modules/next/dist/bin/next dev -p 3099",
+    url: process.env.PLAYWRIGHT_BASE_URL || "http://localhost:3099",
+    reuseExistingServer: !process.env.CI,
     timeout: 120000,
+    env: {
+      NEXT_PUBLIC_SKIP_LOGIN_DEV: "true",
+      NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001",
+    },
   },
 });

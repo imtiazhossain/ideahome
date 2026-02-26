@@ -77,6 +77,14 @@ describe("AuthController", () => {
   });
 
   describe("callback", () => {
+    it("should return 400 when code or state is missing", async () => {
+      const res = mockRes();
+      await controller.callback(res as any, {});
+      expect(mockStatus).toHaveBeenCalledWith(400);
+      expect(mockJson).toHaveBeenCalledWith({
+        error: "Missing code or state",
+      });
+    });
     it("should return token and user when userinfo has email", async () => {
       __setUserinfoResponse({ email: "mock@example.com", name: "Mock User" });
       const user = {
@@ -141,6 +149,195 @@ describe("AuthController", () => {
     });
   });
 
+  describe("google", () => {
+    it("should redirect to Google when configured", async () => {
+      process.env.GOOGLE_CLIENT_ID = "gid";
+      mockAuthService.createState.mockReturnValue("state-123");
+      mockAuthService.getRedirectUri.mockReturnValue(
+        "http://localhost:3001/auth/google/callback"
+      );
+      const res = mockRes();
+      await controller.google(res as any);
+      expect(mockRedirect).toHaveBeenCalledWith(
+        expect.stringContaining("accounts.google.com")
+      );
+      expect(mockRedirect).toHaveBeenCalledWith(
+        expect.stringContaining("state=state-123")
+      );
+    });
+
+    it("should redirect with error when GOOGLE_CLIENT_ID is not set", async () => {
+      delete process.env.GOOGLE_CLIENT_ID;
+      const res = mockRes();
+      mockAuthService.getFrontendCallbackUrl.mockReturnValue(
+        "http://localhost:3000/login/callback"
+      );
+      await controller.google(res as any);
+      expect(mockRedirect).toHaveBeenCalledWith(
+        expect.stringContaining("error=")
+      );
+      expect(mockRedirect).toHaveBeenCalledWith(
+        expect.stringContaining("Google%20SSO%20is%20not%20configured")
+      );
+    });
+  });
+
+  describe("googleCallback", () => {
+    it("should redirect with token on success", async () => {
+      mockAuthService.consumeState.mockReturnValue("google");
+      mockAuthService.exchangeGoogleCode.mockResolvedValue({
+        providerId: "g1",
+        email: "u@x.com",
+        name: "User",
+      });
+      mockAuthService.findOrCreateUserBySso.mockResolvedValue({
+        id: "u1",
+        email: "u@x.com",
+        name: "User",
+      });
+      mockAuthService.signToken.mockReturnValue("jwt-token");
+      mockAuthService.getFrontendCallbackUrl.mockReturnValue(
+        "http://localhost:3000/login/callback?token=jwt-token"
+      );
+      const res = mockRes();
+      await controller.googleCallback(res as any, "code", "state");
+      expect(mockRedirect).toHaveBeenCalledWith(
+        "http://localhost:3000/login/callback?token=jwt-token"
+      );
+    });
+
+    it("should redirect with error when state invalid", async () => {
+      mockAuthService.consumeState.mockReturnValue(null);
+      mockAuthService.getFrontendCallbackUrl.mockReturnValue(
+        "http://localhost:3000/login/callback"
+      );
+      const res = mockRes();
+      await controller.googleCallback(res as any, "code", "bad-state");
+      expect(mockRedirect).toHaveBeenCalledWith(
+        expect.stringContaining("invalid_callback")
+      );
+    });
+
+    it("should redirect with error when exchangeCode throws", async () => {
+      mockAuthService.consumeState.mockReturnValue("google");
+      mockAuthService.exchangeGoogleCode.mockRejectedValue(
+        new Error("OAuth failed")
+      );
+      mockAuthService.getFrontendCallbackUrl.mockReturnValue(
+        "http://localhost:3000/login/callback"
+      );
+      const res = mockRes();
+      await controller.googleCallback(res as any, "code", "state");
+      expect(mockRedirect).toHaveBeenCalledWith(
+        expect.stringContaining("OAuth%20failed")
+      );
+    });
+  });
+
+  describe("github", () => {
+    it("should redirect to GitHub when configured", async () => {
+      process.env.GITHUB_CLIENT_ID = "ghid";
+      mockAuthService.createState.mockReturnValue("state-gh");
+      mockAuthService.getRedirectUri.mockReturnValue(
+        "http://localhost:3001/auth/github/callback"
+      );
+      const res = mockRes();
+      await controller.github(res as any);
+      expect(mockRedirect).toHaveBeenCalledWith(
+        expect.stringContaining("github.com")
+      );
+    });
+
+    it("should redirect with error when GITHUB_CLIENT_ID not set", async () => {
+      delete process.env.GITHUB_CLIENT_ID;
+      mockAuthService.getFrontendCallbackUrl.mockReturnValue(
+        "http://localhost:3000/login/callback"
+      );
+      const res = mockRes();
+      await controller.github(res as any);
+      expect(mockRedirect).toHaveBeenCalledWith(
+        expect.stringContaining("GitHub%20SSO")
+      );
+    });
+  });
+
+  describe("githubCallback", () => {
+    it("should redirect with token on success", async () => {
+      mockAuthService.consumeState.mockReturnValue("github");
+      mockAuthService.exchangeGitHubCode.mockResolvedValue({
+        providerId: "gh1",
+        email: "u@gh.com",
+        name: "GH User",
+      });
+      mockAuthService.findOrCreateUserBySso.mockResolvedValue({
+        id: "u1",
+        email: "u@gh.com",
+        name: "GH User",
+      });
+      mockAuthService.signToken.mockReturnValue("jwt");
+      mockAuthService.getFrontendCallbackUrl.mockReturnValue(
+        "http://localhost:3000/login/callback?token=jwt"
+      );
+      const res = mockRes();
+      await controller.githubCallback(res as any, "code", "state");
+      expect(mockRedirect).toHaveBeenCalledWith(
+        "http://localhost:3000/login/callback?token=jwt"
+      );
+    });
+  });
+
+  describe("apple", () => {
+    it("should redirect to Apple when configured", async () => {
+      process.env.APPLE_CLIENT_ID = "aid";
+      mockAuthService.createState.mockReturnValue("state-apple");
+      mockAuthService.getRedirectUri.mockReturnValue(
+        "http://localhost:3001/auth/apple/callback"
+      );
+      const res = mockRes();
+      await controller.apple(res as any);
+      expect(mockRedirect).toHaveBeenCalledWith(
+        expect.stringContaining("appleid.apple.com")
+      );
+    });
+
+    it("should redirect with error when APPLE_CLIENT_ID not set", async () => {
+      delete process.env.APPLE_CLIENT_ID;
+      mockAuthService.getFrontendCallbackUrl.mockReturnValue(
+        "http://localhost:3000/login/callback"
+      );
+      const res = mockRes();
+      await controller.apple(res as any);
+      expect(mockRedirect).toHaveBeenCalledWith(
+        expect.stringContaining("Apple%20SSO")
+      );
+    });
+  });
+
+  describe("appleCallback", () => {
+    it("should redirect with token on success", async () => {
+      mockAuthService.consumeState.mockReturnValue("apple");
+      mockAuthService.exchangeAppleCode.mockResolvedValue({
+        providerId: "apple1",
+        email: "u@apple.com",
+        name: null,
+      });
+      mockAuthService.findOrCreateUserBySso.mockResolvedValue({
+        id: "u1",
+        email: "u@apple.com",
+        name: null,
+      });
+      mockAuthService.signToken.mockReturnValue("jwt");
+      mockAuthService.getFrontendCallbackUrl.mockReturnValue(
+        "http://localhost:3000/login/callback?token=jwt"
+      );
+      const res = mockRes();
+      await controller.appleCallback(res as any, "code", "state");
+      expect(mockRedirect).toHaveBeenCalledWith(
+        "http://localhost:3000/login/callback?token=jwt"
+      );
+    });
+  });
+
   describe("firebase-session", () => {
     it("should return 400 when idToken is missing", async () => {
       const res = mockRes();
@@ -168,6 +365,21 @@ describe("AuthController", () => {
       expect(mockStatus).toHaveBeenCalledWith(401);
       expect(mockJson).toHaveBeenCalledWith({
         error: "Invalid or expired Firebase token",
+      });
+    });
+
+    it("should return 400 when Firebase token has no email", async () => {
+      mockFirebase.isConfigured.mockReturnValue(true);
+      mockFirebase.verifyIdToken.mockResolvedValue({
+        uid: "firebase-uid",
+        email: "",
+        name: "User",
+      });
+      const res = mockRes();
+      await controller.firebaseSession(res as any, "token");
+      expect(mockStatus).toHaveBeenCalledWith(400);
+      expect(mockJson).toHaveBeenCalledWith({
+        error: "Firebase token missing email",
       });
     });
 

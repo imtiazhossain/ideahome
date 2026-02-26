@@ -2,6 +2,13 @@ import { Test, TestingModule } from "@nestjs/testing";
 import { NotFoundException } from "@nestjs/common";
 import { IssuesService } from "./issues.service";
 import { PrismaService } from "../prisma.service";
+import { StorageService } from "../storage.service";
+
+const mockStorageService = {
+  upload: jest.fn().mockResolvedValue({ url: "uploads/test/file" }),
+  delete: jest.fn().mockResolvedValue(undefined),
+  isFullUrl: jest.fn().mockReturnValue(false),
+};
 
 jest.mock("fs/promises", () => ({
   writeFile: jest.fn().mockResolvedValue(undefined),
@@ -70,6 +77,7 @@ describe("IssuesService", () => {
       providers: [
         IssuesService,
         { provide: PrismaService, useValue: mockPrisma },
+        { provide: StorageService, useValue: mockStorageService },
       ],
     }).compile();
 
@@ -131,6 +139,19 @@ describe("IssuesService", () => {
       });
     });
 
+    it("should filter by userId org when userId provided", async () => {
+      const expected = [{ id: "1", title: "Issue", projectId: "p1" }];
+      mockPrisma.issue.findMany.mockResolvedValue(expected);
+
+      const result = await service.list(undefined, undefined, "user-1");
+      expect(result).toEqual(expected);
+      expect(mockPrisma.issue.findMany).toHaveBeenCalledWith({
+        where: { project: { organizationId: "o1" } },
+        include: ISSUE_INCLUDE,
+        orderBy: { createdAt: "desc" },
+      });
+    });
+
     it("should combine projectId and search when both provided", async () => {
       const expected = [{ id: "1", title: "Bug", projectId: "p1" }];
       mockPrisma.issue.findMany.mockResolvedValue(expected);
@@ -184,6 +205,31 @@ describe("IssuesService", () => {
       expect(result).toEqual(expected);
       expect(mockPrisma.issue.create).toHaveBeenCalledWith({
         data: { ...input, key: "P1-1" },
+        include: ISSUE_INCLUDE,
+      });
+    });
+
+    it("should create issue with single-word project name (acronym first 3 chars)", async () => {
+      mockPrisma.project.findUnique.mockResolvedValue({
+        id: "p1",
+        name: "Ab",
+      });
+      mockPrisma.issue.count.mockResolvedValue(0);
+      mockPrisma.issue.create.mockResolvedValue({
+        id: "1",
+        title: "New",
+        projectId: "p1",
+        key: "AB-1",
+      });
+
+      const result = await service.create({
+        title: "New",
+        description: "Desc",
+        projectId: "p1",
+      });
+      expect(result.key).toBe("AB-1");
+      expect(mockPrisma.issue.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({ key: "AB-1" }),
         include: ISSUE_INCLUDE,
       });
     });
@@ -300,19 +346,26 @@ describe("IssuesService", () => {
       });
     });
 
-    it("should unlink recording/screenshot/file paths when they exist", async () => {
+    it("should delete recording/screenshot/file paths when they exist", async () => {
       mockPrisma.issue.findUnique.mockResolvedValue({
         id: "1",
         recordings: [{ videoUrl: "uploads/recordings/a.webm" }],
         screenshots: [{ imageUrl: "uploads/screenshots/b.png" }],
         files: [{ fileUrl: "uploads/files/c.bin" }],
       });
-      require("fs").existsSync.mockReturnValue(true);
       mockPrisma.issue.delete.mockResolvedValue({ id: "1" });
 
       await service.delete("1");
-      const { unlink } = require("fs/promises");
-      expect(unlink).toHaveBeenCalledTimes(3);
+      expect(mockStorageService.delete).toHaveBeenCalledTimes(3);
+      expect(mockStorageService.delete).toHaveBeenCalledWith(
+        "uploads/recordings/a.webm"
+      );
+      expect(mockStorageService.delete).toHaveBeenCalledWith(
+        "uploads/screenshots/b.png"
+      );
+      expect(mockStorageService.delete).toHaveBeenCalledWith(
+        "uploads/files/c.bin"
+      );
     });
   });
 
@@ -358,23 +411,55 @@ describe("IssuesService", () => {
   });
 
   describe("streamRecording", () => {
+    it("should redirect when recording has full URL (Blob)", async () => {
+      mockPrisma.issueRecording.findFirst.mockResolvedValue({
+        videoUrl: "https://blob.vercel-storage.com/x.webm",
+        issue: { project: { organizationId: "o1" } },
+      });
+      mockStorageService.isFullUrl.mockReturnValue(true);
+      const redirect = jest.fn();
+      const res = { redirect };
+
+      await service.streamRecording("x.webm", res as any);
+      expect(redirect).toHaveBeenCalledWith(
+        "https://blob.vercel-storage.com/x.webm"
+      );
+    });
+
     it("should throw on invalid filename", async () => {
+      mockPrisma.issueRecording.findFirst.mockResolvedValue({
+        videoUrl: "uploads/recordings/x",
+        issue: { project: { organizationId: "o1" } },
+      });
+      mockStorageService.isFullUrl.mockReturnValue(false);
+      const res = { setHeader: jest.fn(), pipe: jest.fn() };
       await expect(
-        service.streamRecording("../../../etc/passwd", {} as any)
+        service.streamRecording("../../../etc/passwd", res as any)
       ).rejects.toThrow(NotFoundException);
-      await expect(service.streamRecording("x", {} as any)).rejects.toThrow(
+      await expect(service.streamRecording("x", res as any)).rejects.toThrow(
         NotFoundException
       );
     });
 
     it("should throw when file does not exist", async () => {
+      mockPrisma.issueRecording.findFirst.mockResolvedValue({
+        videoUrl: "uploads/recordings/valid.webm",
+        issue: { project: { organizationId: "o1" } },
+      });
+      mockStorageService.isFullUrl.mockReturnValue(false);
       require("fs").existsSync.mockReturnValue(false);
+      const res = { setHeader: jest.fn(), pipe: jest.fn() };
       await expect(
-        service.streamRecording("valid.webm", {} as any)
+        service.streamRecording("valid.webm", res as any)
       ).rejects.toThrow(NotFoundException);
     });
 
     it("should set headers and pipe stream when file exists", async () => {
+      mockPrisma.issueRecording.findFirst.mockResolvedValue({
+        videoUrl: "uploads/recordings/video.webm",
+        issue: { project: { organizationId: "o1" } },
+      });
+      mockStorageService.isFullUrl.mockReturnValue(false);
       require("fs").existsSync.mockReturnValue(true);
       const setHeader = jest.fn();
       const pipe = jest.fn();
@@ -517,13 +602,14 @@ describe("IssuesService", () => {
         id: "r1",
         videoUrl: "uploads/recordings/x.webm",
       });
-      require("fs").existsSync.mockReturnValue(true);
       mockPrisma.issueRecording.delete.mockResolvedValue({});
       mockPrisma.issue.findUnique.mockResolvedValue({ id: "i1" });
 
       const result = await service.removeRecording("i1", "r1");
       expect(result).toEqual({ id: "i1" });
-      expect(require("fs/promises").unlink).toHaveBeenCalled();
+      expect(mockStorageService.delete).toHaveBeenCalledWith(
+        "uploads/recordings/x.webm"
+      );
       expect(mockPrisma.issueRecording.delete).toHaveBeenCalledWith({
         where: { id: "r1" },
       });
@@ -755,6 +841,23 @@ describe("IssuesService", () => {
       );
     });
 
+    it("should redirect when file has full URL (Blob)", async () => {
+      mockPrisma.issueFile.findFirst.mockResolvedValue({
+        id: "f1",
+        issueId: "i1",
+        fileUrl: "https://blob.vercel-storage.com/doc.pdf",
+        fileName: "doc.pdf",
+      });
+      mockStorageService.isFullUrl.mockReturnValue(true);
+      const redirect = jest.fn();
+      const res = { redirect };
+
+      await service.streamFile("i1", "f1", res as any);
+      expect(redirect).toHaveBeenCalledWith(
+        "https://blob.vercel-storage.com/doc.pdf"
+      );
+    });
+
     it("should throw when file path does not exist on disk", async () => {
       mockPrisma.issueFile.findFirst.mockResolvedValue({
         id: "f1",
@@ -762,6 +865,7 @@ describe("IssuesService", () => {
         fileUrl: "uploads/files/x",
         fileName: "x",
       });
+      mockStorageService.isFullUrl.mockReturnValue(false);
       require("fs").existsSync.mockReturnValue(false);
       await expect(service.streamFile("i1", "f1", {} as any)).rejects.toThrow(
         NotFoundException

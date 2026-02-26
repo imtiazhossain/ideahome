@@ -1,0 +1,67 @@
+import { Test, TestingModule } from "@nestjs/testing";
+import { TodosController } from "./todos.controller";
+import { TodosService } from "./todos.service";
+import { JwtAuthGuard } from "../auth/jwt.guard";
+
+describe("TodosController", () => {
+  let controller: TodosController;
+  const mockSvc = {
+    list: jest.fn(),
+    create: jest.fn(),
+    update: jest.fn(),
+    remove: jest.fn(),
+    reorder: jest.fn(),
+  };
+
+  beforeEach(async () => {
+    jest.clearAllMocks();
+    const module: TestingModule = await Test.createTestingModule({
+      controllers: [TodosController],
+      providers: [{ provide: TodosService, useValue: mockSvc }],
+    })
+      .overrideGuard(JwtAuthGuard)
+      .useValue({ canActivate: () => true })
+      .compile();
+
+    controller = module.get<TodosController>(TodosController);
+  });
+
+  it("should be defined", () => {
+    expect(controller).toBeDefined();
+  });
+
+  const req = { user: { sub: "u1" } };
+
+  it("list delegates to service", async () => {
+    mockSvc.list.mockResolvedValue([]);
+    await controller.list("p1", "search", req as any);
+    expect(mockSvc.list).toHaveBeenCalledWith("p1", "u1", "search");
+  });
+
+  it("create delegates to service", async () => {
+    mockSvc.create.mockResolvedValue({ id: "t1" });
+    await controller.create({ projectId: "p1", name: "Todo" }, req as any);
+    expect(mockSvc.create).toHaveBeenCalledWith("u1", {
+      projectId: "p1",
+      name: "Todo",
+    });
+  });
+
+  it("update delegates to service", async () => {
+    mockSvc.update.mockResolvedValue({});
+    await controller.update("t1", { name: "New" }, req as any);
+    expect(mockSvc.update).toHaveBeenCalledWith("t1", "u1", { name: "New" });
+  });
+
+  it("remove delegates to service", async () => {
+    mockSvc.remove.mockResolvedValue({});
+    await controller.remove("t1", req as any);
+    expect(mockSvc.remove).toHaveBeenCalledWith("t1", "u1");
+  });
+
+  it("reorder delegates to service", async () => {
+    mockSvc.reorder.mockResolvedValue([]);
+    await controller.reorder({ projectId: "p1", todoIds: ["t1", "t2"] }, req as any);
+    expect(mockSvc.reorder).toHaveBeenCalledWith("p1", "u1", ["t1", "t2"]);
+  });
+});

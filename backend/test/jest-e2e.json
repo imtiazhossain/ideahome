@@ -3,10 +3,10 @@
   "rootDir": ".",
   "testEnvironment": "node",
   "testRegex": ".e2e-spec.ts$",
-  "transform": {
-    "^.+\\.(t|j)s$": "ts-jest"
-  },
+  "transform": { "^.+\\.(t|j)s$": "ts-jest" },
   "moduleNameMapper": {
     "^openid-client$": "<rootDir>/test/__mocks__/openid-client.ts"
-  }
+  },
+  "maxWorkers": 1,
+  "setupFilesAfterEnv": ["<rootDir>/setup-e2e.ts"]
 }

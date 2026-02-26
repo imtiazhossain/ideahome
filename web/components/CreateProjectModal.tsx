@@ -1,0 +1,125 @@
+import React from "react";
+import type { Organization } from "../lib/api";
+import { ErrorBanner } from "./ErrorBanner";
+
+export interface CreateProjectModalProps {
+  open: boolean;
+  onClose: () => void;
+  organizations: Organization[];
+  newOrgName: string;
+  setNewOrgName: (v: string) => void;
+  newProjectOrgId: string;
+  setNewProjectOrgId: (v: string) => void;
+  newProjectName: string;
+  setNewProjectName: (v: string) => void;
+  error: string | null;
+  onDismissError: () => void;
+  submitting: boolean;
+  onSubmit: (e: React.FormEvent) => void;
+}
+
+export function CreateProjectModal({
+  open,
+  onClose,
+  organizations,
+  newOrgName,
+  setNewOrgName,
+  newProjectOrgId,
+  setNewProjectOrgId,
+  newProjectName,
+  setNewProjectName,
+  error,
+  onDismissError,
+  submitting,
+  onSubmit,
+}: CreateProjectModalProps) {
+  if (!open) return null;
+
+  return (
+    <div
+      className="modal-overlay"
+      onClick={() => !submitting && onClose()}
+    >
+      <div className="modal" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-header">
+          <h2>Create project</h2>
+          <button
+            type="button"
+            className="modal-close"
+            onClick={() => !submitting && onClose()}
+            aria-label="Close"
+          >
+            ×
+          </button>
+        </div>
+        <form onSubmit={onSubmit}>
+          {error && (
+            <ErrorBanner
+              message={error}
+              onDismiss={onDismissError}
+              style={{ marginBottom: 16 }}
+            />
+          )}
+          {organizations.length === 0 ? (
+            <div className="form-group">
+              <label>Organization name</label>
+              <input
+                value={newOrgName}
+                onChange={(e) => setNewOrgName(e.target.value)}
+                placeholder="My Organization"
+              />
+              <span className="form-hint">
+                No organizations yet. Enter a name to create one with this
+                project, or leave blank for &quot;My Workspace&quot;.
+              </span>
+            </div>
+          ) : (
+            <div className="form-group">
+              <label htmlFor="create-project-org">Organization</label>
+              <select
+                id="create-project-org"
+                className="form-select"
+                value={newProjectOrgId}
+                onChange={(e) => setNewProjectOrgId(e.target.value)}
+                required
+              >
+                <option value="">Select an organization</option>
+                {organizations.map((o) => (
+                  <option key={o.id} value={o.id}>
+                    {o.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+          <div className="form-group">
+            <label>Project name</label>
+            <input
+              value={newProjectName}
+              onChange={(e) => setNewProjectName(e.target.value)}
+              placeholder="e.g. Engineering, Marketing"
+              required
+              autoFocus={organizations.length > 0}
+            />
+          </div>
+          <div className="modal-actions">
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={() => !submitting && onClose()}
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="btn btn-primary"
+              disabled={submitting}
+            >
+              {submitting ? "Creating…" : "Create"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}

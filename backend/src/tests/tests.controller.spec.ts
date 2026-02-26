@@ -104,7 +104,71 @@ describe("TestsController", () => {
     });
   });
 
+  describe("runUi (POST) when VERCEL or USE_BUILTIN_API", () => {
+    const origEnv = process.env;
+    afterEach(() => {
+      process.env = origEnv;
+    });
+
+    it("should return error when VERCEL is set", async () => {
+      process.env.VERCEL = "1";
+      const result = await controller.runUi({ grep: "home" });
+      expect(result).toEqual({
+        success: false,
+        exitCode: 1,
+        output: "",
+        errorOutput:
+          "UI tests (Playwright) are not available on Vercel. Run them locally with pnpm dev:backend.",
+      });
+      expect(mockTestsService.runUiTest).not.toHaveBeenCalled();
+    });
+
+    it("should return error when USE_BUILTIN_API is set", async () => {
+      process.env.USE_BUILTIN_API = "1";
+      const result = await controller.runUi({ grep: "home" });
+      expect(result.errorOutput).toContain("not available");
+      expect(mockTestsService.runUiTest).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("runUiStream when VERCEL or USE_BUILTIN_API", () => {
+    const origEnv = process.env;
+    afterEach(() => {
+      process.env = origEnv;
+    });
+
+    it("should emit error event when VERCEL is set", (done) => {
+      process.env.VERCEL = "1";
+      const obs = controller.runUiStream("test");
+      const events: unknown[] = [];
+      obs.subscribe({
+        next: (e) => {
+          events.push(JSON.parse((e as { data: string }).data));
+          if (events.length === 1) {
+            expect(events[0]).toMatchObject({
+              type: "error",
+              data: expect.stringContaining("not available"),
+            });
+            done();
+          }
+        },
+      });
+    });
+  });
+
   describe("runApi (POST)", () => {
+    const origVercel = process.env.VERCEL;
+    const origBuiltin = process.env.USE_BUILTIN_API;
+
+    beforeEach(() => {
+      delete process.env.VERCEL;
+      delete process.env.USE_BUILTIN_API;
+    });
+    afterEach(() => {
+      process.env.VERCEL = origVercel;
+      process.env.USE_BUILTIN_API = origBuiltin;
+    });
+
     it("should delegate to service when testNamePattern is provided", async () => {
       const runResult = {
         success: true,
@@ -120,6 +184,23 @@ describe("TestsController", () => {
       expect(mockTestsService.runApiTest).toHaveBeenCalledWith(
         "GET / returns health status"
       );
+    });
+
+    it("should return error when VERCEL is set", async () => {
+      const orig = process.env.VERCEL;
+      process.env.VERCEL = "1";
+      const result = await controller.runApi({
+        testNamePattern: "GET /",
+      });
+      process.env.VERCEL = orig;
+      expect(result).toEqual({
+        success: false,
+        exitCode: 1,
+        output: "",
+        errorOutput:
+          "API tests are not available on Vercel. Run them locally with pnpm test:e2e.",
+      });
+      expect(mockTestsService.runApiTest).not.toHaveBeenCalled();
     });
 
     it("should call service with empty string when testNamePattern is not a string", async () => {

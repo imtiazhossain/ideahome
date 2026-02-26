@@ -16,7 +16,7 @@ describe("AuthService", () => {
       create: jest.fn(),
     },
     organization: {
-      create: jest.fn().mockResolvedValue({ id: "org-1" }),
+      create: jest.fn().mockResolvedValue({ id: "org-1", name: "My Workspace" }),
     },
   };
 
@@ -101,6 +101,295 @@ describe("AuthService", () => {
     });
   });
 
+  describe("ensureUserOrganization", () => {
+    it("returns user when already has organizationId", async () => {
+      mockPrisma.user.findUniqueOrThrow.mockResolvedValue({
+        id: "u1",
+        email: "u@x.com",
+        name: "User",
+        organizationId: "org-1",
+      });
+
+      const result = await service.ensureUserOrganization("u1");
+      expect(result).toEqual({
+        id: "u1",
+        email: "u@x.com",
+        name: "User",
+        organizationId: "org-1",
+      });
+      expect(mockPrisma.organization.create).not.toHaveBeenCalled();
+    });
+
+    it("creates org and updates user when organizationId is null", async () => {
+      mockPrisma.user.findUniqueOrThrow.mockResolvedValue({
+        id: "u1",
+        email: "u@x.com",
+        name: "User",
+        organizationId: null,
+      });
+      mockPrisma.organization.create.mockResolvedValue({
+        id: "new-org",
+        name: "My Workspace",
+      });
+      mockPrisma.user.update.mockResolvedValue({
+        id: "u1",
+        organizationId: "new-org",
+      });
+
+      const result = await service.ensureUserOrganization("u1");
+      expect(result.organizationId).toBe("new-org");
+      expect(mockPrisma.organization.create).toHaveBeenCalledWith({
+        data: { name: "My Workspace" },
+      });
+      expect(mockPrisma.user.update).toHaveBeenCalledWith({
+        where: { id: "u1" },
+        data: { organizationId: "new-org" },
+      });
+    });
+  });
+
+  describe("exchangeGoogleCode", () => {
+    const origFetch = global.fetch;
+    beforeEach(() => {
+      process.env.GOOGLE_CLIENT_ID = "gid";
+      process.env.GOOGLE_CLIENT_SECRET = "gsecret";
+    });
+    afterEach(() => {
+      global.fetch = origFetch;
+    });
+
+    it("returns profile when token and userinfo succeed", async () => {
+      global.fetch = jest.fn()
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve({ access_token: "at" }),
+        } as Response)
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () =>
+            Promise.resolve({
+              id: "google-123",
+              email: "u@example.com",
+              name: "User Name",
+            }),
+        } as Response);
+
+      const result = await service.exchangeGoogleCode("code");
+      expect(result).toEqual({
+        providerId: "google-123",
+        email: "u@example.com",
+        name: "User Name",
+      });
+    });
+
+    it("throws when env vars missing", async () => {
+      delete process.env.GOOGLE_CLIENT_ID;
+      await expect(service.exchangeGoogleCode("code")).rejects.toThrow(
+        "GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET required"
+      );
+    });
+
+    it("throws when no access_token from token response", async () => {
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({}),
+      } as Response);
+      await expect(service.exchangeGoogleCode("code")).rejects.toThrow(
+        "No access_token from Google"
+      );
+    });
+
+    it("throws when userinfo fails", async () => {
+      global.fetch = jest.fn()
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve({ access_token: "at" }),
+        } as Response)
+        .mockResolvedValueOnce({ ok: false } as Response);
+      await expect(service.exchangeGoogleCode("code")).rejects.toThrow(
+        "Google userinfo failed"
+      );
+    });
+
+    it("throws when profile missing email", async () => {
+      global.fetch = jest.fn()
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve({ access_token: "at" }),
+        } as Response)
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve({ id: "g1", name: "User" }),
+        } as Response);
+      await expect(service.exchangeGoogleCode("code")).rejects.toThrow(
+        "Google profile missing email"
+      );
+    });
+  });
+
+  describe("exchangeGitHubCode", () => {
+    const origFetch = global.fetch;
+    beforeEach(() => {
+      process.env.GITHUB_CLIENT_ID = "ghid";
+      process.env.GITHUB_CLIENT_SECRET = "ghsecret";
+    });
+    afterEach(() => {
+      global.fetch = origFetch;
+    });
+
+    it("returns profile when user has email", async () => {
+      global.fetch = jest.fn()
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve({ access_token: "at" }),
+        } as Response)
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () =>
+            Promise.resolve({
+              id: 456,
+              login: "user",
+              email: "u@gh.com",
+              name: "GitHub User",
+            }),
+        } as Response);
+
+      const result = await service.exchangeGitHubCode("code");
+      expect(result).toEqual({
+        providerId: "456",
+        email: "u@gh.com",
+        name: "GitHub User",
+      });
+    });
+
+    it("fetches emails when user has no email", async () => {
+      global.fetch = jest.fn()
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve({ access_token: "at" }),
+        } as Response)
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve({ id: 789, login: "nouser", email: null }),
+        } as Response)
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () =>
+            Promise.resolve([
+              { email: "primary@gh.com", primary: true },
+              { email: "other@gh.com", primary: false },
+            ]),
+        } as Response);
+
+      const result = await service.exchangeGitHubCode("code");
+      expect(result.email).toBe("primary@gh.com");
+    });
+
+    it("throws when env vars missing", async () => {
+      delete process.env.GITHUB_CLIENT_ID;
+      await expect(service.exchangeGitHubCode("code")).rejects.toThrow(
+        "GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET required"
+      );
+    });
+
+    it("throws when no access_token", async () => {
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({}),
+      } as Response);
+      await expect(service.exchangeGitHubCode("code")).rejects.toThrow(
+        "No access_token from GitHub"
+      );
+    });
+
+    it("throws when user API fails", async () => {
+      global.fetch = jest.fn()
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve({ access_token: "at" }),
+        } as Response)
+        .mockResolvedValueOnce({ ok: false } as Response);
+      await expect(service.exchangeGitHubCode("code")).rejects.toThrow(
+        "GitHub user API failed"
+      );
+    });
+
+    it("throws when profile missing email", async () => {
+      global.fetch = jest.fn()
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve({ access_token: "at" }),
+        } as Response)
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve({ id: 1, login: "x", email: null }),
+        } as Response)
+        .mockResolvedValueOnce({ ok: false } as Response);
+      await expect(service.exchangeGitHubCode("code")).rejects.toThrow(
+        "GitHub profile missing email"
+      );
+    });
+  });
+
+  describe("exchangeAppleCode", () => {
+    const origFetch = global.fetch;
+    const jwtMod = require("jsonwebtoken");
+    beforeEach(() => {
+      process.env.APPLE_CLIENT_ID = "aid";
+      process.env.APPLE_TEAM_ID = "tid";
+      process.env.APPLE_KEY_ID = "kid";
+      process.env.APPLE_PRIVATE_KEY = "fake-key";
+      jest.spyOn(jwtMod, "sign").mockReturnValue("mock-client-secret" as never);
+      jest
+        .spyOn(jwtMod, "decode")
+        .mockReturnValue({ sub: "apple-sub-123" } as never);
+    });
+    afterEach(() => {
+      global.fetch = origFetch;
+      jest.restoreAllMocks();
+    });
+
+    it("returns profile with privaterelay email when payload has no email", async () => {
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ id_token: "mock-apple-id-token" }),
+      } as Response);
+
+      const result = await service.exchangeAppleCode("code");
+      expect(result.providerId).toBe("apple-sub-123");
+      expect(result.email).toContain("privaterelay.appleid.com");
+      expect(result.name).toBeNull();
+    });
+
+    it("throws when Invalid Apple id_token", async () => {
+      jest.spyOn(jwtMod, "decode").mockReturnValue(null as never);
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ id_token: "bad-token" }),
+      } as Response);
+      await expect(service.exchangeAppleCode("code")).rejects.toThrow(
+        "Invalid Apple id_token"
+      );
+    });
+
+    it("throws when env vars missing", async () => {
+      delete process.env.APPLE_CLIENT_ID;
+      await expect(service.exchangeAppleCode("code")).rejects.toThrow(
+        "APPLE_CLIENT_ID"
+      );
+    });
+
+    it("throws when no id_token from Apple", async () => {
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({}),
+      } as Response);
+      await expect(service.exchangeAppleCode("code")).rejects.toThrow(
+        "No id_token from Apple"
+      );
+    });
+  });
+
   describe("findOrCreateUserBySso", () => {
     it("returns existing user when account exists", async () => {
       const existingUser = {
@@ -164,6 +453,38 @@ describe("AuthService", () => {
           provider: "github",
           providerId: "github-456",
         },
+      });
+    });
+
+    it("findOrCreateUserByFirebase delegates to findOrCreateUserBySso", async () => {
+      mockPrisma.account.findUnique.mockResolvedValue(null);
+      const newUser = {
+        id: "firebase-user",
+        email: "fb@example.com",
+        name: "FB User",
+      };
+      mockPrisma.user.create.mockResolvedValue(newUser);
+      mockPrisma.user.findUniqueOrThrow.mockResolvedValue({
+        ...newUser,
+        organizationId: "org-1",
+      });
+      mockPrisma.account.create.mockResolvedValue({});
+
+      const result = await service.findOrCreateUserByFirebase(
+        "firebase-uid",
+        "fb@example.com",
+        "FB User"
+      );
+
+      expect(result).toEqual(newUser);
+      expect(mockPrisma.account.findUnique).toHaveBeenCalledWith({
+        where: {
+          provider_providerId: {
+            provider: "firebase",
+            providerId: "firebase-uid",
+          },
+        },
+        include: { user: true },
       });
     });
 
