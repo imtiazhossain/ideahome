@@ -66,6 +66,8 @@ model Idea {
   name      String
   done      Boolean  @default(false)
   order     Int      @default(0)
+  planJson  Json?
+  planGeneratedAt DateTime?
   project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
   projectId String
   createdAt DateTime @default(now())

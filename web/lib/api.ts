@@ -35,15 +35,35 @@ function authHeaders(): Record<string, string> {
 /** Header sent on all API requests so Next.js rewrites only proxy these (not page navigation). */
 export const API_REQUEST_HEADER = "X-Ideahome-Api";
 
+let unauthorizedBlocked = false;
+
+function handleUnauthorizedResponse(): void {
+  if (typeof window === "undefined") return;
+  if (unauthorizedBlocked) return;
+  unauthorizedBlocked = true;
+  clearStoredToken();
+  // In normal auth mode, move to login immediately.
+  if (!isSkipLoginDev()) {
+    window.location.replace("/login");
+  }
+}
+
 /** fetch that includes JWT when present (for SSO). */
-function apiFetch(
+async function apiFetch(
   input: RequestInfo | URL,
   init?: RequestInit
 ): Promise<Response> {
+  if (unauthorizedBlocked && !getStoredToken()) {
+    throw new Error("Unauthorized");
+  }
   const headers = new Headers(init?.headers);
   headers.set(API_REQUEST_HEADER, "1");
   Object.entries(authHeaders()).forEach(([k, v]) => headers.set(k, v));
-  return fetch(input, { ...init, headers });
+  const response = await fetch(input, { ...init, headers });
+  if (response.status === 401) {
+    handleUnauthorizedResponse();
+  }
+  return response;
 }
 
 function isLikelyNetworkFetchError(err: unknown): boolean {
