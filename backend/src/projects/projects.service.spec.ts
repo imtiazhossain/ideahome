@@ -20,6 +20,24 @@ describe("ProjectsService", () => {
       update: jest.fn(),
       delete: jest.fn(),
     },
+    todo: {
+      deleteMany: jest.fn(),
+    },
+    idea: {
+      deleteMany: jest.fn(),
+    },
+    bug: {
+      deleteMany: jest.fn(),
+    },
+    feature: {
+      deleteMany: jest.fn(),
+    },
+    expense: {
+      deleteMany: jest.fn(),
+    },
+    issue: {
+      deleteMany: jest.fn(),
+    },
   };
 
   const mockAuthService = {
@@ -213,6 +231,24 @@ describe("ProjectsService", () => {
       expect(result).toEqual(expected);
       expect(mockPrisma.project.delete).toHaveBeenCalledWith({
         where: { id: "1" },
+      });
+      expect(mockPrisma.todo.deleteMany).toHaveBeenCalledWith({
+        where: { projectId: "1" },
+      });
+      expect(mockPrisma.idea.deleteMany).toHaveBeenCalledWith({
+        where: { projectId: "1" },
+      });
+      expect(mockPrisma.bug.deleteMany).toHaveBeenCalledWith({
+        where: { projectId: "1" },
+      });
+      expect(mockPrisma.feature.deleteMany).toHaveBeenCalledWith({
+        where: { projectId: "1" },
+      });
+      expect(mockPrisma.expense.deleteMany).toHaveBeenCalledWith({
+        where: { projectId: "1" },
+      });
+      expect(mockPrisma.issue.deleteMany).toHaveBeenCalledWith({
+        where: { projectId: "1" },
       });
     });
 

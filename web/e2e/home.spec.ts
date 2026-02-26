@@ -15,7 +15,11 @@ test.afterEach(async ({ page }) => {
 
 // Remove projects created by these tests when the suite finishes.
 test.afterAll(async () => {
-  await deleteTestProjectsByNames(["E2E Project", "Delete Me Project"]);
+  await deleteTestProjectsByNames([
+    "E2E Project",
+    "Delete Me Project",
+    "Delete Me Persist Project",
+  ]);
 });
 
 test.describe("Idea Home home", () => {
@@ -425,6 +429,76 @@ test.describe("Delete project", () => {
       await expect(
         page.getByRole("button", { name: "Delete Me Project", exact: true })
       ).toBeVisible();
+    });
+  });
+
+  test("deleting from sidebar removes project and stays deleted after reload", async ({
+    page,
+  }) => {
+    await test.step("Create Delete Me Persist Project", async () => {
+      await page.goto("/");
+      let createModal = page
+        .locator(".modal")
+        .filter({ hasText: "Create project" });
+      if (!(await createModal.isVisible())) {
+        const expandBtn = page.getByRole("button", { name: "Expand sidebar" });
+        if (await expandBtn.isVisible()) {
+          await expandBtn.click();
+        }
+        await page.getByRole("button", { name: "+ New project" }).click();
+      }
+      createModal = page.locator(".modal").filter({ hasText: "Create project" });
+      await expect(createModal).toBeVisible({ timeout: 5000 });
+      if (await createModal.getByPlaceholder("My Organization").isVisible()) {
+        await createModal.getByPlaceholder("My Organization").fill("Del Org");
+      } else {
+        await createModal
+          .getByRole("combobox", { name: "Organization" })
+          .selectOption({ index: 1 });
+      }
+      await createModal
+        .getByPlaceholder("e.g. Engineering, Marketing")
+        .fill("Delete Me Persist Project");
+      await createModal.getByRole("button", { name: "Create" }).click();
+      await expect(page.locator(".modal")).not.toBeVisible({ timeout: 10000 });
+      await expect(
+        page.getByRole("button", {
+          name: "Delete Me Persist Project",
+          exact: true,
+        })
+      ).toBeVisible({ timeout: 10000 });
+    });
+
+    await test.step("Delete project from sidebar and confirm", async () => {
+      await page
+        .getByRole("button", { name: "Delete Delete Me Persist Project" })
+        .click();
+      const deleteModal = page
+        .locator(".modal")
+        .filter({ hasText: "Delete project" });
+      await expect(deleteModal).toBeVisible();
+      await deleteModal.getByRole("button", { name: "Delete" }).click();
+      await expect(page.locator(".modal")).not.toBeVisible({ timeout: 10000 });
+      await expect(
+        page.getByRole("button", {
+          name: "Delete Me Persist Project",
+          exact: true,
+        })
+      ).toHaveCount(0);
+    });
+
+    await test.step("Reload page and verify deleted project does not reappear", async () => {
+      await page.reload();
+      const expandBtn = page.getByRole("button", { name: "Expand sidebar" });
+      if (await expandBtn.isVisible()) {
+        await expandBtn.click();
+      }
+      await expect(
+        page.getByRole("button", {
+          name: "Delete Me Persist Project",
+          exact: true,
+        })
+      ).toHaveCount(0);
     });
   });
 });

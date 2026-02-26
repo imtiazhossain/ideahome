@@ -71,6 +71,12 @@ export class ProjectsService {
   async delete(id: string, userId: string) {
     await this.get(id, userId);
     try {
+      await this.prisma.todo.deleteMany({ where: { projectId: id } });
+      await this.prisma.idea.deleteMany({ where: { projectId: id } });
+      await this.prisma.bug.deleteMany({ where: { projectId: id } });
+      await this.prisma.feature.deleteMany({ where: { projectId: id } });
+      await this.prisma.expense.deleteMany({ where: { projectId: id } });
+      await this.prisma.issue.deleteMany({ where: { projectId: id } });
       return await this.prisma.project.delete({ where: { id } });
     } catch (e) {
       if (e instanceof PrismaClientKnownRequestError && e.code === "P2025") {
