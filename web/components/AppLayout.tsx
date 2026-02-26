@@ -2,9 +2,14 @@ import React from "react";
 import Head from "next/head";
 import Link from "next/link";
 import { useRouter } from "next/router";
+import { getUserScopedStorageKey } from "../lib/api";
 import { DeleteProjectModal } from "./DeleteProjectModal";
 import { IconTrash } from "./IconTrash";
-import { ProjectNavBar, DrawerCollapsedNav } from "./ProjectNavBar";
+import {
+  ProjectNavBar,
+  DrawerCollapsedNav,
+  useTabOrder,
+} from "./ProjectNavBar";
 import type { ProjectNavTabId } from "./ProjectNavBar";
 
 const NAV_LINKS: { href: string; label: string; tabId: ProjectNavTabId }[] = [
@@ -16,6 +21,48 @@ const NAV_LINKS: { href: string; label: string; tabId: ProjectNavTabId }[] = [
   { href: "/bugs", label: "Bugs", tabId: "forms" },
   { href: "/expenses", label: "Expenses", tabId: "expenses" },
 ];
+
+const PROJECT_ORDER_STORAGE_PREFIX = "ideahome-drawer-project-order";
+const PROJECT_ORDER_LEGACY_KEY = "ideahome-drawer-project-order";
+
+function getProjectOrderStorageKey(): string {
+  return getUserScopedStorageKey(
+    PROJECT_ORDER_STORAGE_PREFIX,
+    PROJECT_ORDER_LEGACY_KEY
+  );
+}
+
+function mergeProjectOrder(
+  projects: { id: string; name: string }[],
+  orderIds: string[]
+): string[] {
+  const validIds = new Set(projects.map((p) => p.id));
+  const deduped = orderIds.filter((id, idx) => validIds.has(id) && orderIds.indexOf(id) === idx);
+  const missing = projects.map((p) => p.id).filter((id) => !deduped.includes(id));
+  return [...deduped, ...missing];
+}
+
+function loadProjectOrderIds(): string[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = localStorage.getItem(getProjectOrderStorageKey());
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((id): id is string => typeof id === "string");
+  } catch {
+    return [];
+  }
+}
+
+function saveProjectOrderIds(ids: string[]) {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(getProjectOrderStorageKey(), JSON.stringify(ids));
+  } catch {
+    // ignore
+  }
+}
 
 export interface AppLayoutProps {
   title: string;
@@ -89,6 +136,83 @@ export function AppLayout({
   children,
 }: AppLayoutProps) {
   const router = useRouter();
+  const { tabOrder, setTabOrder } = useTabOrder();
+  const [projectOrderIds, setProjectOrderIds] = React.useState<string[]>([]);
+  const [draggedProjectId, setDraggedProjectId] = React.useState<string | null>(
+    null
+  );
+  const [dragOverProjectId, setDragOverProjectId] = React.useState<
+    string | null
+  >(null);
+  const [draggedSectionTabId, setDraggedSectionTabId] = React.useState<
+    ProjectNavTabId | null
+  >(null);
+  const [dragOverSectionTabId, setDragOverSectionTabId] = React.useState<
+    ProjectNavTabId | null
+  >(null);
+
+  React.useEffect(() => {
+    setProjectOrderIds((prev) => {
+      const base = prev.length > 0 ? prev : loadProjectOrderIds();
+      return mergeProjectOrder(projects, base);
+    });
+  }, [projects]);
+
+  React.useEffect(() => {
+    if (projectOrderIds.length > 0) saveProjectOrderIds(projectOrderIds);
+  }, [projectOrderIds]);
+
+  const orderedProjects = React.useMemo(() => {
+    if (projectOrderIds.length === 0) return projects;
+    const map = new Map(projects.map((p) => [p.id, p]));
+    return mergeProjectOrder(projects, projectOrderIds)
+      .map((id) => map.get(id))
+      .filter((p): p is { id: string; name: string } => Boolean(p));
+  }, [projects, projectOrderIds]);
+
+  const moveProjectBefore = React.useCallback(
+    (draggedId: string, targetId: string) => {
+      if (!draggedId || !targetId || draggedId === targetId) return;
+      const next = [...mergeProjectOrder(projects, projectOrderIds)];
+      const from = next.indexOf(draggedId);
+      const to = next.indexOf(targetId);
+      if (from === -1 || to === -1 || from === to) return;
+      const [moved] = next.splice(from, 1);
+      next.splice(to, 0, moved);
+      setProjectOrderIds(next);
+    },
+    [projectOrderIds, projects]
+  );
+
+  const moveSectionBefore = React.useCallback(
+    (draggedId: ProjectNavTabId, targetId: ProjectNavTabId) => {
+      if (!draggedId || !targetId || draggedId === targetId) return;
+      const from = tabOrder.indexOf(draggedId);
+      const to = tabOrder.indexOf(targetId);
+      if (from === -1 || to === -1 || from === to) return;
+      const next = [...tabOrder];
+      const [moved] = next.splice(from, 1);
+      next.splice(to, 0, moved);
+      setTabOrder(next);
+    },
+    [setTabOrder, tabOrder]
+  );
+  const orderedNavLinks = React.useMemo(() => {
+    const byId = new Map(NAV_LINKS.map((l) => [l.tabId, l]));
+    const ordered = tabOrder
+      .map((id) => byId.get(id))
+      .filter(
+        (
+          link
+        ): link is { href: string; label: string; tabId: ProjectNavTabId } =>
+          Boolean(link)
+      );
+    const missing = NAV_LINKS.filter(
+      (link) => !ordered.some((item) => item.tabId === link.tabId)
+    );
+    return [...ordered, ...missing];
+  }, [tabOrder]);
+
   const closeDrawerOnMobile = React.useCallback(() => {
     if (
       typeof window !== "undefined" &&
@@ -132,20 +256,74 @@ export function AppLayout({
               </div>
               <div className="drawer-content">
                 <nav className="drawer-nav">
-                  {NAV_LINKS.map(({ href, label, tabId }) => (
-                    <Link
-                      key={href}
-                      href={href}
-                      prefetch={false}
-                      onClick={closeDrawerOnMobile}
-                      className={`drawer-nav-item ${activeTab === tabId ? "is-selected" : ""}`}
-                    >
-                      {label}
-                    </Link>
-                  ))}
                   <div className="drawer-nav-label">Projects</div>
-                  {projects.map((p) => (
-                    <div key={p.id} className="drawer-nav-item-row">
+                  {orderedProjects.map((p) => (
+                    <div
+                      key={p.id}
+                      data-project-id={p.id}
+                      className={`drawer-nav-item-row ${editingProjectId === p.id ? "" : "is-draggable"}${draggedProjectId === p.id ? " is-dragging" : ""}${dragOverProjectId === p.id && draggedProjectId !== p.id ? " is-drag-over" : ""}`}
+                      draggable={editingProjectId !== p.id}
+                      onDragStart={(e) => {
+                        if (editingProjectId === p.id) return;
+                        setDraggedProjectId(p.id);
+                        setDragOverProjectId(null);
+                        e.dataTransfer.effectAllowed = "move";
+                        e.dataTransfer.setData("text/plain", p.id);
+                      }}
+                      onDragOver={(e) => {
+                        if (!draggedProjectId || draggedProjectId === p.id) return;
+                        e.preventDefault();
+                        if (dragOverProjectId !== p.id) setDragOverProjectId(p.id);
+                      }}
+                      onDragLeave={() => {
+                        if (dragOverProjectId === p.id) setDragOverProjectId(null);
+                      }}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        if (!draggedProjectId || draggedProjectId === p.id) return;
+                        moveProjectBefore(draggedProjectId, p.id);
+                        setDragOverProjectId(null);
+                      }}
+                      onTouchStart={() => {
+                        if (editingProjectId === p.id) return;
+                        setDraggedProjectId(p.id);
+                        setDragOverProjectId(null);
+                      }}
+                      onTouchMove={(e) => {
+                        if (!draggedProjectId) return;
+                        const touch = e.touches[0];
+                        if (!touch) return;
+                        const el = document.elementFromPoint(
+                          touch.clientX,
+                          touch.clientY
+                        ) as HTMLElement | null;
+                        const row = el?.closest(
+                          "[data-project-id]"
+                        ) as HTMLElement | null;
+                        const targetId = row?.dataset.projectId ?? null;
+                        if (targetId && targetId !== draggedProjectId) {
+                          e.preventDefault();
+                          if (dragOverProjectId !== targetId) {
+                            setDragOverProjectId(targetId);
+                          }
+                        }
+                      }}
+                      onTouchEnd={() => {
+                        if (draggedProjectId && dragOverProjectId) {
+                          moveProjectBefore(draggedProjectId, dragOverProjectId);
+                        }
+                        setDraggedProjectId(null);
+                        setDragOverProjectId(null);
+                      }}
+                      onTouchCancel={() => {
+                        setDraggedProjectId(null);
+                        setDragOverProjectId(null);
+                      }}
+                      onDragEnd={() => {
+                        setDraggedProjectId(null);
+                        setDragOverProjectId(null);
+                      }}
+                    >
                       {editingProjectId === p.id ? (
                         <input
                           ref={
@@ -225,33 +403,94 @@ export function AppLayout({
                       + New project
                     </button>
                   )}
+                  <div className="drawer-nav-label">Sections</div>
+                  {orderedNavLinks.map(({ href, label, tabId }) => (
+                    <div
+                      key={href}
+                      data-section-tab-id={tabId}
+                      className={`drawer-nav-section-row${draggedSectionTabId === tabId ? " is-dragging" : ""}${dragOverSectionTabId === tabId && draggedSectionTabId !== tabId ? " is-drag-over" : ""}`}
+                      draggable
+                      onDragStart={(e) => {
+                        setDraggedSectionTabId(tabId);
+                        setDragOverSectionTabId(null);
+                        e.dataTransfer.effectAllowed = "move";
+                        e.dataTransfer.setData("text/plain", tabId);
+                      }}
+                      onDragOver={(e) => {
+                        if (!draggedSectionTabId || draggedSectionTabId === tabId)
+                          return;
+                        e.preventDefault();
+                        if (dragOverSectionTabId !== tabId) {
+                          setDragOverSectionTabId(tabId);
+                        }
+                      }}
+                      onDragLeave={() => {
+                        if (dragOverSectionTabId === tabId) {
+                          setDragOverSectionTabId(null);
+                        }
+                      }}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        if (!draggedSectionTabId || draggedSectionTabId === tabId)
+                          return;
+                        moveSectionBefore(draggedSectionTabId, tabId);
+                        setDragOverSectionTabId(null);
+                      }}
+                      onTouchStart={() => {
+                        setDraggedSectionTabId(tabId);
+                        setDragOverSectionTabId(null);
+                      }}
+                      onTouchMove={(e) => {
+                        if (!draggedSectionTabId) return;
+                        const touch = e.touches[0];
+                        if (!touch) return;
+                        const el = document.elementFromPoint(
+                          touch.clientX,
+                          touch.clientY
+                        ) as HTMLElement | null;
+                        const row = el?.closest(
+                          "[data-section-tab-id]"
+                        ) as HTMLElement | null;
+                        const targetId = row?.dataset.sectionTabId as
+                          | ProjectNavTabId
+                          | undefined;
+                        if (targetId && targetId !== draggedSectionTabId) {
+                          e.preventDefault();
+                          if (dragOverSectionTabId !== targetId) {
+                            setDragOverSectionTabId(targetId);
+                          }
+                        }
+                      }}
+                      onTouchEnd={() => {
+                        if (draggedSectionTabId && dragOverSectionTabId) {
+                          moveSectionBefore(
+                            draggedSectionTabId,
+                            dragOverSectionTabId
+                          );
+                        }
+                        setDraggedSectionTabId(null);
+                        setDragOverSectionTabId(null);
+                      }}
+                      onTouchCancel={() => {
+                        setDraggedSectionTabId(null);
+                        setDragOverSectionTabId(null);
+                      }}
+                      onDragEnd={() => {
+                        setDraggedSectionTabId(null);
+                        setDragOverSectionTabId(null);
+                      }}
+                    >
+                      <Link
+                        href={href}
+                        prefetch={false}
+                        onClick={closeDrawerOnMobile}
+                        className={`drawer-nav-item ${activeTab === tabId ? "is-selected" : ""}`}
+                      >
+                        {label}
+                      </Link>
+                    </div>
+                  ))}
                 </nav>
-              </div>
-              <div className="drawer-footer">
-                <button
-                  type="button"
-                  className="drawer-footer-btn"
-                  aria-label="Feedback"
-                >
-                  💬
-                </button>
-                <button
-                  type="button"
-                  className="drawer-footer-btn"
-                  aria-label={
-                    theme === "light"
-                      ? "Switch to dark theme"
-                      : "Switch to light theme"
-                  }
-                  onClick={toggleTheme}
-                  title={
-                    theme === "light"
-                      ? "Switch to dark theme"
-                      : "Switch to light theme"
-                  }
-                >
-                  {theme === "light" ? "🌙" : "☀️"}
-                </button>
               </div>
             </>
           ) : (

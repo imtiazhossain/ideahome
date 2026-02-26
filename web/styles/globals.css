@@ -401,6 +401,62 @@ textarea {
   align-items: center;
   margin-bottom: 2px;
   border-radius: 6px;
+  border: 1px solid transparent;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    transform 0.15s ease,
+    box-shadow 0.15s ease,
+    opacity 0.15s ease;
+}
+
+.drawer-nav-item-row.is-draggable {
+  cursor: grab;
+}
+
+.drawer-nav-item-row.is-draggable:active {
+  cursor: grabbing;
+}
+
+.drawer-nav-item-row.is-dragging {
+  opacity: 0.6;
+  transform: scale(1.01);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  z-index: 10;
+}
+
+.drawer-nav-item-row.is-drag-over {
+  background: var(--column-bg);
+  border-color: var(--border);
+}
+
+.drawer-nav-section-row {
+  margin-bottom: 2px;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  cursor: grab;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    transform 0.15s ease,
+    box-shadow 0.15s ease,
+    opacity 0.15s ease;
+}
+
+.drawer-nav-section-row:active {
+  cursor: grabbing;
+}
+
+.drawer-nav-section-row.is-dragging {
+  opacity: 0.6;
+  transform: scale(1.01);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  z-index: 10;
+}
+
+.drawer-nav-section-row.is-drag-over {
+  background: var(--column-bg);
+  border-color: var(--border);
 }
 
 .drawer-nav-item-row .drawer-nav-item {
