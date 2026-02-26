@@ -4121,7 +4121,7 @@ a.automated-tests-chip-text:hover {
     left: 0;
     top: 0;
     bottom: 0;
-    width: min(340px, 92vw);
+    width: min(270px, 76vw);
     z-index: 20;
     transition: transform 0.2s ease;
     will-change: transform;
@@ -4150,7 +4150,7 @@ a.automated-tests-chip-text:hover {
   }
 
   .drawer.drawer-closed {
-    width: min(340px, 92vw);
+    width: min(270px, 76vw);
     min-width: 0;
     overflow: hidden;
     transform: translateX(-100%);
@@ -4158,7 +4158,7 @@ a.automated-tests-chip-text:hover {
   }
 
   .drawer.drawer-open {
-    width: min(340px, 92vw);
+    width: min(270px, 76vw);
     transform: translateX(0);
     pointer-events: auto;
     box-shadow: 4px 0 20px rgba(0, 0, 0, 0.15);
