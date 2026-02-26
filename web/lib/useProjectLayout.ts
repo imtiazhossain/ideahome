@@ -150,21 +150,38 @@ export function useProjectLayout(): UseProjectLayoutReturn {
     setEditingProjectId(null);
   };
 
-  const handleDeleteProject = useCallback(async (project?: { id: string; name: string } | null) => {
-    const target = project ?? projectToDelete;
-    if (!target) return;
-    setProjectDeleting(true);
-    try {
-      await deleteProject(target.id);
+  const handleDeleteProject = useCallback(
+    async (project?: { id: string; name: string } | null) => {
+      const target = project ?? projectToDelete;
+      if (!target) return;
+      const previousProjects = projects;
+      const previousSelectedProjectId = selectedProjectId;
+      setProjectDeleting(true);
       setProjectToDelete(null);
+      setProjects((prev) => prev.filter((p) => p.id !== target.id));
       if (selectedProjectId === target.id) {
         setSelectedProjectId("");
       }
-      await loadProjects();
-    } finally {
-      setProjectDeleting(false);
-    }
-  }, [projectToDelete, selectedProjectId, setSelectedProjectId, loadProjects]);
+      try {
+        await deleteProject(target.id);
+        await loadProjects();
+      } catch {
+        setProjects(previousProjects);
+        if (previousSelectedProjectId === target.id) {
+          setSelectedProjectId(previousSelectedProjectId);
+        }
+      } finally {
+        setProjectDeleting(false);
+      }
+    },
+    [
+      projectToDelete,
+      projects,
+      selectedProjectId,
+      setSelectedProjectId,
+      loadProjects,
+    ]
+  );
 
   const projectDisplayName = getProjectDisplayName(
     projects,

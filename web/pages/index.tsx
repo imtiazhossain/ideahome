@@ -2098,17 +2098,27 @@ export default function Home() {
   const handleDeleteProject = async (project?: Project | null) => {
     const target = project ?? projectToDelete;
     if (!target) return;
+    const previousProjects = projects;
+    const previousIssues = issues;
+    const previousSelectedProjectId = selectedProjectId;
     setProjectDeleting(true);
     setError(null);
+    setProjectToDelete(null);
+    setProjects((prev) => prev.filter((p) => p.id !== target.id));
+    setIssues((prev) => prev.filter((i) => i.projectId !== target.id));
+    if (selectedProjectId === target.id) {
+      setSelectedProjectId("");
+      setIssues([]);
+    }
     try {
       await deleteProject(target.id);
-      setProjectToDelete(null);
-      if (selectedProjectId === target.id) {
-        setSelectedProjectId("");
-        setIssues([]);
-      }
       await loadProjects();
     } catch (e) {
+      setProjects(previousProjects);
+      setIssues(previousIssues);
+      if (previousSelectedProjectId === target.id) {
+        setSelectedProjectId(previousSelectedProjectId);
+      }
       setError(e instanceof Error ? e.message : "Failed to delete project");
     } finally {
       setProjectDeleting(false);
