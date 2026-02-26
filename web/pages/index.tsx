@@ -1737,6 +1737,7 @@ export default function Home() {
 
   const selectedProjectIdRef = useRef(selectedProjectId);
   selectedProjectIdRef.current = selectedProjectId;
+  const handledCreateProjectQueryRef = useRef<string | null>(null);
 
   const loadProjects = async () => {
     try {
@@ -1955,6 +1956,13 @@ export default function Home() {
       typeof nameParam === "string" && nameParam.trim()
         ? nameParam.trim()
         : null;
+    if (q !== "1") {
+      handledCreateProjectQueryRef.current = null;
+      return;
+    }
+    const queryKey = name ?? "__open_modal__";
+    if (handledCreateProjectQueryRef.current === queryKey) return;
+    handledCreateProjectQueryRef.current = queryKey;
     if (q === "1") {
       router.replace("/", undefined, { shallow: true });
       if (name) {
