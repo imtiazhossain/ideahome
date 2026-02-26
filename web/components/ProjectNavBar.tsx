@@ -55,6 +55,8 @@ const TAB_ORDER_STORAGE_PREFIX = "ideahome-project-nav-tab-order";
 const LEGACY_TAB_ORDER_STORAGE_KEY = "ideahome-project-nav-tab-order";
 const HIDDEN_TABS_STORAGE_PREFIX = "ideahome-project-nav-tabs-hidden";
 const HIDDEN_TABS_LEGACY_KEY = "ideahome-project-nav-tabs-hidden";
+const DELETED_TABS_STORAGE_PREFIX = "ideahome-project-nav-tabs-deleted";
+const DELETED_TABS_LEGACY_KEY = "ideahome-project-nav-tabs-deleted";
 const SETTINGS_BUTTON_VISIBLE_PREFIX = "ideahome-project-nav-settings-visible";
 const SETTINGS_BUTTON_VISIBLE_LEGACY_KEY =
   "ideahome-project-nav-settings-visible";
@@ -80,6 +82,13 @@ function getSettingsButtonVisibleStorageKey(): string {
   return getUserScopedStorageKey(
     SETTINGS_BUTTON_VISIBLE_PREFIX,
     SETTINGS_BUTTON_VISIBLE_LEGACY_KEY
+  );
+}
+
+function getDeletedTabsStorageKey(): string {
+  return getUserScopedStorageKey(
+    DELETED_TABS_STORAGE_PREFIX,
+    DELETED_TABS_LEGACY_KEY
   );
 }
 
@@ -158,11 +167,37 @@ function saveHiddenTabIds(ids: ProjectNavTabId[]) {
   }
 }
 
+function loadDeletedTabIds(): ProjectNavTabId[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = localStorage.getItem(getDeletedTabsStorageKey());
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as string[];
+    return parsed.filter(
+      (id): id is ProjectNavTabId =>
+        typeof id === "string" &&
+        (TABS.some((t) => t.id === id) || id.startsWith("custom-"))
+    );
+  } catch {
+    return [];
+  }
+}
+
+function saveDeletedTabIds(ids: ProjectNavTabId[]) {
+  try {
+    localStorage.setItem(getDeletedTabsStorageKey(), JSON.stringify(ids));
+  } catch {
+    // ignore
+  }
+}
+
 const TabOrderContext = React.createContext<{
   tabOrder: ProjectNavTabId[];
   setTabOrder: (order: ProjectNavTabId[]) => void;
   hiddenTabIds: ProjectNavTabId[];
   setHiddenTabIds: (ids: ProjectNavTabId[]) => void;
+  deletedTabIds: ProjectNavTabId[];
+  setDeletedTabIds: (ids: ProjectNavTabId[]) => void;
 } | null>(null);
 
 export function useTabOrder() {
@@ -172,19 +207,28 @@ export function useTabOrder() {
 }
 
 function loadFilterState() {
-  return { tabOrder: loadTabOrder(), hiddenTabIds: loadHiddenTabIds() };
+  const deletedTabIds = loadDeletedTabIds();
+  const tabOrder = loadTabOrder(deletedTabIds);
+  const hiddenTabIds = loadHiddenTabIds().filter((id) => tabOrder.includes(id));
+  return { tabOrder, hiddenTabIds, deletedTabIds };
 }
 
 export function TabOrderProvider({ children }: { children: React.ReactNode }) {
   const [tabOrder, setTabOrderState] =
     useState<ProjectNavTabId[]>(DEFAULT_TAB_ORDER);
   const [hiddenTabIds, setHiddenTabIdsState] = useState<ProjectNavTabId[]>([]);
+  const [deletedTabIds, setDeletedTabIdsState] = useState<ProjectNavTabId[]>([]);
 
   useEffect(() => {
     const apply = () => {
-      const { tabOrder: order, hiddenTabIds: hidden } = loadFilterState();
+      const {
+        tabOrder: order,
+        hiddenTabIds: hidden,
+        deletedTabIds: deleted,
+      } = loadFilterState();
       setTabOrderState(order);
       setHiddenTabIdsState(hidden);
+      setDeletedTabIdsState(deleted);
     };
     apply();
     const onAuthChange = () => apply();
@@ -199,9 +243,20 @@ export function TabOrderProvider({ children }: { children: React.ReactNode }) {
     setHiddenTabIdsState(ids);
     saveHiddenTabIds(ids);
   }, []);
+  const setDeletedTabIds = useCallback((ids: ProjectNavTabId[]) => {
+    setDeletedTabIdsState(ids);
+    saveDeletedTabIds(ids);
+  }, []);
   return (
     <TabOrderContext.Provider
-      value={{ tabOrder, setTabOrder, hiddenTabIds, setHiddenTabIds }}
+      value={{
+        tabOrder,
+        setTabOrder,
+        hiddenTabIds,
+        setHiddenTabIds,
+        deletedTabIds,
+        setDeletedTabIds,
+      }}
     >
       {children}
     </TabOrderContext.Provider>
@@ -255,9 +310,10 @@ export function DrawerCollapsedNav({
 
 const DEFAULT_TAB_ORDER: ProjectNavTabId[] = TABS.map((t) => t.id);
 
-function loadTabOrder(): ProjectNavTabId[] {
+function loadTabOrder(deletedTabIds: ProjectNavTabId[] = loadDeletedTabIds()): ProjectNavTabId[] {
   if (typeof window === "undefined") return DEFAULT_TAB_ORDER;
   try {
+    const deletedSet = new Set<ProjectNavTabId>(deletedTabIds);
     const key = getTabOrderStorageKey();
     let raw = localStorage.getItem(key);
     if (!raw && key !== LEGACY_TAB_ORDER_STORAGE_KEY) {
@@ -275,16 +331,19 @@ function loadTabOrder(): ProjectNavTabId[] {
     );
     const isValidId = (id: string): id is ProjectNavTabId =>
       TABS.some((t) => t.id === id) || customIds.has(id);
-    const valid = parsed.filter(isValidId);
-    const missingBuiltIn = TABS.filter((t) => !valid.includes(t.id)).map(
-      (t) => t.id
+    const valid = parsed.filter(
+      (id): id is ProjectNavTabId => isValidId(id) && !deletedSet.has(id)
     );
+    const missingBuiltIn = TABS.filter(
+      (t) => !valid.includes(t.id) && !deletedSet.has(t.id)
+    ).map((t) => t.id);
     const missingCustom = customLists
       .map((l) => getCustomListTabId(l.slug))
-      .filter((id) => !valid.includes(id));
-    return valid.length
-      ? [...valid, ...missingBuiltIn, ...missingCustom]
-      : DEFAULT_TAB_ORDER;
+      .filter((id) => !valid.includes(id) && !deletedSet.has(id));
+    const merged = [...valid, ...missingBuiltIn, ...missingCustom];
+    if (merged.length > 0) return merged;
+    const fallbackBuiltIn = TABS.find((t) => !deletedSet.has(t.id))?.id;
+    return fallbackBuiltIn ? [fallbackBuiltIn] : ["board"];
   } catch {
     return DEFAULT_TAB_ORDER;
   }
@@ -301,7 +360,8 @@ function saveTabOrder(order: ProjectNavTabId[]) {
 /** Returns the href of the first visible tab (user's tab order, excluding hidden). */
 export function getFirstVisibleTabHref(): string {
   if (typeof window === "undefined") return "/";
-  const tabOrder = loadTabOrder();
+  const deletedTabIds = loadDeletedTabIds();
+  const tabOrder = loadTabOrder(deletedTabIds);
   const hiddenSet = new Set(loadHiddenTabIds());
   const customLists = getCustomLists();
   for (const id of tabOrder) {
@@ -380,8 +440,14 @@ export function ProjectNavBar({
   showSettingsButton = true,
 }: ProjectNavBarProps) {
   const router = useRouter();
-  const { tabOrder, setTabOrder, hiddenTabIds, setHiddenTabIds } =
-    useTabOrder();
+  const {
+    tabOrder,
+    setTabOrder,
+    hiddenTabIds,
+    setHiddenTabIds,
+    deletedTabIds,
+    setDeletedTabIds,
+  } = useTabOrder();
   const [settingsButtonVisible, setSettingsButtonVisible] = useState(true);
   const [settingsMenuOpen, setSettingsMenuOpen] = useState(false);
   const [reorderSectionOpen, setReorderSectionOpen] = useState(false);
@@ -549,6 +615,14 @@ export function ProjectNavBar({
     return () => clearTimeout(t);
   }, [projectId, projectSearchQuery]);
 
+  const closeSettingsMenu = useCallback(() => {
+    setSettingsMenuOpen(false);
+    setShowTabsSectionOpen(false);
+    setReorderSectionOpen(false);
+    setAddSectionOpen(false);
+    setDeleteProjectSectionOpen(false);
+  }, []);
+
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (
@@ -561,11 +635,7 @@ export function ProjectNavBar({
         settingsMenuRef.current &&
         !settingsMenuRef.current.contains(e.target as Node)
       ) {
-        setSettingsMenuOpen(false);
-        setShowTabsSectionOpen(false);
-        setReorderSectionOpen(false);
-        setAddSectionOpen(false);
-        setDeleteProjectSectionOpen(false);
+        closeSettingsMenu();
       }
       if (
         authMenuRef.current &&
@@ -584,13 +654,13 @@ export function ProjectNavBar({
     };
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
+  }, [closeSettingsMenu]);
 
   const tabsScrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    setTabOrder(loadTabOrder());
-  }, []);
+    setTabOrder(loadTabOrder(deletedTabIds));
+  }, [deletedTabIds, setTabOrder]);
 
   const moveTab = useCallback(
     (tabId: ProjectNavTabId, direction: "up" | "down") => {
@@ -625,6 +695,38 @@ export function ProjectNavBar({
     },
     [tabOrder, setTabOrder, hiddenTabIds]
   );
+
+  const deleteTab = useCallback(
+    (tabId: ProjectNavTabId) => {
+      if (tabOrder.length <= 1) return;
+      const nextOrder = tabOrder.filter((id) => id !== tabId);
+      if (nextOrder.length === 0) return;
+      const nextHidden = hiddenTabIds.filter((id) => id !== tabId);
+      const nextDeleted = Array.from(new Set([...deletedTabIds, tabId]));
+      setTabOrder(nextOrder);
+      setHiddenTabIds(nextHidden);
+      setDeletedTabIds(nextDeleted);
+      if (activeTab === tabId) {
+        void router.push(getFirstVisibleTabHref());
+      }
+    },
+    [
+      activeTab,
+      deletedTabIds,
+      hiddenTabIds,
+      router,
+      setDeletedTabIds,
+      setHiddenTabIds,
+      setTabOrder,
+      tabOrder,
+    ]
+  );
+
+  const restoreDeletedTabs = useCallback(() => {
+    if (deletedTabIds.length === 0) return;
+    setDeletedTabIds([]);
+    setTabOrder(loadTabOrder([]));
+  }, [deletedTabIds.length, setDeletedTabIds, setTabOrder]);
 
   const customLists = getCustomLists();
   const hiddenSet = new Set(hiddenTabIds);
@@ -679,6 +781,7 @@ export function ProjectNavBar({
                 title="Open menu"
               >
                 <IconMenu />
+                <span className="project-nav-menu-btn-label">Menu</span>
               </button>
             )}
             <span className="project-nav-project-icon" aria-hidden>
@@ -963,7 +1066,7 @@ export function ProjectNavBar({
                     title={tab.label}
                     onClick={() => {
                       setProjectSearchOpen(false);
-                      setSettingsMenuOpen(false);
+                      closeSettingsMenu();
                       setAuthMenuOpen(false);
                       setProjectSwitcherOpen(false);
                       if (tab.href === "/") {
@@ -1024,7 +1127,7 @@ export function ProjectNavBar({
                 } catch {
                   /* ignore */
                 }
-                if (!next) setSettingsMenuOpen(false);
+                if (!next) closeSettingsMenu();
               }}
               aria-label={
                 settingsButtonVisible ? "Hide settings" : "Show settings"
@@ -1045,11 +1148,13 @@ export function ProjectNavBar({
                 onClick={() => {
                   const next = !settingsMenuOpen;
                   setSettingsMenuOpen(next);
-                  if (!next) {
+                  if (next) {
                     setShowTabsSectionOpen(false);
                     setReorderSectionOpen(false);
                     setAddSectionOpen(false);
                     setDeleteProjectSectionOpen(false);
+                  } else {
+                    closeSettingsMenu();
                   }
                 }}
                 aria-label="Settings"
@@ -1073,7 +1178,7 @@ export function ProjectNavBar({
                     className="project-nav-add-menu-item"
                     disabled={deleteAllIssuesDisabled}
                     onClick={() => {
-                      setSettingsMenuOpen(false);
+                      closeSettingsMenu();
                       onDeleteAllIssuesClick();
                     }}
                     title={
@@ -1164,6 +1269,7 @@ export function ProjectNavBar({
                       )
                       .map(({ id, label }) => {
                         const visible = !hiddenSet.has(id);
+                        const canDelete = tabOrder.length > 1;
                         return (
                           <li key={id} className="project-nav-filter-item">
                             <label className="project-nav-filter-label">
@@ -1180,9 +1286,40 @@ export function ProjectNavBar({
                               />
                               <span>{label}</span>
                             </label>
+                            <button
+                              type="button"
+                              className="project-nav-filter-delete"
+                              onClick={() => deleteTab(id)}
+                              aria-label={`Delete ${label} tab`}
+                              title={
+                                canDelete
+                                  ? `Delete ${label} tab`
+                                  : "At least one tab must remain"
+                              }
+                              disabled={!canDelete}
+                            >
+                              <IconTrash />
+                            </button>
                           </li>
                         );
                       })}
+                    <li className="project-nav-filter-item project-nav-filter-restore-row">
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className="project-nav-add-menu-item project-nav-filter-restore-btn"
+                        disabled={deletedTabIds.length === 0}
+                        onClick={restoreDeletedTabs}
+                        title={
+                          deletedTabIds.length === 0
+                            ? "No deleted tabs to restore"
+                            : "Restore deleted tabs"
+                        }
+                        aria-label="Restore deleted tabs"
+                      >
+                        Restore deleted tabs
+                      </button>
+                    </li>
                   </ul>
                 )}
                 <button
@@ -1203,7 +1340,7 @@ export function ProjectNavBar({
                           role="menuitem"
                           className="project-nav-add-menu-item"
                           onClick={() => {
-                            setSettingsMenuOpen(false);
+                            closeSettingsMenu();
                             onAddClick();
                           }}
                         >
@@ -1217,7 +1354,7 @@ export function ProjectNavBar({
                         role="menuitem"
                         className="project-nav-add-menu-item"
                         onClick={() => {
-                          setSettingsMenuOpen(false);
+                          closeSettingsMenu();
                           setCreateListName("");
                           setCreateListError(null);
                           setCreateListModalOpen(true);
@@ -1269,8 +1406,7 @@ export function ProjectNavBar({
                         className="project-nav-add-menu-item project-nav-settings-delete-project"
                         disabled={!selectedProjectId || !projects?.length}
                         onClick={() => {
-                          setSettingsMenuOpen(false);
-                          setDeleteProjectSectionOpen(false);
+                          closeSettingsMenu();
                           onDeleteProjectClick();
                         }}
                         title={

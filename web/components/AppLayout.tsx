@@ -89,6 +89,14 @@ export function AppLayout({
   children,
 }: AppLayoutProps) {
   const router = useRouter();
+  const closeDrawerOnMobile = React.useCallback(() => {
+    if (
+      typeof window !== "undefined" &&
+      window.matchMedia("(max-width: 768px)").matches
+    ) {
+      setDrawerOpen(false);
+    }
+  }, [setDrawerOpen]);
   return (
     <>
       <Head>
@@ -129,6 +137,7 @@ export function AppLayout({
                       key={href}
                       href={href}
                       prefetch={false}
+                      onClick={closeDrawerOnMobile}
                       className={`drawer-nav-item ${activeTab === tabId ? "is-selected" : ""}`}
                     >
                       {label}
@@ -160,7 +169,10 @@ export function AppLayout({
                         <button
                           type="button"
                           className={`drawer-nav-item ${selectedProjectId === p.id ? "is-selected" : ""}`}
-                          onClick={() => setSelectedProjectId(p.id)}
+                          onClick={() => {
+                            setSelectedProjectId(p.id);
+                            closeDrawerOnMobile();
+                          }}
                           onDoubleClick={(e) => {
                             e.preventDefault();
                             e.stopPropagation();
@@ -170,6 +182,22 @@ export function AppLayout({
                           title="Double-click to edit name"
                         >
                           {p.name}
+                        </button>
+                      )}
+                      {editingProjectId !== p.id && (
+                        <button
+                          type="button"
+                          className="drawer-nav-item-edit"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            setEditingProjectId(p.id);
+                            setEditingProjectName(p.name);
+                          }}
+                          aria-label={`Rename ${p.name}`}
+                          title={`Rename project "${p.name}"`}
+                        >
+                          ✎
                         </button>
                       )}
                       {showDeletePerProject && (
@@ -244,7 +272,10 @@ export function AppLayout({
             onOpenDrawer={() => setDrawerOpen(true)}
             projects={projects}
             selectedProjectId={selectedProjectId}
-            onSelectProject={setSelectedProjectId}
+            onSelectProject={(id) => {
+              setSelectedProjectId(id);
+              closeDrawerOnMobile();
+            }}
             onCreateProject={
               onCreateProject ??
               ((name) => {

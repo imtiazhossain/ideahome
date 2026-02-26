@@ -445,6 +445,42 @@ textarea {
   opacity: 0;
 }
 
+.drawer-nav-item-edit {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  margin-left: 4px;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.06);
+  color: var(--text);
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+  transition:
+    color 0.15s ease,
+    background 0.15s ease,
+    opacity 0.15s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+}
+
+.drawer-nav-item-row:hover .drawer-nav-item-edit {
+  opacity: 1;
+}
+
+[data-theme="dark"] .drawer-nav-item-edit {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.drawer-nav-item-edit:hover {
+  color: var(--accent, #2b6cb0);
+  background: rgba(43, 108, 176, 0.15);
+}
+
 .drawer-nav-item-row:hover .drawer-nav-item-delete {
   opacity: 1;
 }
@@ -1374,7 +1410,9 @@ textarea {
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  pointer-events: none;
+  pointer-events: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
 }
 
 .project-nav-settings-menu button,
@@ -1556,7 +1594,11 @@ textarea {
 }
 
 .project-nav-filter-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   margin: 0 0 2px;
+  gap: 6px;
 }
 
 .project-nav-filter-item:last-child {
@@ -1568,6 +1610,8 @@ textarea {
   align-items: center;
   gap: 10px;
   padding: 8px 14px;
+  flex: 1;
+  min-width: 0;
   cursor: pointer;
   font-size: 14px;
   font-weight: 400;
@@ -1584,6 +1628,39 @@ textarea {
 .project-nav-filter-label input[type="checkbox"] {
   margin: 0;
   flex-shrink: 0;
+}
+
+.project-nav-filter-delete {
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  margin-right: 8px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition:
+    color 0.15s ease,
+    background 0.15s ease;
+}
+
+.project-nav-filter-delete:hover {
+  color: var(--danger, #c53030);
+  background: rgba(197, 48, 48, 0.15);
+}
+
+.project-nav-filter-restore-row {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--border);
+}
+
+.project-nav-filter-restore-btn {
+  width: 100%;
 }
 
 .project-nav-add-menu {
@@ -1621,6 +1698,15 @@ textarea {
 
 .project-nav-add-menu-item:hover {
   background: var(--column-bg);
+}
+
+.project-nav-add-menu-item:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.project-nav-add-menu-item:disabled:hover {
+  background: none;
 }
 
 .project-nav-settings-delete-project:hover:not(:disabled) {
@@ -3973,7 +4059,14 @@ a.automated-tests-chip-text:hover {
   display: none;
 }
 
-@media (max-width: 768px) {
+@media (max-width: 1024px) {
+  .project-nav {
+    position: sticky;
+    top: 0;
+    z-index: 30;
+    background: var(--bg-bar);
+  }
+
   /* Prevent iOS Safari zoom on input focus (zooms when font-size < 16px) */
   input,
   textarea,
@@ -4001,31 +4094,94 @@ a.automated-tests-chip-text:hover {
     left: 0;
     top: 0;
     bottom: 0;
-    width: min(280px, 85vw);
+    width: min(340px, 92vw);
     z-index: 20;
     box-shadow: 4px 0 20px rgba(0, 0, 0, 0.15);
+  }
+
+  .drawer-logo {
+    margin: 12px 0 8px 12px;
+    width: 36px;
+    height: 36px;
+    font-size: 16px;
+  }
+
+  .drawer-header {
+    min-height: 52px;
+  }
+
+  .drawer-header .drawer-title {
+    padding: 0 12px;
+    font-size: 16px;
+  }
+
+  .drawer-content {
+    padding: 10px 0 14px;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .drawer-nav {
+    padding: 0 10px;
+  }
+
+  .drawer-nav-item {
+    min-height: 44px;
+    padding: 10px 12px;
+    font-size: 15px;
+  }
+
+  .drawer-nav-item-row {
+    gap: 6px;
+    margin-bottom: 4px;
+  }
+
+  .drawer-nav-item-row .drawer-nav-item-input {
+    min-height: 44px;
+    padding: 10px 12px;
+    font-size: 16px;
+  }
+
+  .drawer-nav-item-edit,
+  .drawer-nav-item-delete {
+    width: 34px;
+    height: 34px;
+    opacity: 1;
+    margin-left: 0;
+  }
+
+  .drawer-footer {
+    padding: 12px 10px calc(12px + env(safe-area-inset-bottom, 0px));
   }
 
   .project-nav-menu-btn {
     display: flex;
     align-items: center;
     justify-content: center;
+    gap: 6px;
     flex-shrink: 0;
-    width: 44px;
+    width: auto;
     height: 44px;
     min-width: 44px;
     min-height: 44px;
-    margin: -6px 4px -6px -6px;
-    padding: 0;
-    border: none;
+    margin: -6px 4px -6px 0;
+    padding: 0 10px;
+    border: 1px solid var(--border);
     border-radius: 8px;
-    background: transparent;
-    color: var(--text-muted);
+    background: var(--column-bg);
+    color: var(--text);
   }
 
   .project-nav-menu-btn:hover {
-    background: var(--column-bg);
+    background: var(--bg-card);
     color: var(--text);
+  }
+
+  .project-nav-menu-btn-label {
+    display: inline;
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 1;
   }
 
   .project-nav-top {
@@ -4067,5 +4223,22 @@ a.automated-tests-chip-text:hover {
 }
 
 .project-nav-menu-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 34px;
+  height: 34px;
+  min-width: 34px;
+  min-height: 34px;
+  margin: 0 6px 0 0;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--column-bg);
+  color: var(--text);
+}
+
+.project-nav-menu-btn-label {
   display: none;
 }
