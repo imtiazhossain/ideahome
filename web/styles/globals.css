@@ -423,6 +423,7 @@ textarea {
   transform: scale(1.01);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
   z-index: 10;
+  touch-action: none;
 }
 
 .drawer-nav-item-row.is-drag-over {
@@ -452,6 +453,7 @@ textarea {
   transform: scale(1.01);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
   z-index: 10;
+  touch-action: none;
 }
 
 .drawer-nav-section-row.is-drag-over {

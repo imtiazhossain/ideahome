@@ -150,6 +150,10 @@ export function AppLayout({
   const [dragOverSectionTabId, setDragOverSectionTabId] = React.useState<
     ProjectNavTabId | null
   >(null);
+  const projectTouchMovedRef = React.useRef(false);
+  const sectionTouchMovedRef = React.useRef(false);
+  const suppressProjectTapRef = React.useRef(false);
+  const suppressSectionTapRef = React.useRef(false);
 
   React.useEffect(() => {
     setProjectOrderIds((prev) => {
@@ -286,11 +290,14 @@ export function AppLayout({
                       }}
                       onTouchStart={() => {
                         if (editingProjectId === p.id) return;
+                        projectTouchMovedRef.current = false;
                         setDraggedProjectId(p.id);
                         setDragOverProjectId(null);
                       }}
                       onTouchMove={(e) => {
                         if (!draggedProjectId) return;
+                        e.preventDefault();
+                        projectTouchMovedRef.current = true;
                         const touch = e.touches[0];
                         if (!touch) return;
                         const el = document.elementFromPoint(
@@ -302,22 +309,30 @@ export function AppLayout({
                         ) as HTMLElement | null;
                         const targetId = row?.dataset.projectId ?? null;
                         if (targetId && targetId !== draggedProjectId) {
-                          e.preventDefault();
                           if (dragOverProjectId !== targetId) {
                             setDragOverProjectId(targetId);
                           }
                         }
                       }}
                       onTouchEnd={() => {
-                        if (draggedProjectId && dragOverProjectId) {
+                        if (
+                          projectTouchMovedRef.current &&
+                          draggedProjectId &&
+                          dragOverProjectId
+                        ) {
                           moveProjectBefore(draggedProjectId, dragOverProjectId);
+                        }
+                        if (projectTouchMovedRef.current) {
+                          suppressProjectTapRef.current = true;
                         }
                         setDraggedProjectId(null);
                         setDragOverProjectId(null);
+                        projectTouchMovedRef.current = false;
                       }}
                       onTouchCancel={() => {
                         setDraggedProjectId(null);
                         setDragOverProjectId(null);
+                        projectTouchMovedRef.current = false;
                       }}
                       onDragEnd={() => {
                         setDraggedProjectId(null);
@@ -347,7 +362,13 @@ export function AppLayout({
                         <button
                           type="button"
                           className={`drawer-nav-item ${selectedProjectId === p.id ? "is-selected" : ""}`}
-                          onClick={() => {
+                          onClick={(e) => {
+                            if (suppressProjectTapRef.current) {
+                              suppressProjectTapRef.current = false;
+                              e.preventDefault();
+                              e.stopPropagation();
+                              return;
+                            }
                             setSelectedProjectId(p.id);
                             closeDrawerOnMobile();
                           }}
@@ -403,7 +424,7 @@ export function AppLayout({
                       + New project
                     </button>
                   )}
-                  <div className="drawer-nav-label">Sections</div>
+                  <div className="drawer-nav-label">Tabs</div>
                   {orderedNavLinks.map(({ href, label, tabId }) => (
                     <div
                       key={href}
@@ -437,11 +458,14 @@ export function AppLayout({
                         setDragOverSectionTabId(null);
                       }}
                       onTouchStart={() => {
+                        sectionTouchMovedRef.current = false;
                         setDraggedSectionTabId(tabId);
                         setDragOverSectionTabId(null);
                       }}
                       onTouchMove={(e) => {
                         if (!draggedSectionTabId) return;
+                        e.preventDefault();
+                        sectionTouchMovedRef.current = true;
                         const touch = e.touches[0];
                         if (!touch) return;
                         const el = document.elementFromPoint(
@@ -455,25 +479,33 @@ export function AppLayout({
                           | ProjectNavTabId
                           | undefined;
                         if (targetId && targetId !== draggedSectionTabId) {
-                          e.preventDefault();
                           if (dragOverSectionTabId !== targetId) {
                             setDragOverSectionTabId(targetId);
                           }
                         }
                       }}
                       onTouchEnd={() => {
-                        if (draggedSectionTabId && dragOverSectionTabId) {
+                        if (
+                          sectionTouchMovedRef.current &&
+                          draggedSectionTabId &&
+                          dragOverSectionTabId
+                        ) {
                           moveSectionBefore(
                             draggedSectionTabId,
                             dragOverSectionTabId
                           );
                         }
+                        if (sectionTouchMovedRef.current) {
+                          suppressSectionTapRef.current = true;
+                        }
                         setDraggedSectionTabId(null);
                         setDragOverSectionTabId(null);
+                        sectionTouchMovedRef.current = false;
                       }}
                       onTouchCancel={() => {
                         setDraggedSectionTabId(null);
                         setDragOverSectionTabId(null);
+                        sectionTouchMovedRef.current = false;
                       }}
                       onDragEnd={() => {
                         setDraggedSectionTabId(null);
@@ -483,7 +515,15 @@ export function AppLayout({
                       <Link
                         href={href}
                         prefetch={false}
-                        onClick={closeDrawerOnMobile}
+                        onClick={(e) => {
+                          if (suppressSectionTapRef.current) {
+                            suppressSectionTapRef.current = false;
+                            e.preventDefault();
+                            e.stopPropagation();
+                            return;
+                          }
+                          closeDrawerOnMobile();
+                        }}
                         className={`drawer-nav-item ${activeTab === tabId ? "is-selected" : ""}`}
                       >
                         {label}
