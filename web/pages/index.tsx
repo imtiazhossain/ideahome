@@ -1850,8 +1850,14 @@ export default function Home() {
     async (name: string) => {
       const trimmed = name.trim();
       if (!trimmed) return;
+      const previousSelectedProjectId = selectedProjectId;
+      const tempId = `temp-project-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      const optimisticProject: Project = { id: tempId, name: trimmed };
       setProjectCreateError(null);
       setProjectSubmitting(true);
+      setProjects((prev) => [...prev, optimisticProject]);
+      setSelectedProjectId(tempId);
+      setLastKnownProjectName(trimmed);
       try {
         if (organizations.length === 0) {
           await ensureOrganization();
@@ -1859,10 +1865,18 @@ export default function Home() {
           setOrganizations(list);
         }
         const project = await createProject({ name: trimmed });
-        setProjects((prev) => [...prev, project]);
-        setSelectedProjectId(project.id);
+        setProjects((prev) =>
+          prev.map((p) => (p.id === tempId ? project : p))
+        );
+        if (selectedProjectIdRef.current === tempId) {
+          setSelectedProjectId(project.id);
+        }
         setLastKnownProjectName(project.name);
       } catch (e) {
+        setProjects((prev) => prev.filter((p) => p.id !== tempId));
+        if (selectedProjectIdRef.current === tempId) {
+          setSelectedProjectId(previousSelectedProjectId);
+        }
         setProjectCreateError(
           e instanceof Error ? e.message : "Failed to create project"
         );
@@ -1870,7 +1884,12 @@ export default function Home() {
         setProjectSubmitting(false);
       }
     },
-    [organizations.length, setLastKnownProjectName]
+    [
+      organizations.length,
+      selectedProjectId,
+      setLastKnownProjectName,
+      setSelectedProjectId,
+    ]
   );
 
   useEffect(() => {
@@ -2168,7 +2187,13 @@ export default function Home() {
       setProjectCreateError("Please enter a project name.");
       return;
     }
+    const previousSelectedProjectId = selectedProjectId;
+    const tempId = `temp-project-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const optimisticProject: Project = { id: tempId, name: projectName };
     setProjectSubmitting(true);
+    setProjects((prev) => [...prev, optimisticProject]);
+    setSelectedProjectId(tempId);
+    setLastKnownProjectName(projectName);
     try {
       if (organizations.length === 0) {
         if (newOrgName.trim()) {
@@ -2181,14 +2206,22 @@ export default function Home() {
         if (list.length > 0) setNewProjectOrgId(list[0].id);
       }
       const project = await createProject({ name: projectName });
-      setProjects((prev) => [...prev, project]);
-      setSelectedProjectId(project.id);
+      setProjects((prev) =>
+        prev.map((p) => (p.id === tempId ? project : p))
+      );
+      if (selectedProjectIdRef.current === tempId) {
+        setSelectedProjectId(project.id);
+      }
       setLastKnownProjectName(project.name);
       setCreateProjectOpen(false);
       setNewProjectName("");
       setNewProjectOrgId("");
       setNewOrgName("");
     } catch (e) {
+      setProjects((prev) => prev.filter((p) => p.id !== tempId));
+      if (selectedProjectIdRef.current === tempId) {
+        setSelectedProjectId(previousSelectedProjectId);
+      }
       setProjectCreateError(
         e instanceof Error ? e.message : "Failed to create project"
       );
