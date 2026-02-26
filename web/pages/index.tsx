@@ -2095,14 +2095,15 @@ export default function Home() {
     }
   };
 
-  const handleDeleteProject = async () => {
-    if (!projectToDelete) return;
+  const handleDeleteProject = async (project?: Project | null) => {
+    const target = project ?? projectToDelete;
+    if (!target) return;
     setProjectDeleting(true);
     setError(null);
     try {
-      await deleteProject(projectToDelete.id);
+      await deleteProject(target.id);
       setProjectToDelete(null);
-      if (selectedProjectId === projectToDelete.id) {
+      if (selectedProjectId === target.id) {
         setSelectedProjectId("");
         setIssues([]);
       }

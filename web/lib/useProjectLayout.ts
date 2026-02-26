@@ -30,7 +30,9 @@ export interface UseProjectLayoutReturn {
   projectToDelete: { id: string; name: string } | null;
   setProjectToDelete: (p: { id: string; name: string } | null) => void;
   projectDeleting: boolean;
-  handleDeleteProject: () => Promise<void>;
+  handleDeleteProject: (
+    project?: { id: string; name: string } | null
+  ) => Promise<void>;
 }
 
 export function useProjectLayout(): UseProjectLayoutReturn {
@@ -148,13 +150,14 @@ export function useProjectLayout(): UseProjectLayoutReturn {
     setEditingProjectId(null);
   };
 
-  const handleDeleteProject = useCallback(async () => {
-    if (!projectToDelete) return;
+  const handleDeleteProject = useCallback(async (project?: { id: string; name: string } | null) => {
+    const target = project ?? projectToDelete;
+    if (!target) return;
     setProjectDeleting(true);
     try {
-      await deleteProject(projectToDelete.id);
+      await deleteProject(target.id);
       setProjectToDelete(null);
-      if (selectedProjectId === projectToDelete.id) {
+      if (selectedProjectId === target.id) {
         setSelectedProjectId("");
       }
       await loadProjects();

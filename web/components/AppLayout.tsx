@@ -8,7 +8,6 @@ import {
   getCustomListTabId,
   getCustomLists,
 } from "../lib/customLists";
-import { DeleteProjectModal } from "./DeleteProjectModal";
 import { IconTrash } from "./IconTrash";
 import { IconFilter } from "./icons";
 import {
@@ -101,7 +100,9 @@ export interface AppLayoutProps {
   projectToDelete: { id: string; name: string } | null;
   setProjectToDelete: (p: { id: string; name: string } | null) => void;
   projectDeleting: boolean;
-  handleDeleteProject: () => Promise<void>;
+  handleDeleteProject: (
+    project?: { id: string; name: string } | null
+  ) => Promise<void>;
   /** When true, show delete button next to each project in the drawer */
   showDeletePerProject?: boolean;
   /** When provided, show "+ New project" button in drawer that calls this */
@@ -553,9 +554,16 @@ export function AppLayout({
                           onClick={(e) => {
                             e.preventDefault();
                             e.stopPropagation();
-                            setProjectToDelete(p);
+                            void handleDeleteProject(p);
                             closeDrawerOnMobile();
                           }}
+                          onTouchEnd={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            void handleDeleteProject(p);
+                            closeDrawerOnMobile();
+                          }}
+                          disabled={projectDeleting}
                           aria-label={`Delete ${p.name}`}
                           title={`Delete project "${p.name}"`}
                         >
@@ -786,20 +794,11 @@ export function AppLayout({
             }
             onDeleteProjectClick={() => {
               const current = projects.find((p) => p.id === selectedProjectId);
-              if (current) setProjectToDelete(current);
+              if (current) void handleDeleteProject(current);
             }}
             onDeleteAllIssuesClick={onDeleteAllIssuesClick}
             deleteAllIssuesDisabled={deleteAllIssuesDisabled}
           />
-
-          {projectToDelete && (
-            <DeleteProjectModal
-              project={projectToDelete}
-              deleting={projectDeleting}
-              onClose={() => setProjectToDelete(null)}
-              onConfirm={handleDeleteProject}
-            />
-          )}
 
           {children}
         </main>
