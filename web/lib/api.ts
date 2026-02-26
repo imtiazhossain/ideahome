@@ -21,14 +21,61 @@ function isHttpUrl(value: string): boolean {
   return /^https?:\/\//i.test(value);
 }
 
-/** Legacy localStorage key for SSO JWT (kept for cleanup on logout). */
+/** localStorage fallback key for SSO JWT (also cleaned on logout). */
 export const AUTH_TOKEN_KEY = "ideahome_token";
 /** sessionStorage key for SSO JWT. */
 export const AUTH_TOKEN_SESSION_KEY = "ideahome_token_session";
 
+function safeSessionStorageGet(key: string): string | null {
+  try {
+    return sessionStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function safeSessionStorageSet(key: string, value: string): void {
+  try {
+    sessionStorage.setItem(key, value);
+  } catch {
+    // ignore storage restrictions
+  }
+}
+
+function safeSessionStorageRemove(key: string): void {
+  try {
+    sessionStorage.removeItem(key);
+  } catch {
+    // ignore storage restrictions
+  }
+}
+
+function safeLocalStorageGet(key: string): string | null {
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function safeLocalStorageSet(key: string, value: string): void {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    // ignore storage restrictions
+  }
+}
+
+function safeLocalStorageRemove(key: string): void {
+  try {
+    localStorage.removeItem(key);
+  } catch {
+    // ignore storage restrictions
+  }
+}
+
 function authHeaders(): Record<string, string> {
-  if (typeof window === "undefined") return {};
-  const t = sessionStorage.getItem(AUTH_TOKEN_SESSION_KEY);
+  const t = getStoredToken();
   return t ? { Authorization: `Bearer ${t}` } : {};
 }
 
@@ -117,7 +164,13 @@ export function isSkipLoginDev(): boolean {
 
 export function getStoredToken(): string | null {
   if (typeof window === "undefined") return null;
-  return sessionStorage.getItem(AUTH_TOKEN_SESSION_KEY);
+  const sessionToken = safeSessionStorageGet(AUTH_TOKEN_SESSION_KEY)?.trim();
+  if (sessionToken) return sessionToken;
+  const fallbackToken = safeLocalStorageGet(AUTH_TOKEN_KEY)?.trim();
+  if (!fallbackToken) return null;
+  // Rehydrate session token for code paths that expect sessionStorage.
+  safeSessionStorageSet(AUTH_TOKEN_SESSION_KEY, fallbackToken);
+  return fallbackToken;
 }
 
 /** Custom event dispatched when auth token changes (login/logout). */
@@ -130,14 +183,16 @@ function dispatchAuthChange(): void {
 
 export function setStoredToken(token: string): void {
   if (typeof window === "undefined") return;
-  sessionStorage.setItem(AUTH_TOKEN_SESSION_KEY, token);
+  safeSessionStorageSet(AUTH_TOKEN_SESSION_KEY, token);
+  // Keep a local fallback for browsers/webviews where sessionStorage is volatile.
+  safeLocalStorageSet(AUTH_TOKEN_KEY, token);
   dispatchAuthChange();
 }
 
 export function clearStoredToken(): void {
   if (typeof window === "undefined") return;
-  localStorage.removeItem(AUTH_TOKEN_KEY);
-  sessionStorage.removeItem(AUTH_TOKEN_SESSION_KEY);
+  safeLocalStorageRemove(AUTH_TOKEN_KEY);
+  safeSessionStorageRemove(AUTH_TOKEN_SESSION_KEY);
   dispatchAuthChange();
 }
 
@@ -187,7 +242,7 @@ export const USER_SAVED_DATA_STORAGE_KEYS = [
 export function clearUserSavedData(): void {
   if (typeof window === "undefined") return;
   for (const k of USER_SAVED_DATA_STORAGE_KEYS) {
-    localStorage.removeItem(k);
+    safeLocalStorageRemove(k);
   }
 }
 
