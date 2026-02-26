@@ -1873,6 +1873,9 @@ export default function Home() {
           setSelectedProjectId(project.id);
         }
         setLastKnownProjectName(project.name);
+        if (router.pathname !== "/") {
+          await router.push("/");
+        }
       } catch (e) {
         setProjects((prev) => prev.filter((p) => p.id !== tempId));
         if (selectedProjectIdRef.current === tempId) {
@@ -2221,6 +2224,9 @@ export default function Home() {
         setSelectedProjectId(project.id);
       }
       setLastKnownProjectName(project.name);
+      if (router.pathname !== "/") {
+        await router.push("/");
+      }
       setCreateProjectOpen(false);
       setNewProjectName("");
       setNewProjectOrgId("");
