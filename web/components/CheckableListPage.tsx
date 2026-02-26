@@ -243,6 +243,16 @@ export function CheckableListPage({ pageKey }: { pageKey: CheckableListPageKey }
                 <p className="idea-plan-summary">Thinking...</p>
               </div>
             ) : null}
+            {gifUrl ? (
+              <div className="idea-chat-message idea-chat-message--assistant">
+                <img
+                  src={gifUrl}
+                  alt="AI generated action preview"
+                  className="idea-action-gif"
+                  loading="lazy"
+                />
+              </div>
+            ) : null}
           </div>
           <div className="idea-chat-input-row">
             <textarea
@@ -277,14 +287,6 @@ export function CheckableListPage({ pageKey }: { pageKey: CheckableListPageKey }
               Send
             </button>
           </div>
-          {gifUrl ? (
-            <img
-              src={gifUrl}
-              alt="AI generated action preview"
-              className="idea-action-gif"
-              loading="lazy"
-            />
-          ) : null}
         </div>
       );
     },
