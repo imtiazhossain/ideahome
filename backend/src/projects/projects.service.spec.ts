@@ -61,9 +61,9 @@ describe("ProjectsService", () => {
 
   describe("list", () => {
     it("should return projects for user's org", async () => {
-      mockPrisma.project.findMany
-        .mockResolvedValueOnce([])
-        .mockResolvedValueOnce([{ id: "1", name: "Project 1", organizationId: "o1" }]);
+      mockPrisma.project.findMany.mockResolvedValue([
+        { id: "1", name: "Project 1", organizationId: "o1" },
+      ]);
       const expected = [{ id: "1", name: "Project 1", organizationId: "o1" }];
 
       const result = await service.list("user-1");
@@ -75,38 +75,6 @@ describe("ProjectsService", () => {
       expect(mockPrisma.project.findMany).toHaveBeenCalledWith({
         where: { organizationId: "o1" },
       });
-      expect(mockPrisma.project.createMany).toHaveBeenCalledWith({
-        data: [
-          { name: "Work", organizationId: "o1" },
-          { name: "Life", organizationId: "o1" },
-        ],
-      });
-    });
-
-    it("should create only missing default projects", async () => {
-      mockPrisma.project.findMany
-        .mockResolvedValueOnce([{ name: "Work" }])
-        .mockResolvedValueOnce([{ id: "1", name: "Work", organizationId: "o1" }]);
-
-      await service.list("user-1");
-
-      expect(mockPrisma.project.createMany).toHaveBeenCalledWith({
-        data: [{ name: "Life", organizationId: "o1" }],
-      });
-    });
-
-    it("should skip createMany when defaults already exist", async () => {
-      const expected = [
-        { id: "1", name: "Work", organizationId: "o1" },
-        { id: "2", name: "Life", organizationId: "o1" },
-      ];
-      mockPrisma.project.findMany
-        .mockResolvedValueOnce([{ name: "Work" }, { name: "Life" }])
-        .mockResolvedValueOnce(expected);
-
-      const result = await service.list("user-1");
-
-      expect(result).toEqual(expected);
       expect(mockPrisma.project.createMany).not.toHaveBeenCalled();
     });
   });

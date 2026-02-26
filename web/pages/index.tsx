@@ -56,7 +56,6 @@ import {
   type User,
   type RunUiTestResult,
 } from "../lib/api";
-import { ensureDefaultProjects } from "../lib/defaultProjects";
 import { uiTests, testNameToSlug } from "../lib/ui-tests";
 import { AppLayout } from "../components/AppLayout";
 import { AutoResizeTextarea } from "../components/AutoResizeTextarea";
@@ -1742,12 +1741,11 @@ export default function Home() {
   const loadProjects = async () => {
     try {
       const data = await fetchProjects();
-      const withDefaults = await ensureDefaultProjects(data);
-      setProjects(withDefaults);
-      if (withDefaults.length) {
+      setProjects(data);
+      if (data.length) {
         const current = selectedProjectIdRef.current;
-        const exists = withDefaults.some((p) => p.id === current);
-        if (!exists) setSelectedProjectId(withDefaults[0].id);
+        const exists = data.some((p) => p.id === current);
+        if (!exists) setSelectedProjectId(data[0].id);
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load projects");

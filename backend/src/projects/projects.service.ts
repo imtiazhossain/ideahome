@@ -3,8 +3,6 @@ import { PrismaClientKnownRequestError } from "@prisma/client/runtime/library";
 import { AuthService } from "../auth/auth.service";
 import { PrismaService } from "../prisma.service";
 
-const DEFAULT_PROJECT_NAMES = ["Work", "Life"] as const;
-
 @Injectable()
 export class ProjectsService {
   constructor(
@@ -36,28 +34,8 @@ export class ProjectsService {
     return trimmed;
   }
 
-  private async ensureDefaultProjectsForOrganization(
-    organizationId: string
-  ): Promise<void> {
-    const existing = await this.prisma.project.findMany({
-      where: { organizationId },
-      select: { name: true },
-    });
-    const existingLower = new Set(
-      existing.map((project) => project.name.trim().toLowerCase())
-    );
-    const missing = DEFAULT_PROJECT_NAMES.filter(
-      (name) => !existingLower.has(name.toLowerCase())
-    );
-    if (missing.length === 0) return;
-    await this.prisma.project.createMany({
-      data: missing.map((name) => ({ name, organizationId })),
-    });
-  }
-
   async list(userId: string) {
     const organizationId = await this.getOrgIdForUser(userId);
-    await this.ensureDefaultProjectsForOrganization(organizationId);
     return this.prisma.project.findMany({
       where: { organizationId },
     });
