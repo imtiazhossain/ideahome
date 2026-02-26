@@ -11,6 +11,8 @@ describe("IdeasController", () => {
     update: jest.fn(),
     remove: jest.fn(),
     reorder: jest.fn(),
+    generatePlan: jest.fn(),
+    generateActionTodos: jest.fn(),
   };
 
   beforeEach(async () => {
@@ -75,5 +77,25 @@ describe("IdeasController", () => {
     mockSvc.reorder.mockResolvedValue([]);
     await controller.reorder(undefined as any, req as any);
     expect(mockSvc.reorder).toHaveBeenCalledWith(undefined, "u1", undefined);
+  });
+
+  it("generatePlan delegates to service", async () => {
+    mockSvc.generatePlan.mockResolvedValue({ id: "i1" });
+    await controller.generatePlan("i1", { context: "mobile-first" }, req as any);
+    expect(mockSvc.generatePlan).toHaveBeenCalledWith("i1", "u1", "mobile-first");
+  });
+
+  it("generateActionTodos delegates to service", async () => {
+    mockSvc.generateActionTodos.mockResolvedValue({ createdCount: 3 });
+    await controller.generateActionTodos(
+      "i1",
+      { context: "ship fast" },
+      req as any
+    );
+    expect(mockSvc.generateActionTodos).toHaveBeenCalledWith(
+      "i1",
+      "u1",
+      "ship fast"
+    );
   });
 });

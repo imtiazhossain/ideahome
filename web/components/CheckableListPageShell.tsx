@@ -13,6 +13,8 @@ export interface CheckableListPageShellProps {
   itemCount: number;
   canUndo: boolean;
   onUndo: () => void;
+  canBulkDelete?: boolean;
+  onBulkDelete?: () => void;
   checkableListProps: React.ComponentProps<typeof CheckableList>;
   addGuard?: { projectsLoaded: boolean; selectedProjectId: string; message: string };
   listGuard?: { projectsLoaded: boolean; selectedProjectId: string; message: string };
@@ -26,6 +28,8 @@ export function CheckableListPageShell({
   itemCount: _itemCount,
   canUndo,
   onUndo,
+  canBulkDelete = false,
+  onBulkDelete,
   checkableListProps,
   addGuard,
   listGuard,
@@ -69,18 +73,31 @@ export function CheckableListPageShell({
           ) : (
             listContent
           )}
-          {canUndo && (
+          {(canUndo || canBulkDelete) && (
             <div className="tests-page-section-footer">
-              <button
-                type="button"
-                className="tests-page-section-undo"
-                onClick={onUndo}
-                aria-label="Undo last change"
-                title="Undo"
-              >
-                <IconUndo />
-                Undo
-              </button>
+              {canBulkDelete && onBulkDelete ? (
+                <button
+                  type="button"
+                  className="tests-page-section-bulk-delete"
+                  onClick={onBulkDelete}
+                  aria-label="Delete all completed items"
+                  title="Delete all completed items"
+                >
+                  Delete Done
+                </button>
+              ) : null}
+              {canUndo ? (
+                <button
+                  type="button"
+                  className="tests-page-section-undo"
+                  onClick={onUndo}
+                  aria-label="Undo last change"
+                  title="Undo"
+                >
+                  <IconUndo />
+                  Undo
+                </button>
+              ) : null}
             </div>
           )}
         </section>

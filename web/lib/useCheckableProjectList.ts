@@ -246,6 +246,51 @@ export function useCheckableProjectList<T extends CheckableProjectItem>({
     ]
   );
 
+  const patchItemById = useCallback(
+    (id: string, patch: Partial<T>) => {
+      setItems((prev: T[]) =>
+        prev.map((item) => (item.id === id ? ({ ...item, ...patch } as T) : item))
+      );
+    },
+    [setItems]
+  );
+
+  const removeDoneItems = useCallback(async (): Promise<number> => {
+    const targets = items
+      .map((item, index) => ({ item, index }))
+      .filter(({ item }) => item.done && !isOptimisticId(item.id));
+    if (targets.length === 0) return 0;
+
+    pushHistory();
+    const targetIds = new Set(targets.map(({ item }) => item.id));
+    const removedById = new Map(targets.map(({ item }) => [item.id, item] as const));
+
+    setItems((prev: T[]) => prev.filter((item) => !targetIds.has(item.id)));
+
+    const results = await Promise.allSettled(
+      targets.map(({ item }) => deleteItem(item.id))
+    );
+    const failedIds = targets
+      .filter((_, idx) => results[idx].status === "rejected")
+      .map(({ item }) => item.id);
+
+    if (failedIds.length > 0) {
+      const failedSet = new Set(failedIds);
+      setItems((prev: T[]) => {
+        const restored = failedIds
+          .map((id) => removedById.get(id))
+          .filter((item): item is T => Boolean(item));
+        return [...prev, ...restored].sort((a, b) => a.order - b.order);
+      });
+      if (projectId) {
+        fetchList(projectId).then(setItems as (items: T[]) => void);
+      }
+      return targets.length - failedSet.size;
+    }
+
+    return targets.length;
+  }, [items, pushHistory, setItems, deleteItem, projectId, fetchList]);
+
   return {
     items,
     loading,
@@ -261,6 +306,8 @@ export function useCheckableProjectList<T extends CheckableProjectItem>({
     saveEdit,
     cancelEdit,
     handleReorder,
+    patchItemById,
+    removeDoneItems,
     pushHistory,
     undo,
     canUndo,

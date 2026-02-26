@@ -17,6 +17,8 @@ import { IdeasService } from "./ideas.service";
 @Controller("ideas")
 @UseGuards(JwtAuthGuard)
 export class IdeasController {
+  private readonly maxContextLength = 4000;
+
   constructor(private readonly svc: IdeasService) {}
 
   @Get()
@@ -64,5 +66,38 @@ export class IdeasController {
       requireUserId(req),
       payload.ideaIds
     );
+  }
+
+  @Post(":id/plan")
+  generatePlan(
+    @Param("id") id: string,
+    @Body() body: { context?: string },
+    @Req() req: AuthenticatedRequest
+  ) {
+    return this.svc.generatePlan(
+      id,
+      requireUserId(req),
+      this.normalizeContext(body?.context)
+    );
+  }
+
+  @Post(":id/action-todos")
+  generateActionTodos(
+    @Param("id") id: string,
+    @Body() body: { context?: string },
+    @Req() req: AuthenticatedRequest
+  ) {
+    return this.svc.generateActionTodos(
+      id,
+      requireUserId(req),
+      this.normalizeContext(body?.context)
+    );
+  }
+
+  private normalizeContext(context?: string): string | undefined {
+    if (typeof context !== "string") return undefined;
+    const trimmed = context.trim();
+    if (!trimmed) return undefined;
+    return trimmed.slice(0, this.maxContextLength);
   }
 }

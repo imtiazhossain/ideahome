@@ -1,7 +1,8 @@
 import { Test, TestingModule } from "@nestjs/testing";
-import { ForbiddenException, NotFoundException } from "@nestjs/common";
+import { NotFoundException } from "@nestjs/common";
 import { IdeasService } from "./ideas.service";
 import { PrismaService } from "../prisma.service";
+import { IdeaPlanService } from "./idea-plan.service";
 
 describe("IdeasService", () => {
   let service: IdeasService;
@@ -17,7 +18,15 @@ describe("IdeasService", () => {
       delete: jest.fn(),
       aggregate: jest.fn(),
     },
+    todo: {
+      aggregate: jest.fn(),
+      create: jest.fn(),
+    },
     $transaction: jest.fn(),
+  };
+  const mockIdeaPlanService = {
+    generatePlan: jest.fn(),
+    generateActionResponse: jest.fn(),
   };
 
   beforeEach(async () => {
@@ -28,10 +37,21 @@ describe("IdeasService", () => {
       organizationId: "o1",
     });
     mockPrisma.idea.aggregate.mockResolvedValue({ _max: { order: 0 } });
+    mockIdeaPlanService.generatePlan.mockResolvedValue({
+      summary: "summary",
+      milestones: ["m1"],
+      tasks: ["t1"],
+      risks: ["r1"],
+      firstSteps: ["s1"],
+    });
+    mockIdeaPlanService.generateActionResponse.mockResolvedValue({
+      message: "Hello!",
+    });
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         IdeasService,
+        { provide: IdeaPlanService, useValue: mockIdeaPlanService },
         { provide: PrismaService, useValue: mockPrisma },
       ],
     }).compile();
@@ -114,6 +134,52 @@ describe("IdeasService", () => {
       await expect(service.reorder("p1", "user-1", ["i1", "other"])).rejects.toThrow(
         NotFoundException
       );
+    });
+  });
+
+  describe("generatePlan", () => {
+    it("should generate and persist an idea plan", async () => {
+      mockPrisma.idea.findUnique.mockResolvedValue({
+        id: "i1",
+        name: "Idea One",
+        project: { name: "Project A", organizationId: "o1" },
+      });
+      mockPrisma.idea.update.mockResolvedValue({
+        id: "i1",
+        planJson: { summary: "summary" },
+      });
+
+      const result = await service.generatePlan("i1", "user-1", "mobile app");
+
+      expect(mockIdeaPlanService.generatePlan).toHaveBeenCalledWith({
+        ideaName: "Idea One",
+        projectName: "Project A",
+        context: "mobile app",
+      });
+      expect(mockPrisma.idea.update).toHaveBeenCalled();
+      expect(result).toEqual({ id: "i1", planJson: { summary: "summary" } });
+    });
+  });
+
+  describe("generateActionTodos", () => {
+    it("should generate direct action response without creating todos", async () => {
+      mockPrisma.idea.findUnique.mockResolvedValue({
+        id: "i1",
+        name: "Idea One",
+        projectId: "p1",
+        project: { name: "Project A", organizationId: "o1" },
+      });
+
+      const result = await service.generateActionTodos("i1", "user-1");
+
+      expect(mockIdeaPlanService.generateActionResponse).toHaveBeenCalledWith({
+        ideaName: "Idea One",
+        projectName: "Project A",
+        context: undefined,
+      });
+      expect(result.createdCount).toBe(0);
+      expect(result.todos).toEqual([]);
+      expect(result.message).toBe("Hello!");
     });
   });
 });

@@ -362,6 +362,24 @@ export type Idea = {
   order: number;
   projectId: string;
   createdAt: string;
+  planJson?: IdeaPlan | null;
+  planGeneratedAt?: string | null;
+};
+
+export type IdeaPlan = {
+  summary: string;
+  milestones: string[];
+  tasks: string[];
+  risks: string[];
+  firstSteps: string[];
+};
+
+export type IdeaActionTodosResult = {
+  ideaId: string;
+  createdCount: number;
+  todos: Todo[];
+  previewGifUrl?: string | null;
+  message?: string;
 };
 
 export type Bug = {
@@ -502,6 +520,43 @@ export const createIdea = ideaApi.create;
 export const updateIdea = ideaApi.update;
 export const deleteIdea = ideaApi.remove;
 export const reorderIdeas = ideaApi.reorder;
+
+export async function generateIdeaPlan(
+  ideaId: string,
+  context?: string
+): Promise<Idea> {
+  const r = await apiFetch(`${getApiBase()}/ideas/${encodeURIComponent(ideaId)}/plan`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(
+      typeof context === "string" && context.trim()
+        ? { context: context.trim() }
+        : {}
+    ),
+  });
+  if (!r.ok) await throwFromResponse(r, "Failed to generate idea plan");
+  return r.json();
+}
+
+export async function generateIdeaActionTodos(
+  ideaId: string,
+  context?: string
+): Promise<IdeaActionTodosResult> {
+  const r = await apiFetch(
+    `${getApiBase()}/ideas/${encodeURIComponent(ideaId)}/action-todos`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(
+        typeof context === "string" && context.trim()
+          ? { context: context.trim() }
+          : {}
+      ),
+    }
+  );
+  if (!r.ok) await throwFromResponse(r, "Failed to create AI action todos");
+  return r.json();
+}
 
 export const fetchBugs = bugApi.fetch;
 /** Search bugs by name within a project. */

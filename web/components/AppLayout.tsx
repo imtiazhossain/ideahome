@@ -10,6 +10,7 @@ import {
 } from "../lib/customLists";
 import { IconTrash } from "./IconTrash";
 import { IconFilter } from "./icons";
+import { IconIdeas } from "./icons";
 import {
   ProjectNavBar,
   DrawerCollapsedNav,
@@ -397,28 +398,9 @@ export function AppLayout({
           {drawerOpen ? (
             <>
               <div className="drawer-logo" aria-hidden>
-                <svg
-                  className="drawer-logo-mark"
-                  viewBox="0 0 24 24"
-                  role="img"
-                  aria-hidden="true"
-                >
-                  <path
-                    d="M4 10.5 12 4l8 6.5V19a1 1 0 0 1-1 1h-4.5v-5.2a1 1 0 0 0-1-1h-3a1 1 0 0 0-1 1V20H5a1 1 0 0 1-1-1z"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.8"
-                    strokeLinejoin="round"
-                    strokeLinecap="round"
-                  />
-                  <path
-                    d="M18.5 5.2v1.6M17.7 6h1.6"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.4"
-                    strokeLinecap="round"
-                  />
-                </svg>
+                <span className="drawer-logo-mark" role="img" aria-hidden="true">
+                  <IconIdeas />
+                </span>
               </div>
               <div className="drawer-header">
                 <div className="drawer-title">Idea Home</div>

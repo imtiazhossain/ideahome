@@ -41,6 +41,14 @@ export interface CheckableListProps {
   onToggleDone: (index: number) => void;
   onReorder: (fromIndex: number, toIndex: number) => void;
   onDelete?: (index: number) => void;
+  renderItemActions?: (
+    item: CheckableListItem,
+    index: number
+  ) => React.ReactNode;
+  renderItemDetails?: (
+    item: CheckableListItem,
+    index: number
+  ) => React.ReactNode;
 }
 
 interface SortableItemProps {
@@ -56,6 +64,14 @@ interface SortableItemProps {
   onCancelEdit: () => void;
   onToggleDone: (index: number) => void;
   onDelete?: (index: number) => void;
+  renderItemActions?: (
+    item: CheckableListItem,
+    index: number
+  ) => React.ReactNode;
+  renderItemDetails?: (
+    item: CheckableListItem,
+    index: number
+  ) => React.ReactNode;
 }
 
 const DELETE_BUTTON_WIDTH = 80;
@@ -74,6 +90,8 @@ function SortableItem({
   onCancelEdit,
   onToggleDone,
   onDelete,
+  renderItemActions,
+  renderItemDetails,
 }: SortableItemProps) {
   const disabled = isItemDisabled?.(item) ?? false;
   const itemRef = useRef<HTMLLIElement | null>(null);
@@ -204,8 +222,12 @@ function SortableItem({
     </button>
   );
 
+  const actionSlot = !isEditing ? renderItemActions?.(item, index) : null;
+  const detailsSlot = !isEditing ? renderItemDetails?.(item, index) : null;
+
   const mainContent = (
-    <>
+    <div className="features-list-item-body">
+      <div className="features-list-item-main">
       {isEditing ? (
         <>
           <button
@@ -291,6 +313,7 @@ function SortableItem({
           >
             {item.name}
           </span>
+          {actionSlot}
           {item.done && (
             <span className="features-list-done-badge" aria-label="Done">
               Done
@@ -298,7 +321,9 @@ function SortableItem({
           )}
         </>
       )}
-    </>
+      </div>
+      {detailsSlot && <div className="features-list-item-details">{detailsSlot}</div>}
+    </div>
   );
 
   return (
@@ -343,6 +368,8 @@ export function CheckableList({
   onToggleDone,
   onReorder,
   onDelete,
+  renderItemActions,
+  renderItemDetails,
 }: CheckableListProps) {
   const listRef = useRef<HTMLUListElement>(null);
 
@@ -411,6 +438,8 @@ export function CheckableList({
               onCancelEdit={onCancelEdit}
               onToggleDone={onToggleDone}
               onDelete={onDelete}
+              renderItemActions={renderItemActions}
+              renderItemDetails={renderItemDetails}
             />
           ))}
         </ul>
