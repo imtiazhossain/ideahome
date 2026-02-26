@@ -21,12 +21,14 @@ function isHttpUrl(value: string): boolean {
   return /^https?:\/\//i.test(value);
 }
 
-/** localStorage key for SSO JWT. */
+/** Legacy localStorage key for SSO JWT (kept for cleanup on logout). */
 export const AUTH_TOKEN_KEY = "ideahome_token";
+/** sessionStorage key for SSO JWT. */
+export const AUTH_TOKEN_SESSION_KEY = "ideahome_token_session";
 
 function authHeaders(): Record<string, string> {
   if (typeof window === "undefined") return {};
-  const t = localStorage.getItem(AUTH_TOKEN_KEY);
+  const t = sessionStorage.getItem(AUTH_TOKEN_SESSION_KEY);
   return t ? { Authorization: `Bearer ${t}` } : {};
 }
 
@@ -95,7 +97,7 @@ export function isSkipLoginDev(): boolean {
 
 export function getStoredToken(): string | null {
   if (typeof window === "undefined") return null;
-  return localStorage.getItem(AUTH_TOKEN_KEY);
+  return sessionStorage.getItem(AUTH_TOKEN_SESSION_KEY);
 }
 
 /** Custom event dispatched when auth token changes (login/logout). */
@@ -108,13 +110,14 @@ function dispatchAuthChange(): void {
 
 export function setStoredToken(token: string): void {
   if (typeof window === "undefined") return;
-  localStorage.setItem(AUTH_TOKEN_KEY, token);
+  sessionStorage.setItem(AUTH_TOKEN_SESSION_KEY, token);
   dispatchAuthChange();
 }
 
 export function clearStoredToken(): void {
   if (typeof window === "undefined") return;
   localStorage.removeItem(AUTH_TOKEN_KEY);
+  sessionStorage.removeItem(AUTH_TOKEN_SESSION_KEY);
   dispatchAuthChange();
 }
 
@@ -359,6 +362,15 @@ export type Feature = {
   createdAt: string;
 };
 
+export type Enhancement = {
+  id: string;
+  name: string;
+  done: boolean;
+  order: number;
+  projectId: string;
+  createdAt: string;
+};
+
 type CheckableEntity = {
   id: string;
   name: string;
@@ -486,6 +498,138 @@ export const createFeature = featureApi.create;
 export const updateFeature = featureApi.update;
 export const deleteFeature = featureApi.remove;
 export const reorderFeatures = featureApi.reorder;
+
+const ENHANCEMENTS_STORAGE_PREFIX = "ideahome-enhancements-list";
+const ENHANCEMENTS_STORAGE_LEGACY_KEY = "ideahome-enhancements-list";
+
+function getEnhancementsStorageKey(): string {
+  return getUserScopedStorageKey(
+    ENHANCEMENTS_STORAGE_PREFIX,
+    ENHANCEMENTS_STORAGE_LEGACY_KEY
+  );
+}
+
+function loadEnhancementsStore(): Enhancement[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = localStorage.getItem(getEnhancementsStorageKey());
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter(
+      (item): item is Enhancement =>
+        Boolean(
+          item &&
+            typeof item === "object" &&
+            typeof (item as Enhancement).id === "string" &&
+            typeof (item as Enhancement).name === "string" &&
+            typeof (item as Enhancement).done === "boolean" &&
+            typeof (item as Enhancement).order === "number" &&
+            typeof (item as Enhancement).projectId === "string" &&
+            typeof (item as Enhancement).createdAt === "string"
+        )
+    );
+  } catch {
+    return [];
+  }
+}
+
+function saveEnhancementsStore(items: Enhancement[]): void {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(getEnhancementsStorageKey(), JSON.stringify(items));
+  } catch {
+    // ignore
+  }
+}
+
+function sortEnhancementsByOrder(items: Enhancement[]): Enhancement[] {
+  return [...items].sort((a, b) => a.order - b.order);
+}
+
+function createEnhancementId(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  return `enh-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+export async function fetchEnhancements(projectId: string): Promise<Enhancement[]> {
+  const all = loadEnhancementsStore();
+  return sortEnhancementsByOrder(all.filter((item) => item.projectId === projectId));
+}
+
+export async function createEnhancement(body: {
+  projectId: string;
+  name: string;
+  done?: boolean;
+}): Promise<Enhancement> {
+  const all = loadEnhancementsStore();
+  const projectItems = all.filter((item) => item.projectId === body.projectId);
+  const nextOrder =
+    projectItems.length === 0
+      ? 0
+      : Math.max(...projectItems.map((item) => item.order)) + 1;
+  const created: Enhancement = {
+    id: createEnhancementId(),
+    name: body.name,
+    done: Boolean(body.done),
+    order: nextOrder,
+    projectId: body.projectId,
+    createdAt: new Date().toISOString(),
+  };
+  saveEnhancementsStore([...all, created]);
+  return created;
+}
+
+export async function updateEnhancement(
+  id: string,
+  data: { name?: string; done?: boolean; order?: number }
+): Promise<Enhancement> {
+  const all = loadEnhancementsStore();
+  const idx = all.findIndex((item) => item.id === id);
+  if (idx === -1) throw new Error("Enhancement not found");
+  const current = all[idx];
+  const updated: Enhancement = {
+    ...current,
+    ...(typeof data.name === "string" ? { name: data.name } : {}),
+    ...(typeof data.done === "boolean" ? { done: data.done } : {}),
+    ...(typeof data.order === "number" ? { order: data.order } : {}),
+  };
+  const next = [...all];
+  next[idx] = updated;
+  saveEnhancementsStore(next);
+  return updated;
+}
+
+export async function deleteEnhancement(id: string): Promise<void> {
+  const all = loadEnhancementsStore();
+  const next = all.filter((item) => item.id !== id);
+  saveEnhancementsStore(next);
+}
+
+export async function reorderEnhancements(
+  projectId: string,
+  ids: string[]
+): Promise<Enhancement[]> {
+  const all = loadEnhancementsStore();
+  const projectItems = all.filter((item) => item.projectId === projectId);
+  const byId = new Map(projectItems.map((item) => [item.id, item]));
+  const uniqueIds = Array.from(new Set(ids)).filter((id) => byId.has(id));
+  const missing = projectItems
+    .map((item) => item.id)
+    .filter((id) => !uniqueIds.includes(id));
+  const orderedIds = [...uniqueIds, ...missing];
+  const updatedProjectItems = orderedIds.map((id, order) => ({
+    ...byId.get(id)!,
+    order,
+  }));
+  const projectIdSet = new Set(projectItems.map((item) => item.id));
+  const otherItems = all.filter((item) => !projectIdSet.has(item.id));
+  const next = [...otherItems, ...updatedProjectItems];
+  saveEnhancementsStore(next);
+  return sortEnhancementsByOrder(updatedProjectItems);
+}
 
 export type Expense = {
   id: string;
@@ -902,7 +1046,9 @@ export async function deleteIssueRecording(
 export function getRecordingUrl(videoUrl: string): string {
   if (isHttpUrl(videoUrl)) return videoUrl;
   const filename = videoUrl.replace(/^.*\//, "");
-  return `${getApiBase()}/issues/recordings/stream/${encodeURIComponent(filename)}`;
+  return withAccessToken(
+    `${getApiBase()}/issues/recordings/stream/${encodeURIComponent(filename)}`
+  );
 }
 
 export async function uploadIssueScreenshot(
@@ -954,7 +1100,7 @@ export async function deleteIssueScreenshot(
 /** Full URL to load a screenshot image from the backend. */
 export function getScreenshotUrl(imageUrl: string): string {
   if (isHttpUrl(imageUrl)) return imageUrl;
-  return `${getApiBase()}/${imageUrl}`;
+  return withAccessToken(`${getApiBase()}/${imageUrl}`);
 }
 
 export async function uploadIssueFile(
@@ -1004,5 +1150,15 @@ export async function deleteIssueFile(
 
 /** Full URL to download an issue file (stream endpoint sets Content-Disposition). */
 export function getIssueFileUrl(issueId: string, fileId: string): string {
-  return `${getApiBase()}/issues/${encodeURIComponent(issueId)}/files/${encodeURIComponent(fileId)}/stream`;
+  return withAccessToken(
+    `${getApiBase()}/issues/${encodeURIComponent(issueId)}/files/${encodeURIComponent(fileId)}/stream`
+  );
+}
+
+function withAccessToken(url: string): string {
+  if (typeof window === "undefined") return url;
+  const token = getStoredToken();
+  if (!token) return url;
+  const sep = url.includes("?") ? "&" : "?";
+  return `${url}${sep}access_token=${encodeURIComponent(token)}`;
 }

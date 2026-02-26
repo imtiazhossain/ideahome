@@ -57,12 +57,16 @@ const HIDDEN_TABS_STORAGE_PREFIX = "ideahome-project-nav-tabs-hidden";
 const HIDDEN_TABS_LEGACY_KEY = "ideahome-project-nav-tabs-hidden";
 const DELETED_TABS_STORAGE_PREFIX = "ideahome-project-nav-tabs-deleted";
 const DELETED_TABS_LEGACY_KEY = "ideahome-project-nav-tabs-deleted";
+const TAB_PREFS_MIGRATION_PREFIX = "ideahome-project-nav-prefs-migration";
+const TAB_PREFS_MIGRATION_LEGACY_KEY = "ideahome-project-nav-prefs-migration";
 const SETTINGS_BUTTON_VISIBLE_PREFIX = "ideahome-project-nav-settings-visible";
 const SETTINGS_BUTTON_VISIBLE_LEGACY_KEY =
   "ideahome-project-nav-settings-visible";
+const TAB_PREFS_MIGRATION_VERSION = "default-tabs-v2";
 
 /** Set when user explicitly clicks Board tab; tells _app to skip redirect away from /. */
 export const EXPLICIT_BOARD_SESSION_KEY = "ideahome-explicit-board";
+export const OPEN_SETTINGS_MENU_EVENT = "ideahome-open-settings-menu";
 
 function getTabOrderStorageKey(): string {
   return getUserScopedStorageKey(
@@ -92,9 +96,17 @@ function getDeletedTabsStorageKey(): string {
   );
 }
 
+function getTabPrefsMigrationStorageKey(): string {
+  return getUserScopedStorageKey(
+    TAB_PREFS_MIGRATION_PREFIX,
+    TAB_PREFS_MIGRATION_LEGACY_KEY
+  );
+}
+
 export type ProjectNavTabId =
   | "todo"
   | "ideas"
+  | "enhancements"
   | "summary"
   | "timeline"
   | "board"
@@ -118,6 +130,12 @@ const TABS: {
 }[] = [
   { id: "todo", label: "To-Do", icon: <IconTodo />, href: "/todo" },
   { id: "ideas", label: "Ideas", icon: <IconIdeas />, href: "/ideas" },
+  {
+    id: "enhancements",
+    label: "Enhancements",
+    icon: <IconFeatures />,
+    href: "/enhancements",
+  },
   { id: "summary", label: "Summary", icon: <IconGlobe /> },
   { id: "timeline", label: "Timeline", icon: <IconTimeline /> },
   { id: "board", label: "Board", icon: <IconBoard />, href: "/" },
@@ -206,7 +224,51 @@ export function useTabOrder() {
   return ctx;
 }
 
+function getDefaultVisibleTabOrderForUser(): ProjectNavTabId[] {
+  return [
+    "ideas",
+    "todo",
+    "enhancements",
+    "list",
+    "forms",
+    "board",
+    "expenses",
+  ];
+}
+
+function migrateStoredTabPreferencesToNewDefaults() {
+  if (typeof window === "undefined") return;
+  try {
+    const migrationKey = getTabPrefsMigrationStorageKey();
+    const currentVersion = localStorage.getItem(migrationKey);
+    if (currentVersion === TAB_PREFS_MIGRATION_VERSION) return;
+
+    const preferredOrder = getDefaultVisibleTabOrderForUser();
+    const mustShow = new Set<ProjectNavTabId>(preferredOrder);
+
+    const nextDeleted = loadDeletedTabIds().filter((id) => !mustShow.has(id));
+    const loadedOrder = loadTabOrder(nextDeleted);
+    const preferredPresent = preferredOrder.filter((id) =>
+      loadedOrder.includes(id)
+    );
+    const remaining = loadedOrder.filter((id) => !preferredPresent.includes(id));
+    const nextOrder = [...preferredPresent, ...remaining];
+
+    const nextHidden = loadHiddenTabIds().filter(
+      (id) => nextOrder.includes(id) && !mustShow.has(id)
+    );
+
+    saveDeletedTabIds(nextDeleted);
+    saveTabOrder(nextOrder);
+    saveHiddenTabIds(nextHidden);
+    localStorage.setItem(migrationKey, TAB_PREFS_MIGRATION_VERSION);
+  } catch {
+    // ignore migration failures
+  }
+}
+
 function loadFilterState() {
+  migrateStoredTabPreferencesToNewDefaults();
   const deletedTabIds = loadDeletedTabIds();
   const tabOrder = loadTabOrder(deletedTabIds);
   const hiddenTabIds = loadHiddenTabIds().filter((id) => tabOrder.includes(id));
@@ -478,8 +540,10 @@ export function ProjectNavBar({
     ProjectSearchResult[]
   >([]);
   const [projectSearchOpen, setProjectSearchOpen] = useState(false);
+  const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   const [projectSearchLoading, setProjectSearchLoading] = useState(false);
   const projectSearchRef = useRef<HTMLDivElement>(null);
+  const projectSearchInputRef = useRef<HTMLInputElement>(null);
   const [hasToken, setHasToken] = useState<boolean | null>(null);
   const { theme, toggleTheme } = useTheme();
   useEffect(() => {
@@ -497,6 +561,19 @@ export function ProjectNavBar({
     } catch {
       /* ignore */
     }
+  }, []);
+  useEffect(() => {
+    const openSettingsMenu = () => {
+      setSettingsButtonVisible(true);
+      setSettingsMenuOpen(true);
+      setShowTabsSectionOpen(false);
+      setReorderSectionOpen(false);
+      setAddSectionOpen(false);
+      setDeleteProjectSectionOpen(false);
+    };
+    window.addEventListener(OPEN_SETTINGS_MENU_EVENT, openSettingsMenu);
+    return () =>
+      window.removeEventListener(OPEN_SETTINGS_MENU_EVENT, openSettingsMenu);
   }, []);
   const handleLogout = useCallback(() => {
     setAuthMenuOpen(false);
@@ -630,6 +707,7 @@ export function ProjectNavBar({
         !projectSearchRef.current.contains(e.target as Node)
       ) {
         setProjectSearchOpen(false);
+        setMobileSearchOpen(false);
       }
       if (
         settingsMenuRef.current &&
@@ -770,7 +848,6 @@ export function ProjectNavBar({
     <header className="project-nav">
       <div className="project-nav-top">
         <div className="project-nav-identity">
-          <span className="project-nav-spaces">Spaces</span>
           <div className="project-nav-title-row">
             {onOpenDrawer && (
               <button
@@ -787,126 +864,36 @@ export function ProjectNavBar({
             <span className="project-nav-project-icon" aria-hidden>
               <IconHome />
             </span>
-            {projects && onSelectProject ? (
+            <h1 className="project-nav-project-name">
+              {projectName || "Project"}
+            </h1>
               <div
-                className="project-nav-project-switcher-wrap"
-                ref={projectSwitcherRef}
-              >
-                <button
-                  type="button"
-                  className={`project-nav-project-name-btn${projectSwitcherOpen ? " is-open" : ""}`}
-                  onClick={() => setProjectSwitcherOpen((o) => !o)}
-                  aria-label="Switch project"
-                  aria-expanded={projectSwitcherOpen}
-                  aria-haspopup="true"
-                >
-                  <h1 className="project-nav-project-name">
-                    {projectName || "Project"}
-                  </h1>
-                  <span
-                    className="project-nav-project-name-chevron"
-                    aria-hidden
-                  >
-                    <IconChevronDown />
-                  </span>
-                </button>
-                {projectSwitcherOpen && (
-                  <div
-                    className="project-nav-project-switcher-menu"
-                    role="menu"
-                  >
-                    {projects.map((p) => (
-                      <button
-                        key={p.id}
-                        type="button"
-                        className={`project-nav-project-switcher-item${selectedProjectId === p.id ? " is-selected" : ""}`}
-                        role="menuitem"
-                        onClick={() => {
-                          onSelectProject(p.id);
-                          setProjectSwitcherOpen(false);
-                        }}
-                      >
-                        {p.name}
-                      </button>
-                    ))}
-                    {onCreateProject &&
-                      (showCreateProjectInput ? (
-                        <form
-                          className="project-nav-project-switcher-create-form"
-                          onSubmit={(e) => {
-                            e.preventDefault();
-                            const name = newProjectName.trim();
-                            if (!name) return;
-                            void Promise.resolve(onCreateProject(name)).then(
-                              () => {
-                                setShowCreateProjectInput(false);
-                                setNewProjectName("");
-                                setProjectSwitcherOpen(false);
-                              }
-                            );
-                          }}
-                        >
-                          <input
-                            ref={createProjectInputRef}
-                            type="text"
-                            className="project-nav-project-switcher-create-input"
-                            placeholder="Project name"
-                            value={newProjectName}
-                            onChange={(e) => setNewProjectName(e.target.value)}
-                            onBlur={() => {
-                              if (!newProjectName.trim()) {
-                                setShowCreateProjectInput(false);
-                              }
-                            }}
-                            onKeyDown={(e) => {
-                              if (e.key === "Escape") {
-                                setShowCreateProjectInput(false);
-                                setNewProjectName("");
-                              }
-                            }}
-                            aria-label="Project name"
-                            autoFocus
-                          />
-                          <button
-                            type="submit"
-                            className="project-nav-project-switcher-create-submit"
-                            disabled={!newProjectName.trim()}
-                          >
-                            Create
-                          </button>
-                        </form>
-                      ) : (
-                        <button
-                          type="button"
-                          className="project-nav-project-switcher-item project-nav-project-switcher-item-create"
-                          role="menuitem"
-                          onMouseDown={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            setShowCreateProjectInput(true);
-                          }}
-                        >
-                          <IconPlus />
-                          Create new project
-                        </button>
-                      ))}
-                  </div>
-                )}
-              </div>
-            ) : (
-              <h1 className="project-nav-project-name">
-                {projectName || "Project"}
-              </h1>
-            )}
-            <div
-              className="project-nav-search-wrap"
+              className={`project-nav-search-wrap${mobileSearchOpen ? " is-mobile-search-open" : ""}`}
               ref={projectSearchRef}
               style={projectId ? { position: "relative" } : undefined}
             >
-              <span className="project-nav-search-icon" aria-hidden>
+              <button
+                type="button"
+                className="project-nav-search-icon"
+                aria-label="Open search"
+                onClick={() => {
+                  if (
+                    typeof window !== "undefined" &&
+                    window.matchMedia("(max-width: 1024px)").matches
+                  ) {
+                    setMobileSearchOpen(true);
+                    requestAnimationFrame(() =>
+                      projectSearchInputRef.current?.focus()
+                    );
+                    return;
+                  }
+                  projectSearchInputRef.current?.focus();
+                }}
+              >
                 <IconSearch />
-              </span>
+              </button>
               <input
+                ref={projectSearchInputRef}
                 type="search"
                 id="project-nav-search-input"
                 className="project-nav-search"
@@ -922,10 +909,22 @@ export function ProjectNavBar({
                   }
                 }}
                 onFocus={() =>
-                  projectId &&
-                  projectSearchQuery.trim() &&
-                  setProjectSearchOpen(true)
+                  {
+                    setMobileSearchOpen(true);
+                    if (projectId && projectSearchQuery.trim()) {
+                      setProjectSearchOpen(true);
+                    }
+                  }
                 }
+                onBlur={() => {
+                  if (
+                    typeof window !== "undefined" &&
+                    window.matchMedia("(max-width: 1024px)").matches &&
+                    !(projectId ? projectSearchQuery.trim() : searchValue.trim())
+                  ) {
+                    setMobileSearchOpen(false);
+                  }
+                }}
                 aria-label="Search"
                 aria-expanded={
                   projectId

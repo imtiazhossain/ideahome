@@ -21,11 +21,17 @@ export class JwtAuthGuard implements CanActivate {
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const req = context.switchToHttp().getRequest();
     const auth = req.headers["authorization"] ?? req.headers["Authorization"];
+    const queryToken =
+      req.method === "GET" && typeof req.query?.access_token === "string"
+        ? req.query.access_token.trim()
+        : "";
+    const authFromQuery = queryToken ? `Bearer ${queryToken}` : "";
+    const authValue = auth ?? authFromQuery;
     let hadAuth = false;
 
-    if (auth) {
+    if (authValue) {
       hadAuth = true;
-      const parts = (Array.isArray(auth) ? auth[0] : auth).split(" ");
+      const parts = (Array.isArray(authValue) ? authValue[0] : authValue).split(" ");
       if (parts.length !== 2 || parts[0] !== "Bearer") {
         throw new UnauthorizedException("Invalid Authorization format");
       }
@@ -72,6 +78,7 @@ export class JwtAuthGuard implements CanActivate {
   private async tryDevUser(): Promise<{ id: string; email: string } | null> {
     if (process.env.NODE_ENV === "production") return null;
     if (process.env.SKIP_AUTH_DEV !== "true") return null;
+    if (process.env.ALLOW_DEV_AUTH_BYPASS !== "true") return null;
     return this.resolveDevUser();
   }
 
@@ -84,17 +91,11 @@ export class JwtAuthGuard implements CanActivate {
     email: string;
   } | null> {
     const devUserId = process.env.DEV_USER_ID;
-    if (devUserId) {
-      const user = await this.prisma.user.findUnique({
-        where: { id: devUserId },
-        select: { id: true, email: true },
-      });
-      return user;
-    }
-    const first = await this.prisma.user.findFirst({
-      orderBy: { createdAt: "asc" },
+    if (!devUserId) return null;
+    const user = await this.prisma.user.findUnique({
+      where: { id: devUserId },
       select: { id: true, email: true },
     });
-    return first;
+    return user;
   }
 }

@@ -1,10 +1,15 @@
 /**
- * In-memory cache for project list data (todos, ideas, features, bugs).
+ * In-memory cache for project list data (todos, ideas, enhancements, features, bugs).
  * Shows cached data instantly when revisiting a list or switching back to a project;
  * pages still refetch in the background to revalidate.
  */
 
-export type ListCacheKey = "todos" | "ideas" | "features" | "bugs";
+export type ListCacheKey =
+  | "todos"
+  | "ideas"
+  | "enhancements"
+  | "features"
+  | "bugs";
 
 interface CacheEntry<T> {
   data: T[];

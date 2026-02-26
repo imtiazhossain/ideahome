@@ -6,6 +6,7 @@ import {
   isAuthenticated,
   updateProject,
 } from "./api";
+import { ensureDefaultProjects } from "./defaultProjects";
 import { getProjectDisplayName } from "./utils";
 import { useSelectedProject } from "./SelectedProjectContext";
 import { prefetchProjectLists } from "./prefetchProjectLists";
@@ -58,12 +59,13 @@ export function useProjectLayout(): UseProjectLayoutReturn {
 
   const loadProjects = useCallback(() => {
     return fetchProjects()
-      .then((data) => {
-        setProjects(data);
-        if (data.length) {
+      .then(async (data) => {
+        const withDefaults = await ensureDefaultProjects(data);
+        setProjects(withDefaults);
+        if (withDefaults.length) {
           const current = selectedProjectIdRef.current;
-          const exists = data.some((p) => p.id === current);
-          if (!exists) setSelectedProjectId(data[0].id);
+          const exists = withDefaults.some((p) => p.id === current);
+          if (!exists) setSelectedProjectId(withDefaults[0].id);
         }
       })
       .catch(() => {})

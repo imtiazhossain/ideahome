@@ -20,10 +20,10 @@ export interface CheckableListPageShellProps {
 
 export function CheckableListPageShell({
   appLayoutProps,
-  pageTitle,
+  pageTitle: _pageTitle,
   addFormProps,
-  listTitle,
-  itemCount,
+  listTitle: _listTitle,
+  itemCount: _itemCount,
   canUndo,
   onUndo,
   checkableListProps,
@@ -41,8 +41,6 @@ export function CheckableListPageShell({
   return (
     <AppLayout {...appLayoutProps}>
       <div className="tests-page-content">
-        <h1 className="tests-page-title">{pageTitle}</h1>
-
         <section className="tests-page-section">
           {addGuard ? (
             <ProjectSectionGuard
@@ -59,24 +57,6 @@ export function CheckableListPageShell({
         </section>
 
         <section className="tests-page-section">
-          <h2 className="tests-page-section-title">
-            {listTitle}{" "}
-            <span className="tests-page-section-count" aria-label="Count">
-              {itemCount}
-            </span>
-            {canUndo && (
-              <button
-                type="button"
-                className="tests-page-section-undo"
-                onClick={onUndo}
-                aria-label="Undo last change"
-                title="Undo"
-              >
-                <IconUndo />
-                Undo
-              </button>
-            )}
-          </h2>
           {listGuard ? (
             <ProjectSectionGuard
               projectsLoaded={listGuard.projectsLoaded}
@@ -88,6 +68,20 @@ export function CheckableListPageShell({
             </ProjectSectionGuard>
           ) : (
             listContent
+          )}
+          {canUndo && (
+            <div className="tests-page-section-footer">
+              <button
+                type="button"
+                className="tests-page-section-undo"
+                onClick={onUndo}
+                aria-label="Undo last change"
+                title="Undo"
+              >
+                <IconUndo />
+                Undo
+              </button>
+            </div>
           )}
         </section>
       </div>

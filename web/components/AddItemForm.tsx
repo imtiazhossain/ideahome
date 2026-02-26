@@ -28,13 +28,6 @@ export function AddItemForm({
     <form
       onSubmit={onSubmit}
       className="features-add-form"
-      style={{
-        display: "flex",
-        gap: "8px",
-        flexWrap: "wrap",
-        alignItems: "center",
-        marginTop: "8px",
-      }}
     >
       {error && (
         <p
@@ -58,8 +51,7 @@ export function AddItemForm({
         }}
         placeholder={placeholder}
         aria-label={ariaLabel}
-        className="project-nav-search"
-        style={{ flex: "1", minWidth: "200px", padding: "8px 12px" }}
+        className="project-nav-search features-add-input"
       />
       <button
         type="submit"

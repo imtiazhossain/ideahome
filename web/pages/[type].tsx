@@ -2,7 +2,13 @@ import { useRouter } from "next/router";
 import { CheckableListPage } from "../components/CheckableListPage";
 import type { CheckableListPageKey } from "../config/checkableListPages";
 
-const VALID_TYPES: CheckableListPageKey[] = ["features", "todo", "bugs", "ideas"];
+const VALID_TYPES: CheckableListPageKey[] = [
+  "features",
+  "todo",
+  "bugs",
+  "ideas",
+  "enhancements",
+];
 
 export default function CheckableListTypePage() {
   const router = useRouter();

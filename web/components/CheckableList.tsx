@@ -1,4 +1,4 @@
-import React, { useRef, useState, useCallback } from "react";
+import React, { useCallback, useRef, useState } from "react";
 import {
   DndContext,
   closestCenter,
@@ -76,6 +76,7 @@ function SortableItem({
   onDelete,
 }: SortableItemProps) {
   const disabled = isItemDisabled?.(item) ?? false;
+  const itemRef = useRef<HTMLLIElement | null>(null);
   const [swipeOffset, setSwipeOffset] = useState(0);
   const [isSwiping, setIsSwiping] = useState(false);
   const startXRef = useRef(0);
@@ -109,7 +110,10 @@ function SortableItem({
     (clientX: number) => {
       if (!canSwipe || !isSwiping) return;
       const delta = clientX - startXRef.current;
-      const next = Math.min(0, Math.max(-DELETE_BUTTON_WIDTH, startOffsetRef.current + delta));
+      const next = Math.min(
+        0,
+        Math.max(-DELETE_BUTTON_WIDTH, startOffsetRef.current + delta)
+      );
       setSwipeOffset(next);
     },
     [canSwipe, isSwiping]
@@ -118,7 +122,9 @@ function SortableItem({
   const handlePointerEnd = useCallback(() => {
     if (!isSwiping) return;
     setIsSwiping(false);
-    setSwipeOffset((prev) => (prev < -SWIPE_THRESHOLD ? -DELETE_BUTTON_WIDTH : 0));
+    setSwipeOffset((prev) =>
+      prev < -SWIPE_THRESHOLD ? -DELETE_BUTTON_WIDTH : 0
+    );
   }, [isSwiping]);
 
   React.useEffect(() => {
@@ -131,7 +137,7 @@ function SortableItem({
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
     };
-  }, [isSwiping, handlePointerMove, handlePointerEnd]);
+  }, [handlePointerEnd, handlePointerMove, isSwiping]);
 
   const handleDeleteClick = useCallback(
     (e: React.MouseEvent) => {
@@ -140,7 +146,7 @@ function SortableItem({
       onDelete?.(index);
       setSwipeOffset(0);
     },
-    [onDelete, index]
+    [index, onDelete]
   );
 
   const style = {
@@ -148,6 +154,31 @@ function SortableItem({
     transition,
     opacity: isDragging ? 0.5 : 1,
   };
+
+  const setRefs = useCallback(
+    (node: HTMLLIElement | null) => {
+      itemRef.current = node;
+      setNodeRef(node);
+    },
+    [setNodeRef]
+  );
+
+  React.useEffect(() => {
+    if (swipeOffset === 0) return;
+    const onOutside = (e: MouseEvent | TouchEvent) => {
+      const target = e.target as Node | null;
+      if (!target) return;
+      if (itemRef.current?.contains(target)) return;
+      setSwipeOffset(0);
+      setIsSwiping(false);
+    };
+    document.addEventListener("mousedown", onOutside);
+    document.addEventListener("touchstart", onOutside, { passive: true });
+    return () => {
+      document.removeEventListener("mousedown", onOutside);
+      document.removeEventListener("touchstart", onOutside);
+    };
+  }, [swipeOffset]);
 
   const dragHandle = (
     <span
@@ -159,6 +190,18 @@ function SortableItem({
     >
       <IconGrip />
     </span>
+  );
+
+  const deleteHandle = (
+    <button
+      type="button"
+      className="features-list-row-delete"
+      onClick={handleDeleteClick}
+      aria-label={`Delete ${item.name}`}
+      title={`Delete ${item.name}`}
+    >
+      <IconTrash />
+    </button>
   );
 
   const mainContent = (
@@ -260,23 +303,12 @@ function SortableItem({
 
   return (
     <li
-      ref={setNodeRef}
+      ref={setRefs}
       style={style}
       className={`features-list-item ${item.done ? "features-list-item--done" : ""} ${isDragging ? "features-list-item--dragging" : ""}`}
     >
-      {dragHandle}
       {canSwipe ? (
         <div className="features-list-item-swipe-wrap">
-          <div className="features-list-item-swipe-actions">
-            <button
-              type="button"
-              className="features-list-item-swipe-delete"
-              onClick={handleDeleteClick}
-              aria-label={`Delete ${item.name}`}
-            >
-              <IconTrash />
-            </button>
-          </div>
           <div
             className="features-list-item-swipe-content"
             style={{
@@ -291,6 +323,7 @@ function SortableItem({
       ) : (
         mainContent
       )}
+      {canSwipe && swipeOffset <= -SWIPE_THRESHOLD ? deleteHandle : dragHandle}
     </li>
   );
 }
@@ -298,7 +331,7 @@ function SortableItem({
 export function CheckableList({
   items,
   itemLabel,
-  emptyMessage = "No items yet. Add one above.",
+  emptyMessage = "No entries yet. Add one above.",
   loading = false,
   isItemDisabled,
   editingIndex,

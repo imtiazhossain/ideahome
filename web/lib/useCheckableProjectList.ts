@@ -157,18 +157,20 @@ export function useCheckableProjectList<T extends CheckableProjectItem>({
   );
 
   const toggleDone = useCallback(
-    async (index: number) => {
+    (index: number) => {
       const item = items[index];
       if (isOptimisticId(item.id)) return;
       const newDone = !item.done;
-      try {
-        await updateItem(item.id, { done: newDone });
-        applyToggleDone(index);
-      } catch {
-        setItems((prev: T[]) => [...prev]);
-      }
+      applyToggleDone(index);
+      updateItem(item.id, { done: newDone }).catch(() => {
+        if (!projectId) {
+          setItems((prev: T[]) => [...prev]);
+          return;
+        }
+        fetchList(projectId).then(setItems as (items: T[]) => void);
+      });
     },
-    [items, updateItem, setItems, applyToggleDone]
+    [items, updateItem, applyToggleDone, projectId, fetchList, setItems]
   );
 
   const removeItem = useCallback(

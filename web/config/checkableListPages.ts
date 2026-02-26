@@ -1,5 +1,5 @@
 /**
- * Single source of truth for Features, To-Do, Bugs, and Ideas pages.
+ * Single source of truth for Features, To-Do, Bugs, Ideas, and Enhancements pages.
  * Change any string, API, or behavior here — no need to touch page files.
  */
 import type { ListCacheKey } from "../lib/listCache";
@@ -8,25 +8,31 @@ import { createLegacyListStorage } from "../lib/legacyListStorage";
 import {
   createBug,
   createFeature,
+  createEnhancement,
   createIdea,
   createTodo,
   deleteBug,
+  deleteEnhancement,
   deleteFeature,
   deleteIdea,
   deleteTodo,
+  fetchEnhancements,
   fetchBugs,
   fetchFeatures,
   fetchIdeas,
   fetchTodos,
+  reorderEnhancements,
   reorderBugs,
   reorderFeatures,
   reorderIdeas,
   reorderTodos,
+  updateEnhancement,
   updateBug,
   updateFeature,
   updateIdea,
   updateTodo,
   type Bug,
+  type Enhancement,
   type Feature,
   type Idea,
   type Todo,
@@ -49,7 +55,12 @@ const ideasLegacy = createLegacyListStorage(
   "ideahome-ideas-list"
 );
 
-export type CheckableListPageKey = "features" | "todo" | "bugs" | "ideas";
+export type CheckableListPageKey =
+  | "features"
+  | "todo"
+  | "bugs"
+  | "ideas"
+  | "enhancements";
 
 export interface CheckableListPageDef<T> {
   listType: ListCacheKey;
@@ -88,7 +99,7 @@ export interface CheckableListPageDef<T> {
 
 export const CHECKABLE_LIST_PAGES: Record<
   CheckableListPageKey,
-  CheckableListPageDef<Feature | Todo | Bug | Idea>
+  CheckableListPageDef<Feature | Todo | Bug | Idea | Enhancement>
 > = {
   features: {
     listType: "features",
@@ -119,8 +130,8 @@ export const CHECKABLE_LIST_PAGES: Record<
     pageTitle: "To-Do",
     itemLabel: "to-do",
     listTitle: "To-Do List",
-    emptyMessage: "No items yet. Add one above.",
-    addPlaceholder: "To-do item",
+    emptyMessage: "No to-dos yet. Add one above.",
+    addPlaceholder: "To-do",
     addGuardMessage: "Select a project to add to-dos.",
     listGuardMessage: "Select a project to see and manage to-dos.",
     fetchList: fetchTodos,
@@ -164,8 +175,8 @@ export const CHECKABLE_LIST_PAGES: Record<
     pageTitle: "Ideas",
     itemLabel: "idea",
     listTitle: "Ideas List",
-    emptyMessage: "No items yet. Add one above.",
-    addPlaceholder: "Idea item",
+    emptyMessage: "No ideas yet. Add one above.",
+    addPlaceholder: "Idea",
     addGuardMessage: "Select a project to add ideas.",
     listGuardMessage: "Select a project to see and manage ideas.",
     fetchList: fetchIdeas,
@@ -177,6 +188,28 @@ export const CHECKABLE_LIST_PAGES: Record<
       load: () => ideasLegacy.load(),
       create: createIdea,
       clear: () => ideasLegacy.clear(),
+    },
+  },
+  enhancements: {
+    listType: "enhancements",
+    title: "Enhancements · Idea Home",
+    activeTab: "enhancements",
+    pageTitle: "Enhancements",
+    itemLabel: "enhancement",
+    listTitle: "Enhancements List",
+    emptyMessage: "No enhancements yet. Add one above.",
+    addPlaceholder: "Enhancement",
+    addGuardMessage: "Select a project to add enhancements.",
+    listGuardMessage: "Select a project to see and manage enhancements.",
+    fetchList: fetchEnhancements,
+    createItem: createEnhancement,
+    updateItem: updateEnhancement,
+    deleteItem: deleteEnhancement,
+    reorderItems: reorderEnhancements,
+    legacyMigration: {
+      load: () => [],
+      create: createEnhancement,
+      clear: () => {},
     },
   },
 };

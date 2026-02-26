@@ -96,10 +96,10 @@ export default function CustomListPage() {
         value: listState.newItem,
         onChange: listState.setNewItem,
         onSubmit: listState.addItem,
-        placeholder: "Add an item…",
-        ariaLabel: "New item",
-        submitAriaLabel: "Add item",
-        submitTitle: "Add item",
+        placeholder: "Add…",
+        ariaLabel: "New entry",
+        submitAriaLabel: "Add entry",
+        submitTitle: "Add entry",
       }}
       listTitle="List"
       itemCount={listState.items.length}
@@ -107,8 +107,8 @@ export default function CustomListPage() {
       onUndo={listState.undo}
       checkableListProps={{
         items: listState.items,
-        itemLabel: "item",
-        emptyMessage: "No items yet. Add one above.",
+        itemLabel: "entry",
+        emptyMessage: "No entries yet. Add one above.",
         loading: !hydrated,
         isItemDisabled: () => false,
         editingIndex: listState.editingIndex,

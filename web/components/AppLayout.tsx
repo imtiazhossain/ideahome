@@ -3,8 +3,14 @@ import Head from "next/head";
 import Link from "next/link";
 import { useRouter } from "next/router";
 import { getUserScopedStorageKey } from "../lib/api";
+import {
+  addCustomList,
+  getCustomListTabId,
+  getCustomLists,
+} from "../lib/customLists";
 import { DeleteProjectModal } from "./DeleteProjectModal";
 import { IconTrash } from "./IconTrash";
+import { IconFilter } from "./icons";
 import {
   ProjectNavBar,
   DrawerCollapsedNav,
@@ -12,14 +18,22 @@ import {
 } from "./ProjectNavBar";
 import type { ProjectNavTabId } from "./ProjectNavBar";
 
-const NAV_LINKS: { href: string; label: string; tabId: ProjectNavTabId }[] = [
-  { href: "/", label: "Dashboard", tabId: "board" },
-  { href: "/todo", label: "To-Do", tabId: "todo" },
-  { href: "/ideas", label: "Ideas", tabId: "ideas" },
-  { href: "/tests", label: "Tests", tabId: "tests" },
-  { href: "/features", label: "Features", tabId: "list" },
-  { href: "/bugs", label: "Bugs", tabId: "forms" },
-  { href: "/expenses", label: "Expenses", tabId: "expenses" },
+const SECTION_LINKS: { href?: string; label: string; tabId: ProjectNavTabId }[] = [
+  { tabId: "todo", label: "To-Do", href: "/todo" },
+  { tabId: "ideas", label: "Ideas", href: "/ideas" },
+  { tabId: "enhancements", label: "Enhancements", href: "/enhancements" },
+  { tabId: "summary", label: "Summary" },
+  { tabId: "timeline", label: "Timeline" },
+  { tabId: "board", label: "Dashboard", href: "/" },
+  { tabId: "tests", label: "Tests", href: "/tests" },
+  { tabId: "calendar", label: "Calendar" },
+  { tabId: "list", label: "Features", href: "/features" },
+  { tabId: "forms", label: "Bugs", href: "/bugs" },
+  { tabId: "goals", label: "Goals" },
+  { tabId: "development", label: "Code Health", href: "/coverage" },
+  { tabId: "expenses", label: "Expenses", href: "/expenses" },
+  { tabId: "code", label: "Code" },
+  { tabId: "pages", label: "Pages" },
 ];
 
 const PROJECT_ORDER_STORAGE_PREFIX = "ideahome-drawer-project-order";
@@ -136,24 +150,26 @@ export function AppLayout({
   children,
 }: AppLayoutProps) {
   const router = useRouter();
-  const { tabOrder, setTabOrder } = useTabOrder();
+  const {
+    tabOrder,
+    setTabOrder,
+    hiddenTabIds,
+    setHiddenTabIds,
+    deletedTabIds,
+    setDeletedTabIds,
+  } = useTabOrder();
+  const drawerSettingsRef = React.useRef<HTMLDivElement>(null);
+  const [drawerSettingsOpen, setDrawerSettingsOpen] = React.useState(false);
+  const [drawerFiltersOpen, setDrawerFiltersOpen] = React.useState(false);
+  const [drawerDeleteSectionsOpen, setDrawerDeleteSectionsOpen] =
+    React.useState(false);
   const [projectOrderIds, setProjectOrderIds] = React.useState<string[]>([]);
-  const [draggedProjectId, setDraggedProjectId] = React.useState<string | null>(
-    null
-  );
-  const [dragOverProjectId, setDragOverProjectId] = React.useState<
-    string | null
-  >(null);
-  const [draggedSectionTabId, setDraggedSectionTabId] = React.useState<
-    ProjectNavTabId | null
-  >(null);
-  const [dragOverSectionTabId, setDragOverSectionTabId] = React.useState<
-    ProjectNavTabId | null
-  >(null);
-  const projectTouchMovedRef = React.useRef(false);
-  const sectionTouchMovedRef = React.useRef(false);
-  const suppressProjectTapRef = React.useRef(false);
-  const suppressSectionTapRef = React.useRef(false);
+  const [creatingProject, setCreatingProject] = React.useState(false);
+  const [creatingProjectName, setCreatingProjectName] = React.useState("");
+  const [creatingSection, setCreatingSection] = React.useState(false);
+  const [creatingSectionName, setCreatingSectionName] = React.useState("");
+  const creatingProjectInputRef = React.useRef<HTMLInputElement>(null);
+  const creatingSectionInputRef = React.useRef<HTMLInputElement>(null);
 
   React.useEffect(() => {
     setProjectOrderIds((prev) => {
@@ -174,48 +190,148 @@ export function AppLayout({
       .filter((p): p is { id: string; name: string } => Boolean(p));
   }, [projects, projectOrderIds]);
 
-  const moveProjectBefore = React.useCallback(
-    (draggedId: string, targetId: string) => {
-      if (!draggedId || !targetId || draggedId === targetId) return;
-      const next = [...mergeProjectOrder(projects, projectOrderIds)];
-      const from = next.indexOf(draggedId);
-      const to = next.indexOf(targetId);
-      if (from === -1 || to === -1 || from === to) return;
-      const [moved] = next.splice(from, 1);
-      next.splice(to, 0, moved);
+  const moveProject = React.useCallback(
+    (projectId: string, direction: "up" | "down") => {
+      const ids = orderedProjects.map((p) => p.id);
+      const from = ids.indexOf(projectId);
+      if (from === -1) return;
+      const to = direction === "up" ? from - 1 : from + 1;
+      if (to < 0 || to >= ids.length) return;
+      const next = [...ids];
+      [next[from], next[to]] = [next[to], next[from]];
       setProjectOrderIds(next);
     },
-    [projectOrderIds, projects]
-  );
-
-  const moveSectionBefore = React.useCallback(
-    (draggedId: ProjectNavTabId, targetId: ProjectNavTabId) => {
-      if (!draggedId || !targetId || draggedId === targetId) return;
-      const from = tabOrder.indexOf(draggedId);
-      const to = tabOrder.indexOf(targetId);
-      if (from === -1 || to === -1 || from === to) return;
-      const next = [...tabOrder];
-      const [moved] = next.splice(from, 1);
-      next.splice(to, 0, moved);
-      setTabOrder(next);
-    },
-    [setTabOrder, tabOrder]
+    [orderedProjects]
   );
   const orderedNavLinks = React.useMemo(() => {
-    const byId = new Map(NAV_LINKS.map((l) => [l.tabId, l]));
+    const byId = new Map(SECTION_LINKS.map((l) => [l.tabId, l]));
+    const customById = new Map<string, (ReturnType<typeof getCustomLists>[number])>(
+      getCustomLists().map((l) => [getCustomListTabId(l.slug), l])
+    );
     const ordered = tabOrder
-      .map((id) => byId.get(id))
+      .map((id) => {
+        const builtIn = byId.get(id);
+        if (builtIn) return builtIn;
+        const custom = customById.get(id);
+        if (!custom) return null;
+        return {
+          href: `/list/${custom.slug}`,
+          label: custom.name,
+          tabId: id,
+        };
+      })
       .filter(
         (
           link
-        ): link is { href: string; label: string; tabId: ProjectNavTabId } =>
+        ): link is { href?: string; label: string; tabId: ProjectNavTabId } =>
           Boolean(link)
       );
-    const missing = NAV_LINKS.filter(
+    const missing = SECTION_LINKS.filter(
       (link) => !ordered.some((item) => item.tabId === link.tabId)
     );
     return [...ordered, ...missing];
   }, [tabOrder]);
+
+  const visibleOrderedNavLinks = React.useMemo(
+    () => orderedNavLinks.filter((link) => !hiddenTabIds.includes(link.tabId)),
+    [hiddenTabIds, orderedNavLinks]
+  );
+  const sortedFilterSections = React.useMemo(
+    () =>
+      [...orderedNavLinks]
+        .map((section) => ({
+          ...section,
+          visible: !hiddenTabIds.includes(section.tabId),
+        }))
+        .sort((a, b) => {
+          if (a.visible !== b.visible) return a.visible ? -1 : 1;
+          return a.label.localeCompare(b.label, undefined, {
+            sensitivity: "base",
+          });
+        }),
+    [hiddenTabIds, orderedNavLinks]
+  );
+
+  const moveNavTab = React.useCallback(
+    (tabId: ProjectNavTabId, direction: "up" | "down") => {
+      const navTabIds = visibleOrderedNavLinks.map((l) => l.tabId);
+      const fromVisible = navTabIds.indexOf(tabId);
+      if (fromVisible === -1) return;
+      const toVisible = direction === "up" ? fromVisible - 1 : fromVisible + 1;
+      if (toVisible < 0 || toVisible >= navTabIds.length) return;
+      const swapId = navTabIds[toVisible];
+      const from = tabOrder.indexOf(tabId);
+      const to = tabOrder.indexOf(swapId);
+      if (from === -1 || to === -1) return;
+      const next = [...tabOrder];
+      [next[from], next[to]] = [next[to], next[from]];
+      setTabOrder(next);
+    },
+    [setTabOrder, tabOrder, visibleOrderedNavLinks]
+  );
+
+  const deleteSectionTab = React.useCallback(
+    (tabId: ProjectNavTabId) => {
+      if (tabOrder.length <= 1) return;
+      const nextOrder = tabOrder.filter((id) => id !== tabId);
+      if (nextOrder.length === 0) return;
+      setTabOrder(nextOrder);
+      setHiddenTabIds(hiddenTabIds.filter((id) => id !== tabId));
+      setDeletedTabIds(Array.from(new Set([...deletedTabIds, tabId])));
+    },
+    [
+      deletedTabIds,
+      hiddenTabIds,
+      setDeletedTabIds,
+      setHiddenTabIds,
+      setTabOrder,
+      tabOrder,
+    ]
+  );
+
+  const submitNewProject = React.useCallback(async () => {
+    const name = creatingProjectName.trim();
+    if (!name) {
+      setCreatingProject(false);
+      setCreatingProjectName("");
+      return;
+    }
+    const createProject =
+      onCreateProject ??
+      ((nextName: string) =>
+        router.push("/?createProject=1&projectName=" + encodeURIComponent(nextName)));
+    await Promise.resolve(createProject(name));
+    setCreatingProject(false);
+    setCreatingProjectName("");
+  }, [creatingProjectName, onCreateProject, router]);
+
+  const submitNewSection = React.useCallback(() => {
+    const name = creatingSectionName.trim();
+    if (!name) {
+      setCreatingSection(false);
+      setCreatingSectionName("");
+      return;
+    }
+    const list = addCustomList(name);
+    const id = getCustomListTabId(list.slug);
+    if (!tabOrder.includes(id)) {
+      setTabOrder([...tabOrder, id]);
+    }
+    setCreatingSection(false);
+    setCreatingSectionName("");
+    void router.push(`/list/${list.slug}`);
+  }, [creatingSectionName, router, setTabOrder, tabOrder]);
+
+  const handleAddProject = React.useCallback(() => {
+    setCreatingProject(true);
+    setCreatingProjectName("");
+    setEditingProjectId(null);
+  }, [setEditingProjectId]);
+
+  const handleAddTab = React.useCallback(() => {
+    setCreatingSection(true);
+    setCreatingSectionName("");
+  }, []);
 
   const closeDrawerOnMobile = React.useCallback(() => {
     if (
@@ -225,6 +341,42 @@ export function AppLayout({
       setDrawerOpen(false);
     }
   }, [setDrawerOpen]);
+
+  React.useEffect(() => {
+    if (!drawerOpen) {
+      setDrawerSettingsOpen(false);
+      setDrawerFiltersOpen(false);
+      setDrawerDeleteSectionsOpen(false);
+    }
+  }, [drawerOpen]);
+
+  React.useEffect(() => {
+    if (!drawerSettingsOpen && !drawerFiltersOpen && !drawerDeleteSectionsOpen)
+      return;
+    const onOutside = (e: MouseEvent | TouchEvent) => {
+      const target = e.target as Node | null;
+      if (!target) return;
+      if (drawerSettingsRef.current?.contains(target)) return;
+      setDrawerSettingsOpen(false);
+      setDrawerFiltersOpen(false);
+      setDrawerDeleteSectionsOpen(false);
+    };
+    document.addEventListener("mousedown", onOutside);
+    document.addEventListener("touchstart", onOutside, { passive: true });
+    return () => {
+      document.removeEventListener("mousedown", onOutside);
+      document.removeEventListener("touchstart", onOutside);
+    };
+  }, [drawerDeleteSectionsOpen, drawerFiltersOpen, drawerSettingsOpen]);
+
+  React.useEffect(() => {
+    if (creatingProject) creatingProjectInputRef.current?.focus();
+  }, [creatingProject]);
+
+  React.useEffect(() => {
+    if (creatingSection) creatingSectionInputRef.current?.focus();
+  }, [creatingSection]);
+
   return (
     <>
       <Head>
@@ -237,14 +389,35 @@ export function AppLayout({
           aria-hidden
         />
       )}
-      <div className="app-layout">
+      <div className={`app-layout${drawerOpen ? " is-drawer-open" : ""}`}>
         <aside
           className={`drawer ${drawerOpen ? "drawer-open" : "drawer-closed"}`}
         >
           {drawerOpen ? (
             <>
               <div className="drawer-logo" aria-hidden>
-                IH
+                <svg
+                  className="drawer-logo-mark"
+                  viewBox="0 0 24 24"
+                  role="img"
+                  aria-hidden="true"
+                >
+                  <path
+                    d="M4 10.5 12 4l8 6.5V19a1 1 0 0 1-1 1h-4.5v-5.2a1 1 0 0 0-1-1h-3a1 1 0 0 0-1 1V20H5a1 1 0 0 1-1-1z"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.8"
+                    strokeLinejoin="round"
+                    strokeLinecap="round"
+                  />
+                  <path
+                    d="M18.5 5.2v1.6M17.7 6h1.6"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.4"
+                    strokeLinecap="round"
+                  />
+                </svg>
               </div>
               <div className="drawer-header">
                 <div className="drawer-title">Idea Home</div>
@@ -260,85 +433,47 @@ export function AppLayout({
               </div>
               <div className="drawer-content">
                 <nav className="drawer-nav">
-                  <div className="drawer-nav-label">Projects</div>
-                  {orderedProjects.map((p) => (
-                    <div
-                      key={p.id}
-                      data-project-id={p.id}
-                      className={`drawer-nav-item-row ${editingProjectId === p.id ? "" : "is-draggable"}${draggedProjectId === p.id ? " is-dragging" : ""}${dragOverProjectId === p.id && draggedProjectId !== p.id ? " is-drag-over" : ""}`}
-                      draggable={editingProjectId !== p.id}
-                      onDragStart={(e) => {
-                        if (editingProjectId === p.id) return;
-                        setDraggedProjectId(p.id);
-                        setDragOverProjectId(null);
-                        e.dataTransfer.effectAllowed = "move";
-                        e.dataTransfer.setData("text/plain", p.id);
-                      }}
-                      onDragOver={(e) => {
-                        if (!draggedProjectId || draggedProjectId === p.id) return;
-                        e.preventDefault();
-                        if (dragOverProjectId !== p.id) setDragOverProjectId(p.id);
-                      }}
-                      onDragLeave={() => {
-                        if (dragOverProjectId === p.id) setDragOverProjectId(null);
-                      }}
-                      onDrop={(e) => {
-                        e.preventDefault();
-                        if (!draggedProjectId || draggedProjectId === p.id) return;
-                        moveProjectBefore(draggedProjectId, p.id);
-                        setDragOverProjectId(null);
-                      }}
-                      onTouchStart={() => {
-                        if (editingProjectId === p.id) return;
-                        projectTouchMovedRef.current = false;
-                        setDraggedProjectId(p.id);
-                        setDragOverProjectId(null);
-                      }}
-                      onTouchMove={(e) => {
-                        if (!draggedProjectId) return;
-                        e.preventDefault();
-                        projectTouchMovedRef.current = true;
-                        const touch = e.touches[0];
-                        if (!touch) return;
-                        const el = document.elementFromPoint(
-                          touch.clientX,
-                          touch.clientY
-                        ) as HTMLElement | null;
-                        const row = el?.closest(
-                          "[data-project-id]"
-                        ) as HTMLElement | null;
-                        const targetId = row?.dataset.projectId ?? null;
-                        if (targetId && targetId !== draggedProjectId) {
-                          if (dragOverProjectId !== targetId) {
-                            setDragOverProjectId(targetId);
-                          }
-                        }
-                      }}
-                      onTouchEnd={() => {
-                        if (
-                          projectTouchMovedRef.current &&
-                          draggedProjectId &&
-                          dragOverProjectId
-                        ) {
-                          moveProjectBefore(draggedProjectId, dragOverProjectId);
-                        }
-                        if (projectTouchMovedRef.current) {
-                          suppressProjectTapRef.current = true;
-                        }
-                        setDraggedProjectId(null);
-                        setDragOverProjectId(null);
-                        projectTouchMovedRef.current = false;
-                      }}
-                      onTouchCancel={() => {
-                        setDraggedProjectId(null);
-                        setDragOverProjectId(null);
-                        projectTouchMovedRef.current = false;
-                      }}
-                      onDragEnd={() => {
-                        setDraggedProjectId(null);
-                        setDragOverProjectId(null);
-                      }}
+                  <div className="drawer-nav-label-row">
+                    <div className="drawer-nav-label">Projects</div>
+                    <button
+                      type="button"
+                      className="drawer-nav-label-add-btn"
+                      onClick={handleAddProject}
+                      aria-label="Add project"
+                      title="Add project"
                     >
+                      +
+                    </button>
+                  </div>
+                  {creatingProject && (
+                    <div className="drawer-nav-item-row">
+                      <input
+                        ref={creatingProjectInputRef}
+                        type="text"
+                        className="drawer-nav-item drawer-nav-item-input"
+                        value={creatingProjectName}
+                        onChange={(e) => setCreatingProjectName(e.target.value)}
+                        onBlur={() => {
+                          void submitNewProject();
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            void submitNewProject();
+                          }
+                          if (e.key === "Escape") {
+                            e.preventDefault();
+                            setCreatingProject(false);
+                            setCreatingProjectName("");
+                          }
+                        }}
+                        placeholder="Project Name?"
+                        aria-label="Project Name"
+                      />
+                    </div>
+                  )}
+                  {orderedProjects.map((p) => (
+                    <div key={p.id} className="drawer-nav-item-row">
                       {editingProjectId === p.id ? (
                         <input
                           ref={
@@ -362,13 +497,7 @@ export function AppLayout({
                         <button
                           type="button"
                           className={`drawer-nav-item ${selectedProjectId === p.id ? "is-selected" : ""}`}
-                          onClick={(e) => {
-                            if (suppressProjectTapRef.current) {
-                              suppressProjectTapRef.current = false;
-                              e.preventDefault();
-                              e.stopPropagation();
-                              return;
-                            }
+                          onClick={() => {
                             setSelectedProjectId(p.id);
                             closeDrawerOnMobile();
                           }}
@@ -399,10 +528,28 @@ export function AppLayout({
                           ✎
                         </button>
                       )}
-                      {showDeletePerProject && (
+                      {editingProjectId !== p.id && (
+                        <span className="drawer-nav-row-actions">
+                          <button
+                            type="button"
+                            className="drawer-nav-item-reorder"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              moveProject(p.id, "up");
+                            }}
+                            aria-label={`Move ${p.name} up`}
+                            title="Move up"
+                            disabled={orderedProjects[0]?.id === p.id}
+                          >
+                            ▲
+                          </button>
+                        </span>
+                      )}
+                      {(showDeletePerProject || editingProjectId === p.id) && (
                         <button
                           type="button"
-                          className="drawer-nav-item-delete"
+                          className={`drawer-nav-item-delete${editingProjectId === p.id ? " is-visible" : ""}`}
                           onClick={(e) => {
                             e.stopPropagation();
                             setProjectToDelete(p);
@@ -415,122 +562,194 @@ export function AppLayout({
                       )}
                     </div>
                   ))}
-                  {onNewProjectClick && (
+                  <div className="drawer-nav-label-row drawer-nav-label-row-sections">
+                    <div className="drawer-nav-label">Sections</div>
                     <button
                       type="button"
-                      className="drawer-nav-item drawer-nav-item-action"
-                      onClick={onNewProjectClick}
+                      className="drawer-nav-label-add-btn"
+                      onClick={handleAddTab}
+                      aria-label="Add tab"
+                      title="Add tab"
                     >
-                      + New project
+                      +
                     </button>
-                  )}
-                  <div className="drawer-nav-label">Tabs</div>
-                  {orderedNavLinks.map(({ href, label, tabId }) => (
-                    <div
-                      key={href}
-                      data-section-tab-id={tabId}
-                      className={`drawer-nav-section-row${draggedSectionTabId === tabId ? " is-dragging" : ""}${dragOverSectionTabId === tabId && draggedSectionTabId !== tabId ? " is-drag-over" : ""}`}
-                      draggable
-                      onDragStart={(e) => {
-                        setDraggedSectionTabId(tabId);
-                        setDragOverSectionTabId(null);
-                        e.dataTransfer.effectAllowed = "move";
-                        e.dataTransfer.setData("text/plain", tabId);
-                      }}
-                      onDragOver={(e) => {
-                        if (!draggedSectionTabId || draggedSectionTabId === tabId)
-                          return;
-                        e.preventDefault();
-                        if (dragOverSectionTabId !== tabId) {
-                          setDragOverSectionTabId(tabId);
-                        }
-                      }}
-                      onDragLeave={() => {
-                        if (dragOverSectionTabId === tabId) {
-                          setDragOverSectionTabId(null);
-                        }
-                      }}
-                      onDrop={(e) => {
-                        e.preventDefault();
-                        if (!draggedSectionTabId || draggedSectionTabId === tabId)
-                          return;
-                        moveSectionBefore(draggedSectionTabId, tabId);
-                        setDragOverSectionTabId(null);
-                      }}
-                      onTouchStart={() => {
-                        sectionTouchMovedRef.current = false;
-                        setDraggedSectionTabId(tabId);
-                        setDragOverSectionTabId(null);
-                      }}
-                      onTouchMove={(e) => {
-                        if (!draggedSectionTabId) return;
-                        e.preventDefault();
-                        sectionTouchMovedRef.current = true;
-                        const touch = e.touches[0];
-                        if (!touch) return;
-                        const el = document.elementFromPoint(
-                          touch.clientX,
-                          touch.clientY
-                        ) as HTMLElement | null;
-                        const row = el?.closest(
-                          "[data-section-tab-id]"
-                        ) as HTMLElement | null;
-                        const targetId = row?.dataset.sectionTabId as
-                          | ProjectNavTabId
-                          | undefined;
-                        if (targetId && targetId !== draggedSectionTabId) {
-                          if (dragOverSectionTabId !== targetId) {
-                            setDragOverSectionTabId(targetId);
+                  </div>
+                  {creatingSection && (
+                    <div className="drawer-nav-section-row">
+                      <input
+                        ref={creatingSectionInputRef}
+                        type="text"
+                        className="drawer-nav-item drawer-nav-item-input"
+                        value={creatingSectionName}
+                        onChange={(e) => setCreatingSectionName(e.target.value)}
+                        onBlur={submitNewSection}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            submitNewSection();
                           }
-                        }
-                      }}
-                      onTouchEnd={() => {
-                        if (
-                          sectionTouchMovedRef.current &&
-                          draggedSectionTabId &&
-                          dragOverSectionTabId
-                        ) {
-                          moveSectionBefore(
-                            draggedSectionTabId,
-                            dragOverSectionTabId
-                          );
-                        }
-                        if (sectionTouchMovedRef.current) {
-                          suppressSectionTapRef.current = true;
-                        }
-                        setDraggedSectionTabId(null);
-                        setDragOverSectionTabId(null);
-                        sectionTouchMovedRef.current = false;
-                      }}
-                      onTouchCancel={() => {
-                        setDraggedSectionTabId(null);
-                        setDragOverSectionTabId(null);
-                        sectionTouchMovedRef.current = false;
-                      }}
-                      onDragEnd={() => {
-                        setDraggedSectionTabId(null);
-                        setDragOverSectionTabId(null);
-                      }}
-                    >
-                      <Link
-                        href={href}
-                        prefetch={false}
-                        onClick={(e) => {
-                          if (suppressSectionTapRef.current) {
-                            suppressSectionTapRef.current = false;
+                          if (e.key === "Escape") {
+                            e.preventDefault();
+                            setCreatingSection(false);
+                            setCreatingSectionName("");
+                          }
+                        }}
+                        placeholder="Section Name?"
+                        aria-label="Section Name"
+                      />
+                    </div>
+                  )}
+                  {visibleOrderedNavLinks.map(({ href, label, tabId }) => (
+                    <div key={tabId} className="drawer-nav-section-row">
+                      {href ? (
+                        <Link
+                          href={href}
+                          prefetch={false}
+                          onClick={closeDrawerOnMobile}
+                          className={`drawer-nav-item ${activeTab === tabId ? "is-selected" : ""}`}
+                        >
+                          {label}
+                        </Link>
+                      ) : (
+                        <button
+                          type="button"
+                          className={`drawer-nav-item ${activeTab === tabId ? "is-selected" : ""}`}
+                          onClick={() => {}}
+                          title={label}
+                        >
+                          {label}
+                        </button>
+                      )}
+                      <span className="drawer-nav-row-actions">
+                        <button
+                          type="button"
+                          className="drawer-nav-item-reorder"
+                          onClick={(e) => {
                             e.preventDefault();
                             e.stopPropagation();
-                            return;
-                          }
-                          closeDrawerOnMobile();
-                        }}
-                        className={`drawer-nav-item ${activeTab === tabId ? "is-selected" : ""}`}
-                      >
-                        {label}
-                      </Link>
+                            moveNavTab(tabId, "up");
+                          }}
+                          aria-label={`Move ${label} up`}
+                          title="Move up"
+                          disabled={visibleOrderedNavLinks[0]?.tabId === tabId}
+                        >
+                          ▲
+                        </button>
+                      </span>
                     </div>
                   ))}
                 </nav>
+              </div>
+              <div className="drawer-bottom-settings" ref={drawerSettingsRef}>
+                {drawerFiltersOpen && (
+                  <div className="drawer-bottom-filter-menu">
+                    {sortedFilterSections.map(({ tabId, label, visible }) => (
+                      <label key={tabId} className="drawer-bottom-filter-item">
+                        <input
+                          type="checkbox"
+                          checked={visible}
+                          onChange={() => {
+                            const next = visible
+                              ? [...hiddenTabIds, tabId]
+                              : hiddenTabIds.filter((id) => id !== tabId);
+                            setHiddenTabIds(next);
+                          }}
+                          aria-label={`${visible ? "Hide" : "Show"} ${label}`}
+                        />
+                        <span>{label}</span>
+                      </label>
+                    ))}
+                  </div>
+                )}
+                {drawerDeleteSectionsOpen && (
+                  <div className="drawer-bottom-delete-sections-menu">
+                    {orderedNavLinks.map(({ tabId, label }) => {
+                      const canDelete = tabOrder.length > 1;
+                      return (
+                        <div key={tabId} className="drawer-bottom-delete-row">
+                          <span>{label}</span>
+                          <button
+                            type="button"
+                            className="drawer-bottom-delete-btn"
+                            onClick={() => deleteSectionTab(tabId)}
+                            aria-label={`Delete ${label}`}
+                            title={
+                              canDelete
+                                ? `Delete ${label}`
+                                : "At least one section must remain"
+                            }
+                            disabled={!canDelete}
+                          >
+                            <IconTrash />
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+                {drawerSettingsOpen && (
+                  <div className="drawer-bottom-settings-menu" role="menu">
+                    <button
+                      type="button"
+                      className="drawer-bottom-settings-menu-item"
+                      role="menuitem"
+                      onClick={() => {
+                        setDrawerFiltersOpen((open) => !open);
+                        setDrawerDeleteSectionsOpen(false);
+                      }}
+                      aria-label="Manage tabs"
+                      title="Manage tabs"
+                    >
+                      <IconFilter />
+                    </button>
+                    <button
+                      type="button"
+                      className="drawer-bottom-settings-menu-item"
+                      role="menuitem"
+                      onClick={() => {
+                        setDrawerDeleteSectionsOpen((open) => !open);
+                        setDrawerFiltersOpen(false);
+                      }}
+                      aria-label="Delete sections"
+                      title="Delete sections"
+                    >
+                      <IconTrash />
+                    </button>
+                    <button
+                      type="button"
+                      className="drawer-bottom-settings-menu-item"
+                      role="menuitem"
+                      onClick={() => {
+                        toggleTheme();
+                        setDrawerSettingsOpen(false);
+                        setDrawerFiltersOpen(false);
+                        setDrawerDeleteSectionsOpen(false);
+                      }}
+                      aria-label={theme === "light" ? "Switch to dark theme" : "Switch to light theme"}
+                      title={theme === "light" ? "Switch to dark theme" : "Switch to light theme"}
+                    >
+                      {theme === "light" ? "☀" : "🌙"}
+                    </button>
+                  </div>
+                )}
+                <button
+                  type="button"
+                  className="drawer-bottom-settings-btn"
+                  onClick={() => {
+                    setDrawerSettingsOpen((open) => {
+                      const next = !open;
+                      if (!next) {
+                        setDrawerFiltersOpen(false);
+                        setDrawerDeleteSectionsOpen(false);
+                      }
+                      return next;
+                    });
+                  }}
+                  aria-label="Settings"
+                  title="Settings"
+                >
+                  ⚙
+                </button>
               </div>
             </>
           ) : (

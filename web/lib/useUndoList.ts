@@ -17,10 +17,8 @@ export function useUndoList<T>(
   const [canUndo, setCanUndo] = useState(false);
 
   useEffect(() => {
-    if (resetKey !== undefined) {
-      historyRef.current = [];
-      setCanUndo(false);
-    }
+    historyRef.current = [];
+    setCanUndo(false);
   }, [resetKey]);
 
   const pushHistory = useCallback(() => {

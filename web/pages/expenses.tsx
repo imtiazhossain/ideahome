@@ -254,261 +254,171 @@ export default function ExpensesPage() {
       projectDeleting={projectDeleting}
       handleDeleteProject={handleDeleteProject}
     >
-      <div className="tests-page-content">
-            <h1 className="tests-page-title">Expenses</h1>
+      <div className="tests-page-content expenses-page-content">
+        <h1 className="tests-page-title">Expenses</h1>
 
-            <section className="tests-page-section">
-              <h2 className="tests-page-section-title">Summary</h2>
-              <p
-                className="tests-page-section-desc"
-                style={{ fontSize: "1.25rem", fontWeight: 600 }}
-              >
-                Total: {formatCurrency(total)}{" "}
-                <span
-                  className="tests-page-section-count"
-                  aria-label="Number of expenses"
+        <section className="tests-page-section">
+          <h2 className="tests-page-section-title">Summary</h2>
+          <p className="tests-page-section-desc expenses-total">
+            Total: {formatCurrency(total)}{" "}
+            <span className="tests-page-section-count" aria-label="Number of expenses">
+              ({expenses.length} expenses)
+            </span>
+          </p>
+          {Object.keys(byCategory).length > 0 && (
+            <ul className="expenses-summary-list">
+              {Object.entries(byCategory)
+                .sort((a, b) => b[1] - a[1])
+                .map(([cat, sum]) => (
+                  <li key={cat}>{cat}: {formatCurrency(sum)}</li>
+                ))}
+            </ul>
+          )}
+        </section>
+
+        <section className="tests-page-section">
+          <ProjectSectionGuard
+            projectsLoaded={projectsLoaded}
+            selectedProjectId={selectedProjectId}
+            message="Select a project to add expenses."
+            variant="add"
+          >
+            <form onSubmit={addExpense} className="expenses-form">
+              <div className="expenses-field expenses-field-amount">
+                <label htmlFor="expenses-amount">Amount ($)</label>
+                <input
+                  id="expenses-amount"
+                  type="text"
+                  inputMode="decimal"
+                  value={amount}
+                  onChange={(e) => setAmount(e.target.value)}
+                  placeholder="0.00"
+                  aria-label="Amount"
+                  className="expenses-input"
+                />
+              </div>
+              <div className="expenses-field expenses-field-description">
+                <label htmlFor="expenses-description">Description</label>
+                <input
+                  id="expenses-description"
+                  ref={descriptionInputRef}
+                  type="text"
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  placeholder="What was this for?"
+                  aria-label="Description"
+                  className="expenses-input"
+                />
+              </div>
+              <div className="expenses-field expenses-field-date">
+                <label htmlFor="expenses-date">Date</label>
+                <input
+                  id="expenses-date"
+                  type="date"
+                  value={date}
+                  onChange={(e) => setDate(e.target.value)}
+                  aria-label="Date"
+                  className="expenses-input"
+                />
+              </div>
+              <div className="expenses-field expenses-field-category">
+                <label htmlFor="expenses-category">Category</label>
+                <select
+                  id="expenses-category"
+                  value={category}
+                  onChange={(e) => setCategory(e.target.value)}
+                  aria-label="Category"
+                  className="expenses-input"
                 >
-                  ({expenses.length} expenses)
-                </span>
-              </p>
-              {Object.keys(byCategory).length > 0 && (
-                <ul style={{ listStyle: "none", padding: 0, marginTop: "8px" }}>
-                  {Object.entries(byCategory)
-                    .sort((a, b) => b[1] - a[1])
-                    .map(([cat, sum]) => (
-                      <li key={cat} style={{ marginBottom: "4px" }}>
-                        {cat}: {formatCurrency(sum)}
-                      </li>
-                    ))}
-                </ul>
-              )}
-            </section>
-
-            <section className="tests-page-section">
-              <ProjectSectionGuard
-                projectsLoaded={projectsLoaded}
-                selectedProjectId={selectedProjectId}
-                message="Select a project to add expenses."
-                variant="add"
+                  {CATEGORIES.map((c) => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <button
+                type="submit"
+                className="project-nav-add expenses-add-btn"
+                aria-label="Add expense"
+                title="Add expense"
               >
-                <form
-                  onSubmit={addExpense}
-                  className="features-add-form"
-                  style={{
-                    display: "flex",
-                    flexWrap: "wrap",
-                    gap: "8px",
-                    alignItems: "flex-end",
-                    marginTop: "8px",
-                  }}
-                >
-                  <div
-                    style={{
-                      display: "flex",
-                      flexDirection: "column",
-                      gap: "4px",
-                    }}
-                  >
-                    <label htmlFor="expenses-amount">Amount ($)</label>
-                    <input
-                      id="expenses-amount"
-                      type="text"
-                      inputMode="decimal"
-                      value={amount}
-                      onChange={(e) => setAmount(e.target.value)}
-                      placeholder="0.00"
-                      aria-label="Amount"
-                      className="project-nav-search"
-                      style={{ width: "100px", padding: "8px 12px" }}
-                    />
-                  </div>
-                  <div
-                    style={{
-                      display: "flex",
-                      flexDirection: "column",
-                      gap: "4px",
-                      flex: "1",
-                      minWidth: "180px",
-                    }}
-                  >
-                    <label htmlFor="expenses-description">Description</label>
-                    <input
-                      id="expenses-description"
-                      ref={descriptionInputRef}
-                      type="text"
-                      value={description}
-                      onChange={(e) => setDescription(e.target.value)}
-                      placeholder="What was this for?"
-                      aria-label="Description"
-                      className="project-nav-search"
-                      style={{ padding: "8px 12px" }}
-                    />
-                  </div>
-                  <div
-                    style={{
-                      display: "flex",
-                      flexDirection: "column",
-                      gap: "4px",
-                    }}
-                  >
-                    <label htmlFor="expenses-date">Date</label>
-                    <input
-                      id="expenses-date"
-                      type="date"
-                      value={date}
-                      onChange={(e) => setDate(e.target.value)}
-                      aria-label="Date"
-                      className="project-nav-search"
-                      style={{ padding: "8px 12px" }}
-                    />
-                  </div>
-                  <div
-                    style={{
-                      display: "flex",
-                      flexDirection: "column",
-                      gap: "4px",
-                    }}
-                  >
-                    <label htmlFor="expenses-category">Category</label>
-                    <select
-                      id="expenses-category"
-                      value={category}
-                      onChange={(e) => setCategory(e.target.value)}
-                      aria-label="Category"
-                      className="project-nav-search"
-                      style={{ padding: "8px 12px", minWidth: "120px" }}
-                    >
-                      {CATEGORIES.map((c) => (
-                        <option key={c} value={c}>
-                          {c}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <button
-                    type="submit"
-                    className="project-nav-add"
-                    style={{ alignSelf: "flex-end" }}
-                    aria-label="Add expense"
-                    title="Add expense"
-                  >
-                    <IconPlus />
-                  </button>
-                </form>
-              </ProjectSectionGuard>
-            </section>
+                <IconPlus />
+              </button>
+            </form>
+          </ProjectSectionGuard>
+        </section>
 
-            <section className="tests-page-section">
-              <h2 className="tests-page-section-title">
-                Expense List{" "}
-                <span className="tests-page-section-count" aria-label="Count">
-                  {expenses.length}
-                </span>
-              </h2>
-              <ProjectSectionGuard
-                projectsLoaded={projectsLoaded}
-                selectedProjectId={selectedProjectId}
-                message="Select a project to see and manage expenses."
-                variant="list"
-              >
-                {expensesLoading ? (
-                  <LoadingMessage
-                    className="tests-page-section-desc"
-                  />
-                ) : expenses.length === 0 ? (
-                  <p className="tests-page-section-desc">
-                    No expenses yet. Add one above.
-                  </p>
-                ) : (
-                  <ul
-                    className="features-list"
-                    style={{ listStyle: "none", padding: 0, margin: "8px 0 0" }}
-                  >
-                    {expenses.map((item) => (
-                      <li
-                        key={item.id}
-                        className="features-list-item"
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: "12px",
-                          flexWrap: "wrap",
-                          padding: "10px 0",
-                          borderBottom:
-                            "1px solid var(--border-color, #e5e7eb)",
-                        }}
-                      >
-                        <span style={{ fontWeight: 600, minWidth: "80px" }}>
-                          {formatCurrency(item.amount)}
-                        </span>
-                        <span style={{ flex: "1", minWidth: "120px" }}>
-                          {item.description}
-                        </span>
-                        <span
-                          style={{
-                            color: "var(--text-muted, #6b7280)",
-                            fontSize: "0.9rem",
-                          }}
+        <section className="tests-page-section">
+          <h2 className="tests-page-section-title">
+            Expense List{" "}
+            <span className="tests-page-section-count" aria-label="Count">
+              {expenses.length}
+            </span>
+          </h2>
+          <ProjectSectionGuard
+            projectsLoaded={projectsLoaded}
+            selectedProjectId={selectedProjectId}
+            message="Select a project to see and manage expenses."
+            variant="list"
+          >
+            {expensesLoading ? (
+              <LoadingMessage className="tests-page-section-desc" />
+            ) : expenses.length === 0 ? (
+              <p className="tests-page-section-desc">No expenses yet. Add one above.</p>
+            ) : (
+              <ul className="expenses-list">
+                {expenses.map((item) => (
+                  <li key={item.id} className="expenses-item">
+                    <div className="expenses-item-main">
+                      <span className="expenses-item-amount">{formatCurrency(item.amount)}</span>
+                      <span className="expenses-item-description">{item.description}</span>
+                    </div>
+                    <div className="expenses-item-meta">
+                      <span className="expenses-item-date">{item.date}</span>
+                      {editingCategoryId === item.id ? (
+                        <select
+                          value={item.category}
+                          onChange={(e) => updateExpenseCategory(item.id, e.target.value)}
+                          onBlur={() => setEditingCategoryId(null)}
+                          autoFocus
+                          aria-label={`Edit category for ${item.description}`}
+                          className="expenses-category-select"
                         >
-                          {item.date}
-                        </span>
-                        {editingCategoryId === item.id ? (
-                          <select
-                            value={item.category}
-                            onChange={(e) =>
-                              updateExpenseCategory(item.id, e.target.value)
-                            }
-                            onBlur={() => setEditingCategoryId(null)}
-                            autoFocus
-                            aria-label={`Edit category for ${item.description}`}
-                            className="project-nav-search"
-                            style={{
-                              fontSize: "0.85rem",
-                              padding: "4px 8px",
-                              minWidth: "100px",
-                            }}
-                          >
-                            {CATEGORIES.map((c) => (
-                              <option key={c} value={c}>
-                                {c}
-                              </option>
-                            ))}
-                          </select>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => setEditingCategoryId(item.id)}
-                            style={{
-                              fontSize: "0.85rem",
-                              background: "none",
-                              border: "none",
-                              cursor: "pointer",
-                              padding: "2px 4px",
-                              textAlign: "left",
-                              color: "var(--text)",
-                            }}
-                            title="Click to edit category"
-                            aria-label={`Edit category: ${item.category}`}
-                          >
-                            {item.category}
-                          </button>
-                        )}
+                          {CATEGORIES.map((c) => (
+                            <option key={c} value={c}>
+                              {c}
+                            </option>
+                          ))}
+                        </select>
+                      ) : (
                         <button
                           type="button"
-                          className="features-list-remove"
-                          onClick={() => removeExpense(item.id)}
-                          aria-label={`Remove ${item.description}`}
-                          title={`Remove "${item.description}"`}
+                          className="expenses-category-btn"
+                          onClick={() => setEditingCategoryId(item.id)}
+                          title="Click to edit category"
+                          aria-label={`Edit category: ${item.category}`}
                         >
-                          <IconTrash />
+                          {item.category}
                         </button>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </ProjectSectionGuard>
-            </section>
-          </div>
+                      )}
+                      <button
+                        type="button"
+                        className="features-list-remove"
+                        onClick={() => removeExpense(item.id)}
+                        aria-label={`Remove ${item.description}`}
+                        title={`Remove "${item.description}"`}
+                      >
+                        <IconTrash />
+                      </button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </ProjectSectionGuard>
+        </section>
+      </div>
     </AppLayout>
   );
 }

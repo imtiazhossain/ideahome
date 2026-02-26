@@ -29,7 +29,12 @@ export function getCorsOptions() {
   const allowedOrigins = resolveAllowedOrigins();
   return {
     origin: (origin: string | undefined, cb: (err: Error | null, allow?: boolean) => void) => {
-      if (!origin) return cb(null, true);
+      if (!origin) {
+        if (process.env.NODE_ENV === "production") {
+          return cb(new Error("Origin required by CORS"), false);
+        }
+        return cb(null, true);
+      }
       if (allowedOrigins.some((o) => (typeof o === "string" ? o === origin : o.test(origin)))) {
         return cb(null, true);
       }
