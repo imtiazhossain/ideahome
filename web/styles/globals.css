@@ -4091,6 +4091,7 @@ a.automated-tests-chip-text:hover {
   padding: 8px 10px;
   font-size: 12px;
   line-height: 1.4;
+  touch-action: manipulation;
 }
 
 .idea-chat-input::placeholder {
@@ -5160,6 +5161,10 @@ a.automated-tests-chip-text:hover {
 
   .features-list-input {
     font-size: 13px !important;
+  }
+
+  .idea-chat-input {
+    resize: none;
   }
 
   .drawer-backdrop {

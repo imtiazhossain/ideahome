@@ -39,15 +39,21 @@ export function CheckableListPage({ pageKey }: { pageKey: CheckableListPageKey }
   );
   const actionThreadRefs = React.useRef<Record<string, HTMLDivElement | null>>({});
 
+  const focusIdeaInput = useCallback((ideaId: string) => {
+    const node = actionInputRefs.current[ideaId];
+    if (!node) return;
+    requestAnimationFrame(() => {
+      node.focus({ preventScroll: true });
+      const valueLength = node.value.length;
+      node.setSelectionRange(valueLength, valueLength);
+    });
+  }, []);
+
   React.useEffect(() => {
     if (!pendingFocusIdeaId) return;
-    const input = actionInputRefs.current[pendingFocusIdeaId];
-    if (!input) return;
-    input.focus();
-    const valueLength = input.value.length;
-    input.setSelectionRange(valueLength, valueLength);
+    focusIdeaInput(pendingFocusIdeaId);
     setPendingFocusIdeaId(null);
-  }, [pendingFocusIdeaId, actionLoadingById, actionChatById, actionGifById]);
+  }, [focusIdeaInput, pendingFocusIdeaId, actionLoadingById, actionChatById, actionGifById]);
 
   React.useEffect(() => {
     Object.values(actionThreadRefs.current).forEach((node) => {
@@ -191,6 +197,7 @@ export function CheckableListPage({ pageKey }: { pageKey: CheckableListPageKey }
       setActionInputById((prev) => ({ ...prev, [ideaId]: "" }));
 
       await handleGenerateActionTodos(ideaId, context);
+      focusIdeaInput(ideaId);
     },
     [
       actionChatById,
@@ -198,6 +205,7 @@ export function CheckableListPage({ pageKey }: { pageKey: CheckableListPageKey }
       actionLoadingById,
       buildIdeaChatContext,
       createChatMessageId,
+      focusIdeaInput,
       handleGenerateActionTodos,
     ]
   );
@@ -262,6 +270,7 @@ export function CheckableListPage({ pageKey }: { pageKey: CheckableListPageKey }
             <button
               type="button"
               className="idea-chat-send-btn"
+              onPointerDown={(e) => e.preventDefault()}
               onClick={() => void handleSendIdeaChat(ideaId)}
               disabled={loading || !inputValue.trim()}
             >
