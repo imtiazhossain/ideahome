@@ -71,13 +71,29 @@ export class ProjectsService {
   async delete(id: string, userId: string) {
     await this.get(id, userId);
     try {
-      await this.prisma.todo.deleteMany({ where: { projectId: id } });
-      await this.prisma.idea.deleteMany({ where: { projectId: id } });
-      await this.prisma.bug.deleteMany({ where: { projectId: id } });
-      await this.prisma.feature.deleteMany({ where: { projectId: id } });
-      await this.prisma.expense.deleteMany({ where: { projectId: id } });
-      await this.prisma.issue.deleteMany({ where: { projectId: id } });
-      return await this.prisma.project.delete({ where: { id } });
+      return await this.prisma.$transaction(async (tx) => {
+        await tx.commentAttachment.deleteMany({
+          where: { comment: { issue: { projectId: id } } },
+        });
+        await tx.issueCommentEdit.deleteMany({
+          where: { comment: { issue: { projectId: id } } },
+        });
+        await tx.issueComment.deleteMany({
+          where: { issue: { projectId: id } },
+        });
+        await tx.issueRecording.deleteMany({ where: { issue: { projectId: id } } });
+        await tx.issueScreenshot.deleteMany({
+          where: { issue: { projectId: id } },
+        });
+        await tx.issueFile.deleteMany({ where: { issue: { projectId: id } } });
+        await tx.issue.deleteMany({ where: { projectId: id } });
+        await tx.todo.deleteMany({ where: { projectId: id } });
+        await tx.idea.deleteMany({ where: { projectId: id } });
+        await tx.bug.deleteMany({ where: { projectId: id } });
+        await tx.feature.deleteMany({ where: { projectId: id } });
+        await tx.expense.deleteMany({ where: { projectId: id } });
+        return tx.project.delete({ where: { id } });
+      });
     } catch (e) {
       if (e instanceof PrismaClientKnownRequestError && e.code === "P2025") {
         throw new NotFoundException("Project not found");

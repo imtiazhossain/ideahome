@@ -9,6 +9,7 @@ describe("ProjectsService", () => {
   let service: ProjectsService;
 
   const mockPrisma = {
+    $transaction: jest.fn(),
     user: {
       findUnique: jest.fn().mockResolvedValue({ organizationId: "o1" }),
     },
@@ -38,6 +39,24 @@ describe("ProjectsService", () => {
     issue: {
       deleteMany: jest.fn(),
     },
+    issueComment: {
+      deleteMany: jest.fn(),
+    },
+    issueCommentEdit: {
+      deleteMany: jest.fn(),
+    },
+    commentAttachment: {
+      deleteMany: jest.fn(),
+    },
+    issueRecording: {
+      deleteMany: jest.fn(),
+    },
+    issueScreenshot: {
+      deleteMany: jest.fn(),
+    },
+    issueFile: {
+      deleteMany: jest.fn(),
+    },
   };
 
   const mockAuthService = {
@@ -49,6 +68,9 @@ describe("ProjectsService", () => {
   beforeEach(async () => {
     jest.clearAllMocks();
     mockPrisma.user.findUnique.mockResolvedValue({ organizationId: "o1" });
+    mockPrisma.$transaction.mockImplementation((fn: (tx: typeof mockPrisma) => unknown) =>
+      fn(mockPrisma)
+    );
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         ProjectsService,
@@ -229,8 +251,27 @@ describe("ProjectsService", () => {
 
       const result = await service.delete("1", "user-1");
       expect(result).toEqual(expected);
+      expect(mockPrisma.$transaction).toHaveBeenCalledTimes(1);
       expect(mockPrisma.project.delete).toHaveBeenCalledWith({
         where: { id: "1" },
+      });
+      expect(mockPrisma.commentAttachment.deleteMany).toHaveBeenCalledWith({
+        where: { comment: { issue: { projectId: "1" } } },
+      });
+      expect(mockPrisma.issueCommentEdit.deleteMany).toHaveBeenCalledWith({
+        where: { comment: { issue: { projectId: "1" } } },
+      });
+      expect(mockPrisma.issueComment.deleteMany).toHaveBeenCalledWith({
+        where: { issue: { projectId: "1" } },
+      });
+      expect(mockPrisma.issueRecording.deleteMany).toHaveBeenCalledWith({
+        where: { issue: { projectId: "1" } },
+      });
+      expect(mockPrisma.issueScreenshot.deleteMany).toHaveBeenCalledWith({
+        where: { issue: { projectId: "1" } },
+      });
+      expect(mockPrisma.issueFile.deleteMany).toHaveBeenCalledWith({
+        where: { issue: { projectId: "1" } },
       });
       expect(mockPrisma.todo.deleteMany).toHaveBeenCalledWith({
         where: { projectId: "1" },
