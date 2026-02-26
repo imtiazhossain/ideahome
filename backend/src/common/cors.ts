@@ -28,17 +28,23 @@ function resolveAllowedOrigins(): CorsOrigin[] {
 export function getCorsOptions() {
   const allowedOrigins = resolveAllowedOrigins();
   return {
-    origin: (origin: string | undefined, cb: (err: Error | null, allow?: boolean) => void) => {
+    origin: (
+      origin: string | undefined,
+      cb: (err: Error | null, allow?: boolean) => void
+    ) => {
       if (!origin) {
-        if (process.env.NODE_ENV === "production") {
-          return cb(new Error("Origin required by CORS"), false);
-        }
+        // Same-origin navigations and non-browser clients may omit Origin.
         return cb(null, true);
       }
-      if (allowedOrigins.some((o) => (typeof o === "string" ? o === origin : o.test(origin)))) {
+      if (
+        allowedOrigins.some((o) =>
+          typeof o === "string" ? o === origin : o.test(origin)
+        )
+      ) {
         return cb(null, true);
       }
-      return cb(new Error("Origin not allowed by CORS"), false);
+      // Deny CORS headers without throwing an application error.
+      return cb(null, false);
     },
     credentials: true,
   };
