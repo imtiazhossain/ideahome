@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/router";
 import {
+  createProject,
   deleteProject,
   fetchProjects,
   isAuthenticated,
@@ -33,6 +34,7 @@ export interface UseProjectLayoutReturn {
   handleDeleteProject: (
     project?: { id: string; name: string } | null
   ) => Promise<void>;
+  createProjectByName: (name: string) => Promise<void>;
 }
 
 export function useProjectLayout(): UseProjectLayoutReturn {
@@ -150,6 +152,36 @@ export function useProjectLayout(): UseProjectLayoutReturn {
     setEditingProjectId(null);
   };
 
+  const createProjectByName = useCallback(
+    async (name: string) => {
+      const trimmed = name.trim();
+      if (!trimmed) return;
+      const previousSelectedProjectId = selectedProjectIdRef.current;
+      const tempId = `temp-project-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      const optimisticProject = { id: tempId, name: trimmed };
+      setProjects((prev) => [...prev, optimisticProject]);
+      setSelectedProjectId(tempId);
+      setLastKnownProjectName(trimmed);
+      try {
+        const project = await createProject({ name: trimmed });
+        setProjects((prev) =>
+          prev.map((p) => (p.id === tempId ? project : p))
+        );
+        if (selectedProjectIdRef.current === tempId) {
+          setSelectedProjectId(project.id);
+        }
+        setLastKnownProjectName(project.name);
+      } catch (e) {
+        setProjects((prev) => prev.filter((p) => p.id !== tempId));
+        if (selectedProjectIdRef.current === tempId) {
+          setSelectedProjectId(previousSelectedProjectId);
+        }
+        throw e;
+      }
+    },
+    [setLastKnownProjectName, setSelectedProjectId]
+  );
+
   const handleDeleteProject = useCallback(
     async (project?: { id: string; name: string } | null) => {
       const target = project ?? projectToDelete;
@@ -210,5 +242,6 @@ export function useProjectLayout(): UseProjectLayoutReturn {
     setProjectToDelete,
     projectDeleting,
     handleDeleteProject,
+    createProjectByName,
   };
 }

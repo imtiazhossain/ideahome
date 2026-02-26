@@ -6,7 +6,7 @@ test.afterEach(async ({ page }) => {
 });
 
 test.afterAll(async () => {
-  await deleteTestProjectsByNames(["Nav Project"]);
+  await deleteTestProjectsByNames(["Nav Project", "Inline Nav Project"]);
 });
 
 test.describe("Navigation", () => {
@@ -130,6 +130,41 @@ test.describe("Navigation", () => {
     await test.step("Verify project name in nav bar", async () => {
       await expect(page.locator(".project-nav-project-name")).toHaveText(
         "Nav Project"
+      );
+    });
+  });
+
+  test("inline sidebar create on non-home page shows new project immediately", async ({
+    page,
+  }) => {
+    await test.step("Navigate to tests page", async () => {
+      await page.goto("/tests");
+      await expect(page).toHaveURL(/\/tests/);
+    });
+    await test.step("Expand sidebar if closed", async () => {
+      const expandBtn = page.getByRole("button", { name: "Expand sidebar" });
+      if (await expandBtn.isVisible()) {
+        await expandBtn.click();
+      }
+    });
+    await test.step("Create project from sidebar inline input", async () => {
+      await page.getByRole("button", { name: "Add project" }).click();
+      const input = page.getByRole("textbox", { name: "Project Name" });
+      await expect(input).toBeVisible();
+      await input.fill("Inline Nav Project");
+      await input.press("Enter");
+    });
+    await test.step("Verify new project appears selected immediately", async () => {
+      await expect(
+        page.getByRole("button", { name: "Inline Nav Project", exact: true })
+      ).toBeVisible({ timeout: 10000 });
+      await expect(
+        page.locator(".drawer-nav-item.is-selected", {
+          hasText: "Inline Nav Project",
+        })
+      ).toBeVisible({ timeout: 10000 });
+      await expect(page.locator(".project-nav-project-name")).toHaveText(
+        "Inline Nav Project"
       );
     });
   });

@@ -253,6 +253,7 @@ export default function ExpensesPage() {
       setProjectToDelete={setProjectToDelete}
       projectDeleting={projectDeleting}
       handleDeleteProject={handleDeleteProject}
+      onCreateProject={layout.createProjectByName}
     >
       <div className="tests-page-content expenses-page-content">
         <h1 className="tests-page-title">Expenses</h1>

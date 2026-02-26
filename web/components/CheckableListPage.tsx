@@ -74,6 +74,7 @@ export function CheckableListPage({ pageKey }: { pageKey: CheckableListPageKey }
         setProjectToDelete: layout.setProjectToDelete,
         projectDeleting: layout.projectDeleting,
         handleDeleteProject: layout.handleDeleteProject,
+        onCreateProject: layout.createProjectByName,
       }}
       pageTitle={def.pageTitle}
       addFormProps={{

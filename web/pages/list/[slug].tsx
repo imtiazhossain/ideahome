@@ -90,6 +90,7 @@ export default function CustomListPage() {
         setProjectToDelete: layout.setProjectToDelete,
         projectDeleting: layout.projectDeleting,
         handleDeleteProject: layout.handleDeleteProject,
+        onCreateProject: layout.createProjectByName,
       }}
       pageTitle={list.name}
       addFormProps={{

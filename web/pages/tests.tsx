@@ -230,6 +230,7 @@ export default function TestsPage() {
       setProjectToDelete={setProjectToDelete}
       projectDeleting={projectDeleting}
       handleDeleteProject={handleDeleteProject}
+      onCreateProject={layout.createProjectByName}
       showDeletePerProject
     >
       <div className="tests-page-content">
