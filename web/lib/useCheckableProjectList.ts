@@ -1,17 +1,14 @@
-import { useCallback, useState } from "react";
+import { useCallback } from "react";
 import type { ListCacheKey } from "./listCache";
 import { useCachedProjectList } from "./useCachedProjectList";
 import { useUndoList } from "./useUndoList";
 import {
-  adjustEditingIndexAfterRemove,
-  adjustEditingIndexAfterReorder,
   createOptimisticId,
   indexForNewUncheckedItem,
   insertUncheckedItem,
   isOptimisticId,
-  reorder,
-  applyToggleDoneOrder,
 } from "./utils";
+import { useCheckableUiState } from "./useCheckableUiState";
 
 export interface CheckableProjectItem {
   id: string;
@@ -72,15 +69,29 @@ export function useCheckableProjectList<T extends CheckableProjectItem>({
     fetchList,
     legacyMigration,
   });
-  const [newItem, setNewItem] = useState("");
-  const [editingIndex, setEditingIndex] = useState<number | null>(null);
-  const [editingValue, setEditingValue] = useState("");
   const { pushHistory, undo, canUndo } = useUndoList(
     items,
     setItems as (items: T[]) => void,
     20,
     projectId || undefined
   );
+  const {
+    newItem,
+    setNewItem,
+    editingIndex,
+    editingValue,
+    setEditingValue,
+    startEdit,
+    cancelEdit,
+    applyToggleDone,
+    applyReorder,
+    applyRemove,
+  } = useCheckableUiState<T>({
+    items,
+    setItems,
+    pushHistory,
+    canEditItem: (item) => !isOptimisticId(item?.id ?? ""),
+  });
 
   const addItem = useCallback(
     (e: React.FormEvent) => {
@@ -149,32 +160,23 @@ export function useCheckableProjectList<T extends CheckableProjectItem>({
     async (index: number) => {
       const item = items[index];
       if (isOptimisticId(item.id)) return;
-      pushHistory();
       const newDone = !item.done;
       try {
         await updateItem(item.id, { done: newDone });
-        let newIndex = 0;
-        setItems((prev: T[]) => {
-          const [reordered, idx] = applyToggleDoneOrder(prev, index, newDone);
-          newIndex = idx;
-          return reordered;
-        });
-        if (editingIndex === index) setEditingIndex(newIndex);
+        applyToggleDone(index);
       } catch {
         setItems((prev: T[]) => [...prev]);
       }
     },
-    [items, editingIndex, pushHistory, updateItem, setItems]
+    [items, updateItem, setItems, applyToggleDone]
   );
 
   const removeItem = useCallback(
     (index: number, skipHistory?: boolean) => {
       const item = items[index];
       if (isOptimisticId(item.id)) return;
-      if (!skipHistory) pushHistory();
       const removed = { ...item };
-      setItems((prev: T[]) => prev.filter((_, i) => i !== index));
-      setEditingIndex(adjustEditingIndexAfterRemove(editingIndex, index));
+      applyRemove(index, skipHistory);
       deleteItem(item.id).catch(() => {
         setItems((prev: T[]) => [
           ...prev.slice(0, index),
@@ -183,16 +185,7 @@ export function useCheckableProjectList<T extends CheckableProjectItem>({
         ]);
       });
     },
-    [items, editingIndex, pushHistory, deleteItem, setItems]
-  );
-
-  const startEdit = useCallback(
-    (index: number) => {
-      if (isOptimisticId(items[index]?.id ?? "")) return;
-      setEditingIndex(index);
-      setEditingValue(items[index]?.name ?? "");
-    },
-    [items]
+    [items, applyRemove, deleteItem, setItems]
   );
 
   const saveEdit = useCallback(
@@ -216,24 +209,24 @@ export function useCheckableProjectList<T extends CheckableProjectItem>({
       } else {
         removeItem(editingIndex, true);
       }
-      setEditingIndex(null);
+      cancelEdit();
     },
-    [items, editingIndex, editingValue, pushHistory, updateItem, removeItem, setItems]
+    [
+      items,
+      editingIndex,
+      editingValue,
+      pushHistory,
+      updateItem,
+      removeItem,
+      setItems,
+      cancelEdit,
+    ]
   );
-
-  const cancelEdit = useCallback(() => {
-    setEditingIndex(null);
-  }, []);
 
   const handleReorder = useCallback(
     (fromIndex: number, toIndex: number) => {
       if (!projectId) return;
-      pushHistory();
-      const reordered = reorder(items, fromIndex, toIndex);
-      setItems(reordered);
-      setEditingIndex(
-        adjustEditingIndexAfterReorder(editingIndex, fromIndex, toIndex)
-      );
+      const reordered = applyReorder(fromIndex, toIndex);
       reorderItems(projectId, reordered.map((i) => i.id))
         .then(setItems as (items: T[]) => void)
         .catch(() => {
@@ -242,14 +235,12 @@ export function useCheckableProjectList<T extends CheckableProjectItem>({
         });
     },
     [
-      items,
-      editingIndex,
       projectId,
-      pushHistory,
       reorderItems,
       fetchList,
       setItems,
       onReorderError,
+      applyReorder,
     ]
   );
 

@@ -6,14 +6,17 @@ import { NestFactory } from "@nestjs/core";
 import { AppModule } from "./app.module";
 import { json, urlencoded } from "express";
 import type { Request, Response } from "express";
+import { getJwtSecret } from "./auth/jwt-secret";
+import { getCorsOptions } from "./common/cors";
 
 let cachedApp: ReturnType<typeof createApp> | null = null;
 
 async function createApp() {
+  getJwtSecret();
   const app = await NestFactory.create(AppModule, { bodyParser: false });
   app.use(json({ limit: "500mb" }));
   app.use(urlencoded({ extended: true, limit: "500mb" }));
-  app.enableCors();
+  app.enableCors(getCorsOptions());
   await app.init();
   return app.getHttpAdapter().getInstance();
 }

@@ -1,4 +1,5 @@
 import { Test, TestingModule } from "@nestjs/testing";
+import { BadRequestException, InternalServerErrorException } from "@nestjs/common";
 import { OrganizationsService } from "./organizations.service";
 import { AuthService } from "../auth/auth.service";
 import { PrismaService } from "../prisma.service";
@@ -83,6 +84,20 @@ describe("OrganizationsService", () => {
         data: { organizationId: "org-1" },
       });
     });
+
+    it("should throw BadRequestException when name is blank", async () => {
+      await expect(service.create("user-1", { name: "   " })).rejects.toThrow(
+        BadRequestException
+      );
+      expect(mockPrisma.organization.create).not.toHaveBeenCalled();
+    });
+
+    it("should throw BadRequestException when name is not a string", async () => {
+      await expect(
+        service.create("user-1", { name: 123 as unknown as string })
+      ).rejects.toThrow(BadRequestException);
+      expect(mockPrisma.organization.create).not.toHaveBeenCalled();
+    });
   });
 
   describe("ensureForUser", () => {
@@ -96,7 +111,10 @@ describe("OrganizationsService", () => {
 
       await expect(
         service.ensureForUser("u1")
-      ).rejects.toThrow("Unexpected: no organization after ensure");
+      ).rejects.toThrow(InternalServerErrorException);
+      await expect(service.ensureForUser("u1")).rejects.toThrow(
+        "Unexpected: no organization after ensure"
+      );
     });
     it("should return existing org when user has one", async () => {
       mockAuthService.ensureUserOrganization.mockResolvedValue({

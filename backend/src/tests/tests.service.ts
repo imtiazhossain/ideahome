@@ -13,6 +13,7 @@ const WEB_DIR = path.join(WORKSPACE_ROOT, "web");
 const BACKEND_DIR = process.cwd();
 const RUN_TIMEOUT_MS = 120_000;
 const API_TEST_TIMEOUT_MS = 60_000;
+const MAX_TEST_PATTERN_LENGTH = 300;
 
 /** Env for child processes: no color (clean output), no NO_COLOR to avoid Node warning when FORCE_COLOR is set. */
 function childEnv(): NodeJS.ProcessEnv {
@@ -134,6 +135,10 @@ export type StreamEvent =
   | { type: "result"; data: RunUiTestResult }
   | { type: "error"; data: string };
 
+function normalizePattern(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
+}
+
 @Injectable()
 export class TestsService {
   private readonly logger = new Logger(TestsService.name);
@@ -168,10 +173,20 @@ export class TestsService {
 
       (async () => {
         try {
-          const trimmed = typeof grep === "string" ? grep.trim() : "";
+          const trimmed = normalizePattern(grep);
           if (!trimmed) {
             subscriber.next({
               data: JSON.stringify({ type: "error", data: "Missing grep" }),
+            } as MessageEvent);
+            subscriber.complete();
+            return;
+          }
+          if (trimmed.length > MAX_TEST_PATTERN_LENGTH) {
+            subscriber.next({
+              data: JSON.stringify({
+                type: "error",
+                data: `grep exceeds ${MAX_TEST_PATTERN_LENGTH} characters`,
+              }),
             } as MessageEvent);
             subscriber.complete();
             return;
@@ -301,6 +316,23 @@ export class TestsService {
   }
 
   async runUiTest(grep: string): Promise<RunUiTestResult> {
+    const pattern = normalizePattern(grep);
+    if (!pattern) {
+      return {
+        success: false,
+        exitCode: 1,
+        output: "",
+        errorOutput: "Missing grep",
+      };
+    }
+    if (pattern.length > MAX_TEST_PATTERN_LENGTH) {
+      return {
+        success: false,
+        exitCode: 1,
+        output: "",
+        errorOutput: `grep exceeds ${MAX_TEST_PATTERN_LENGTH} characters`,
+      };
+    }
     const chunks: Buffer[] = [];
     const errChunks: Buffer[] = [];
     const outputDir = path.join(os.tmpdir(), `playwright-video-${Date.now()}`);
@@ -308,11 +340,14 @@ export class TestsService {
     let configPath: string | null = null;
 
     return new Promise((resolve) => {
+      let settled = false;
       const finish = async (
         code: number | null,
         signal: string | null,
         timedOut: boolean
       ) => {
+        if (settled) return;
+        settled = true;
         const output = Buffer.concat(chunks).toString("utf8");
         const errorOutput =
           Buffer.concat(errChunks).toString("utf8") +
@@ -411,7 +446,7 @@ export class TestsService {
             "--output",
             outputDir,
             "-g",
-            grep,
+            pattern,
           ],
           { cwd: WEB_DIR, env: playwrightEnv() }
         );
@@ -422,14 +457,14 @@ export class TestsService {
         const timeout = setTimeout(
           /* istanbul ignore next */ () => {
             /* istanbul ignore next */ child.kill("SIGTERM");
-            /* istanbul ignore next */ finish(null, null, true);
+            /* istanbul ignore next */ void finish(null, null, true);
           },
           RUN_TIMEOUT_MS
         );
 
         child.on("close", (code, signal) => {
           clearTimeout(timeout);
-          finish(code, signal, false);
+          void finish(code, signal, false);
         });
       })();
     });
@@ -439,14 +474,21 @@ export class TestsService {
    * Run a single API (Jest e2e) test by name pattern.
    */
   async runApiTest(testNamePattern: string): Promise<RunApiTestResult> {
-    const pattern =
-      typeof testNamePattern === "string" ? testNamePattern.trim() : "";
+    const pattern = normalizePattern(testNamePattern);
     if (!pattern) {
       return {
         success: false,
         exitCode: 1,
         output: "",
         errorOutput: "Missing test name pattern",
+      };
+    }
+    if (pattern.length > MAX_TEST_PATTERN_LENGTH) {
+      return {
+        success: false,
+        exitCode: 1,
+        output: "",
+        errorOutput: `test name pattern exceeds ${MAX_TEST_PATTERN_LENGTH} characters`,
       };
     }
 

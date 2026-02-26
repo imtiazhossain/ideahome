@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
 import { PrismaClientKnownRequestError } from "@prisma/client/runtime/library";
 import { AuthService } from "../auth/auth.service";
 import { PrismaService } from "../prisma.service";
@@ -22,6 +22,18 @@ export class ProjectsService {
     return withOrg.organizationId!;
   }
 
+  private sanitizeName(name: unknown, entity: string): string {
+    if (typeof name !== "string") {
+      throw new BadRequestException(`${entity} name is required`);
+    }
+    const trimmed = name.trim();
+    if (!trimmed) throw new BadRequestException(`${entity} name is required`);
+    if (trimmed.length > 120) {
+      throw new BadRequestException(`${entity} name must be 120 characters or fewer`);
+    }
+    return trimmed;
+  }
+
   async list(userId: string) {
     const organizationId = await this.getOrgIdForUser(userId);
     return this.prisma.project.findMany({
@@ -39,16 +51,21 @@ export class ProjectsService {
     return project;
   }
 
-  async create(userId: string, data: { name: string }) {
+  async create(userId: string, data: { name: unknown }) {
     const organizationId = await this.getOrgIdForUser(userId);
+    const name = this.sanitizeName(data.name, "Project");
     return this.prisma.project.create({
-      data: { name: data.name, organizationId },
+      data: { name, organizationId },
     });
   }
 
-  async update(id: string, userId: string, data: { name?: string }) {
+  async update(id: string, userId: string, data: { name?: unknown }) {
     await this.get(id, userId);
-    return this.prisma.project.update({ where: { id }, data });
+    const payload: { name?: string } = {};
+    if (data.name !== undefined) {
+      payload.name = this.sanitizeName(data.name, "Project");
+    }
+    return this.prisma.project.update({ where: { id }, data: payload });
   }
 
   async delete(id: string, userId: string) {

@@ -1,5 +1,10 @@
 import { Test, TestingModule } from "@nestjs/testing";
-import { NotFoundException } from "@nestjs/common";
+import {
+  BadRequestException,
+  InternalServerErrorException,
+  NotFoundException,
+} from "@nestjs/common";
+import { PrismaClientKnownRequestError } from "@prisma/client/runtime/library";
 import { IssuesService } from "./issues.service";
 import { PrismaService } from "../prisma.service";
 import { StorageService } from "../storage.service";
@@ -17,7 +22,7 @@ jest.mock("fs/promises", () => ({
 }));
 jest.mock("fs", () => ({
   existsSync: jest.fn(),
-  createReadStream: jest.fn().mockReturnValue({ pipe: jest.fn() }),
+  createReadStream: jest.fn().mockReturnValue({ pipe: jest.fn(), on: jest.fn() }),
 }));
 
 const ISSUE_INCLUDE = {
@@ -46,7 +51,6 @@ describe("IssuesService", () => {
       update: jest.fn(),
       delete: jest.fn(),
       deleteMany: jest.fn(),
-      count: jest.fn(),
     },
     issueRecording: {
       findFirst: jest.fn(),
@@ -70,7 +74,11 @@ describe("IssuesService", () => {
   };
 
   beforeEach(async () => {
-    jest.clearAllMocks();
+    jest.resetAllMocks();
+    mockStorageService.upload.mockResolvedValue({ url: "uploads/test/file" });
+    mockStorageService.delete.mockResolvedValue(undefined);
+    mockStorageService.isFullUrl.mockReturnValue(false);
+    mockPrisma.user.findUnique.mockResolvedValue({ organizationId: "o1" });
     const fs = require("fs");
     fs.existsSync.mockReturnValue(false);
     const module: TestingModule = await Test.createTestingModule({
@@ -167,6 +175,20 @@ describe("IssuesService", () => {
         orderBy: { createdAt: "desc" },
       });
     });
+
+    it("should ignore non-string search", async () => {
+      await expect(
+        service.list(123 as unknown as string, undefined)
+      ).rejects.toThrow(BadRequestException);
+      expect(mockPrisma.issue.findMany).not.toHaveBeenCalled();
+    });
+
+    it("should throw BadRequestException for whitespace projectId", async () => {
+      await expect(service.list("   " as string, undefined)).rejects.toThrow(
+        BadRequestException
+      );
+      expect(mockPrisma.issue.findMany).not.toHaveBeenCalled();
+    });
   });
 
   describe("get", () => {
@@ -197,8 +219,9 @@ describe("IssuesService", () => {
       mockPrisma.project.findUnique.mockResolvedValue({
         id: "p1",
         name: "Project 1",
+        organizationId: "o1",
       });
-      mockPrisma.issue.count.mockResolvedValue(0);
+      mockPrisma.issue.findMany.mockResolvedValue([]);
       mockPrisma.issue.create.mockResolvedValue(expected);
 
       const result = await service.create(input);
@@ -213,8 +236,9 @@ describe("IssuesService", () => {
       mockPrisma.project.findUnique.mockResolvedValue({
         id: "p1",
         name: "Ab",
+        organizationId: "o1",
       });
-      mockPrisma.issue.count.mockResolvedValue(0);
+      mockPrisma.issue.findMany.mockResolvedValue([]);
       mockPrisma.issue.create.mockResolvedValue({
         id: "1",
         title: "New",
@@ -241,8 +265,9 @@ describe("IssuesService", () => {
       mockPrisma.project.findUnique.mockResolvedValue({
         id: "p1",
         name: "Project 1",
+        organizationId: "o1",
       });
-      mockPrisma.issue.count.mockResolvedValue(0);
+      mockPrisma.issue.findMany.mockResolvedValue([]);
       mockPrisma.issue.create.mockResolvedValue(expected);
 
       const result = await service.create(input);
@@ -251,6 +276,113 @@ describe("IssuesService", () => {
         data: { ...input, key: "P1-1" },
         include: ISSUE_INCLUDE,
       });
+    });
+
+    it("should throw BadRequestException when assignee is outside project org", async () => {
+      mockPrisma.project.findUnique.mockResolvedValue({
+        id: "p1",
+        name: "Project 1",
+        organizationId: "o1",
+      });
+      mockPrisma.user.findUnique.mockResolvedValueOnce({ organizationId: "o2" });
+
+      await expect(
+        service.create({
+          title: "New",
+          projectId: "p1",
+          assigneeId: "u-other",
+        })
+      ).rejects.toThrow(BadRequestException);
+      expect(mockPrisma.issue.create).not.toHaveBeenCalled();
+    });
+
+    it("should throw BadRequestException for invalid status on create", async () => {
+      await expect(
+        service.create({ title: "New", projectId: "p1", status: "invalid" } as any)
+      ).rejects.toThrow(BadRequestException);
+      expect(mockPrisma.issue.create).not.toHaveBeenCalled();
+    });
+
+    it("should throw BadRequestException for out-of-range qualityScore on create", async () => {
+      await expect(
+        service.create({ title: "New", projectId: "p1", qualityScore: 101 } as any)
+      ).rejects.toThrow(BadRequestException);
+      expect(mockPrisma.issue.create).not.toHaveBeenCalled();
+    });
+
+    it("should throw BadRequestException for blank title on create", async () => {
+      await expect(
+        service.create({ title: "   ", projectId: "p1" } as any)
+      ).rejects.toThrow(BadRequestException);
+      expect(mockPrisma.issue.create).not.toHaveBeenCalled();
+    });
+
+    it("should trim title on create", async () => {
+      mockPrisma.project.findUnique.mockResolvedValue({
+        id: "p1",
+        name: "Project 1",
+        organizationId: "o1",
+      });
+      mockPrisma.issue.findMany.mockResolvedValue([]);
+      mockPrisma.issue.create.mockResolvedValue({
+        id: "1",
+        title: "New",
+        projectId: "p1",
+      });
+
+      await service.create({ title: "  New  ", projectId: "p1" });
+      expect(mockPrisma.issue.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({ title: "New", key: "P1-1" }),
+        include: ISSUE_INCLUDE,
+      });
+    });
+
+    it("should throw BadRequestException for non-string optional text fields on create", async () => {
+      await expect(
+        service.create({
+          title: "New",
+          projectId: "p1",
+          description: 123 as any,
+        })
+      ).rejects.toThrow(BadRequestException);
+      expect(mockPrisma.issue.create).not.toHaveBeenCalled();
+    });
+
+    it("should throw BadRequestException for non-string assigneeId on create", async () => {
+      await expect(
+        service.create({
+          title: "New",
+          projectId: "p1",
+          assigneeId: 123 as any,
+        })
+      ).rejects.toThrow(BadRequestException);
+      expect(mockPrisma.issue.create).not.toHaveBeenCalled();
+    });
+
+    it("should throw BadRequestException for invalid projectId on create", async () => {
+      await expect(
+        service.create({ title: "New", projectId: 123 as any })
+      ).rejects.toThrow(BadRequestException);
+      expect(mockPrisma.issue.create).not.toHaveBeenCalled();
+    });
+
+    it("should throw InternalServerErrorException when key allocation repeatedly conflicts", async () => {
+      const conflict = new PrismaClientKnownRequestError("Unique conflict", {
+        code: "P2002",
+        clientVersion: "4",
+      });
+      mockPrisma.project.findUnique.mockResolvedValue({
+        id: "p1",
+        name: "Project 1",
+        organizationId: "o1",
+      });
+      mockPrisma.issue.findMany.mockResolvedValue([]);
+      mockPrisma.issue.create.mockRejectedValue(conflict);
+
+      await expect(service.create({ title: "New", projectId: "p1" })).rejects.toThrow(
+        InternalServerErrorException
+      );
+      expect(mockPrisma.issue.create).toHaveBeenCalledTimes(5);
     });
   });
 
@@ -267,12 +399,34 @@ describe("IssuesService", () => {
         include: ISSUE_INCLUDE,
       });
     });
+
+    it("should throw BadRequestException when status is invalid", async () => {
+      await expect(service.updateStatus("1", "invalid")).rejects.toThrow(
+        BadRequestException
+      );
+      expect(mockPrisma.issue.update).not.toHaveBeenCalled();
+    });
+
+    it("should throw BadRequestException when status is blank", async () => {
+      await expect(service.updateStatus("1", "   ")).rejects.toThrow(
+        BadRequestException
+      );
+      expect(mockPrisma.issue.update).not.toHaveBeenCalled();
+    });
+
+    it("should throw BadRequestException when status is not a string", async () => {
+      await expect(
+        service.updateStatus("1", 123 as unknown as string)
+      ).rejects.toThrow(BadRequestException);
+      expect(mockPrisma.issue.update).not.toHaveBeenCalled();
+    });
   });
 
   describe("update", () => {
     it("should update an issue", async () => {
       const data = { title: "Updated", status: "in_progress" };
       const expected = { id: "1", ...data };
+      mockPrisma.issue.findUnique.mockResolvedValue({ projectId: "p1" });
       mockPrisma.issue.update.mockResolvedValue(expected);
 
       const result = await service.update("1", data);
@@ -288,6 +442,7 @@ describe("IssuesService", () => {
       const tests = JSON.stringify(["test A", "test B"]);
       const data = { automatedTest: tests };
       const expected = { id: "1", automatedTest: tests };
+      mockPrisma.issue.findUnique.mockResolvedValue({ projectId: "p1" });
       mockPrisma.issue.update.mockResolvedValue(expected);
 
       const result = await service.update("1", data);
@@ -301,6 +456,7 @@ describe("IssuesService", () => {
 
     it("should strip disallowed fields", async () => {
       const data = { title: "OK", hackerField: "bad" };
+      mockPrisma.issue.findUnique.mockResolvedValue({ projectId: "p1" });
       mockPrisma.issue.update.mockResolvedValue({ id: "1", title: "OK" });
 
       await service.update("1", data);
@@ -313,12 +469,96 @@ describe("IssuesService", () => {
 
     it("should omit allowed keys with undefined value", async () => {
       const data = { title: "OK", description: undefined };
+      mockPrisma.issue.findUnique.mockResolvedValue({ projectId: "p1" });
       mockPrisma.issue.update.mockResolvedValue({ id: "1", title: "OK" });
 
       await service.update("1", data);
       expect(mockPrisma.issue.update).toHaveBeenCalledWith({
         where: { id: "1" },
         data: { title: "OK" },
+        include: ISSUE_INCLUDE,
+      });
+    });
+
+    it("should throw NotFoundException when updating missing issue", async () => {
+      mockPrisma.issue.findUnique.mockResolvedValue(null);
+      await expect(service.update("missing", { title: "x" })).rejects.toThrow(
+        NotFoundException
+      );
+      expect(mockPrisma.issue.update).not.toHaveBeenCalled();
+    });
+
+    it("should throw BadRequestException when assigning user outside issue org", async () => {
+      mockPrisma.issue.findUnique.mockResolvedValue({ projectId: "p1" });
+      mockPrisma.project.findUnique.mockResolvedValue({ organizationId: "o1" });
+      mockPrisma.user.findUnique.mockResolvedValueOnce({ organizationId: "o2" });
+
+      await expect(
+        service.update("1", { assigneeId: "u-other" })
+      ).rejects.toThrow(BadRequestException);
+      expect(mockPrisma.issue.update).not.toHaveBeenCalled();
+    });
+
+    it("should throw BadRequestException for invalid status on update", async () => {
+      mockPrisma.issue.findUnique.mockResolvedValue({ projectId: "p1" });
+      await expect(service.update("1", { status: "invalid" })).rejects.toThrow(
+        BadRequestException
+      );
+      expect(mockPrisma.issue.update).not.toHaveBeenCalled();
+    });
+
+    it("should throw BadRequestException for invalid qualityScore on update", async () => {
+      mockPrisma.issue.findUnique.mockResolvedValue({ projectId: "p1" });
+      await expect(service.update("1", { qualityScore: -1 })).rejects.toThrow(
+        BadRequestException
+      );
+      expect(mockPrisma.issue.update).not.toHaveBeenCalled();
+    });
+
+    it("should throw BadRequestException for blank title on update", async () => {
+      mockPrisma.issue.findUnique.mockResolvedValue({ projectId: "p1" });
+      await expect(service.update("1", { title: "   " })).rejects.toThrow(
+        BadRequestException
+      );
+      expect(mockPrisma.issue.update).not.toHaveBeenCalled();
+    });
+
+    it("should trim title on update", async () => {
+      mockPrisma.issue.findUnique.mockResolvedValue({ projectId: "p1" });
+      mockPrisma.issue.update.mockResolvedValue({ id: "1", title: "Updated" });
+
+      await service.update("1", { title: "  Updated  " });
+      expect(mockPrisma.issue.update).toHaveBeenCalledWith({
+        where: { id: "1" },
+        data: { title: "Updated" },
+        include: ISSUE_INCLUDE,
+      });
+    });
+
+    it("should throw BadRequestException for non-string optional text fields on update", async () => {
+      mockPrisma.issue.findUnique.mockResolvedValue({ projectId: "p1" });
+      await expect(
+        service.update("1", { description: 123 as any })
+      ).rejects.toThrow(BadRequestException);
+      expect(mockPrisma.issue.update).not.toHaveBeenCalled();
+    });
+
+    it("should throw BadRequestException for non-string assigneeId on update", async () => {
+      mockPrisma.issue.findUnique.mockResolvedValue({ projectId: "p1" });
+      await expect(
+        service.update("1", { assigneeId: 123 as any })
+      ).rejects.toThrow(BadRequestException);
+      expect(mockPrisma.issue.update).not.toHaveBeenCalled();
+    });
+
+    it("should normalize blank assigneeId to null on update", async () => {
+      mockPrisma.issue.findUnique.mockResolvedValue({ projectId: "p1" });
+      mockPrisma.issue.update.mockResolvedValue({ id: "1" });
+
+      await service.update("1", { assigneeId: "   " });
+      expect(mockPrisma.issue.update).toHaveBeenCalledWith({
+        where: { id: "1" },
+        data: { assigneeId: null },
         include: ISSUE_INCLUDE,
       });
     });
@@ -408,6 +648,22 @@ describe("IssuesService", () => {
         where: { project: { organizationId: "o1" } },
       });
     });
+
+    it("should throw BadRequestException when projectId is invalid", async () => {
+      await expect(
+        service.deleteMany(123 as unknown as string, "user-1")
+      ).rejects.toThrow(BadRequestException);
+      expect(mockPrisma.issue.findMany).not.toHaveBeenCalled();
+      expect(mockPrisma.issue.deleteMany).not.toHaveBeenCalled();
+    });
+
+    it("should throw BadRequestException when projectId is whitespace", async () => {
+      await expect(service.deleteMany("   ", "user-1")).rejects.toThrow(
+        BadRequestException
+      );
+      expect(mockPrisma.issue.findMany).not.toHaveBeenCalled();
+      expect(mockPrisma.issue.deleteMany).not.toHaveBeenCalled();
+    });
   });
 
   describe("streamRecording", () => {
@@ -465,12 +721,35 @@ describe("IssuesService", () => {
       const pipe = jest.fn();
       const res = { setHeader, pipe };
       const { createReadStream } = require("fs");
-      createReadStream.mockReturnValue({ pipe });
+      createReadStream.mockReturnValue({ pipe, on: jest.fn() });
 
       await service.streamRecording("video.webm", res as any);
       expect(setHeader).toHaveBeenCalledWith("Content-Type", "video/webm");
       expect(setHeader).toHaveBeenCalledWith("Accept-Ranges", "bytes");
       expect(pipe).toHaveBeenCalledWith(res);
+    });
+
+    it("should return 500 when recording stream errors before headers are sent", async () => {
+      mockPrisma.issueRecording.findFirst.mockResolvedValue({
+        videoUrl: "uploads/recordings/video.webm",
+        issue: { project: { organizationId: "o1" } },
+      });
+      mockStorageService.isFullUrl.mockReturnValue(false);
+      require("fs").existsSync.mockReturnValue(true);
+      const setHeader = jest.fn();
+      const status = jest.fn().mockReturnThis();
+      const end = jest.fn();
+      const pipe = jest.fn();
+      const on = jest.fn((event: string, cb: (err: Error) => void) => {
+        if (event === "error") cb(new Error("stream failed"));
+      });
+      const res = { setHeader, status, end, pipe, headersSent: false };
+      const { createReadStream } = require("fs");
+      createReadStream.mockReturnValue({ pipe, on });
+
+      await service.streamRecording("video.webm", res as any);
+      expect(status).toHaveBeenCalledWith(500);
+      expect(end).toHaveBeenCalled();
     });
   });
 
@@ -521,6 +800,38 @@ describe("IssuesService", () => {
           name: "My Recording.mp4",
         }),
       });
+    });
+
+    it("should throw for blank videoBase64", async () => {
+      await expect(service.addRecording("i1", "   ")).rejects.toThrow(
+        BadRequestException
+      );
+      expect(mockPrisma.issue.findUnique).not.toHaveBeenCalled();
+      expect(mockPrisma.issueRecording.create).not.toHaveBeenCalled();
+    });
+
+    it("should throw for invalid mediaType", async () => {
+      await expect(
+        service.addRecording("i1", "ZGF0YQ==", "invalid" as any, "screen")
+      ).rejects.toThrow(BadRequestException);
+      expect(mockPrisma.issue.findUnique).not.toHaveBeenCalled();
+      expect(mockPrisma.issueRecording.create).not.toHaveBeenCalled();
+    });
+
+    it("should throw for invalid recordingType", async () => {
+      await expect(
+        service.addRecording("i1", "ZGF0YQ==", "video", "invalid" as any)
+      ).rejects.toThrow(BadRequestException);
+      expect(mockPrisma.issue.findUnique).not.toHaveBeenCalled();
+      expect(mockPrisma.issueRecording.create).not.toHaveBeenCalled();
+    });
+
+    it("should throw for invalid videoBase64 payload", async () => {
+      await expect(service.addRecording("i1", "not-base64")).rejects.toThrow(
+        BadRequestException
+      );
+      expect(mockPrisma.issue.findUnique).not.toHaveBeenCalled();
+      expect(mockPrisma.issueRecording.create).not.toHaveBeenCalled();
     });
   });
 
@@ -576,6 +887,21 @@ describe("IssuesService", () => {
       });
     });
 
+    it("should trim recording name", async () => {
+      mockPrisma.issueRecording.findFirst.mockResolvedValue({
+        id: "r1",
+        issueId: "i1",
+      });
+      mockPrisma.issueRecording.update.mockResolvedValue({});
+      mockPrisma.issue.findUnique.mockResolvedValue({ id: "i1" });
+
+      await service.updateRecording("i1", "r1", { name: "  New  " });
+      expect(mockPrisma.issueRecording.update).toHaveBeenCalledWith({
+        where: { id: "r1" },
+        data: { name: "New" },
+      });
+    });
+
     it("should update only mediaType and recordingType when provided", async () => {
       mockPrisma.issueRecording.findFirst.mockResolvedValue({
         id: "r1",
@@ -593,6 +919,39 @@ describe("IssuesService", () => {
         where: { id: "r1" },
         data: { mediaType: "audio", recordingType: "camera" },
       });
+    });
+
+    it("should throw for invalid mediaType on update", async () => {
+      mockPrisma.issueRecording.findFirst.mockResolvedValue({
+        id: "r1",
+        issueId: "i1",
+      });
+      await expect(
+        service.updateRecording("i1", "r1", { mediaType: "invalid" as any })
+      ).rejects.toThrow(BadRequestException);
+      expect(mockPrisma.issueRecording.update).not.toHaveBeenCalled();
+    });
+
+    it("should throw for invalid recordingType on update", async () => {
+      mockPrisma.issueRecording.findFirst.mockResolvedValue({
+        id: "r1",
+        issueId: "i1",
+      });
+      await expect(
+        service.updateRecording("i1", "r1", { recordingType: "invalid" as any })
+      ).rejects.toThrow(BadRequestException);
+      expect(mockPrisma.issueRecording.update).not.toHaveBeenCalled();
+    });
+
+    it("should throw for non-string recording name", async () => {
+      mockPrisma.issueRecording.findFirst.mockResolvedValue({
+        id: "r1",
+        issueId: "i1",
+      });
+      await expect(
+        service.updateRecording("i1", "r1", { name: 123 as any })
+      ).rejects.toThrow(BadRequestException);
+      expect(mockPrisma.issueRecording.update).not.toHaveBeenCalled();
     });
   });
 
@@ -642,6 +1001,22 @@ describe("IssuesService", () => {
         service.addScreenshot("missing", "ZGF0YQ==")
       ).rejects.toThrow(NotFoundException);
     });
+
+    it("should throw when imageBase64 is blank", async () => {
+      await expect(service.addScreenshot("i1", "   ")).rejects.toThrow(
+        BadRequestException
+      );
+      expect(mockPrisma.issue.findUnique).not.toHaveBeenCalled();
+      expect(mockPrisma.issueScreenshot.create).not.toHaveBeenCalled();
+    });
+
+    it("should throw when imageBase64 is invalid", async () => {
+      await expect(service.addScreenshot("i1", "not-base64")).rejects.toThrow(
+        BadRequestException
+      );
+      expect(mockPrisma.issue.findUnique).not.toHaveBeenCalled();
+      expect(mockPrisma.issueScreenshot.create).not.toHaveBeenCalled();
+    });
   });
 
   describe("updateScreenshot", () => {
@@ -676,6 +1051,17 @@ describe("IssuesService", () => {
       await expect(service.updateScreenshot("i1", "s1", "x")).rejects.toThrow(
         NotFoundException
       );
+    });
+
+    it("should throw when screenshot name is not a string/null", async () => {
+      mockPrisma.issueScreenshot.findUnique.mockResolvedValue({
+        id: "s1",
+        issueId: "i1",
+      });
+      await expect(
+        service.updateScreenshot("i1", "s1", 123 as any)
+      ).rejects.toThrow(BadRequestException);
+      expect(mockPrisma.issueScreenshot.update).not.toHaveBeenCalled();
     });
   });
 
@@ -723,6 +1109,41 @@ describe("IssuesService", () => {
         service.addFile("missing", "ZGF0YQ==", "x.pdf")
       ).rejects.toThrow(NotFoundException);
     });
+
+    it("should throw when fileName is blank", async () => {
+      await expect(service.addFile("i1", "ZGF0YQ==", "   ")).rejects.toThrow(
+        BadRequestException
+      );
+      expect(mockPrisma.issue.findUnique).not.toHaveBeenCalled();
+      expect(mockPrisma.issueFile.create).not.toHaveBeenCalled();
+    });
+
+    it("should throw when fileBase64 is blank", async () => {
+      await expect(service.addFile("i1", "   ", "doc.pdf")).rejects.toThrow(
+        BadRequestException
+      );
+      expect(mockPrisma.issue.findUnique).not.toHaveBeenCalled();
+      expect(mockPrisma.issueFile.create).not.toHaveBeenCalled();
+    });
+
+    it("should throw when fileBase64 is invalid", async () => {
+      await expect(
+        service.addFile("i1", "not-base64", "doc.pdf")
+      ).rejects.toThrow(BadRequestException);
+      expect(mockPrisma.issue.findUnique).not.toHaveBeenCalled();
+      expect(mockPrisma.issueFile.create).not.toHaveBeenCalled();
+    });
+
+    it("should throw when file payload types are invalid", async () => {
+      await expect(
+        service.addFile("i1", 123 as any, "doc.pdf")
+      ).rejects.toThrow(BadRequestException);
+      await expect(
+        service.addFile("i1", "ZGF0YQ==", 123 as any)
+      ).rejects.toThrow(BadRequestException);
+      expect(mockPrisma.issue.findUnique).not.toHaveBeenCalled();
+      expect(mockPrisma.issueFile.create).not.toHaveBeenCalled();
+    });
   });
 
   describe("updateFile", () => {
@@ -761,6 +1182,17 @@ describe("IssuesService", () => {
       await expect(
         service.updateFile("i1", "f1", { fileName: "x" })
       ).rejects.toThrow(NotFoundException);
+    });
+
+    it("should throw when fileName is not a string", async () => {
+      mockPrisma.issueFile.findFirst.mockResolvedValue({
+        id: "f1",
+        issueId: "i1",
+      });
+      await expect(
+        service.updateFile("i1", "f1", { fileName: 123 as any })
+      ).rejects.toThrow(BadRequestException);
+      expect(mockPrisma.issueFile.update).not.toHaveBeenCalled();
     });
   });
 
@@ -802,7 +1234,7 @@ describe("IssuesService", () => {
       const pipe = jest.fn();
       const res = { setHeader, pipe };
       const { createReadStream } = require("fs");
-      createReadStream.mockReturnValue({ pipe });
+      createReadStream.mockReturnValue({ pipe, on: jest.fn() });
 
       await service.streamFile("i1", "f1", res as any);
       expect(setHeader).toHaveBeenCalledWith("Content-Type", "application/pdf");
@@ -825,7 +1257,7 @@ describe("IssuesService", () => {
       const pipe = jest.fn();
       const res = { setHeader, pipe };
       const { createReadStream } = require("fs");
-      createReadStream.mockReturnValue({ pipe });
+      createReadStream.mockReturnValue({ pipe, on: jest.fn() });
 
       await service.streamFile("i1", "f1", res as any);
       expect(setHeader).toHaveBeenCalledWith(
@@ -870,6 +1302,46 @@ describe("IssuesService", () => {
       await expect(service.streamFile("i1", "f1", {} as any)).rejects.toThrow(
         NotFoundException
       );
+    });
+
+    it("should throw when fileUrl is not an allowed local uploads path", async () => {
+      mockPrisma.issueFile.findFirst.mockResolvedValue({
+        id: "f1",
+        issueId: "i1",
+        fileUrl: "../../../etc/passwd",
+        fileName: "x",
+      });
+      mockStorageService.isFullUrl.mockReturnValue(false);
+
+      await expect(service.streamFile("i1", "f1", {} as any)).rejects.toThrow(
+        NotFoundException
+      );
+      expect(require("fs").existsSync).not.toHaveBeenCalled();
+    });
+
+    it("should end response when file stream errors after headers are sent", async () => {
+      mockPrisma.issueFile.findFirst.mockResolvedValue({
+        id: "f1",
+        issueId: "i1",
+        fileUrl: "uploads/files/x",
+        fileName: "doc.pdf",
+      });
+      mockStorageService.isFullUrl.mockReturnValue(false);
+      require("fs").existsSync.mockReturnValue(true);
+      const setHeader = jest.fn();
+      const status = jest.fn().mockReturnThis();
+      const end = jest.fn();
+      const pipe = jest.fn();
+      const on = jest.fn((event: string, cb: (err: Error) => void) => {
+        if (event === "error") cb(new Error("stream failed"));
+      });
+      const res = { setHeader, status, end, pipe, headersSent: true };
+      const { createReadStream } = require("fs");
+      createReadStream.mockReturnValue({ pipe, on });
+
+      await service.streamFile("i1", "f1", res as any);
+      expect(status).not.toHaveBeenCalled();
+      expect(end).toHaveBeenCalled();
     });
   });
 });

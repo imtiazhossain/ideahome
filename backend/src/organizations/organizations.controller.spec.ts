@@ -61,6 +61,13 @@ describe("OrganizationsController", () => {
         body
       );
     });
+
+    it("should handle missing create body safely", async () => {
+      mockOrganizationsService.create.mockResolvedValue({ id: "1" });
+      const req = { user: { sub: "user-1" } };
+      await controller.create(req as any, undefined as any);
+      expect(mockOrganizationsService.create).toHaveBeenCalledWith("user-1", {});
+    });
   });
 
   describe("ensure", () => {

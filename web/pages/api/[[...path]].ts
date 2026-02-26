@@ -19,7 +19,12 @@ export default async function handler(
     return res.status(404).json({ error: "Not found" });
   }
 
-  const pathSegments = (req.query.path as string[]) || [];
+  const rawPath = req.query.path;
+  const pathSegments = Array.isArray(rawPath)
+    ? rawPath
+    : typeof rawPath === "string"
+      ? [rawPath]
+      : [];
   const apiPath = "/" + pathSegments.join("/");
   const search = req.url?.includes("?") ? "?" + req.url.split("?")[1] : "";
   const pathForNest = apiPath + search;

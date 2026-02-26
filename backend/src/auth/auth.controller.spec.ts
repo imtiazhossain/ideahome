@@ -3,7 +3,6 @@ import { __setUserinfoResponse } from "openid-client";
 import { AuthController } from "./auth.controller";
 import { AuthService } from "./auth.service";
 import { FirebaseService } from "./firebase.service";
-import { PrismaService } from "../prisma.service";
 
 const mockRedirect = jest.fn();
 const mockStatus = jest.fn().mockReturnThis();
@@ -17,16 +16,14 @@ function mockRes() {
   };
 }
 
+function getStateFromRedirect(): string {
+  const redirectTo = mockRedirect.mock.calls.at(-1)?.[0] as string | undefined;
+  if (!redirectTo) throw new Error("Missing redirect URL");
+  return new URL(redirectTo).searchParams.get("state") ?? "";
+}
+
 describe("AuthController", () => {
   let controller: AuthController;
-
-  const mockPrisma = {
-    user: {
-      findFirst: jest.fn(),
-      create: jest.fn(),
-      update: jest.fn(),
-    },
-  };
 
   const mockAuthService = {
     createState: jest.fn(),
@@ -53,7 +50,6 @@ describe("AuthController", () => {
     const module: TestingModule = await Test.createTestingModule({
       controllers: [AuthController],
       providers: [
-        { provide: PrismaService, useValue: mockPrisma },
         { provide: AuthService, useValue: mockAuthService },
         { provide: FirebaseService, useValue: mockFirebase },
       ],
@@ -71,7 +67,7 @@ describe("AuthController", () => {
       const res = mockRes();
       await controller.login(res as any);
       expect(mockRedirect).toHaveBeenCalledWith(
-        "https://mock-auth.example/authorize"
+        expect.stringContaining("https://mock-auth.example/authorize")
       );
     });
   });
@@ -85,28 +81,49 @@ describe("AuthController", () => {
         error: "Missing code or state",
       });
     });
+
+    it("should return 400 when code or state is blank", async () => {
+      const res = mockRes();
+      await controller.callback(res as any, { code: "   ", state: "state" });
+      expect(mockStatus).toHaveBeenCalledWith(400);
+      expect(mockJson).toHaveBeenCalledWith({
+        error: "Missing code or state",
+      });
+    });
     it("should return token and user when userinfo has email", async () => {
-      __setUserinfoResponse({ email: "mock@example.com", name: "Mock User" });
+      __setUserinfoResponse({
+        sub: "oidc-sub-1",
+        email: "mock@example.com",
+        name: "Mock User",
+      });
       const user = {
         id: "user-1",
         email: "mock@example.com",
         name: "Mock User",
       };
-      mockPrisma.user.findFirst.mockResolvedValue(null);
-      mockPrisma.user.create.mockResolvedValue(user);
+      mockAuthService.findOrCreateUserBySso.mockResolvedValue(user);
 
+      const loginRes = mockRes();
+      await controller.login(loginRes as any);
+      const state = getStateFromRedirect();
       const res = mockRes();
       await controller.callback(res as any, {
         code: "code",
-        state: "mock-state",
+        state,
       });
 
-      expect(mockPrisma.user.findFirst).toHaveBeenCalledWith({
-        where: { email: "mock@example.com" },
-        orderBy: { createdAt: "asc" },
-      });
-      expect(mockPrisma.user.create).toHaveBeenCalledWith({
-        data: { email: "mock@example.com", name: "Mock User" },
+      expect(mockAuthService.findOrCreateUserBySso).toHaveBeenCalledWith(
+        "oidc",
+        {
+          providerId: "oidc-sub-1",
+          email: "mock@example.com",
+          name: "Mock User",
+        }
+      );
+      expect(mockAuthService.signToken).toHaveBeenCalledWith({
+        id: "user-1",
+        email: "mock@example.com",
+        name: "Mock User",
       });
       expect(mockJson).toHaveBeenCalled();
       const payload = mockJson.mock.calls[0][0];
@@ -115,23 +132,48 @@ describe("AuthController", () => {
     });
 
     it("should pass undefined name when userinfo has email but no name", async () => {
-      __setUserinfoResponse({ email: "nobody@example.com" });
+      __setUserinfoResponse({ sub: "oidc-sub-2", email: "nobody@example.com" });
       const user = { id: "user-2", email: "nobody@example.com", name: null };
-      mockPrisma.user.findFirst.mockResolvedValue(null);
-      mockPrisma.user.create.mockResolvedValue(user);
+      mockAuthService.findOrCreateUserBySso.mockResolvedValue(user);
 
+      const loginRes = mockRes();
+      await controller.login(loginRes as any);
+      const state = getStateFromRedirect();
       const res = mockRes();
       await controller.callback(res as any, {
         code: "code",
-        state: "mock-state",
+        state,
       });
 
-      expect(mockPrisma.user.findFirst).toHaveBeenCalledWith({
-        where: { email: "nobody@example.com" },
-        orderBy: { createdAt: "asc" },
+      expect(mockAuthService.findOrCreateUserBySso).toHaveBeenCalledWith("oidc", {
+        providerId: "oidc-sub-2",
+        email: "nobody@example.com",
+        name: null,
       });
-      expect(mockPrisma.user.create).toHaveBeenCalledWith({
-        data: { email: "nobody@example.com", name: undefined },
+    });
+
+    it("should coerce non-string userinfo name to null", async () => {
+      __setUserinfoResponse({
+        sub: "oidc-sub-3",
+        email: "n3@example.com",
+        name: 123 as unknown as string,
+      });
+      const user = { id: "user-3", email: "n3@example.com", name: null };
+      mockAuthService.findOrCreateUserBySso.mockResolvedValue(user);
+
+      const loginRes = mockRes();
+      await controller.login(loginRes as any);
+      const state = getStateFromRedirect();
+      const res = mockRes();
+      await controller.callback(res as any, {
+        code: "code",
+        state,
+      });
+
+      expect(mockAuthService.findOrCreateUserBySso).toHaveBeenCalledWith("oidc", {
+        providerId: "oidc-sub-3",
+        email: "n3@example.com",
+        name: null,
       });
     });
 
@@ -139,13 +181,87 @@ describe("AuthController", () => {
       __setUserinfoResponse({});
       const res = mockRes();
       await controller.login(res as any);
+      const state = getStateFromRedirect();
       await controller.callback(res as any, {
         code: "code",
-        state: "mock-state",
+        state,
       });
       expect(res.status).toHaveBeenCalledWith(400);
       expect(res.json).toHaveBeenCalledWith({ error: "No email in userinfo" });
+      __setUserinfoResponse({
+        sub: "oidc-sub",
+        email: "mock@example.com",
+        name: "Mock User",
+      });
+    });
+
+    it("should return 400 when userinfo email is not a string", async () => {
+      __setUserinfoResponse({
+        sub: "oidc-sub",
+        email: 123 as unknown as string,
+        name: "Mock User",
+      });
+      const res = mockRes();
+      await controller.login(res as any);
+      const state = getStateFromRedirect();
+      await controller.callback(res as any, {
+        code: "code",
+        state,
+      });
+      expect(res.status).toHaveBeenCalledWith(400);
+      expect(res.json).toHaveBeenCalledWith({ error: "No email in userinfo" });
+      __setUserinfoResponse({
+        sub: "oidc-sub",
+        email: "mock@example.com",
+        name: "Mock User",
+      });
+    });
+
+    it("should return 400 when userinfo has no sub", async () => {
       __setUserinfoResponse({ email: "mock@example.com", name: "Mock User" });
+      const res = mockRes();
+      await controller.login(res as any);
+      const state = getStateFromRedirect();
+      await controller.callback(res as any, {
+        code: "code",
+        state,
+      });
+      expect(res.status).toHaveBeenCalledWith(400);
+      expect(res.json).toHaveBeenCalledWith({ error: "No sub in userinfo" });
+      __setUserinfoResponse({
+        sub: "oidc-sub",
+        email: "mock@example.com",
+        name: "Mock User",
+      });
+    });
+
+    it("should return 400 when OIDC state is invalid", async () => {
+      const res = mockRes();
+      await controller.callback(res as any, {
+        code: "code",
+        state: "invalid",
+      });
+      expect(res.status).toHaveBeenCalledWith(400);
+      expect(res.json).toHaveBeenCalledWith({ error: "Invalid or expired state" });
+    });
+
+    it("should return 400 when OIDC state iat is too far in the future", async () => {
+      const realNow = Date.now;
+      try {
+        const t0 = 1_700_000_000_000;
+        Date.now = jest.fn(() => t0);
+        const res = mockRes();
+        await controller.login(res as any);
+        const state = getStateFromRedirect();
+        Date.now = jest.fn(() => t0 - 120_000);
+        await controller.callback(res as any, { code: "code", state });
+        expect(res.status).toHaveBeenCalledWith(400);
+        expect(res.json).toHaveBeenCalledWith({
+          error: "Invalid or expired state",
+        });
+      } finally {
+        Date.now = realNow;
+      }
     });
   });
 
@@ -197,12 +313,12 @@ describe("AuthController", () => {
       });
       mockAuthService.signToken.mockReturnValue("jwt-token");
       mockAuthService.getFrontendCallbackUrl.mockReturnValue(
-        "http://localhost:3000/login/callback?token=jwt-token"
+        "http://localhost:3000/login/callback#token=jwt-token"
       );
       const res = mockRes();
       await controller.googleCallback(res as any, "code", "state");
       expect(mockRedirect).toHaveBeenCalledWith(
-        "http://localhost:3000/login/callback?token=jwt-token"
+        "http://localhost:3000/login/callback#token=jwt-token"
       );
     });
 
@@ -231,6 +347,19 @@ describe("AuthController", () => {
       expect(mockRedirect).toHaveBeenCalledWith(
         expect.stringContaining("OAuth%20failed")
       );
+    });
+
+    it("should redirect with error when code is not a string", async () => {
+      mockAuthService.consumeState.mockReturnValue("google");
+      mockAuthService.getFrontendCallbackUrl.mockReturnValue(
+        "http://localhost:3000/login/callback"
+      );
+      const res = mockRes();
+      await controller.googleCallback(res as any, 123 as any, "state");
+      expect(mockRedirect).toHaveBeenCalledWith(
+        expect.stringContaining("invalid_callback")
+      );
+      expect(mockAuthService.exchangeGoogleCode).not.toHaveBeenCalled();
     });
   });
 
@@ -276,13 +405,26 @@ describe("AuthController", () => {
       });
       mockAuthService.signToken.mockReturnValue("jwt");
       mockAuthService.getFrontendCallbackUrl.mockReturnValue(
-        "http://localhost:3000/login/callback?token=jwt"
+        "http://localhost:3000/login/callback#token=jwt"
       );
       const res = mockRes();
       await controller.githubCallback(res as any, "code", "state");
       expect(mockRedirect).toHaveBeenCalledWith(
-        "http://localhost:3000/login/callback?token=jwt"
+        "http://localhost:3000/login/callback#token=jwt"
       );
+    });
+
+    it("should redirect with error when code is blank", async () => {
+      mockAuthService.consumeState.mockReturnValue("github");
+      mockAuthService.getFrontendCallbackUrl.mockReturnValue(
+        "http://localhost:3000/login/callback"
+      );
+      const res = mockRes();
+      await controller.githubCallback(res as any, "   ", "state");
+      expect(mockRedirect).toHaveBeenCalledWith(
+        expect.stringContaining("invalid_callback")
+      );
+      expect(mockAuthService.exchangeGitHubCode).not.toHaveBeenCalled();
     });
   });
 
@@ -328,13 +470,26 @@ describe("AuthController", () => {
       });
       mockAuthService.signToken.mockReturnValue("jwt");
       mockAuthService.getFrontendCallbackUrl.mockReturnValue(
-        "http://localhost:3000/login/callback?token=jwt"
+        "http://localhost:3000/login/callback#token=jwt"
       );
       const res = mockRes();
       await controller.appleCallback(res as any, "code", "state");
       expect(mockRedirect).toHaveBeenCalledWith(
-        "http://localhost:3000/login/callback?token=jwt"
+        "http://localhost:3000/login/callback#token=jwt"
       );
+    });
+
+    it("should redirect with error when state is not a string", async () => {
+      mockAuthService.consumeState.mockReturnValue(null);
+      mockAuthService.getFrontendCallbackUrl.mockReturnValue(
+        "http://localhost:3000/login/callback"
+      );
+      const res = mockRes();
+      await controller.appleCallback(res as any, "code", 123 as any);
+      expect(mockRedirect).toHaveBeenCalledWith(
+        expect.stringContaining("invalid_callback")
+      );
+      expect(mockAuthService.exchangeAppleCode).not.toHaveBeenCalled();
     });
   });
 
@@ -344,6 +499,14 @@ describe("AuthController", () => {
       await controller.firebaseSession(res as any, "");
       expect(mockStatus).toHaveBeenCalledWith(400);
       expect(mockJson).toHaveBeenCalledWith({ error: "idToken required" });
+    });
+
+    it("should return 400 when idToken is whitespace", async () => {
+      const res = mockRes();
+      await controller.firebaseSession(res as any, "   ");
+      expect(mockStatus).toHaveBeenCalledWith(400);
+      expect(mockJson).toHaveBeenCalledWith({ error: "idToken required" });
+      expect(mockFirebase.verifyIdToken).not.toHaveBeenCalled();
     });
 
     it("should return 503 when Firebase is not configured", async () => {
@@ -383,6 +546,21 @@ describe("AuthController", () => {
       });
     });
 
+    it("should return 400 when Firebase token email is not a string", async () => {
+      mockFirebase.isConfigured.mockReturnValue(true);
+      mockFirebase.verifyIdToken.mockResolvedValue({
+        uid: "firebase-uid",
+        email: 123,
+        name: "User",
+      });
+      const res = mockRes();
+      await controller.firebaseSession(res as any, "token");
+      expect(mockStatus).toHaveBeenCalledWith(400);
+      expect(mockJson).toHaveBeenCalledWith({
+        error: "Firebase token missing email",
+      });
+    });
+
     it("should return token and user when Firebase token is valid", async () => {
       mockFirebase.isConfigured.mockReturnValue(true);
       mockFirebase.verifyIdToken.mockResolvedValue({
@@ -408,6 +586,37 @@ describe("AuthController", () => {
         token: "our-jwt",
         user: { id: user.id, email: user.email, name: user.name },
       });
+    });
+
+    it("should coerce non-string Firebase name to null", async () => {
+      mockFirebase.isConfigured.mockReturnValue(true);
+      mockFirebase.verifyIdToken.mockResolvedValue({
+        uid: "firebase-uid-2",
+        email: "fire2@example.com",
+        name: 123,
+      });
+      mockAuthService.findOrCreateUserByFirebase.mockResolvedValue({
+        id: "u2",
+        email: "fire2@example.com",
+        name: null,
+      });
+      mockAuthService.signToken.mockReturnValue("jwt-2");
+      const res = mockRes();
+
+      await controller.firebaseSession(res as any, "valid-firebase-token");
+      expect(mockAuthService.findOrCreateUserByFirebase).toHaveBeenCalledWith(
+        "firebase-uid-2",
+        "fire2@example.com",
+        null
+      );
+    });
+
+    it("should trim idToken before verifying", async () => {
+      mockFirebase.isConfigured.mockReturnValue(true);
+      mockFirebase.verifyIdToken.mockResolvedValue(null);
+      const res = mockRes();
+      await controller.firebaseSession(res as any, "  token-with-space  ");
+      expect(mockFirebase.verifyIdToken).toHaveBeenCalledWith("token-with-space");
     });
   });
 });

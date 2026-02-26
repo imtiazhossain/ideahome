@@ -10,8 +10,8 @@ import {
   Req,
   UseGuards,
 } from "@nestjs/common";
-import { Request } from "express";
 import { JwtAuthGuard } from "../auth/jwt.guard";
+import { AuthenticatedRequest, requireUserId } from "../auth/request-user";
 import { ExpensesService } from "./expenses.service";
 
 @Controller("expenses")
@@ -22,9 +22,9 @@ export class ExpensesController {
   @Get()
   list(
     @Query("projectId") projectId: string,
-    @Req() req: Request & { user?: { sub: string } }
+    @Req() req: AuthenticatedRequest
   ) {
-    return this.svc.list(projectId, req.user!.sub);
+    return this.svc.list(projectId, requireUserId(req));
   }
 
   @Post()
@@ -37,9 +37,9 @@ export class ExpensesController {
       date: string;
       category?: string;
     },
-    @Req() req: Request & { user?: { sub: string } }
+    @Req() req: AuthenticatedRequest
   ) {
-    return this.svc.create(req.user!.sub, body);
+    return this.svc.create(requireUserId(req), body ?? {});
   }
 
   @Patch(":id")
@@ -52,16 +52,16 @@ export class ExpensesController {
       date?: string;
       category?: string;
     },
-    @Req() req: Request & { user?: { sub: string } }
+    @Req() req: AuthenticatedRequest
   ) {
-    return this.svc.update(id, req.user!.sub, body);
+    return this.svc.update(id, requireUserId(req), body ?? {});
   }
 
   @Delete(":id")
   remove(
     @Param("id") id: string,
-    @Req() req: Request & { user?: { sub: string } }
+    @Req() req: AuthenticatedRequest
   ) {
-    return this.svc.remove(id, req.user!.sub);
+    return this.svc.remove(id, requireUserId(req));
   }
 }

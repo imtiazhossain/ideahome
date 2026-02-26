@@ -51,10 +51,22 @@ describe("ExpensesController", () => {
     });
   });
 
+  it("create handles missing body safely", async () => {
+    mockSvc.create.mockResolvedValue({ id: "e1" });
+    await controller.create(undefined as any, req as any);
+    expect(mockSvc.create).toHaveBeenCalledWith("u1", {});
+  });
+
   it("update delegates to service", async () => {
     mockSvc.update.mockResolvedValue({});
     await controller.update("e1", { amount: 20 }, req as any);
     expect(mockSvc.update).toHaveBeenCalledWith("e1", "u1", { amount: 20 });
+  });
+
+  it("update handles missing body safely", async () => {
+    mockSvc.update.mockResolvedValue({});
+    await controller.update("e1", undefined as any, req as any);
+    expect(mockSvc.update).toHaveBeenCalledWith("e1", "u1", {});
   });
 
   it("remove delegates to service", async () => {

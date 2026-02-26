@@ -1,14 +1,11 @@
-import { useCallback, useState } from "react";
+import { useCallback } from "react";
 import { useUndoList } from "./useUndoList";
 import {
-  adjustEditingIndexAfterRemove,
-  adjustEditingIndexAfterReorder,
   createOptimisticId,
   indexForNewUncheckedItem,
   insertUncheckedItem,
-  reorder,
-  applyToggleDoneOrder,
 } from "./utils";
+import { useCheckableUiState } from "./useCheckableUiState";
 
 export interface LocalCheckableItem {
   id: string;
@@ -30,15 +27,28 @@ export function useLocalCheckableList<T extends LocalCheckableItem>({
   resetKey,
   idPrefix = "local",
 }: UseLocalCheckableListOptions<T>) {
-  const [newItem, setNewItem] = useState("");
-  const [editingIndex, setEditingIndex] = useState<number | null>(null);
-  const [editingValue, setEditingValue] = useState("");
   const { pushHistory, undo, canUndo } = useUndoList(
     items,
     setItems as (items: T[]) => void,
     20,
     resetKey
   );
+  const {
+    newItem,
+    setNewItem,
+    editingIndex,
+    editingValue,
+    setEditingValue,
+    startEdit,
+    cancelEdit,
+    applyToggleDone,
+    applyReorder,
+    applyRemove,
+  } = useCheckableUiState<T>({
+    items,
+    setItems,
+    pushHistory,
+  });
 
   const addItem = useCallback(
     (e: React.FormEvent) => {
@@ -60,33 +70,17 @@ export function useLocalCheckableList<T extends LocalCheckableItem>({
 
   const toggleDone = useCallback(
     (index: number) => {
-      pushHistory();
-      const item = items[index];
-      const newDone = !item.done;
-      let newIndex = 0;
-      setItems((prev: T[]) => {
-        const [reordered, idx] = applyToggleDoneOrder(prev, index, newDone);
-        newIndex = idx;
-        return reordered;
-      });
-      if (editingIndex === index) setEditingIndex(newIndex);
+      applyToggleDone(index);
     },
-    [items, editingIndex, pushHistory, setItems]
+    [applyToggleDone]
   );
 
   const removeItem = useCallback(
     (index: number, skipHistory?: boolean) => {
-      if (!skipHistory) pushHistory();
-      setItems((prev: T[]) => prev.filter((_, i) => i !== index));
-      setEditingIndex(adjustEditingIndexAfterRemove(editingIndex, index));
+      applyRemove(index, skipHistory);
     },
-    [editingIndex, pushHistory, setItems]
+    [applyRemove]
   );
-
-  const startEdit = useCallback((index: number) => {
-    setEditingIndex(index);
-    setEditingValue(items[index]?.name ?? "");
-  }, [items]);
 
   const saveEdit = useCallback(
     () => {
@@ -102,25 +96,16 @@ export function useLocalCheckableList<T extends LocalCheckableItem>({
       } else {
         removeItem(editingIndex, true);
       }
-      setEditingIndex(null);
+      cancelEdit();
     },
-    [editingIndex, editingValue, pushHistory, removeItem, setItems]
+    [editingIndex, editingValue, pushHistory, removeItem, setItems, cancelEdit]
   );
-
-  const cancelEdit = useCallback(() => {
-    setEditingIndex(null);
-  }, []);
 
   const handleReorder = useCallback(
     (fromIndex: number, toIndex: number) => {
-      pushHistory();
-      const reordered = reorder(items, fromIndex, toIndex);
-      setItems(reordered);
-      setEditingIndex(
-        adjustEditingIndexAfterReorder(editingIndex, fromIndex, toIndex)
-      );
+      applyReorder(fromIndex, toIndex);
     },
-    [items, editingIndex, pushHistory, setItems]
+    [applyReorder]
   );
 
   return {

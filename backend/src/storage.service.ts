@@ -1,4 +1,4 @@
-import { Injectable } from "@nestjs/common";
+import { BadRequestException, Injectable } from "@nestjs/common";
 
 export interface StorageResult {
   url: string;
@@ -10,8 +10,22 @@ export interface StorageResult {
  */
 @Injectable()
 export class StorageService {
+  private static readonly LOCAL_UPLOAD_PATH_RE =
+    /^uploads\/(recordings|screenshots|files)\/[a-zA-Z0-9_.-]+$/;
+  private static readonly SAFE_FILENAME_RE = /^[a-zA-Z0-9_.-]+$/;
+
   private useBlob(): boolean {
     return Boolean(process.env.BLOB_READ_WRITE_TOKEN);
+  }
+
+  private validateFilename(filename: string): void {
+    if (
+      !filename ||
+      filename.length > 180 ||
+      !StorageService.SAFE_FILENAME_RE.test(filename)
+    ) {
+      throw new BadRequestException("Unsafe filename");
+    }
   }
 
   async upload(
@@ -20,6 +34,7 @@ export class StorageService {
     buffer: Buffer,
     contentType?: string
   ): Promise<StorageResult> {
+    this.validateFilename(filename);
     if (this.useBlob()) {
       return this.uploadToBlob(folder, filename, buffer, contentType);
     }
@@ -27,7 +42,7 @@ export class StorageService {
   }
 
   async delete(urlOrPath: string): Promise<void> {
-    if (urlOrPath.startsWith("http")) {
+    if (this.isFullUrl(urlOrPath)) {
       await this.deleteFromBlob(urlOrPath);
     } else {
       await this.deleteFromFilesystem(urlOrPath);
@@ -36,7 +51,7 @@ export class StorageService {
 
   /** Returns true if the URL is a full URL (Blob) that can be used directly. */
   isFullUrl(urlOrPath: string): boolean {
-    return urlOrPath.startsWith("http");
+    return /^https?:\/\//i.test(urlOrPath);
   }
 
   private async uploadToBlob(
@@ -75,6 +90,9 @@ export class StorageService {
   }
 
   private async deleteFromFilesystem(urlOrPath: string): Promise<void> {
+    if (!StorageService.LOCAL_UPLOAD_PATH_RE.test(urlOrPath)) {
+      return;
+    }
     const { unlink } = await import("fs/promises");
     const { join } = await import("path");
     const filePath = join(process.cwd(), urlOrPath);

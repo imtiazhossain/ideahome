@@ -1,5 +1,9 @@
 import { Test, TestingModule } from "@nestjs/testing";
-import { ForbiddenException, NotFoundException } from "@nestjs/common";
+import {
+  BadRequestException,
+  ForbiddenException,
+  NotFoundException,
+} from "@nestjs/common";
 import { ExpensesService } from "./expenses.service";
 import { PrismaService } from "../prisma.service";
 
@@ -64,6 +68,14 @@ describe("ExpensesService", () => {
         NotFoundException
       );
     });
+
+    it("should throw BadRequestException when projectId is invalid", async () => {
+      await expect(
+        service.list(123 as unknown as string, "user-1")
+      ).rejects.toThrow(BadRequestException);
+      expect(mockPrisma.project.findUnique).not.toHaveBeenCalled();
+      expect(mockPrisma.expense.findMany).not.toHaveBeenCalled();
+    });
   });
 
   describe("create", () => {
@@ -113,6 +125,92 @@ describe("ExpensesService", () => {
         }),
       });
     });
+
+    it("should throw BadRequestException for invalid amount", async () => {
+      await expect(
+        service.create("user-1", {
+          projectId: "p1",
+          amount: Number.NaN,
+          description: "Misc",
+          date: "2025-01-01",
+        })
+      ).rejects.toThrow(BadRequestException);
+      expect(mockPrisma.expense.create).not.toHaveBeenCalled();
+    });
+
+    it("should throw BadRequestException for invalid date format", async () => {
+      await expect(
+        service.create("user-1", {
+          projectId: "p1",
+          amount: 10,
+          description: "Misc",
+          date: "01/01/2025",
+        })
+      ).rejects.toThrow(BadRequestException);
+      expect(mockPrisma.expense.create).not.toHaveBeenCalled();
+    });
+
+    it("should throw BadRequestException for non-string date", async () => {
+      await expect(
+        service.create("user-1", {
+          projectId: "p1",
+          amount: 10,
+          description: "Misc",
+          date: 123 as unknown as string,
+        })
+      ).rejects.toThrow(BadRequestException);
+      expect(mockPrisma.expense.create).not.toHaveBeenCalled();
+    });
+
+    it("should throw BadRequestException for blank description", async () => {
+      await expect(
+        service.create("user-1", {
+          projectId: "p1",
+          amount: 10,
+          description: "   ",
+          date: "2025-01-01",
+        })
+      ).rejects.toThrow(BadRequestException);
+      expect(mockPrisma.expense.create).not.toHaveBeenCalled();
+    });
+
+    it("should throw BadRequestException for non-string description", async () => {
+      await expect(
+        service.create("user-1", {
+          projectId: "p1",
+          amount: 10,
+          description: 123 as unknown as string,
+          date: "2025-01-01",
+        })
+      ).rejects.toThrow(BadRequestException);
+      expect(mockPrisma.expense.create).not.toHaveBeenCalled();
+    });
+
+    it("should throw BadRequestException for non-string category", async () => {
+      await expect(
+        service.create("user-1", {
+          projectId: "p1",
+          amount: 10,
+          description: "Misc",
+          date: "2025-01-01",
+          category: 123 as unknown as string,
+        })
+      ).rejects.toThrow(BadRequestException);
+      expect(mockPrisma.expense.create).not.toHaveBeenCalled();
+    });
+
+    it("should throw BadRequestException for invalid projectId", async () => {
+      await expect(
+        service.create("user-1", {
+          projectId: 123 as unknown as string,
+          amount: 10,
+          description: "Misc",
+          date: "2025-01-01",
+        })
+      ).rejects.toThrow(BadRequestException);
+      expect(mockPrisma.project.findUnique).not.toHaveBeenCalled();
+      expect(mockPrisma.expense.create).not.toHaveBeenCalled();
+    });
   });
 
   describe("update", () => {
@@ -128,6 +226,72 @@ describe("ExpensesService", () => {
 
       const result = await service.update("e1", "user-1", { amount: 75 });
       expect(result.amount).toBe(75);
+    });
+
+    it("should throw BadRequestException for negative amount", async () => {
+      mockPrisma.expense.findUnique.mockResolvedValue({
+        id: "e1",
+        project: { organizationId: "o1" },
+      });
+      await expect(
+        service.update("e1", "user-1", { amount: -1 })
+      ).rejects.toThrow(BadRequestException);
+      expect(mockPrisma.expense.update).not.toHaveBeenCalled();
+    });
+
+    it("should throw BadRequestException for invalid date", async () => {
+      mockPrisma.expense.findUnique.mockResolvedValue({
+        id: "e1",
+        project: { organizationId: "o1" },
+      });
+      await expect(
+        service.update("e1", "user-1", { date: "2025-02-30" })
+      ).rejects.toThrow(BadRequestException);
+      expect(mockPrisma.expense.update).not.toHaveBeenCalled();
+    });
+
+    it("should throw BadRequestException for non-string date update", async () => {
+      mockPrisma.expense.findUnique.mockResolvedValue({
+        id: "e1",
+        project: { organizationId: "o1" },
+      });
+      await expect(
+        service.update("e1", "user-1", { date: 123 as unknown as string })
+      ).rejects.toThrow(BadRequestException);
+      expect(mockPrisma.expense.update).not.toHaveBeenCalled();
+    });
+
+    it("should throw BadRequestException for blank description update", async () => {
+      mockPrisma.expense.findUnique.mockResolvedValue({
+        id: "e1",
+        project: { organizationId: "o1" },
+      });
+      await expect(
+        service.update("e1", "user-1", { description: "   " })
+      ).rejects.toThrow(BadRequestException);
+      expect(mockPrisma.expense.update).not.toHaveBeenCalled();
+    });
+
+    it("should throw BadRequestException for non-string description update", async () => {
+      mockPrisma.expense.findUnique.mockResolvedValue({
+        id: "e1",
+        project: { organizationId: "o1" },
+      });
+      await expect(
+        service.update("e1", "user-1", { description: 123 as unknown as string })
+      ).rejects.toThrow(BadRequestException);
+      expect(mockPrisma.expense.update).not.toHaveBeenCalled();
+    });
+
+    it("should throw BadRequestException for non-string category update", async () => {
+      mockPrisma.expense.findUnique.mockResolvedValue({
+        id: "e1",
+        project: { organizationId: "o1" },
+      });
+      await expect(
+        service.update("e1", "user-1", { category: 123 as unknown as string })
+      ).rejects.toThrow(BadRequestException);
+      expect(mockPrisma.expense.update).not.toHaveBeenCalled();
     });
   });
 

@@ -1,5 +1,12 @@
-import { Injectable, NotFoundException } from "@nestjs/common";
+import {
+  BadRequestException,
+  Injectable,
+  InternalServerErrorException,
+  NotFoundException,
+} from "@nestjs/common";
 import { Prisma } from "@prisma/client";
+import { PrismaClientKnownRequestError } from "@prisma/client/runtime/library";
+import { getOrgIdForUser, verifyProjectInOrg } from "../common/org-scope";
 import { PrismaService } from "../prisma.service";
 import { StorageService } from "../storage.service";
 import { existsSync } from "fs";
@@ -14,6 +21,9 @@ const ISSUE_INCLUDE = {
   screenshots: { orderBy: { createdAt: "asc" as const } },
   files: { orderBy: { createdAt: "asc" as const } },
 };
+const ISSUE_STATUSES = new Set(["backlog", "todo", "in_progress", "done"]);
+const ISSUE_MEDIA_TYPES = new Set(["video", "audio"]);
+const ISSUE_RECORDING_TYPES = new Set(["screen", "camera", "audio"]);
 
 /** Project name to acronym, e.g. "Idea Home Launch" -> "IHL". */
 function projectNameToAcronym(name: string): string {
@@ -28,22 +38,21 @@ function projectNameToAcronym(name: string): string {
 
 @Injectable()
 export class IssuesService {
+  private static readonly LOCAL_FILE_URL_RE = /^uploads\/files\/[a-zA-Z0-9_.-]+$/;
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly storage: StorageService
   ) {}
 
   private async getOrgIdForUser(userId: string): Promise<string> {
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-      select: { organizationId: true },
-    });
-    if (!user?.organizationId) {
-      throw new NotFoundException(
+    return getOrgIdForUser(
+      this.prisma,
+      userId,
+      new NotFoundException(
         "User has no organization. Complete login again to create one."
-      );
-    }
-    return user.organizationId;
+      )
+    );
   }
 
   private async verifyIssueBelongsToUser(
@@ -70,22 +79,71 @@ export class IssuesService {
     userId: string
   ): Promise<void> {
     const orgId = await this.getOrgIdForUser(userId);
-    const project = await this.prisma.project.findUnique({
-      where: { id: projectId },
-    });
-    if (!project || project.organizationId !== orgId) {
-      throw new NotFoundException("Project not found");
+    await verifyProjectInOrg(this.prisma, projectId, orgId);
+  }
+
+  private normalizeRequiredTitle(value: unknown): string {
+    if (typeof value !== "string") {
+      throw new BadRequestException("title is required");
     }
+    const trimmed = value.trim();
+    if (!trimmed) {
+      throw new BadRequestException("title is required");
+    }
+    return trimmed;
+  }
+
+  private normalizeRequiredProjectId(value: unknown): string {
+    if (typeof value !== "string" || !value.trim()) {
+      throw new BadRequestException("projectId is required");
+    }
+    return value.trim();
+  }
+
+  private normalizeOptionalProjectId(value: unknown): string | undefined {
+    if (value === undefined || value === null || value === "") return undefined;
+    if (typeof value !== "string") {
+      throw new BadRequestException("projectId must be a string");
+    }
+    const trimmed = value.trim();
+    if (!trimmed) {
+      throw new BadRequestException("projectId must be a non-empty string");
+    }
+    return trimmed;
+  }
+
+  private normalizeOptionalTextField(
+    value: unknown,
+    field: string
+  ): string | null | undefined {
+    if (value === undefined) return undefined;
+    if (value === null) return null;
+    if (typeof value !== "string") {
+      throw new BadRequestException(`${field} must be a string`);
+    }
+    return value;
+  }
+
+  private normalizeOptionalAssigneeId(value: unknown): string | null | undefined {
+    if (value === undefined || value === null) return value as
+      | null
+      | undefined;
+    if (typeof value !== "string") {
+      throw new BadRequestException("assigneeId must be a string or null");
+    }
+    const trimmed = value.trim();
+    return trimmed || null;
   }
 
   async list(projectId?: string, search?: string, userId?: string) {
+    const safeProjectId = this.normalizeOptionalProjectId(projectId);
     const where: Prisma.IssueWhereInput = {};
     if (userId) {
       const orgId = await this.getOrgIdForUser(userId);
       where.project = { organizationId: orgId };
     }
-    if (projectId) where.projectId = projectId;
-    if (search && search.trim()) {
+    if (safeProjectId) where.projectId = safeProjectId;
+    if (typeof search === "string" && search.trim()) {
       const term = search.trim();
       const contains = { contains: term, mode: "insensitive" as const };
       where.OR = [
@@ -117,37 +175,114 @@ export class IssuesService {
 
   async create(
     data: {
-      title: string;
-      description?: string;
-      acceptanceCriteria?: string;
-      database?: string;
-      api?: string;
-      testCases?: string;
-      automatedTest?: string;
-      qualityScore?: number;
-      projectId: string;
-      assigneeId?: string;
+      title?: unknown;
+      description?: unknown;
+      acceptanceCriteria?: unknown;
+      database?: unknown;
+      api?: unknown;
+      testCases?: unknown;
+      automatedTest?: unknown;
+      status?: unknown;
+      qualityScore?: unknown;
+      projectId?: unknown;
+      assigneeId?: unknown;
     },
     userId?: string
   ) {
-    if (userId) await this.verifyProjectBelongsToUser(data.projectId, userId);
+    const title = this.normalizeRequiredTitle(data.title);
+    const projectId = this.normalizeRequiredProjectId(data.projectId);
+    const description = this.normalizeOptionalTextField(
+      data.description,
+      "description"
+    );
+    const acceptanceCriteria = this.normalizeOptionalTextField(
+      data.acceptanceCriteria,
+      "acceptanceCriteria"
+    );
+    const database = this.normalizeOptionalTextField(data.database, "database");
+    const api = this.normalizeOptionalTextField(data.api, "api");
+    const testCases = this.normalizeOptionalTextField(
+      data.testCases,
+      "testCases"
+    );
+    const automatedTest = this.normalizeOptionalTextField(
+      data.automatedTest,
+      "automatedTest"
+    );
+    const assigneeId = this.normalizeOptionalAssigneeId(data.assigneeId);
+    const status = typeof data.status === "string" ? data.status : undefined;
+    const qualityScore =
+      typeof data.qualityScore === "number" ? data.qualityScore : undefined;
+    if (userId) await this.verifyProjectBelongsToUser(projectId, userId);
+    this.validateStatus(data.status);
+    this.validateQualityScore(data.qualityScore);
+    await this.validateAssigneeInProjectOrg(projectId, assigneeId);
     const project = await this.prisma.project.findUnique({
-      where: { id: data.projectId },
+      where: { id: projectId },
     });
     if (!project) throw new NotFoundException("Project not found");
-    const count = await this.prisma.issue.count({
-      where: { projectId: data.projectId },
-    });
     const acronym = projectNameToAcronym(project.name);
-    const key = `${acronym}-${count + 1}`;
-    return this.prisma.issue.create({
-      data: { ...data, key },
-      include: ISSUE_INCLUDE,
+
+    // Generate project-local keys safely under concurrent creates.
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const key = await this.nextIssueKey(projectId, acronym);
+      try {
+        return await this.prisma.issue.create({
+          data: {
+            projectId,
+            title,
+            description,
+            acceptanceCriteria,
+            database,
+            api,
+            testCases,
+            automatedTest,
+            status,
+            qualityScore,
+            assigneeId,
+            key,
+          },
+          include: ISSUE_INCLUDE,
+        });
+      } catch (e) {
+        if (
+          e instanceof PrismaClientKnownRequestError &&
+          e.code === "P2002"
+        ) {
+          continue;
+        }
+        throw e;
+      }
+    }
+
+    throw new InternalServerErrorException(
+      "Could not allocate a unique issue key"
+    );
+  }
+
+  private async nextIssueKey(projectId: string, acronym: string): Promise<string> {
+    const prefix = `${acronym}-`;
+    const rows = await this.prisma.issue.findMany({
+      where: { projectId, key: { startsWith: prefix } },
+      select: { key: true },
     });
+    let max = 0;
+    for (const row of rows ?? []) {
+      const key = row.key ?? "";
+      const suffix = key.slice(prefix.length);
+      const n = Number.parseInt(suffix, 10);
+      if (Number.isFinite(n) && n > max) max = n;
+    }
+    return `${prefix}${max + 1}`;
   }
 
   async update(id: string, data: Record<string, unknown>, userId?: string) {
     if (userId) await this.verifyIssueBelongsToUser(id, userId);
+    const existing = await this.prisma.issue.findUnique({
+      where: { id },
+      select: { projectId: true },
+    });
+    if (!existing) throw new NotFoundException("Issue not found");
     const allowed = [
       "title",
       "description",
@@ -164,6 +299,32 @@ export class IssuesService {
     for (const key of allowed) {
       if (key in data && data[key] !== undefined) payload[key] = data[key];
     }
+    if ("title" in payload) {
+      payload.title = this.normalizeRequiredTitle(payload.title);
+    }
+    for (const key of [
+      "description",
+      "acceptanceCriteria",
+      "database",
+      "api",
+      "testCases",
+      "automatedTest",
+    ]) {
+      if (key in payload) {
+        payload[key] = this.normalizeOptionalTextField(payload[key], key);
+      }
+    }
+    if ("assigneeId" in payload) {
+      payload.assigneeId = this.normalizeOptionalAssigneeId(payload.assigneeId);
+    }
+    if ("status" in payload) this.validateStatus(payload.status);
+    if ("qualityScore" in payload) this.validateQualityScore(payload.qualityScore);
+    if ("assigneeId" in payload) {
+      await this.validateAssigneeInProjectOrg(
+        existing.projectId,
+        (payload.assigneeId as string | null | undefined) ?? undefined
+      );
+    }
     return this.prisma.issue.update({
       where: { id },
       data: payload as Prisma.IssueUpdateInput,
@@ -171,13 +332,96 @@ export class IssuesService {
     });
   }
 
-  async updateStatus(id: string, status: string, userId?: string) {
+  private async validateAssigneeInProjectOrg(
+    projectId: string,
+    assigneeId?: string | null
+  ): Promise<void> {
+    if (assigneeId === undefined || assigneeId === null || assigneeId === "") return;
+    const project = await this.prisma.project.findUnique({
+      where: { id: projectId },
+      select: { organizationId: true },
+    });
+    if (!project) throw new NotFoundException("Project not found");
+    const assignee = await this.prisma.user.findUnique({
+      where: { id: assigneeId },
+      select: { organizationId: true },
+    });
+    if (!assignee || assignee.organizationId !== project.organizationId) {
+      throw new BadRequestException("Assignee must belong to the issue project organization");
+    }
+  }
+
+  async updateStatus(id: string, status: unknown, userId?: string) {
     if (userId) await this.verifyIssueBelongsToUser(id, userId);
+    if (typeof status !== "string" || !status.trim()) {
+      throw new BadRequestException(
+        "status must be one of: backlog, todo, in_progress, done"
+      );
+    }
+    this.validateStatus(status);
     return this.prisma.issue.update({
       where: { id },
       data: { status },
       include: ISSUE_INCLUDE,
     });
+  }
+
+  private validateStatus(status: unknown): void {
+    if (status === undefined) return;
+    if (typeof status !== "string" || !ISSUE_STATUSES.has(status)) {
+      throw new BadRequestException(
+        "status must be one of: backlog, todo, in_progress, done"
+      );
+    }
+  }
+
+  private validateQualityScore(score: unknown): void {
+    if (score === undefined) return;
+    if (
+      typeof score !== "number" ||
+      !Number.isFinite(score) ||
+      score < 0 ||
+      score > 100
+    ) {
+      throw new BadRequestException("qualityScore must be a number between 0 and 100");
+    }
+  }
+
+  private validateNonEmptyBase64(value: unknown, field: string): string {
+    if (typeof value !== "string" || !value.trim()) {
+      throw new BadRequestException(`${field} is required`);
+    }
+    return value.trim();
+  }
+
+  private validateRecordingMediaType(value: unknown): "video" | "audio" {
+    if (typeof value !== "string" || !ISSUE_MEDIA_TYPES.has(value)) {
+      throw new BadRequestException("mediaType must be one of: video, audio");
+    }
+    return value as "video" | "audio";
+  }
+
+  private validateRecordingType(
+    value: unknown
+  ): "screen" | "camera" | "audio" {
+    if (typeof value !== "string" || !ISSUE_RECORDING_TYPES.has(value)) {
+      throw new BadRequestException(
+        "recordingType must be one of: screen, camera, audio"
+      );
+    }
+    return value as "screen" | "camera" | "audio";
+  }
+
+  private decodeBase64(value: string, field: string): Buffer {
+    const normalized = value.replace(/\s+/g, "");
+    if (
+      normalized.length === 0 ||
+      normalized.length % 4 !== 0 ||
+      !/^[A-Za-z0-9+/]+={0,2}$/.test(normalized)
+    ) {
+      throw new BadRequestException(`${field} must be a valid base64 string`);
+    }
+    return Buffer.from(normalized, "base64");
   }
 
   async delete(id: string, userId?: string) {
@@ -194,11 +438,12 @@ export class IssuesService {
 
   /** Delete all issues, optionally scoped by projectId. Cleans up related files. Only deletes issues in user's org. */
   async deleteMany(projectId: string | undefined, userId: string) {
+    const safeProjectId = this.normalizeOptionalProjectId(projectId);
     const orgId = await this.getOrgIdForUser(userId);
     const where: Prisma.IssueWhereInput = {
       project: { organizationId: orgId },
     };
-    if (projectId) where.projectId = projectId;
+    if (safeProjectId) where.projectId = safeProjectId;
     const issues = await this.prisma.issue.findMany({
       where,
       include: { recordings: true, screenshots: true, files: true },
@@ -271,6 +516,13 @@ export class IssuesService {
     res.setHeader("Content-Type", contentType);
     res.setHeader("Accept-Ranges", "bytes");
     const stream = createReadStream(filePath);
+    stream.on("error", () => {
+      if (!res.headersSent) {
+        res.status(500).end();
+        return;
+      }
+      res.end();
+    });
     stream.pipe(res);
   }
 
@@ -282,6 +534,13 @@ export class IssuesService {
     fileName?: string,
     userId?: string
   ) {
+    const safeVideoBase64 = this.validateNonEmptyBase64(
+      videoBase64,
+      "videoBase64"
+    );
+    const safeMediaType = this.validateRecordingMediaType(mediaType);
+    const safeRecordingType = this.validateRecordingType(recordingType);
+    const buffer = this.decodeBase64(safeVideoBase64, "videoBase64");
     if (userId) await this.verifyIssueBelongsToUser(issueId, userId);
     const issue = await this.prisma.issue.findUnique({
       where: { id: issueId },
@@ -300,10 +559,9 @@ export class IssuesService {
       );
       displayName = fileName.trim();
     } else {
-      const suffix = `-${recordingType}.webm`;
+      const suffix = `-${safeRecordingType}.webm`;
       filename = `${issueId}-${Date.now()}${suffix}`;
     }
-    const buffer = Buffer.from(videoBase64, "base64");
     const ext = filename.match(/\.[a-z0-9]+$/i)?.[0]?.toLowerCase() ?? ".webm";
     const contentType =
       IssuesService.RECORDING_CONTENT_TYPES[ext] ?? "video/webm";
@@ -317,8 +575,8 @@ export class IssuesService {
       data: {
         videoUrl,
         issueId,
-        mediaType,
-        recordingType,
+        mediaType: safeMediaType,
+        recordingType: safeRecordingType,
         name: displayName ?? undefined,
       },
     });
@@ -330,9 +588,9 @@ export class IssuesService {
     issueId: string,
     recordingId: string,
     data: {
-      mediaType?: "video" | "audio";
-      recordingType?: "screen" | "camera" | "audio";
-      name?: string | null;
+      mediaType?: unknown;
+      recordingType?: unknown;
+      name?: unknown;
     },
     userId?: string
   ) {
@@ -347,11 +605,22 @@ export class IssuesService {
       recordingType?: string;
       name?: string | null;
     } = {};
-    if (data.mediaType !== undefined) payload.mediaType = data.mediaType;
+    if (data.mediaType !== undefined) {
+      payload.mediaType = this.validateRecordingMediaType(data.mediaType);
+    }
     if (data.recordingType !== undefined)
-      payload.recordingType = data.recordingType;
-    if (data.name !== undefined)
-      payload.name = data.name === "" ? null : data.name;
+      payload.recordingType = this.validateRecordingType(data.recordingType);
+    if (data.name !== undefined) {
+      if (data.name !== null && typeof data.name !== "string") {
+        throw new BadRequestException("name must be a string or null");
+      }
+      if (data.name === null) {
+        payload.name = null;
+      } else {
+        const trimmed = data.name.trim();
+        payload.name = trimmed ? trimmed : null;
+      }
+    }
     if (Object.keys(payload).length === 0) return this.get(issueId);
 
     await this.prisma.issueRecording.update({
@@ -380,6 +649,11 @@ export class IssuesService {
     fileName?: string,
     userId?: string
   ) {
+    const safeImageBase64 = this.validateNonEmptyBase64(
+      imageBase64,
+      "imageBase64"
+    );
+    const buffer = this.decodeBase64(safeImageBase64, "imageBase64");
     if (userId) await this.verifyIssueBelongsToUser(issueId, userId);
     const issue = await this.prisma.issue.findUnique({
       where: { id: issueId },
@@ -387,7 +661,6 @@ export class IssuesService {
     if (!issue) throw new NotFoundException("Issue not found");
 
     const filename = `${issueId}-${Date.now()}.png`;
-    const buffer = Buffer.from(imageBase64, "base64");
     const { url: imageUrl } = await this.storage.upload(
       "screenshots",
       filename,
@@ -415,12 +688,11 @@ export class IssuesService {
     if (!screenshot || screenshot.issueId !== issueId) {
       throw new NotFoundException("Screenshot not found");
     }
+    if (name !== undefined && name !== null && typeof name !== "string") {
+      throw new BadRequestException("name must be a string or null");
+    }
     const value =
-      name === undefined
-        ? undefined
-        : name === null || (typeof name === "string" && name.trim() === "")
-          ? null
-          : name.trim();
+      name === undefined ? undefined : name === null || name.trim() === "" ? null : name.trim();
     await this.prisma.issueScreenshot.update({
       where: { id: screenshotId },
       data: value === undefined ? {} : { name: value },
@@ -452,15 +724,25 @@ export class IssuesService {
     userId?: string
   ) {
     if (userId) await this.verifyIssueBelongsToUser(issueId, userId);
+    if (typeof fileBase64 !== "string" || typeof fileName !== "string") {
+      throw new BadRequestException("fileBase64 and fileName are required");
+    }
+    const trimmedName = fileName.trim();
+    const trimmedBase64 = fileBase64.trim();
+    if (!trimmedName || !trimmedBase64) {
+      throw new BadRequestException("fileBase64 and fileName are required");
+    }
+    const buffer = this.decodeBase64(trimmedBase64, "fileBase64");
     const issue = await this.prisma.issue.findUnique({
       where: { id: issueId },
     });
     if (!issue) throw new NotFoundException("Issue not found");
 
-    const ext = fileName.includes(".") ? fileName.replace(/^.*\./, "") : "bin";
+    const ext = trimmedName.includes(".")
+      ? trimmedName.replace(/^.*\./, "")
+      : "bin";
     const safeExt = ext.replace(/[^a-zA-Z0-9]/g, "") || "bin";
     const filename = `${issueId}-${Date.now()}-${safeExt}`;
-    const buffer = Buffer.from(fileBase64, "base64");
     const { url: fileUrl } = await this.storage.upload(
       "files",
       filename,
@@ -468,7 +750,7 @@ export class IssuesService {
       "application/octet-stream"
     );
     await this.prisma.issueFile.create({
-      data: { fileUrl, fileName, issueId },
+      data: { fileUrl, fileName: trimmedName, issueId },
     });
 
     return this.get(issueId);
@@ -477,7 +759,7 @@ export class IssuesService {
   async updateFile(
     issueId: string,
     fileId: string,
-    data: { fileName?: string },
+    data: { fileName?: unknown },
     userId?: string
   ) {
     if (userId) await this.verifyIssueBelongsToUser(issueId, userId);
@@ -485,6 +767,9 @@ export class IssuesService {
       where: { id: fileId, issueId },
     });
     if (!file) throw new NotFoundException("File not found");
+    if (data.fileName !== undefined && typeof data.fileName !== "string") {
+      throw new BadRequestException("fileName must be a string");
+    }
     const fileName = data.fileName?.trim();
     if (fileName === undefined || fileName === "") return this.get(issueId);
     await this.prisma.issueFile.update({
@@ -522,6 +807,9 @@ export class IssuesService {
       res.redirect(file.fileUrl);
       return;
     }
+    if (!IssuesService.LOCAL_FILE_URL_RE.test(file.fileUrl)) {
+      throw new NotFoundException("File not found");
+    }
     const filePath = join(process.cwd(), file.fileUrl);
     if (!existsSync(filePath)) throw new NotFoundException("File not found");
     const safeName = file.fileName.replace(/[^\w.-]/g, "_");
@@ -537,6 +825,13 @@ export class IssuesService {
         : `attachment; filename="${safeName}"`
     );
     const stream = createReadStream(filePath);
+    stream.on("error", () => {
+      if (!res.headersSent) {
+        res.status(500).end();
+        return;
+      }
+      res.end();
+    });
     stream.pipe(res);
   }
 }

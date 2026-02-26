@@ -1,4 +1,5 @@
 import { Test, TestingModule } from "@nestjs/testing";
+import { UnauthorizedException } from "@nestjs/common";
 import { IssuesController } from "./issues.controller";
 import { IssuesService } from "./issues.service";
 import { IssueCommentsService } from "./issue-comments.service";
@@ -102,6 +103,13 @@ describe("IssuesController", () => {
         "user-1"
       );
     });
+
+    it("should throw UnauthorizedException when req.user.sub is missing", async () => {
+      expect(() =>
+        controller.list(undefined, undefined, {} as any)
+      ).toThrow(UnauthorizedException);
+      expect(mockIssuesService.list).not.toHaveBeenCalled();
+    });
   });
 
   describe("streamRecording", () => {
@@ -144,6 +152,17 @@ describe("IssuesController", () => {
         "user-1"
       );
     });
+
+    it("should pass empty attachment body safely when request body is missing", async () => {
+      mockIssueCommentsService.addAttachment.mockResolvedValue({ id: "a1" });
+      await controller.addCommentAttachment("1", "c1", undefined as any, req as any);
+      expect(mockIssueCommentsService.addAttachment).toHaveBeenCalledWith(
+        "1",
+        "c1",
+        {},
+        "user-1"
+      );
+    });
   });
 
   describe("createComment", () => {
@@ -157,6 +176,16 @@ describe("IssuesController", () => {
       expect(mockIssueCommentsService.create).toHaveBeenCalledWith(
         "1",
         "New comment",
+        "user-1"
+      );
+    });
+
+    it("should pass undefined body safely when request body is missing", async () => {
+      mockIssueCommentsService.create.mockResolvedValue({ id: "c1" });
+      await controller.createComment("1", undefined as any, req as any);
+      expect(mockIssueCommentsService.create).toHaveBeenCalledWith(
+        "1",
+        undefined,
         "user-1"
       );
     });
@@ -174,6 +203,17 @@ describe("IssuesController", () => {
         "1",
         "c1",
         "Updated",
+        "user-1"
+      );
+    });
+
+    it("should pass undefined update body safely when request body is missing", async () => {
+      mockIssueCommentsService.update.mockResolvedValue({ id: "c1" });
+      await controller.updateComment("1", "c1", undefined as any, req as any);
+      expect(mockIssueCommentsService.update).toHaveBeenCalledWith(
+        "1",
+        "c1",
+        undefined,
         "user-1"
       );
     });
@@ -249,6 +289,19 @@ describe("IssuesController", () => {
         "user-1"
       );
     });
+
+    it("should pass undefined videoBase64 safely when body is missing", async () => {
+      mockIssuesService.addRecording.mockResolvedValue({ id: "1" });
+      await controller.addRecording("1", undefined as any, req as any);
+      expect(mockIssuesService.addRecording).toHaveBeenCalledWith(
+        "1",
+        undefined,
+        "video",
+        "screen",
+        undefined,
+        "user-1"
+      );
+    });
   });
 
   describe("updateRecording", () => {
@@ -263,6 +316,17 @@ describe("IssuesController", () => {
         "1",
         "r1",
         body,
+        "user-1"
+      );
+    });
+
+    it("should pass empty update payload safely when body is missing", async () => {
+      mockIssuesService.updateRecording.mockResolvedValue({ id: "1" });
+      await controller.updateRecording("1", "r1", undefined as any, req as any);
+      expect(mockIssuesService.updateRecording).toHaveBeenCalledWith(
+        "1",
+        "r1",
+        {},
         "user-1"
       );
     });
@@ -297,6 +361,17 @@ describe("IssuesController", () => {
         "user-1"
       );
     });
+
+    it("should pass undefined imageBase64 safely when body is missing", async () => {
+      mockIssuesService.addScreenshot.mockResolvedValue({ id: "1" });
+      await controller.addScreenshot("1", undefined as any, req as any);
+      expect(mockIssuesService.addScreenshot).toHaveBeenCalledWith(
+        "1",
+        undefined,
+        undefined,
+        "user-1"
+      );
+    });
   });
 
   describe("updateScreenshot", () => {
@@ -310,6 +385,17 @@ describe("IssuesController", () => {
         "1",
         "s1",
         "x",
+        "user-1"
+      );
+    });
+
+    it("should pass undefined name safely when body is missing", async () => {
+      mockIssuesService.updateScreenshot.mockResolvedValue({ id: "1" });
+      await controller.updateScreenshot("1", "s1", undefined as any, req as any);
+      expect(mockIssuesService.updateScreenshot).toHaveBeenCalledWith(
+        "1",
+        "s1",
+        undefined,
         "user-1"
       );
     });
@@ -345,6 +431,34 @@ describe("IssuesController", () => {
         controller.addFile(
           "1",
           { fileBase64: "x", fileName: "" } as any,
+          req as any
+        )
+      ).toThrow("fileBase64 and fileName are required");
+      expect(() =>
+        controller.addFile(
+          "1",
+          { fileBase64: "   ", fileName: "doc.pdf" } as any,
+          req as any
+        )
+      ).toThrow("fileBase64 and fileName are required");
+      expect(() =>
+        controller.addFile(
+          "1",
+          { fileBase64: "abc", fileName: "   " } as any,
+          req as any
+        )
+      ).toThrow("fileBase64 and fileName are required");
+      expect(() =>
+        controller.addFile(
+          "1",
+          { fileBase64: 123 as any, fileName: "doc.pdf" } as any,
+          req as any
+        )
+      ).toThrow("fileBase64 and fileName are required");
+      expect(() =>
+        controller.addFile(
+          "1",
+          { fileBase64: "abc", fileName: 123 as any } as any,
           req as any
         )
       ).toThrow("fileBase64 and fileName are required");
@@ -402,6 +516,17 @@ describe("IssuesController", () => {
         "user-1"
       );
     });
+
+    it("should pass empty update payload safely when body is missing", async () => {
+      mockIssuesService.updateFile.mockResolvedValue({ id: "1" });
+      await controller.updateFile("1", "f1", undefined as any, req as any);
+      expect(mockIssuesService.updateFile).toHaveBeenCalledWith(
+        "1",
+        "f1",
+        {},
+        "user-1"
+      );
+    });
   });
 
   describe("removeFile", () => {
@@ -440,6 +565,12 @@ describe("IssuesController", () => {
       );
       expect(mockIssuesService.create).toHaveBeenCalledWith(body, "user-1");
     });
+
+    it("should pass empty object safely when create body is missing", async () => {
+      mockIssuesService.create.mockResolvedValue({ id: "1" });
+      await controller.create(undefined as any, req as any);
+      expect(mockIssuesService.create).toHaveBeenCalledWith({}, "user-1");
+    });
   });
 
   describe("update", () => {
@@ -457,6 +588,12 @@ describe("IssuesController", () => {
         "user-1"
       );
     });
+
+    it("should pass empty object safely when update body is missing", async () => {
+      mockIssuesService.update.mockResolvedValue({ id: "1" });
+      await controller.update("1", undefined as any, req as any);
+      expect(mockIssuesService.update).toHaveBeenCalledWith("1", {}, "user-1");
+    });
   });
 
   describe("updateStatus", () => {
@@ -470,6 +607,16 @@ describe("IssuesController", () => {
       expect(mockIssuesService.updateStatus).toHaveBeenCalledWith(
         "1",
         "done",
+        "user-1"
+      );
+    });
+
+    it("should pass undefined status safely when body is missing", async () => {
+      mockIssuesService.updateStatus.mockResolvedValue({ id: "1" });
+      await controller.updateStatus("1", undefined as any, req as any);
+      expect(mockIssuesService.updateStatus).toHaveBeenCalledWith(
+        "1",
+        undefined,
         "user-1"
       );
     });

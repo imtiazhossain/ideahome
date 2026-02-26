@@ -47,6 +47,12 @@ describe("TodosController", () => {
     });
   });
 
+  it("create handles missing body safely", async () => {
+    mockSvc.create.mockResolvedValue({ id: "t1" });
+    await controller.create(undefined as any, req as any);
+    expect(mockSvc.create).toHaveBeenCalledWith("u1", {});
+  });
+
   it("update delegates to service", async () => {
     mockSvc.update.mockResolvedValue({});
     await controller.update("t1", { name: "New" }, req as any);
@@ -63,5 +69,11 @@ describe("TodosController", () => {
     mockSvc.reorder.mockResolvedValue([]);
     await controller.reorder({ projectId: "p1", todoIds: ["t1", "t2"] }, req as any);
     expect(mockSvc.reorder).toHaveBeenCalledWith("p1", "u1", ["t1", "t2"]);
+  });
+
+  it("reorder handles missing body safely", async () => {
+    mockSvc.reorder.mockResolvedValue([]);
+    await controller.reorder(undefined as any, req as any);
+    expect(mockSvc.reorder).toHaveBeenCalledWith(undefined, "u1", undefined);
   });
 });

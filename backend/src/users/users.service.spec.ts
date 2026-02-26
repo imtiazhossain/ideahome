@@ -8,6 +8,7 @@ describe("UsersService", () => {
 
   const mockPrisma = {
     user: {
+      findUnique: jest.fn(),
       findMany: jest.fn(),
     },
   };
@@ -35,13 +36,26 @@ describe("UsersService", () => {
         { id: "1", email: "a@test.com", name: "A" },
         { id: "2", email: "b@test.com", name: "B" },
       ];
+      mockPrisma.user.findUnique.mockResolvedValue({ organizationId: "o1" });
       mockPrisma.user.findMany.mockResolvedValue(users);
 
-      await expect(service.list()).resolves.toEqual(users);
+      await expect(service.list("u1")).resolves.toEqual(users);
+      expect(mockPrisma.user.findUnique).toHaveBeenCalledWith({
+        where: { id: "u1" },
+        select: { organizationId: true },
+      });
       expect(mockPrisma.user.findMany).toHaveBeenCalledWith({
+        where: { organizationId: "o1" },
         orderBy: { email: "asc" },
         select: { id: true, email: true, name: true },
       });
+    });
+
+    it("should return empty list when user has no organization", async () => {
+      mockPrisma.user.findUnique.mockResolvedValue({ organizationId: null });
+
+      await expect(service.list("u1")).resolves.toEqual([]);
+      expect(mockPrisma.user.findMany).not.toHaveBeenCalled();
     });
   });
 });

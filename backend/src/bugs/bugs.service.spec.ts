@@ -164,7 +164,10 @@ describe("BugsService", () => {
   describe("reorder", () => {
     it("should reorder bugs", async () => {
       mockPrisma.bug.update.mockResolvedValue({});
-      mockPrisma.bug.findMany.mockResolvedValue([]);
+      mockPrisma.bug.findMany
+        .mockResolvedValueOnce([{ id: "b1" }, { id: "b2" }, { id: "b3" }])
+        .mockResolvedValueOnce([{ id: "b2" }, { id: "b1" }, { id: "b3" }])
+        .mockResolvedValueOnce([]);
       mockPrisma.$transaction.mockImplementation((ops: Promise<unknown>[]) =>
         Promise.all(ops)
       );
@@ -172,6 +175,15 @@ describe("BugsService", () => {
       await service.reorder("p1", "user-1", ["b2", "b1", "b3"]);
       expect(mockPrisma.$transaction).toHaveBeenCalled();
       expect(mockPrisma.bug.findMany).toHaveBeenCalled();
+    });
+
+    it("should throw NotFoundException when a bug is outside the project", async () => {
+      mockPrisma.bug.findMany
+        .mockResolvedValueOnce([{ id: "b1" }, { id: "other" }])
+        .mockResolvedValueOnce([{ id: "b1" }]);
+      await expect(service.reorder("p1", "user-1", ["b1", "other"])).rejects.toThrow(
+        NotFoundException
+      );
     });
   });
 });

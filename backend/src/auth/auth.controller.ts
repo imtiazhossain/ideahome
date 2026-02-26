@@ -1,21 +1,79 @@
 import { Body, Controller, Get, Post, Query, Res } from "@nestjs/common";
 import { Response } from "express";
-import { PrismaService } from "../prisma.service";
+import * as crypto from "crypto";
 import { AuthService } from "./auth.service";
 import { FirebaseService } from "./firebase.service";
 import type { SsoProfile } from "./auth.service";
+import { getJwtSecret } from "./jwt-secret";
 
-const verifierStore = new Map<string, string>();
+const OIDC_STATE_TTL_MS = 10 * 60 * 1000;
+const OIDC_STATE_FUTURE_SKEW_MS = 60 * 1000;
 
 type OAuthCallbackQuery = { code?: string; state?: string };
 
 @Controller("auth")
 export class AuthController {
   constructor(
-    private readonly prisma: PrismaService,
     private readonly authService: AuthService,
     private readonly firebase: FirebaseService
   ) {}
+
+  private createOidcState(codeVerifier: string): string {
+    const payload = {
+      iat: Date.now(),
+      n: crypto.randomBytes(8).toString("hex"),
+      v: codeVerifier,
+    };
+    const payloadStr = JSON.stringify(payload);
+    const b64 = Buffer.from(payloadStr, "utf8").toString("base64url");
+    const sig = crypto
+      .createHmac("sha256", getJwtSecret())
+      .update(payloadStr)
+      .digest("base64url");
+    return `${b64}.${sig}`;
+  }
+
+  private consumeOidcState(state: string): string | null {
+    if (!state || typeof state !== "string") return null;
+    const dot = state.lastIndexOf(".");
+    if (dot === -1) return null;
+    const b64 = state.slice(0, dot);
+    const sig = state.slice(dot + 1);
+    let payloadStr: string;
+    try {
+      payloadStr = Buffer.from(b64, "base64url").toString("utf8");
+    } catch {
+      return null;
+    }
+    const expectedSig = crypto
+      .createHmac("sha256", getJwtSecret())
+      .update(payloadStr)
+      .digest("base64url");
+    const sigBuf = Buffer.from(sig);
+    const expectedBuf = Buffer.from(expectedSig);
+    if (
+      sigBuf.length !== expectedBuf.length ||
+      !crypto.timingSafeEqual(sigBuf, expectedBuf)
+    ) {
+      return null;
+    }
+    let payload: { iat?: number; v?: string };
+    try {
+      payload = JSON.parse(payloadStr);
+    } catch {
+      return null;
+    }
+    if (
+      typeof payload.iat !== "number" ||
+      payload.iat > Date.now() + OIDC_STATE_FUTURE_SKEW_MS ||
+      Date.now() - payload.iat > OIDC_STATE_TTL_MS ||
+      typeof payload.v !== "string" ||
+      !payload.v
+    ) {
+      return null;
+    }
+    return payload.v;
+  }
 
   private redirectWithError(res: Response, error: string) {
     const url = `${this.authService.getFrontendCallbackUrl("")}?error=${encodeURIComponent(error)}`;
@@ -29,12 +87,14 @@ export class AuthController {
     code: string,
     exchangeCode: (code: string) => Promise<SsoProfile>
   ) {
-    const consumed = this.authService.consumeState(state);
-    if (consumed !== provider || !code) {
+    const safeState = typeof state === "string" ? state.trim() : "";
+    const safeCode = typeof code === "string" ? code.trim() : "";
+    const consumed = this.authService.consumeState(safeState);
+    if (consumed !== provider || !safeCode) {
       return this.redirectWithError(res, "invalid_callback");
     }
     try {
-      const profile = await exchangeCode(code);
+      const profile = await exchangeCode(safeCode);
       const user = await this.authService.findOrCreateUserBySso(
         provider,
         profile
@@ -72,8 +132,7 @@ export class AuthController {
 
     const codeVerifier = generators.codeVerifier();
     const codeChallenge = generators.codeChallenge(codeVerifier);
-    const state = generators.state();
-    verifierStore.set(state, codeVerifier);
+    const state = this.createOidcState(codeVerifier);
 
     const authUrl = client.authorizationUrl({
       scope: "openid email profile",
@@ -87,7 +146,8 @@ export class AuthController {
 
   @Get("callback")
   async callback(@Res() res: Response, @Query() query: OAuthCallbackQuery) {
-    const { code, state } = query;
+    const code = typeof query.code === "string" ? query.code.trim() : "";
+    const state = typeof query.state === "string" ? query.state.trim() : "";
     if (!code || !state) {
       return res.status(400).json({ error: "Missing code or state" });
     }
@@ -96,8 +156,10 @@ export class AuthController {
       process.env.OIDC_REDIRECT_URI ??
       /* istanbul ignore next */ "http://localhost:3001/auth/callback";
 
-    const codeVerifier = verifierStore.get(state);
-    verifierStore.delete(state);
+    const codeVerifier = this.consumeOidcState(state);
+    if (!codeVerifier) {
+      return res.status(400).json({ error: "Invalid or expired state" });
+    }
 
     const tokenSet = await client.callback(
       redirectUri,
@@ -106,24 +168,28 @@ export class AuthController {
     );
     const userinfo = await client.userinfo(tokenSet.access_token as string);
 
-    const email = userinfo.email;
+    const emailRaw = (userinfo as { email?: unknown }).email;
+    const email =
+      typeof emailRaw === "string" && emailRaw.trim() ? emailRaw.trim() : "";
+    const sub =
+      typeof (userinfo as { sub?: unknown }).sub === "string"
+        ? ((userinfo as { sub?: string }).sub ?? "")
+        : "";
+    const nameRaw = (userinfo as { name?: unknown }).name;
+    const name =
+      typeof nameRaw === "string" && nameRaw.trim() ? nameRaw.trim() : null;
     if (!email) {
       return res.status(400).json({ error: "No email in userinfo" });
     }
+    if (!sub) {
+      return res.status(400).json({ error: "No sub in userinfo" });
+    }
 
-    const existing = await this.prisma.user.findFirst({
-      where: { email },
-      orderBy: { createdAt: "asc" },
+    const user = await this.authService.findOrCreateUserBySso("oidc", {
+      providerId: sub,
+      email,
+      name,
     });
-    const user = existing
-      ? await this.prisma.user.update({
-          where: { id: existing.id },
-          data: { name: userinfo.name || undefined },
-        })
-      : await this.prisma.user.create({
-          data: { email, name: userinfo.name },
-        });
-    await this.authService.ensureUserOrganization(user.id);
 
     const token = this.authService.signToken(user);
 
@@ -231,29 +297,35 @@ export class AuthController {
     @Res() res: Response,
     @Body("idToken") idToken: string
   ) {
-    if (!idToken || typeof idToken !== "string") {
+    if (typeof idToken !== "string" || !idToken.trim()) {
       return res.status(400).json({ error: "idToken required" });
     }
+    const normalizedIdToken = idToken.trim();
     if (!this.firebase.isConfigured()) {
       return res.status(503).json({
         error:
           "Firebase is not configured. Set FIREBASE_PROJECT_ID and credentials.",
       });
     }
-    const decoded = await this.firebase.verifyIdToken(idToken);
+    const decoded = await this.firebase.verifyIdToken(normalizedIdToken);
     if (!decoded) {
       return res
         .status(401)
         .json({ error: "Invalid or expired Firebase token" });
     }
-    const email = decoded.email ?? "";
+    const emailRaw = (decoded as { email?: unknown }).email;
+    const email =
+      typeof emailRaw === "string" && emailRaw.trim() ? emailRaw.trim() : "";
     if (!email) {
       return res.status(400).json({ error: "Firebase token missing email" });
     }
+    const nameRaw = (decoded as { name?: unknown }).name;
+    const name =
+      typeof nameRaw === "string" && nameRaw.trim() ? nameRaw.trim() : null;
     const user = await this.authService.findOrCreateUserByFirebase(
       decoded.uid,
       email,
-      decoded.name
+      name
     );
     const token = this.authService.signToken(user);
     return res.json({

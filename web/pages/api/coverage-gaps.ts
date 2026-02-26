@@ -1,20 +1,8 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import path from "path";
 import fs from "fs";
-
-function getMonorepoRoot(): string {
-  const cwd = process.cwd();
-  const here = path.join(cwd, "package.json");
-  if (fs.existsSync(here)) {
-    try {
-      const pkg = JSON.parse(fs.readFileSync(here, "utf-8"));
-      if (pkg.workspaces) return cwd;
-    } catch {
-      // ignore
-    }
-  }
-  return path.resolve(cwd, "..");
-}
+import { ensureInternalApiAccess } from "../../lib/server/internal-api-access";
+import { getMonorepoRoot } from "../../lib/server/monorepo-root";
 
 type CoverageEntry = {
   s: Record<string, number>;
@@ -39,6 +27,15 @@ export default async function handler(
   if (req.method !== "GET") {
     res.setHeader("Allow", "GET");
     return res.status(405).json({ error: "Method not allowed" });
+  }
+
+  const access = ensureInternalApiAccess(req, {
+    devOnlyError: "Coverage gaps endpoint is only available in development",
+    localhostError:
+      "Coverage gaps endpoint requires localhost access or RUN_COVERAGE_TOKEN configuration.",
+  });
+  if (!access.allowed) {
+    return res.status(access.status).json({ error: access.error });
   }
 
   const root = getMonorepoRoot();

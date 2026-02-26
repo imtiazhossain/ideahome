@@ -1,4 +1,5 @@
 import { Test, TestingModule } from "@nestjs/testing";
+import { JwtAuthGuard } from "../auth/jwt.guard";
 import { UsersController } from "./users.controller";
 import { UsersService } from "./users.service";
 
@@ -15,7 +16,10 @@ describe("UsersController", () => {
     const module: TestingModule = await Test.createTestingModule({
       controllers: [UsersController],
       providers: [{ provide: UsersService, useValue: mockUsersService }],
-    }).compile();
+    })
+      .overrideGuard(JwtAuthGuard)
+      .useValue({ canActivate: () => true })
+      .compile();
 
     controller = module.get<UsersController>(UsersController);
     service = module.get<UsersService>(UsersService);
@@ -32,9 +36,11 @@ describe("UsersController", () => {
         { id: "2", email: "b@test.com", name: null },
       ];
       mockUsersService.list.mockResolvedValue(users);
+      const req = { user: { sub: "u1" } } as any;
 
-      await expect(controller.list()).resolves.toEqual(users);
+      await expect(controller.list(req)).resolves.toEqual(users);
       expect(mockUsersService.list).toHaveBeenCalledTimes(1);
+      expect(mockUsersService.list).toHaveBeenCalledWith("u1");
     });
   });
 });

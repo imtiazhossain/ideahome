@@ -11,6 +11,12 @@ const COMMENT_INCLUDE = {
   editHistory: { orderBy: { editedAt: "asc" as const } },
   attachments: { orderBy: { createdAt: "asc" as const } },
 };
+const COMMENT_ATTACHMENT_TYPES = new Set([
+  "screenshot",
+  "video",
+  "screen_recording",
+  "camera_recording",
+]);
 
 @Injectable()
 export class IssueCommentsService {
@@ -19,6 +25,18 @@ export class IssueCommentsService {
     private readonly issuesService: IssuesService,
     private readonly storage: StorageService
   ) {}
+
+  private decodeBase64(value: string, field: string): Buffer {
+    const normalized = value.replace(/\s+/g, "");
+    if (
+      normalized.length === 0 ||
+      normalized.length % 4 !== 0 ||
+      !/^[A-Za-z0-9+/]+={0,2}$/.test(normalized)
+    ) {
+      throw new BadRequestException(`${field} must be a valid base64 string`);
+    }
+    return Buffer.from(normalized, "base64");
+  }
 
   async list(issueId: string, userId: string) {
     await this.issuesService.verifyIssueAccess(issueId, userId);
@@ -29,10 +47,15 @@ export class IssueCommentsService {
     });
   }
 
-  async create(issueId: string, body: string, userId: string) {
+  async create(issueId: string, body: unknown, userId: string) {
     await this.issuesService.verifyIssueAccess(issueId, userId);
+    if (typeof body !== "string") {
+      throw new BadRequestException("Comment body is required");
+    }
+    const text = body.trim();
+    if (!text) throw new BadRequestException("Comment body is required");
     return this.prisma.issueComment.create({
-      data: { issueId, body },
+      data: { issueId, body: text },
       include: COMMENT_INCLUDE,
     });
   }
@@ -40,7 +63,7 @@ export class IssueCommentsService {
   async update(
     issueId: string,
     commentId: string,
-    body: string,
+    body: unknown,
     userId: string
   ) {
     await this.issuesService.verifyIssueAccess(issueId, userId);
@@ -49,7 +72,12 @@ export class IssueCommentsService {
     });
     if (!comment || comment.issueId !== issueId)
       throw new NotFoundException("Comment not found");
-    if (comment.body === body.trim()) return this.getOne(commentId);
+    if (typeof body !== "string") {
+      throw new BadRequestException("Comment body is required");
+    }
+    const text = body.trim();
+    if (!text) throw new BadRequestException("Comment body is required");
+    if (comment.body === text) return this.getOne(commentId);
 
     await this.prisma.$transaction([
       this.prisma.issueCommentEdit.create({
@@ -57,7 +85,7 @@ export class IssueCommentsService {
       }),
       this.prisma.issueComment.update({
         where: { id: commentId },
-        data: { body: body.trim() },
+        data: { body: text },
       }),
     ]);
     return this.getOne(commentId);
@@ -76,9 +104,9 @@ export class IssueCommentsService {
     issueId: string,
     commentId: string,
     payload: {
-      type: "screenshot" | "video" | "screen_recording" | "camera_recording";
-      imageBase64?: string;
-      videoBase64?: string;
+      type?: unknown;
+      imageBase64?: unknown;
+      videoBase64?: unknown;
     },
     userId: string
   ) {
@@ -89,6 +117,16 @@ export class IssueCommentsService {
     if (!comment) throw new NotFoundException("Comment not found");
 
     const { type, imageBase64, videoBase64 } = payload;
+    if (typeof type !== "string") {
+      throw new BadRequestException(
+        "type must be one of: screenshot, video, screen_recording, camera_recording"
+      );
+    }
+    if (!COMMENT_ATTACHMENT_TYPES.has(type)) {
+      throw new BadRequestException(
+        "type must be one of: screenshot, video, screen_recording, camera_recording"
+      );
+    }
     const imageB64 =
       typeof imageBase64 === "string" ? imageBase64.trim() : undefined;
     const videoB64 =
@@ -111,7 +149,7 @@ export class IssueCommentsService {
 
     if (isImage) {
       const filename = `comment-${commentId}-${Date.now()}.png`;
-      const buffer = Buffer.from(imageB64, "base64");
+      const buffer = this.decodeBase64(imageB64, "imageBase64");
       const { url: mediaUrl } = await this.storage.upload(
         "screenshots",
         filename,
@@ -125,7 +163,7 @@ export class IssueCommentsService {
     }
 
     const filename = `comment-${commentId}-${Date.now()}.webm`;
-    const buffer = Buffer.from(videoB64!, "base64");
+    const buffer = this.decodeBase64(videoB64!, "videoBase64");
     const { url: mediaUrl } = await this.storage.upload(
       "recordings",
       filename,

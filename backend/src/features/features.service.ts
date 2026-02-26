@@ -1,116 +1,43 @@
-import {
-  ForbiddenException,
-  Injectable,
-  NotFoundException,
-} from "@nestjs/common";
+import { Injectable } from "@nestjs/common";
+import { ProjectScopedListService } from "../common/project-scoped-list.service";
 import { PrismaService } from "../prisma.service";
 
 @Injectable()
 export class FeaturesService {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly listService: ProjectScopedListService;
 
-  private async getOrgIdForUser(userId: string): Promise<string> {
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-      select: { organizationId: true },
-    });
-    if (!user?.organizationId) {
-      throw new ForbiddenException(
-        "User has no organization. Complete login again to create one."
-      );
-    }
-    return user.organizationId;
-  }
-
-  private async verifyProjectAccess(
-    projectId: string,
-    userId: string
-  ): Promise<void> {
-    const orgId = await this.getOrgIdForUser(userId);
-    const project = await this.prisma.project.findUnique({
-      where: { id: projectId },
-    });
-    if (!project || project.organizationId !== orgId) {
-      throw new NotFoundException("Project not found");
-    }
+  constructor(private readonly prisma: PrismaService) {
+    this.listService = new ProjectScopedListService(
+      prisma,
+      "feature",
+      "Feature"
+    );
   }
 
   async list(projectId: string, userId: string, search?: string) {
-    await this.verifyProjectAccess(projectId, userId);
-    const where: {
-      projectId: string;
-      name?: { contains: string; mode: "insensitive" };
-    } = {
-      projectId,
-    };
-    if (search?.trim()) {
-      where.name = { contains: search.trim(), mode: "insensitive" };
-    }
-    return this.prisma.feature.findMany({
-      where,
-      orderBy: [{ order: "asc" }, { createdAt: "asc" }],
-    });
+    return this.listService.list(projectId, userId, search);
   }
 
   async create(
     userId: string,
-    body: { projectId: string; name: string; done?: boolean }
+    body: { projectId?: unknown; name?: unknown; done?: unknown }
   ) {
-    await this.verifyProjectAccess(body.projectId, userId);
-    const agg = await this.prisma.feature.aggregate({
-      where: { projectId: body.projectId },
-      _max: { order: true },
-    });
-    const maxOrder = agg._max.order ?? -1;
-    return this.prisma.feature.create({
-      data: {
-        projectId: body.projectId,
-        name: body.name.trim(),
-        done: Boolean(body.done),
-        order: maxOrder + 1,
-      },
-    });
-  }
-
-  private async verifyFeatureAccess(featureId: string, userId: string) {
-    const orgId = await this.getOrgIdForUser(userId);
-    const feature = await this.prisma.feature.findUnique({
-      where: { id: featureId },
-      include: { project: true },
-    });
-    if (!feature || feature.project.organizationId !== orgId) {
-      throw new NotFoundException("Feature not found");
-    }
-    return feature;
+    return this.listService.create(userId, body);
   }
 
   async update(
     id: string,
     userId: string,
-    body: { name?: string; done?: boolean; order?: number }
+    body: { name?: unknown; done?: unknown; order?: unknown }
   ) {
-    await this.verifyFeatureAccess(id, userId);
-    const data: { name?: string; done?: boolean; order?: number } = {};
-    if (body.name !== undefined) data.name = body.name.trim();
-    if (body.done !== undefined) data.done = body.done;
-    if (body.order !== undefined) data.order = body.order;
-    return this.prisma.feature.update({ where: { id }, data });
+    return this.listService.update(id, userId, body);
   }
 
   async remove(id: string, userId: string) {
-    await this.verifyFeatureAccess(id, userId);
-    return this.prisma.feature.delete({ where: { id } });
+    return this.listService.remove(id, userId);
   }
 
   async reorder(projectId: string, userId: string, featureIds: string[]) {
-    await this.verifyProjectAccess(projectId, userId);
-    const updates = featureIds.map((id, index) =>
-      this.prisma.feature.update({
-        where: { id },
-        data: { order: index },
-      })
-    );
-    await this.prisma.$transaction(updates);
-    return this.list(projectId, userId);
+    return this.listService.reorder(projectId, userId, featureIds);
   }
 }

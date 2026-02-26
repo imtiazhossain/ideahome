@@ -1,5 +1,5 @@
 import { Test, TestingModule } from "@nestjs/testing";
-import { NotFoundException } from "@nestjs/common";
+import { BadRequestException, NotFoundException } from "@nestjs/common";
 import { PrismaClientKnownRequestError } from "@prisma/client/runtime/library";
 import { AuthService } from "../auth/auth.service";
 import { ProjectsService } from "./projects.service";
@@ -145,6 +145,20 @@ describe("ProjectsService", () => {
         data: { name: input.name, organizationId: "new-org" },
       });
     });
+
+    it("should throw BadRequestException when name is blank", async () => {
+      await expect(service.create("user-1", { name: "   " })).rejects.toThrow(
+        BadRequestException
+      );
+      expect(mockPrisma.project.create).not.toHaveBeenCalled();
+    });
+
+    it("should throw BadRequestException when name is not a string", async () => {
+      await expect(
+        service.create("user-1", { name: 123 as unknown as string })
+      ).rejects.toThrow(BadRequestException);
+      expect(mockPrisma.project.create).not.toHaveBeenCalled();
+    });
   });
 
   describe("update", () => {
@@ -158,8 +172,30 @@ describe("ProjectsService", () => {
       expect(result).toEqual(expected);
       expect(mockPrisma.project.update).toHaveBeenCalledWith({
         where: { id: "1" },
-        data,
+        data: { name: "Updated Name" },
       });
+    });
+
+    it("should throw BadRequestException when update name is blank", async () => {
+      mockPrisma.project.findUnique.mockResolvedValue({
+        id: "1",
+        organizationId: "o1",
+      });
+      await expect(service.update("1", "user-1", { name: "   " })).rejects.toThrow(
+        BadRequestException
+      );
+      expect(mockPrisma.project.update).not.toHaveBeenCalled();
+    });
+
+    it("should throw BadRequestException when update name is not a string", async () => {
+      mockPrisma.project.findUnique.mockResolvedValue({
+        id: "1",
+        organizationId: "o1",
+      });
+      await expect(
+        service.update("1", "user-1", { name: 123 as unknown as string })
+      ).rejects.toThrow(BadRequestException);
+      expect(mockPrisma.project.update).not.toHaveBeenCalled();
     });
   });
 

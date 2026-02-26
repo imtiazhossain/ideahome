@@ -1,6 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import path from "path";
 import fs from "fs";
+import { ensureInternalApiAccess } from "../../lib/server/internal-api-access";
 
 export type UITestSuite = {
   name: string;
@@ -55,8 +56,6 @@ function parseSpecContent(content: string): UITestSuite[] {
   // Match test.describe("Suite name", () => { ... }) - capture suite name
   const describeRe =
     /test\.describe\s*\(\s*["']([^"']+)["']\s*,\s*\(\)\s*=>\s*\{/g;
-  // Match test("test name", async ... - capture test name (same line)
-  const testRe = /test\s*\(\s*["']([^"']+)["']\s*,\s*(?:async\s*)?\(/g;
 
   let m: RegExpExecArray | null;
   const describeMatches: { name: string; start: number; end: number }[] = [];
@@ -116,6 +115,15 @@ export default function handler(
   if (req.method !== "GET") {
     res.setHeader("Allow", "GET");
     return res.status(405).json({ error: "Method not allowed" });
+  }
+
+  const access = ensureInternalApiAccess(req, {
+    devOnlyError: "UI tests endpoint is only available in development",
+    localhostError:
+      "UI tests endpoint requires localhost access or RUN_COVERAGE_TOKEN configuration.",
+  });
+  if (!access.allowed) {
+    return res.status(access.status).json({ error: access.error });
   }
 
   res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");

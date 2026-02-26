@@ -2,20 +2,8 @@ import type { NextApiRequest, NextApiResponse } from "next";
 import { spawn } from "child_process";
 import path from "path";
 import fs from "fs";
-
-function getMonorepoRoot(): string {
-  const cwd = process.cwd();
-  const here = path.join(cwd, "package.json");
-  if (fs.existsSync(here)) {
-    try {
-      const pkg = JSON.parse(fs.readFileSync(here, "utf-8"));
-      if (pkg.workspaces) return cwd;
-    } catch {
-      // ignore
-    }
-  }
-  return path.resolve(cwd, "..");
-}
+import { ensureInternalApiAccess } from "../../lib/server/internal-api-access";
+import { getMonorepoRoot } from "../../lib/server/monorepo-root";
 
 /**
  * POST /api/run-coverage
@@ -36,11 +24,13 @@ export default async function handler(
     return res.status(405).json({ ok: false, error: "Method not allowed" });
   }
 
-  if (process.env.NODE_ENV !== "development") {
-    return res.status(403).json({
-      ok: false,
-      error: "Run coverage is only available in development",
-    });
+  const access = ensureInternalApiAccess(req, {
+    devOnlyError: "Run coverage is only available in development",
+    localhostError:
+      "Run coverage requires localhost access or RUN_COVERAGE_TOKEN configuration.",
+  });
+  if (!access.allowed) {
+    return res.status(access.status).json({ ok: false, error: access.error });
   }
 
   const root = getMonorepoRoot();

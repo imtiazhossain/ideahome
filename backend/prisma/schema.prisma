@@ -123,6 +123,8 @@ model Issue {
   screenshots        IssueScreenshot[]
   files              IssueFile[]
   createdAt           DateTime      @default(now())
+
+  @@unique([projectId, key])
 }
 
 model IssueFile {

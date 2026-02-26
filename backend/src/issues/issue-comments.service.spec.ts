@@ -1,5 +1,5 @@
 import { Test, TestingModule } from "@nestjs/testing";
-import { NotFoundException } from "@nestjs/common";
+import { BadRequestException, NotFoundException } from "@nestjs/common";
 import { IssueCommentsService } from "./issue-comments.service";
 import { IssuesService } from "./issues.service";
 import { PrismaService } from "../prisma.service";
@@ -138,6 +138,20 @@ describe("IssueCommentsService", () => {
       ).rejects.toThrow("Issue not found");
       expect(mockPrisma.issueComment.create).not.toHaveBeenCalled();
     });
+
+    it("should throw BadRequestException for blank comment body", async () => {
+      await expect(
+        service.create("issue-1", "   ", TEST_USER_ID)
+      ).rejects.toThrow(BadRequestException);
+      expect(mockPrisma.issueComment.create).not.toHaveBeenCalled();
+    });
+
+    it("should throw BadRequestException for non-string comment body", async () => {
+      await expect(
+        service.create("issue-1", 123 as unknown as string, TEST_USER_ID)
+      ).rejects.toThrow(BadRequestException);
+      expect(mockPrisma.issueComment.create).not.toHaveBeenCalled();
+    });
   });
 
   describe("update", () => {
@@ -216,6 +230,37 @@ describe("IssueCommentsService", () => {
         service.update("issue-1", "c1", "New", TEST_USER_ID)
       ).rejects.toThrow("Comment not found");
     });
+
+    it("should throw BadRequestException for blank update body", async () => {
+      mockPrisma.issueComment.findUnique.mockResolvedValue({
+        id: "c1",
+        issueId: "issue-1",
+        body: "Old body",
+      });
+
+      await expect(
+        service.update("issue-1", "c1", "   ", TEST_USER_ID)
+      ).rejects.toThrow(BadRequestException);
+      expect(mockPrisma.$transaction).not.toHaveBeenCalled();
+    });
+
+    it("should throw BadRequestException for non-string update body", async () => {
+      mockPrisma.issueComment.findUnique.mockResolvedValue({
+        id: "c1",
+        issueId: "issue-1",
+        body: "Old body",
+      });
+
+      await expect(
+        service.update(
+          "issue-1",
+          "c1",
+          123 as unknown as string,
+          TEST_USER_ID
+        )
+      ).rejects.toThrow(BadRequestException);
+      expect(mockPrisma.$transaction).not.toHaveBeenCalled();
+    });
   });
 
   describe("addAttachment", () => {
@@ -289,6 +334,22 @@ describe("IssueCommentsService", () => {
       ).rejects.toThrow("Provide a non-empty imageBase64 for screenshot");
     });
 
+    it("should throw BadRequestException when screenshot imageBase64 is invalid", async () => {
+      mockPrisma.issueComment.findFirst.mockResolvedValue({
+        id: "c1",
+        issueId: "issue-1",
+      });
+
+      await expect(
+        service.addAttachment(
+          "issue-1",
+          "c1",
+          { type: "screenshot", imageBase64: "not-base64" },
+          TEST_USER_ID
+        )
+      ).rejects.toThrow("imageBase64 must be a valid base64 string");
+    });
+
     it("should throw BadRequestException when video has no videoBase64", async () => {
       mockPrisma.issueComment.findFirst.mockResolvedValue({
         id: "c1",
@@ -305,6 +366,41 @@ describe("IssueCommentsService", () => {
       ).rejects.toThrow(
         "Provide a non-empty videoBase64 for video, screen_recording, or camera_recording"
       );
+    });
+
+    it("should throw BadRequestException when videoBase64 is invalid", async () => {
+      mockPrisma.issueComment.findFirst.mockResolvedValue({
+        id: "c1",
+        issueId: "issue-1",
+      });
+
+      await expect(
+        service.addAttachment(
+          "issue-1",
+          "c1",
+          { type: "video", videoBase64: "not-base64" },
+          TEST_USER_ID
+        )
+      ).rejects.toThrow("videoBase64 must be a valid base64 string");
+    });
+
+    it("should throw BadRequestException when type is invalid", async () => {
+      mockPrisma.issueComment.findFirst.mockResolvedValue({
+        id: "c1",
+        issueId: "issue-1",
+      });
+
+      await expect(
+        service.addAttachment(
+          "issue-1",
+          "c1",
+          { type: "invalid" as any, videoBase64: "dmlkZW8=" },
+          TEST_USER_ID
+        )
+      ).rejects.toThrow(
+        "type must be one of: screenshot, video, screen_recording, camera_recording"
+      );
+      expect(mockPrisma.commentAttachment.create).not.toHaveBeenCalled();
     });
 
     it("should throw NotFoundException when comment not found", async () => {

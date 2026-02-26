@@ -4,6 +4,14 @@ import Head from "next/head";
 import Link from "next/link";
 import { setStoredToken, clearStoredToken } from "../../lib/api";
 
+function safeDecodeURIComponent(value: string): string {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+}
+
 export default function LoginCallbackPage() {
   const router = useRouter();
   const [status, setStatus] = useState<"loading" | "done" | "error">("loading");
@@ -11,15 +19,24 @@ export default function LoginCallbackPage() {
 
   useEffect(() => {
     if (!router.isReady) return;
+    const hash = typeof window !== "undefined" ? window.location.hash : "";
+    const hashParams = new URLSearchParams(hash.startsWith("#") ? hash.slice(1) : hash);
+    const tokenFromHash = hashParams.get("token")?.trim() ?? "";
+    const errorFromHash = hashParams.get("error")?.trim() ?? "";
     const { token, error } = router.query;
-    if (typeof error === "string") {
+    const tokenFromQuery = typeof token === "string" ? token.trim() : "";
+    const errorFromQuery = typeof error === "string" ? safeDecodeURIComponent(error).trim() : "";
+    const resolvedError =
+      errorFromHash || errorFromQuery || null;
+    if (resolvedError) {
       clearStoredToken();
-      setErrorMessage(decodeURIComponent(error));
+      setErrorMessage(resolvedError);
       setStatus("error");
       return;
     }
-    if (typeof token === "string" && token) {
-      setStoredToken(token);
+    const resolvedToken = tokenFromHash || tokenFromQuery;
+    if (resolvedToken) {
+      setStoredToken(resolvedToken);
       setStatus("done");
       router.replace("/", undefined, { shallow: false });
       return;

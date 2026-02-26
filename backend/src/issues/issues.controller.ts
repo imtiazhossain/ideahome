@@ -13,7 +13,8 @@ import {
   Res,
   UseGuards,
 } from "@nestjs/common";
-import { Request, Response } from "express";
+import { Response } from "express";
+import { AuthenticatedRequest, requireUserId } from "../auth/request-user";
 import { JwtAuthGuard } from "../auth/jwt.guard";
 import { IssueCommentsService } from "./issue-comments.service";
 import { IssuesService } from "./issues.service";
@@ -26,15 +27,15 @@ export class IssuesController {
     private readonly commentsSvc: IssueCommentsService
   ) {}
 
-  private userId(req: Request & { user?: { sub: string } }): string {
-    return req.user!.sub;
+  private userId(req: AuthenticatedRequest): string {
+    return requireUserId(req);
   }
 
   @Get()
   list(
     @Query("projectId") projectId: string | undefined,
     @Query("search") search: string | undefined,
-    @Req() req: Request & { user?: { sub: string } }
+    @Req() req: AuthenticatedRequest
   ) {
     return this.svc.list(projectId, search, this.userId(req));
   }
@@ -43,7 +44,7 @@ export class IssuesController {
   async streamRecording(
     @Param("filename") filename: string,
     @Res() res: Response,
-    @Req() req: Request & { user?: { sub: string } }
+    @Req() req: AuthenticatedRequest
   ) {
     await this.svc.streamRecording(filename, res, this.userId(req));
   }
@@ -51,7 +52,7 @@ export class IssuesController {
   @Get(":id/comments")
   listComments(
     @Param("id") id: string,
-    @Req() req: Request & { user?: { sub: string } }
+    @Req() req: AuthenticatedRequest
   ) {
     return this.commentsSvc.list(id, this.userId(req));
   }
@@ -66,12 +67,13 @@ export class IssuesController {
       imageBase64?: string;
       videoBase64?: string;
     },
-    @Req() req: Request & { user?: { sub: string } }
+    @Req() req: AuthenticatedRequest
   ) {
+    const payload = body ?? {};
     return this.commentsSvc.addAttachment(
       id,
       commentId,
-      body,
+      payload,
       this.userId(req)
     );
   }
@@ -80,9 +82,9 @@ export class IssuesController {
   createComment(
     @Param("id") id: string,
     @Body() body: { body: string },
-    @Req() req: Request & { user?: { sub: string } }
+    @Req() req: AuthenticatedRequest
   ) {
-    return this.commentsSvc.create(id, body.body, this.userId(req));
+    return this.commentsSvc.create(id, body?.body, this.userId(req));
   }
 
   @Delete(":id/comments/:commentId/attachments/:attachmentId")
@@ -90,7 +92,7 @@ export class IssuesController {
     @Param("id") id: string,
     @Param("commentId") commentId: string,
     @Param("attachmentId") attachmentId: string,
-    @Req() req: Request & { user?: { sub: string } }
+    @Req() req: AuthenticatedRequest
   ) {
     return this.commentsSvc.removeAttachment(
       id,
@@ -105,16 +107,16 @@ export class IssuesController {
     @Param("id") id: string,
     @Param("commentId") commentId: string,
     @Body() body: { body: string },
-    @Req() req: Request & { user?: { sub: string } }
+    @Req() req: AuthenticatedRequest
   ) {
-    return this.commentsSvc.update(id, commentId, body.body, this.userId(req));
+    return this.commentsSvc.update(id, commentId, body?.body, this.userId(req));
   }
 
   @Delete(":id/comments/:commentId")
   deleteComment(
     @Param("id") id: string,
     @Param("commentId") commentId: string,
-    @Req() req: Request & { user?: { sub: string } }
+    @Req() req: AuthenticatedRequest
   ) {
     return this.commentsSvc.delete(id, commentId, this.userId(req));
   }
@@ -129,14 +131,15 @@ export class IssuesController {
       recordingType?: "screen" | "camera" | "audio";
       fileName?: string;
     },
-    @Req() req: Request & { user?: { sub: string } }
+    @Req() req: AuthenticatedRequest
   ) {
+    const payload = body ?? {};
     return this.svc.addRecording(
       id,
-      body.videoBase64,
-      body.mediaType ?? "video",
-      body.recordingType ?? "screen",
-      body.fileName,
+      payload.videoBase64,
+      payload.mediaType ?? "video",
+      payload.recordingType ?? "screen",
+      payload.fileName,
       this.userId(req)
     );
   }
@@ -151,16 +154,21 @@ export class IssuesController {
       recordingType?: "screen" | "camera" | "audio";
       name?: string | null;
     },
-    @Req() req: Request & { user?: { sub: string } }
+    @Req() req: AuthenticatedRequest
   ) {
-    return this.svc.updateRecording(id, recordingId, body, this.userId(req));
+    return this.svc.updateRecording(
+      id,
+      recordingId,
+      body ?? {},
+      this.userId(req)
+    );
   }
 
   @Delete(":id/recordings/:recordingId")
   removeRecording(
     @Param("id") id: string,
     @Param("recordingId") recordingId: string,
-    @Req() req: Request & { user?: { sub: string } }
+    @Req() req: AuthenticatedRequest
   ) {
     return this.svc.removeRecording(id, recordingId, this.userId(req));
   }
@@ -169,12 +177,13 @@ export class IssuesController {
   addScreenshot(
     @Param("id") id: string,
     @Body() body: { imageBase64: string; fileName?: string },
-    @Req() req: Request & { user?: { sub: string } }
+    @Req() req: AuthenticatedRequest
   ) {
+    const payload = body ?? {};
     return this.svc.addScreenshot(
       id,
-      body.imageBase64,
-      body.fileName,
+      payload.imageBase64,
+      payload.fileName,
       this.userId(req)
     );
   }
@@ -184,12 +193,13 @@ export class IssuesController {
     @Param("id") id: string,
     @Param("screenshotId") screenshotId: string,
     @Body() body: { name?: string | null },
-    @Req() req: Request & { user?: { sub: string } }
+    @Req() req: AuthenticatedRequest
   ) {
+    const payload = body ?? {};
     return this.svc.updateScreenshot(
       id,
       screenshotId,
-      body.name,
+      payload.name,
       this.userId(req)
     );
   }
@@ -198,7 +208,7 @@ export class IssuesController {
   removeScreenshot(
     @Param("id") id: string,
     @Param("screenshotId") screenshotId: string,
-    @Req() req: Request & { user?: { sub: string } }
+    @Req() req: AuthenticatedRequest
   ) {
     return this.svc.removeScreenshot(id, screenshotId, this.userId(req));
   }
@@ -207,21 +217,19 @@ export class IssuesController {
   addFile(
     @Param("id") id: string,
     @Body() body: { fileBase64?: string; fileName?: string },
-    @Req() req: Request & { user?: { sub: string } }
+    @Req() req: AuthenticatedRequest
   ) {
+    const fileBase64 = body?.fileBase64;
+    const fileName = body?.fileName;
     if (
-      body?.fileBase64 == null ||
-      body?.fileName == null ||
-      body.fileName === ""
+      typeof fileBase64 !== "string" ||
+      typeof fileName !== "string" ||
+      fileBase64.trim() === "" ||
+      fileName.trim() === ""
     ) {
       throw new BadRequestException("fileBase64 and fileName are required");
     }
-    return this.svc.addFile(
-      id,
-      body.fileBase64,
-      body.fileName,
-      this.userId(req)
-    );
+    return this.svc.addFile(id, fileBase64, fileName, this.userId(req));
   }
 
   @Get(":id/files/:fileId/stream")
@@ -229,7 +237,7 @@ export class IssuesController {
     @Param("id") id: string,
     @Param("fileId") fileId: string,
     @Res() res: Response,
-    @Req() req: Request & { user?: { sub: string } }
+    @Req() req: AuthenticatedRequest
   ) {
     return this.svc.streamFile(id, fileId, res, this.userId(req));
   }
@@ -239,16 +247,16 @@ export class IssuesController {
     @Param("id") id: string,
     @Param("fileId") fileId: string,
     @Body() body: { fileName?: string },
-    @Req() req: Request & { user?: { sub: string } }
+    @Req() req: AuthenticatedRequest
   ) {
-    return this.svc.updateFile(id, fileId, body, this.userId(req));
+    return this.svc.updateFile(id, fileId, body ?? {}, this.userId(req));
   }
 
   @Delete(":id/files/:fileId")
   removeFile(
     @Param("id") id: string,
     @Param("fileId") fileId: string,
-    @Req() req: Request & { user?: { sub: string } }
+    @Req() req: AuthenticatedRequest
   ) {
     return this.svc.removeFile(id, fileId, this.userId(req));
   }
@@ -256,7 +264,7 @@ export class IssuesController {
   @Get(":id")
   get(
     @Param("id") id: string,
-    @Req() req: Request & { user?: { sub: string } }
+    @Req() req: AuthenticatedRequest
   ) {
     return this.svc.get(id, this.userId(req));
   }
@@ -272,37 +280,38 @@ export class IssuesController {
       api?: string;
       testCases?: string;
       automatedTest?: string;
+      status?: string;
       qualityScore?: number;
       projectId: string;
       assigneeId?: string;
     },
-    @Req() req: Request & { user?: { sub: string } }
+    @Req() req: AuthenticatedRequest
   ) {
-    return this.svc.create(body, this.userId(req));
+    return this.svc.create(body ?? {}, this.userId(req));
   }
 
   @Put(":id")
   update(
     @Param("id") id: string,
     @Body() body: Record<string, unknown>,
-    @Req() req: Request & { user?: { sub: string } }
+    @Req() req: AuthenticatedRequest
   ) {
-    return this.svc.update(id, body, this.userId(req));
+    return this.svc.update(id, (body ?? {}) as Record<string, unknown>, this.userId(req));
   }
 
   @Patch(":id/status")
   updateStatus(
     @Param("id") id: string,
     @Body() body: { status: string },
-    @Req() req: Request & { user?: { sub: string } }
+    @Req() req: AuthenticatedRequest
   ) {
-    return this.svc.updateStatus(id, body.status, this.userId(req));
+    return this.svc.updateStatus(id, body?.status, this.userId(req));
   }
 
   @Delete("bulk")
   removeAll(
     @Query("projectId") projectId: string | undefined,
-    @Req() req: Request & { user?: { sub: string } }
+    @Req() req: AuthenticatedRequest
   ) {
     return this.svc.deleteMany(projectId, this.userId(req));
   }
@@ -310,7 +319,7 @@ export class IssuesController {
   @Delete(":id")
   remove(
     @Param("id") id: string,
-    @Req() req: Request & { user?: { sub: string } }
+    @Req() req: AuthenticatedRequest
   ) {
     return this.svc.delete(id, this.userId(req));
   }

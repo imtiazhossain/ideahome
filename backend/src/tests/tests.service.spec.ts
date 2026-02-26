@@ -79,6 +79,21 @@ describe("TestsService", () => {
       });
     });
 
+    it("should emit error when grep exceeds max length", (done) => {
+      const events: unknown[] = [];
+      service.runUiTestStream("x".repeat(301)).subscribe({
+        next: (e) => events.push(JSON.parse((e as { data: string }).data)),
+        complete: () => {
+          expect(events).toHaveLength(1);
+          expect(events[0]).toEqual({
+            type: "error",
+            data: "grep exceeds 300 characters",
+          });
+          done();
+        },
+      });
+    });
+
     it("should spawn, then emit result on close with success and video when code 0", (done) => {
       let closeHandler: (code: number | null, signal: string | null) => void;
       mockSpawn.mockImplementation(() => {
@@ -356,6 +371,38 @@ describe("TestsService", () => {
   });
 
   describe("runUiTest", () => {
+    it("should return error when grep is empty", async () => {
+      const result = await service.runUiTest("");
+      expect(result).toEqual({
+        success: false,
+        exitCode: 1,
+        output: "",
+        errorOutput: "Missing grep",
+      });
+      expect(mockSpawn).not.toHaveBeenCalled();
+    });
+
+    it("should return error when grep is only whitespace", async () => {
+      const result = await service.runUiTest("   ");
+      expect(result.success).toBe(false);
+      expect(result.errorOutput).toBe("Missing grep");
+      expect(mockSpawn).not.toHaveBeenCalled();
+    });
+
+    it("should return error when grep is not a string", async () => {
+      const result = await service.runUiTest(123 as unknown as string);
+      expect(result.success).toBe(false);
+      expect(result.errorOutput).toBe("Missing grep");
+      expect(mockSpawn).not.toHaveBeenCalled();
+    });
+
+    it("should return error when grep exceeds max length", async () => {
+      const result = await service.runUiTest("x".repeat(301));
+      expect(result.success).toBe(false);
+      expect(result.errorOutput).toBe("grep exceeds 300 characters");
+      expect(mockSpawn).not.toHaveBeenCalled();
+    });
+
     it("should resolve with success and video when child exits 0", async () => {
       let closeHandler: (code: number | null, signal: string | null) => void;
       mockSpawn.mockImplementation(() => ({
@@ -561,6 +608,7 @@ describe("TestsService", () => {
       expect(result.success).toBe(true);
       expect(result.videoBase64).toBe(Buffer.from("video").toString("base64"));
     });
+
   });
 
   describe("runApiTest", () => {
@@ -585,6 +633,13 @@ describe("TestsService", () => {
       const result = await service.runApiTest(123 as unknown as string);
       expect(result.success).toBe(false);
       expect(result.errorOutput).toBe("Missing test name pattern");
+    });
+
+    it("should return error when pattern exceeds max length", async () => {
+      const result = await service.runApiTest("x".repeat(301));
+      expect(result.success).toBe(false);
+      expect(result.errorOutput).toBe("test name pattern exceeds 300 characters");
+      expect(mockSpawn).not.toHaveBeenCalled();
     });
 
     it("should resolve with success when child exits 0", async () => {

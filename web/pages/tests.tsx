@@ -839,11 +839,13 @@ export default function TestsPage() {
                     setRunTestStreamActive(false);
                     setRunTestRunning(false);
                     if (!gotResult) {
+                      const apiBase =
+                        typeof getApiBase === "function"
+                          ? getApiBase() || window.location.origin
+                          : "http://localhost:3001";
                       setRunTestStreamError(
                         "Connection lost. Start the backend (pnpm dev:backend from repo root) and ensure it is reachable at " +
-                          (typeof getApiBase === "function"
-                            ? getApiBase()
-                            : "http://localhost:3001") +
+                          apiBase +
                           ". Run pnpm install in the web app if Playwright is missing."
                       );
                     }

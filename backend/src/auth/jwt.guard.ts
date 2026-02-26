@@ -12,8 +12,6 @@ import { getJwtSecret } from "./jwt-secret";
 
 @Injectable()
 export class JwtAuthGuard implements CanActivate {
-  private readonly ensuredOrgUserIds = new Set<string>();
-
   constructor(
     private readonly prisma: PrismaService,
     private readonly firebase: FirebaseService,
@@ -72,14 +70,13 @@ export class JwtAuthGuard implements CanActivate {
   }
 
   private async tryDevUser(): Promise<{ id: string; email: string } | null> {
+    if (process.env.NODE_ENV === "production") return null;
     if (process.env.SKIP_AUTH_DEV !== "true") return null;
     return this.resolveDevUser();
   }
 
   private async ensureUserAndOrg(userId: string): Promise<void> {
-    if (this.ensuredOrgUserIds.has(userId)) return;
     await this.authService.ensureUserOrganization(userId);
-    this.ensuredOrgUserIds.add(userId);
   }
 
   private async resolveDevUser(): Promise<{

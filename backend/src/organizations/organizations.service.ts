@@ -1,4 +1,8 @@
-import { Injectable } from "@nestjs/common";
+import {
+  BadRequestException,
+  Injectable,
+  InternalServerErrorException,
+} from "@nestjs/common";
 import { AuthService } from "../auth/auth.service";
 import { PrismaService } from "../prisma.service";
 
@@ -8,6 +12,20 @@ export class OrganizationsService {
     private readonly prisma: PrismaService,
     private readonly authService: AuthService
   ) {}
+
+  private sanitizeName(name: unknown): string {
+    if (typeof name !== "string") {
+      throw new BadRequestException("Organization name is required");
+    }
+    const trimmed = name.trim();
+    if (!trimmed) throw new BadRequestException("Organization name is required");
+    if (trimmed.length > 120) {
+      throw new BadRequestException(
+        "Organization name must be 120 characters or fewer"
+      );
+    }
+    return trimmed;
+  }
 
   /** List organizations the user belongs to (for now, only their personal org). */
   async listForUser(userId: string) {
@@ -23,9 +41,10 @@ export class OrganizationsService {
   }
 
   /** Create an organization and assign the current user to it. */
-  async create(userId: string, data: { name: string }) {
+  async create(userId: string, data: { name?: unknown }) {
+    const name = this.sanitizeName(data.name);
     const org = await this.prisma.organization.create({
-      data: { name: data.name },
+      data: { name },
     });
     await this.prisma.user.update({
       where: { id: userId },
@@ -37,8 +56,11 @@ export class OrganizationsService {
   /** Ensure the user has an organization (creates "My Workspace" if none). Returns the org. */
   async ensureForUser(userId: string) {
     const user = await this.authService.ensureUserOrganization(userId);
-    if (!user.organizationId)
-      throw new Error("Unexpected: no organization after ensure");
+    if (!user.organizationId) {
+      throw new InternalServerErrorException(
+        "Unexpected: no organization after ensure"
+      );
+    }
     const org = await this.prisma.organization.findUniqueOrThrow({
       where: { id: user.organizationId },
     });

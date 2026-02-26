@@ -107,13 +107,25 @@ describe("FeaturesService", () => {
   describe("reorder", () => {
     it("should reorder features", async () => {
       mockPrisma.feature.update.mockResolvedValue({});
-      mockPrisma.feature.findMany.mockResolvedValue([]);
+      mockPrisma.feature.findMany
+        .mockResolvedValueOnce([{ id: "f1" }, { id: "f2" }])
+        .mockResolvedValueOnce([{ id: "f2" }, { id: "f1" }])
+        .mockResolvedValueOnce([]);
       mockPrisma.$transaction.mockImplementation((ops: Promise<unknown>[]) =>
         Promise.all(ops)
       );
 
       await service.reorder("p1", "user-1", ["f2", "f1"]);
       expect(mockPrisma.$transaction).toHaveBeenCalled();
+    });
+
+    it("should throw NotFoundException when a feature is outside the project", async () => {
+      mockPrisma.feature.findMany
+        .mockResolvedValueOnce([{ id: "f1" }, { id: "other" }])
+        .mockResolvedValueOnce([{ id: "f1" }]);
+      await expect(service.reorder("p1", "user-1", ["f1", "other"])).rejects.toThrow(
+        NotFoundException
+      );
     });
   });
 });

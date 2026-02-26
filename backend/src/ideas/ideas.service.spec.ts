@@ -95,13 +95,25 @@ describe("IdeasService", () => {
   describe("reorder", () => {
     it("should reorder ideas", async () => {
       mockPrisma.idea.update.mockResolvedValue({});
-      mockPrisma.idea.findMany.mockResolvedValue([]);
+      mockPrisma.idea.findMany
+        .mockResolvedValueOnce([{ id: "i1" }, { id: "i2" }])
+        .mockResolvedValueOnce([{ id: "i2" }, { id: "i1" }])
+        .mockResolvedValueOnce([]);
       mockPrisma.$transaction.mockImplementation((ops: Promise<unknown>[]) =>
         Promise.all(ops)
       );
 
       await service.reorder("p1", "user-1", ["i2", "i1"]);
       expect(mockPrisma.$transaction).toHaveBeenCalled();
+    });
+
+    it("should throw NotFoundException when an idea is outside the project", async () => {
+      mockPrisma.idea.findMany
+        .mockResolvedValueOnce([{ id: "i1" }, { id: "other" }])
+        .mockResolvedValueOnce([{ id: "i1" }]);
+      await expect(service.reorder("p1", "user-1", ["i1", "other"])).rejects.toThrow(
+        NotFoundException
+      );
     });
   });
 });

@@ -1,4 +1,5 @@
 import { Test, TestingModule } from "@nestjs/testing";
+import { BadRequestException } from "@nestjs/common";
 import { StorageService } from "./storage.service";
 
 const mockPut = jest.fn();
@@ -68,6 +69,17 @@ describe("StorageService", () => {
       );
     });
 
+    it("should reject unsafe upload filename", async () => {
+      await expect(
+        service.upload("recordings", "../x.webm", Buffer.from("data"))
+      ).rejects.toThrow(BadRequestException);
+      await expect(
+        service.upload("recordings", "../x.webm", Buffer.from("data"))
+      ).rejects.toThrow("Unsafe filename");
+      expect(mockMkdir).not.toHaveBeenCalled();
+      expect(mockWriteFile).not.toHaveBeenCalled();
+    });
+
     it("should delete from filesystem", async () => {
       mockUnlink.mockResolvedValue(undefined);
 
@@ -82,8 +94,15 @@ describe("StorageService", () => {
       await expect(service.delete("uploads/x")).resolves.not.toThrow();
     });
 
+    it("should ignore delete for unsafe local paths", async () => {
+      await service.delete("../etc/passwd");
+      await service.delete("uploads/files/nested/path.bin");
+      expect(mockUnlink).not.toHaveBeenCalled();
+    });
+
     it("isFullUrl returns false for relative path", () => {
       expect(service.isFullUrl("uploads/recordings/x.webm")).toBe(false);
+      expect(service.isFullUrl("httpx://not-valid")).toBe(false);
     });
   });
 
@@ -112,6 +131,16 @@ describe("StorageService", () => {
       );
     });
 
+    it("should reject unsafe filename before blob upload", async () => {
+      await expect(
+        service.upload("files", "nested/path.bin", Buffer.from("x"))
+      ).rejects.toThrow(BadRequestException);
+      await expect(
+        service.upload("files", "nested/path.bin", Buffer.from("x"))
+      ).rejects.toThrow("Unsafe filename");
+      expect(mockPut).not.toHaveBeenCalled();
+    });
+
     it("should delete from blob when url starts with http", async () => {
       mockDel.mockResolvedValue(undefined);
 
@@ -122,6 +151,7 @@ describe("StorageService", () => {
 
     it("isFullUrl returns true for http url", () => {
       expect(service.isFullUrl("https://blob.vercel-storage.com/x")).toBe(true);
+      expect(service.isFullUrl("HTTP://blob.vercel-storage.com/x")).toBe(true);
     });
   });
 });

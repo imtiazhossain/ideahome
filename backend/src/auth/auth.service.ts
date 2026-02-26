@@ -5,6 +5,26 @@ import { PrismaService } from "../prisma.service";
 import { getJwtSecret } from "./jwt-secret";
 
 const STATE_TTL_MS = 10 * 60 * 1000; // 10 minutes
+const STATE_FUTURE_SKEW_MS = 60 * 1000; // 1 minute
+const OAUTH_FETCH_TIMEOUT_MS = 15_000;
+
+async function fetchWithTimeout(
+  url: string,
+  init?: RequestInit
+): Promise<Response> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), OAUTH_FETCH_TIMEOUT_MS);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } catch (err) {
+    if (err instanceof Error && err.name === "AbortError") {
+      throw new Error("OAuth request timed out");
+    }
+    throw err;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
 
 export type SsoProfile = {
   providerId: string;
@@ -17,7 +37,7 @@ async function postForm(
   body: Record<string, string>,
   headers: Record<string, string> = {}
 ): Promise<Record<string, unknown>> {
-  const res = await fetch(url, {
+  const res = await fetchWithTimeout(url, {
     method: "POST",
     headers: {
       "Content-Type": "application/x-www-form-urlencoded",
@@ -47,7 +67,7 @@ export class AuthService {
       process.env.NEXT_PUBLIC_APP_URL ??
       "http://localhost:3000";
     const baseUrl = `${base.replace(/\/$/, "")}/login/callback`;
-    return token ? `${baseUrl}?token=${encodeURIComponent(token)}` : baseUrl;
+    return token ? `${baseUrl}#token=${encodeURIComponent(token)}` : baseUrl;
   }
 
   createState(provider: "google" | "github" | "apple"): string {
@@ -81,7 +101,14 @@ export class AuthService {
       .createHmac("sha256", getJwtSecret())
       .update(payloadStr)
       .digest("base64url");
-    if (sig !== expectedSig) return null;
+    const sigBuf = Buffer.from(sig);
+    const expectedBuf = Buffer.from(expectedSig);
+    if (
+      sigBuf.length !== expectedBuf.length ||
+      !crypto.timingSafeEqual(sigBuf, expectedBuf)
+    ) {
+      return null;
+    }
     let payload: { p?: string; iat?: number };
     try {
       payload = JSON.parse(payloadStr);
@@ -96,6 +123,7 @@ export class AuthService {
       return null;
     if (
       typeof payload.iat !== "number" ||
+      payload.iat > Date.now() + STATE_FUTURE_SKEW_MS ||
       Date.now() - payload.iat > STATE_TTL_MS
     )
       return null;
@@ -137,15 +165,42 @@ export class AuthService {
     return this.findOrCreateUserBySso("firebase", profile);
   }
 
+  private normalizeSsoProfile(profile: SsoProfile): SsoProfile {
+    if (typeof profile.providerId !== "string" || !profile.providerId.trim()) {
+      throw new Error("SSO profile missing providerId");
+    }
+    if (typeof profile.email !== "string" || !profile.email.trim()) {
+      throw new Error("SSO profile missing email");
+    }
+    if (
+      profile.name !== undefined &&
+      profile.name !== null &&
+      typeof profile.name !== "string"
+    ) {
+      throw new Error("SSO profile name must be a string or null");
+    }
+    return {
+      providerId: profile.providerId.trim(),
+      email: profile.email.trim(),
+      name:
+        profile.name === undefined
+          ? undefined
+          : profile.name === null
+            ? null
+            : profile.name.trim() || null,
+    };
+  }
+
   async findOrCreateUserBySso(
-    provider: "google" | "github" | "apple" | "firebase",
+    provider: "google" | "github" | "apple" | "firebase" | "oidc",
     profile: SsoProfile
   ): Promise<{ id: string; email: string; name: string | null }> {
+    const normalized = this.normalizeSsoProfile(profile);
     const existing = await this.prisma.account.findUnique({
       where: {
         provider_providerId: {
           provider,
-          providerId: profile.providerId,
+          providerId: normalized.providerId,
         },
       },
       include: { user: true },
@@ -154,8 +209,8 @@ export class AuthService {
       await this.prisma.user.update({
         where: { id: existing.userId },
         data: {
-          ...(profile.name != null && { name: profile.name }),
-          ...(profile.email && { email: profile.email }),
+          ...(normalized.name != null && { name: normalized.name }),
+          ...(normalized.email && { email: normalized.email }),
         },
       });
       await this.ensureUserOrganization(existing.userId);
@@ -167,15 +222,15 @@ export class AuthService {
     // Each SSO account gets its own User and Organization (no linking by email).
     const user = await this.prisma.user.create({
       data: {
-        email: profile.email,
-        name: profile.name ?? undefined,
+        email: normalized.email,
+        name: normalized.name ?? undefined,
       },
     });
     await this.prisma.account.create({
       data: {
         userId: user.id,
         provider,
-        providerId: profile.providerId,
+        providerId: normalized.providerId,
       },
     });
     await this.ensureUserOrganization(user.id);
@@ -203,7 +258,7 @@ export class AuthService {
     })) as { access_token?: string };
     const accessToken = tokenRes.access_token;
     if (!accessToken) throw new Error("No access_token from Google");
-    const userRes = await fetch(
+    const userRes = await fetchWithTimeout(
       "https://www.googleapis.com/oauth2/v2/userinfo",
       {
         headers: { Authorization: `Bearer ${accessToken}` },
@@ -242,7 +297,7 @@ export class AuthService {
     )) as { access_token?: string };
     const accessToken = tokenRes.access_token;
     if (!accessToken) throw new Error("No access_token from GitHub");
-    const userRes = await fetch("https://api.github.com/user", {
+    const userRes = await fetchWithTimeout("https://api.github.com/user", {
       headers: {
         Authorization: `Bearer ${accessToken}`,
         Accept: "application/vnd.github.v3+json",
@@ -257,12 +312,15 @@ export class AuthService {
     };
     let email = user.email;
     if (!email) {
-      const emailsRes = await fetch("https://api.github.com/user/emails", {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          Accept: "application/vnd.github.v3+json",
-        },
-      });
+      const emailsRes = await fetchWithTimeout(
+        "https://api.github.com/user/emails",
+        {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            Accept: "application/vnd.github.v3+json",
+          },
+        }
+      );
       if (emailsRes.ok) {
         const emails = (await emailsRes.json()) as Array<{
           email: string;

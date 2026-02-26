@@ -1,10 +1,13 @@
 import { Test, TestingModule } from "@nestjs/testing";
+import { JwtAuthGuard } from "../auth/jwt.guard";
 import { TestsController } from "./tests.controller";
 import { TestsService } from "./tests.service";
 
 describe("TestsController", () => {
   let controller: TestsController;
   let service: TestsService;
+  const originalEnableTestEndpoints = process.env.ENABLE_TEST_ENDPOINTS;
+  const originalNodeEnv = process.env.NODE_ENV;
 
   const mockTestsService = {
     runUiTest: jest.fn(),
@@ -14,13 +17,22 @@ describe("TestsController", () => {
 
   beforeEach(async () => {
     jest.clearAllMocks();
+    process.env.ENABLE_TEST_ENDPOINTS = "true";
     const module: TestingModule = await Test.createTestingModule({
       controllers: [TestsController],
       providers: [{ provide: TestsService, useValue: mockTestsService }],
-    }).compile();
+    })
+      .overrideGuard(JwtAuthGuard)
+      .useValue({ canActivate: () => true })
+      .compile();
 
     controller = module.get<TestsController>(TestsController);
     service = module.get<TestsService>(TestsService);
+  });
+
+  afterEach(() => {
+    process.env.ENABLE_TEST_ENDPOINTS = originalEnableTestEndpoints;
+    process.env.NODE_ENV = originalNodeEnv;
   });
 
   it("should be defined", () => {
@@ -28,6 +40,23 @@ describe("TestsController", () => {
   });
 
   describe("runUi (POST)", () => {
+    it("should throw when test execution endpoints are disabled", async () => {
+      delete process.env.ENABLE_TEST_ENDPOINTS;
+      await expect(controller.runUi({ grep: "home" })).rejects.toThrow(
+        "Test execution endpoints are disabled"
+      );
+      expect(mockTestsService.runUiTest).not.toHaveBeenCalled();
+    });
+
+    it("should throw in production even when enabled", async () => {
+      process.env.NODE_ENV = "production";
+      process.env.ENABLE_TEST_ENDPOINTS = "true";
+      await expect(controller.runUi({ grep: "home" })).rejects.toThrow(
+        "Test execution endpoints are disabled in production."
+      );
+      expect(mockTestsService.runUiTest).not.toHaveBeenCalled();
+    });
+
     it("should return error when grep is missing", async () => {
       const result = await controller.runUi({} as { grep: string });
       expect(result).toEqual({

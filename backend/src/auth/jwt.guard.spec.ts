@@ -18,6 +18,7 @@ describe("JwtAuthGuard", () => {
     ensureUserOrganization: jest.Mock;
   };
   const mockVerify = jwt.verify as jest.MockedFunction<typeof jwt.verify>;
+  const originalNodeEnv = process.env.NODE_ENV;
 
   function createMockContext(
     headers: Record<string, string | string[]>
@@ -53,6 +54,11 @@ describe("JwtAuthGuard", () => {
     delete process.env.JWT_SECRET;
     delete process.env.SKIP_AUTH_DEV;
     delete process.env.DEV_USER_ID;
+    process.env.NODE_ENV = originalNodeEnv;
+  });
+
+  afterAll(() => {
+    process.env.NODE_ENV = originalNodeEnv;
   });
 
   async function canActivate(ctx: ExecutionContext): Promise<boolean> {
@@ -251,6 +257,19 @@ describe("JwtAuthGuard", () => {
       await expect(canActivate(ctx)).rejects.toThrow(
         "Missing Authorization header"
       );
+    });
+
+    it("should ignore SKIP_AUTH_DEV in production", async () => {
+      process.env.NODE_ENV = "production";
+      process.env.SKIP_AUTH_DEV = "true";
+      mockPrisma.user.findFirst.mockResolvedValue(devUser);
+      const ctx = createMockContext({});
+
+      await expect(canActivate(ctx)).rejects.toThrow(UnauthorizedException);
+      await expect(canActivate(ctx)).rejects.toThrow(
+        "Missing Authorization header"
+      );
+      expect(mockPrisma.user.findFirst).not.toHaveBeenCalled();
     });
   });
 });

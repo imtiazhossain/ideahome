@@ -58,10 +58,10 @@ describe("AuthService", () => {
   });
 
   describe("getFrontendCallbackUrl", () => {
-    it("includes token in query when provided", () => {
+    it("includes token in fragment when provided", () => {
       process.env.FRONTEND_URL = "https://app.example.com";
       expect(service.getFrontendCallbackUrl("jwt-here")).toBe(
-        "https://app.example.com/login/callback?token=jwt-here"
+        "https://app.example.com/login/callback#token=jwt-here"
       );
     });
     it("returns base URL without token when empty", () => {
@@ -87,6 +87,25 @@ describe("AuthService", () => {
       const state = service.createState("google");
       const tampered = state.slice(0, -2) + "xx";
       expect(service.consumeState(tampered)).toBeNull();
+    });
+
+    it("returns null when signature length is invalid", () => {
+      const state = service.createState("github");
+      const [payload] = state.split(".");
+      expect(service.consumeState(`${payload}.x`)).toBeNull();
+    });
+
+    it("returns null for state issued too far in the future", () => {
+      const realNow = Date.now;
+      try {
+        const t0 = 1_700_000_000_000;
+        Date.now = jest.fn(() => t0);
+        const state = service.createState("google");
+        Date.now = jest.fn(() => t0 - 120_000);
+        expect(service.consumeState(state)).toBeNull();
+      } finally {
+        Date.now = realNow;
+      }
     });
   });
 
@@ -520,6 +539,74 @@ describe("AuthService", () => {
           userId: "user-apple-new",
           provider: "apple",
           providerId: "apple-789",
+        },
+      });
+    });
+
+    it("throws when providerId is missing", async () => {
+      await expect(
+        service.findOrCreateUserBySso("google", {
+          providerId: "   ",
+          email: "user@example.com",
+        })
+      ).rejects.toThrow("SSO profile missing providerId");
+      expect(mockPrisma.account.findUnique).not.toHaveBeenCalled();
+    });
+
+    it("throws when email is missing", async () => {
+      await expect(
+        service.findOrCreateUserBySso("google", {
+          providerId: "g1",
+          email: "   ",
+        })
+      ).rejects.toThrow("SSO profile missing email");
+      expect(mockPrisma.account.findUnique).not.toHaveBeenCalled();
+    });
+
+    it("throws when name type is invalid", async () => {
+      await expect(
+        service.findOrCreateUserBySso("google", {
+          providerId: "g1",
+          email: "user@example.com",
+          name: 123 as unknown as string,
+        })
+      ).rejects.toThrow("SSO profile name must be a string or null");
+      expect(mockPrisma.account.findUnique).not.toHaveBeenCalled();
+    });
+
+    it("trims providerId/email and normalizes blank name to null", async () => {
+      mockPrisma.account.findUnique.mockResolvedValue(null);
+      const newUser = {
+        id: "user-new",
+        email: "new@example.com",
+        name: null,
+      };
+      mockPrisma.user.create.mockResolvedValue(newUser);
+      mockPrisma.user.findUniqueOrThrow.mockResolvedValue({
+        ...newUser,
+        organizationId: "org-1",
+      });
+      mockPrisma.account.create.mockResolvedValue({});
+
+      await service.findOrCreateUserBySso("github", {
+        providerId: "  gh-123  ",
+        email: "  new@example.com  ",
+        name: "   ",
+      });
+
+      expect(mockPrisma.account.findUnique).toHaveBeenCalledWith({
+        where: {
+          provider_providerId: {
+            provider: "github",
+            providerId: "gh-123",
+          },
+        },
+        include: { user: true },
+      });
+      expect(mockPrisma.user.create).toHaveBeenCalledWith({
+        data: {
+          email: "new@example.com",
+          name: undefined,
         },
       });
     });

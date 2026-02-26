@@ -68,6 +68,14 @@ describe("ProjectsController", () => {
         name: "New Project",
       });
     });
+
+    it("should handle missing create body safely", async () => {
+      mockProjectsService.create.mockResolvedValue({ id: "1" });
+      await controller.create(undefined as any, req as any);
+      expect(mockProjectsService.create).toHaveBeenCalledWith("user-1", {
+        name: undefined,
+      });
+    });
   });
 
   describe("update", () => {
@@ -83,6 +91,16 @@ describe("ProjectsController", () => {
         "1",
         "user-1",
         body
+      );
+    });
+
+    it("should handle missing update body safely", async () => {
+      mockProjectsService.update.mockResolvedValue({ id: "1" });
+      await controller.update("1", undefined as any, req as any);
+      expect(mockProjectsService.update).toHaveBeenCalledWith(
+        "1",
+        "user-1",
+        {}
       );
     });
   });
