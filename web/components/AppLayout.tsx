@@ -554,6 +554,7 @@ export function AppLayout({
                             e.preventDefault();
                             e.stopPropagation();
                             setProjectToDelete(p);
+                            closeDrawerOnMobile();
                           }}
                           aria-label={`Delete ${p.name}`}
                           title={`Delete project "${p.name}"`}
