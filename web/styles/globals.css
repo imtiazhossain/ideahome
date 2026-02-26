@@ -4060,6 +4060,17 @@ a.automated-tests-chip-text:hover {
 }
 
 @media (max-width: 1024px) {
+  .drawer {
+    position: fixed;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: min(340px, 92vw);
+    z-index: 20;
+    transition: transform 0.2s ease;
+    will-change: transform;
+  }
+
   .project-nav {
     position: sticky;
     top: 0;
@@ -4083,19 +4094,17 @@ a.automated-tests-chip-text:hover {
   }
 
   .drawer.drawer-closed {
-    width: 0;
+    width: min(340px, 92vw);
     min-width: 0;
     overflow: hidden;
-    border-right-width: 0;
+    transform: translateX(-100%);
+    pointer-events: none;
   }
 
   .drawer.drawer-open {
-    position: fixed;
-    left: 0;
-    top: 0;
-    bottom: 0;
     width: min(340px, 92vw);
-    z-index: 20;
+    transform: translateX(0);
+    pointer-events: auto;
     box-shadow: 4px 0 20px rgba(0, 0, 0, 0.15);
   }
 
