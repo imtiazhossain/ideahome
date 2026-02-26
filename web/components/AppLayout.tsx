@@ -269,7 +269,7 @@ export function AppLayout({
             activeTab={activeTab}
             searchPlaceholder={searchPlaceholder}
             onAddClick={onAddClick}
-            onOpenDrawer={() => setDrawerOpen(true)}
+            onOpenDrawer={() => setDrawerOpen((o) => !o)}
             projects={projects}
             selectedProjectId={selectedProjectId}
             onSelectProject={(id) => {
