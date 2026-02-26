@@ -549,8 +549,9 @@ export function AppLayout({
                       {(showDeletePerProject || editingProjectId === p.id) && (
                         <button
                           type="button"
-                          className={`drawer-nav-item-delete${editingProjectId === p.id ? " is-visible" : ""}`}
+                          className={`drawer-nav-item-delete${showDeletePerProject || editingProjectId === p.id ? " is-visible" : ""}`}
                           onClick={(e) => {
+                            e.preventDefault();
                             e.stopPropagation();
                             setProjectToDelete(p);
                           }}
