@@ -59,7 +59,7 @@ export function IdeaAssistantPanel({
   return (
     <div className="idea-plan-card">
       <div className="idea-plan-card-head">
-        <span className="idea-plan-card-badge">AI chat</span>
+        <span className="idea-plan-card-badge">Ask Bulby</span>
       </div>
       <div className="idea-chat-thread" ref={onThreadRef}>
         {messages.map((message) => (
@@ -100,10 +100,12 @@ export function IdeaAssistantPanel({
             }
           }}
           placeholder={
-            isMobileAssistantComposer ? "Ask AI" : "Ask AI a follow-up..."
+            isMobileAssistantComposer
+              ? "Ask Bulby"
+              : "Ask Bulby a follow-up..."
           }
           rows={1}
-          aria-label="Ask AI a follow-up"
+          aria-label="Ask Bulby a follow-up"
         />
         <button
           type="button"
