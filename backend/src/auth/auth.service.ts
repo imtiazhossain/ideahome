@@ -74,6 +74,15 @@ export class AuthService {
     return `${baseUrl}${joiner}${hash}`;
   }
 
+  private appendQueryParams(baseUrl: string, params: Record<string, string>): string {
+    const url = new URL(baseUrl);
+    Object.entries(params).forEach(([key, value]) => {
+      if (!value) return;
+      url.searchParams.set(key, value);
+    });
+    return url.toString();
+  }
+
   private isAllowedMobileRedirectUri(redirectUri: string): boolean {
     let parsed: URL;
     try {
@@ -100,7 +109,7 @@ export class AuthService {
 
   getFrontendCallbackUrl(token: string, mobileRedirectUri?: string | null): string {
     if (mobileRedirectUri) {
-      return this.appendHashParams(mobileRedirectUri, { token });
+      return this.appendQueryParams(mobileRedirectUri, { token });
     }
     const base =
       process.env.FRONTEND_URL ??
@@ -112,7 +121,7 @@ export class AuthService {
 
   getErrorRedirectUrl(error: string, mobileRedirectUri?: string | null): string {
     if (mobileRedirectUri) {
-      return this.appendHashParams(mobileRedirectUri, { error });
+      return this.appendQueryParams(mobileRedirectUri, { error });
     }
     return this.appendHashParams(this.getFrontendCallbackUrl(""), { error });
   }
