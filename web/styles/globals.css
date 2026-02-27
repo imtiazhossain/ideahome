@@ -5444,6 +5444,27 @@ a.automated-tests-chip-text:hover {
 
 .expenses-add-btn {
   align-self: flex-end;
+  background: #111827;
+  color: #f9fafb;
+  border: 1px solid #1f2937;
+}
+
+.expenses-add-btn:hover:not(:disabled) {
+  background: #030712;
+  color: #ffffff;
+}
+
+.expenses-add-btn:disabled {
+  background: #4b5563;
+  color: #9ca3af;
+  border-color: #6b7280;
+  opacity: 1;
+}
+
+.expenses-add-btn:disabled:hover {
+  background: #4b5563;
+  color: #9ca3af;
+  border-color: #6b7280;
 }
 
 .expenses-list {

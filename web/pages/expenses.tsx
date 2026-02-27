@@ -98,10 +98,10 @@ function formatExpenseDateDisplay(value: string): string {
   if (!value) return "Select date";
   const parsed = new Date(`${value}T00:00:00`);
   if (Number.isNaN(parsed.getTime())) return value;
-  return parsed.toLocaleDateString(undefined, {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
+  return parsed.toLocaleDateString("en-US", {
+    month: "2-digit",
+    day: "2-digit",
+    year: "2-digit",
   });
 }
 
@@ -471,12 +471,14 @@ export default function ExpensesPage() {
                 {expenses.map((item) => (
                   <li key={item.id} className="expenses-item">
                     <div className="expenses-item-main">
-                      <span className="expenses-item-date">{item.date}</span>
-                      <span className="expenses-item-amount">
-                        {formatCurrency(item.amount)}
+                      <span className="expenses-item-date">
+                        {formatExpenseDateDisplay(item.date)}
                       </span>
                       <span className="expenses-item-description">
                         {item.description}
+                      </span>
+                      <span className="expenses-item-amount">
+                        {formatCurrency(item.amount)}
                       </span>
                     </div>
                     <div className="expenses-item-meta">
