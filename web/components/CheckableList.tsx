@@ -263,7 +263,29 @@ function SortableItem({
 
   const mainContent = (
     <div className="features-list-item-body">
-      <div className="features-list-item-main">
+      <div
+        className="features-list-item-main"
+        onClick={(e) => {
+          if (disabled || isEditing) return;
+          const target = e.target as HTMLElement | null;
+          if (!target) return;
+          if (
+            target.closest(
+              "button, input, textarea, a, [contenteditable='true'], [role='button']"
+            )
+          ) {
+            return;
+          }
+          if (
+            target.closest(
+              ".features-list-item-details, .features-list-drag-handle, .features-list-row-delete"
+            )
+          ) {
+            return;
+          }
+          onStartEdit(index);
+        }}
+      >
         {isEditing ? (
           <>
             <button
