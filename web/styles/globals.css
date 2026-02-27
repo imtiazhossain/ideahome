@@ -5375,6 +5375,23 @@ a.automated-tests-chip-text:hover {
   min-width: 140px;
 }
 
+.expenses-field-date .expenses-input[type="date"] {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  inline-size: 100%;
+  display: block;
+}
+
+.expenses-field-date .expenses-input[type="date"]::-webkit-date-and-time-value {
+  min-width: 0;
+}
+
+.expenses-field-date
+  .expenses-input[type="date"]::-webkit-calendar-picker-indicator {
+  margin: 0;
+}
+
 .expenses-field-category .expenses-input {
   min-width: 130px;
 }
@@ -5579,30 +5596,61 @@ a.automated-tests-chip-text:hover {
   }
 
   .expenses-item {
-    align-items: flex-start;
-    gap: 8px;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: nowrap;
   }
 
   .expenses-item-main {
-    width: 100%;
+    width: auto;
+    flex: 1;
     min-width: 0;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 4px;
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+    overflow: hidden;
   }
 
   .expenses-item-amount {
-    min-width: 0;
+    min-width: auto;
+    white-space: nowrap;
   }
 
   .expenses-item-description {
     min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .expenses-item-meta {
-    width: 100%;
-    justify-content: space-between;
-    gap: 8px;
+    width: auto;
+    justify-content: flex-end;
+    gap: 6px;
+    flex-wrap: nowrap;
+    flex: 0 0 auto;
+  }
+
+  .expenses-item-date {
+    display: none;
+  }
+
+  .expenses-category-btn {
+    max-width: 92px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .expenses-category-select {
+    max-width: 110px;
+    min-width: 0;
+  }
+
+  .expenses-item .features-list-remove {
+    min-height: 36px;
+    min-width: 36px;
+    padding: 6px 10px;
   }
 }
 

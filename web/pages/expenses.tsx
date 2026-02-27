@@ -83,6 +83,17 @@ function clearStoredExpensesLegacy(): void {
   localStorage.removeItem(LEGACY_COSTS_KEY);
 }
 
+function saveStoredExpensesLegacy(
+  items: { amount: number; description: string; date: string; category: string }[]
+): void {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(getExpensesStorageKey(), JSON.stringify(items));
+  } catch {
+    // best effort local fallback
+  }
+}
+
 export default function ExpensesPage() {
   const router = useRouter();
   const layout = useProjectLayout();
@@ -241,11 +252,27 @@ export default function ExpensesPage() {
   };
 
   const removeExpense = async (id: string) => {
+    const previousExpenses = expenses;
+    const nextExpenses = previousExpenses.filter((e) => e.id !== id);
+    setExpenses(nextExpenses);
+
+    const isLocalOnlyExpense = id.startsWith("local-") || !isAuthenticated();
+    if (isLocalOnlyExpense) {
+      saveStoredExpensesLegacy(
+        nextExpenses.map((item) => ({
+          amount: item.amount,
+          description: item.description,
+          date: item.date,
+          category: item.category || "Other",
+        }))
+      );
+      return;
+    }
+
     try {
       await deleteExpense(id);
-      setExpenses((prev) => prev.filter((e) => e.id !== id));
     } catch {
-      // keep in list
+      setExpenses(previousExpenses);
     }
   };
 
