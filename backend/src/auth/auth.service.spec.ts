@@ -72,13 +72,19 @@ describe("AuthService", () => {
         "https://app.example.com/login/callback"
       );
     });
+    it("uses mobile callback bridge for mobile redirect targets", () => {
+      process.env.FRONTEND_URL = "https://app.example.com";
+      expect(service.getFrontendCallbackUrl("jwt-here", "ideahome://auth")).toBe(
+        "https://app.example.com/mobile/auth/callback?redirect_uri=ideahome%3A%2F%2Fauth&token=jwt-here"
+      );
+    });
   });
 
   describe("createState / consumeState", () => {
     it("returns provider after consumeState", () => {
       const state = service.createState("apple");
       expect(state).toBeTruthy();
-      expect(service.consumeState(state)).toBe("apple");
+      expect(service.consumeState(state)?.provider).toBe("apple");
     });
     it("returns null for unknown or invalid state", () => {
       expect(service.consumeState("unknown-state")).toBeNull();

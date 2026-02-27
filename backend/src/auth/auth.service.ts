@@ -66,6 +66,14 @@ export class AuthService {
     return `${base}/auth/${provider}/callback`;
   }
 
+  private getFrontendBaseUrl(): string {
+    const base =
+      process.env.FRONTEND_URL ??
+      process.env.NEXT_PUBLIC_APP_URL ??
+      "http://localhost:3000";
+    return base.replace(/\/$/, "");
+  }
+
   private appendHashParams(baseUrl: string, params: Record<string, string>): string {
     const hashParams = new URLSearchParams(params);
     const hash = hashParams.toString();
@@ -109,19 +117,23 @@ export class AuthService {
 
   getFrontendCallbackUrl(token: string, mobileRedirectUri?: string | null): string {
     if (mobileRedirectUri) {
-      return this.appendQueryParams(mobileRedirectUri, { token });
+      const mobileCallbackUrl = `${this.getFrontendBaseUrl()}/mobile/auth/callback`;
+      return this.appendQueryParams(mobileCallbackUrl, {
+        redirect_uri: mobileRedirectUri,
+        token,
+      });
     }
-    const base =
-      process.env.FRONTEND_URL ??
-      process.env.NEXT_PUBLIC_APP_URL ??
-      "http://localhost:3000";
-    const baseUrl = `${base.replace(/\/$/, "")}/login/callback`;
+    const baseUrl = `${this.getFrontendBaseUrl()}/login/callback`;
     return token ? this.appendHashParams(baseUrl, { token }) : baseUrl;
   }
 
   getErrorRedirectUrl(error: string, mobileRedirectUri?: string | null): string {
     if (mobileRedirectUri) {
-      return this.appendQueryParams(mobileRedirectUri, { error });
+      const mobileCallbackUrl = `${this.getFrontendBaseUrl()}/mobile/auth/callback`;
+      return this.appendQueryParams(mobileCallbackUrl, {
+        redirect_uri: mobileRedirectUri,
+        error,
+      });
     }
     return this.appendHashParams(this.getFrontendCallbackUrl(""), { error });
   }

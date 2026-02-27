@@ -36,16 +36,49 @@ function notifyNative(payload: NativeBridgePayload): void {
   }
 }
 
+function normalizeAppRedirectUri(rawValue: string): string {
+  const candidate = rawValue.trim();
+  if (!candidate) return "";
+  try {
+    const parsed = new URL(candidate);
+    if (parsed.protocol !== "ideahome:") return "";
+    return parsed.toString();
+  } catch {
+    return "";
+  }
+}
+
+function appendQueryParams(baseUrl: string, params: Record<string, string>): string {
+  const url = new URL(baseUrl);
+  Object.entries(params).forEach(([key, value]) => {
+    if (!value) return;
+    url.searchParams.set(key, value);
+  });
+  return url.toString();
+}
+
 export default function MobileAuthCallbackPage() {
   const router = useRouter();
   const [status, setStatus] = useState<CallbackStatus>("loading");
   const [message, setMessage] = useState("");
+  const [deepLinkUrl, setDeepLinkUrl] = useState("");
 
   useEffect(() => {
     if (!router.isReady || typeof window === "undefined") return;
 
     const token = readValue(window.location.href, "token");
     const error = readValue(window.location.href, "error");
+    const redirectUri = normalizeAppRedirectUri(
+      readValue(window.location.href, "redirect_uri")
+    );
+
+    const openAppWithParams = (params: Record<string, string>): boolean => {
+      if (!redirectUri) return false;
+      const nextAppUrl = appendQueryParams(redirectUri, params);
+      setDeepLinkUrl(nextAppUrl);
+      window.location.assign(nextAppUrl);
+      return true;
+    };
 
     if (error) {
       clearStoredToken();
@@ -53,6 +86,7 @@ export default function MobileAuthCallbackPage() {
       notifyNative({ type: "auth-change", token: "" });
       setMessage(error);
       setStatus("error");
+      openAppWithParams({ error });
       return;
     }
 
@@ -61,11 +95,20 @@ export default function MobileAuthCallbackPage() {
       notifyNative({ type: "auth-error", error: fallback });
       setMessage(fallback);
       setStatus("error");
+      openAppWithParams({ error: fallback });
       return;
     }
 
     setStoredToken(token);
     notifyNative({ type: "auth-change", token });
+    if (openAppWithParams({ token })) {
+      setMessage(
+        "Returning to IdeaHome app. If it does not open automatically, use the button below."
+      );
+      setStatus("done");
+      return;
+    }
+
     setStatus("done");
     router.replace("/");
   }, [router, router.isReady]);
@@ -99,7 +142,31 @@ export default function MobileAuthCallbackPage() {
           }}
         >
           {status === "loading" && <p style={{ margin: 0 }}>Signing you in…</p>}
-          {status === "done" && <p style={{ margin: 0 }}>Redirecting to IdeaHome…</p>}
+          {status === "done" && (
+            <>
+              <p style={{ margin: 0 }}>{message || "Redirecting to IdeaHome…"}</p>
+              {deepLinkUrl ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    window.location.assign(deepLinkUrl);
+                  }}
+                  style={{
+                    marginTop: 14,
+                    borderRadius: 8,
+                    border: "1px solid var(--border)",
+                    background: "var(--button-bg)",
+                    color: "var(--button-text)",
+                    padding: "10px 14px",
+                    cursor: "pointer",
+                    fontWeight: 600,
+                  }}
+                >
+                  Open IdeaHome App
+                </button>
+              ) : null}
+            </>
+          )}
           {status === "error" && (
             <>
               <p style={{ margin: "0 0 10px", color: "var(--trend-down)" }}>
@@ -108,6 +175,26 @@ export default function MobileAuthCallbackPage() {
               <p style={{ margin: 0, color: "var(--text-muted)", fontSize: 14 }}>
                 {message}
               </p>
+              {deepLinkUrl ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    window.location.assign(deepLinkUrl);
+                  }}
+                  style={{
+                    marginTop: 14,
+                    borderRadius: 8,
+                    border: "1px solid var(--border)",
+                    background: "var(--button-bg)",
+                    color: "var(--button-text)",
+                    padding: "10px 14px",
+                    cursor: "pointer",
+                    fontWeight: 600,
+                  }}
+                >
+                  Return to IdeaHome App
+                </button>
+              ) : null}
             </>
           )}
         </div>
