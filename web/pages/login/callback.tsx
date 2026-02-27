@@ -8,6 +8,8 @@ import {
   getUserScopedStorageKey,
 } from "../../lib/api";
 
+const JUST_LOGGED_IN_SESSION_KEY = "ideahome-just-logged-in";
+
 function safeDecodeURIComponent(value: string): string {
   try {
     return decodeURIComponent(value);
@@ -44,12 +46,15 @@ export default function LoginCallbackPage() {
     if (resolvedToken) {
       setStoredToken(resolvedToken);
       try {
+        const selectedProjectLegacyKey = "ideahome-selected-project-id";
         localStorage.removeItem(
           getUserScopedStorageKey(
-            "ideahome-selected-project-id",
-            "ideahome-selected-project-id"
+            selectedProjectLegacyKey,
+            selectedProjectLegacyKey
           )
         );
+        localStorage.removeItem(selectedProjectLegacyKey);
+        sessionStorage.setItem(JUST_LOGGED_IN_SESSION_KEY, "1");
       } catch {
         // ignore
       }

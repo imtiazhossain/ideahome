@@ -4,12 +4,45 @@ import {
   createProject,
   deleteProject,
   fetchProjects,
+  getUserScopedStorageKey,
   isAuthenticated,
   updateProject,
 } from "./api";
 import { getProjectDisplayName } from "./utils";
 import { useSelectedProject } from "./SelectedProjectContext";
 import { prefetchProjectLists } from "./prefetchProjectLists";
+
+const PROJECT_ORDER_STORAGE_PREFIX = "ideahome-drawer-project-order";
+const PROJECT_ORDER_LEGACY_KEY = "ideahome-drawer-project-order";
+const JUST_LOGGED_IN_SESSION_KEY = "ideahome-just-logged-in";
+
+function getProjectOrderStorageKey(): string {
+  return getUserScopedStorageKey(
+    PROJECT_ORDER_STORAGE_PREFIX,
+    PROJECT_ORDER_LEGACY_KEY
+  );
+}
+
+function getFirstProjectIdFromDrawerOrder(
+  projects: { id: string; name: string }[]
+): string {
+  if (projects.length === 0) return "";
+  if (typeof window === "undefined") return projects[0].id;
+  try {
+    const raw = localStorage.getItem(getProjectOrderStorageKey());
+    if (!raw) return projects[0].id;
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return projects[0].id;
+    const orderedIds = parsed.filter(
+      (id): id is string => typeof id === "string"
+    );
+    const validIds = new Set(projects.map((project) => project.id));
+    const firstOrderedExistingId = orderedIds.find((id) => validIds.has(id));
+    return firstOrderedExistingId ?? projects[0].id;
+  } catch {
+    return projects[0].id;
+  }
+}
 
 export interface UseProjectLayoutReturn {
   projects: { id: string; name: string }[];
@@ -65,10 +98,18 @@ export function useProjectLayout(): UseProjectLayoutReturn {
       .then((data) => {
         setProjects(data);
         if (data.length) {
+          const justLoggedIn =
+            typeof window !== "undefined" &&
+            sessionStorage.getItem(JUST_LOGGED_IN_SESSION_KEY) === "1";
+          if (justLoggedIn) {
+            sessionStorage.removeItem(JUST_LOGGED_IN_SESSION_KEY);
+            setSelectedProjectId(getFirstProjectIdFromDrawerOrder(data));
+            return;
+          }
           const current = selectedProjectIdRef.current;
           const exists = data.some((p) => p.id === current);
           if (!exists) {
-            setSelectedProjectId(data[0].id);
+            setSelectedProjectId(getFirstProjectIdFromDrawerOrder(data));
           }
         }
       })
