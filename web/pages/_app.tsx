@@ -6,7 +6,10 @@ import {
   getFirstVisibleTabHref,
   EXPLICIT_BOARD_SESSION_KEY,
 } from "../components/ProjectNavBar";
-import { SelectedProjectProvider } from "../lib/SelectedProjectContext";
+import {
+  SelectedProjectProvider,
+  useSelectedProject,
+} from "../lib/SelectedProjectContext";
 import { ThemeProvider } from "../lib/ThemeContext";
 import "../styles/globals.css";
 
@@ -14,6 +17,7 @@ export { useTheme } from "../lib/ThemeContext";
 
 function RedirectToFirstTab({ children }: { children: React.ReactNode }) {
   const router = useRouter();
+  const { selectedProjectId } = useSelectedProject();
   useEffect(() => {
     if (router.pathname !== "/") {
       try {
@@ -32,9 +36,12 @@ function RedirectToFirstTab({ children }: { children: React.ReactNode }) {
     } catch {
       /* ignore */
     }
+    // Without a selected project, redirecting to list pages can cause a loop
+    // back to "/" (those pages redirect home when no project exists).
+    if (!selectedProjectId) return;
     const firstHref = getFirstVisibleTabHref();
     if (firstHref !== "/") router.replace(firstHref);
-  }, [router.pathname, router.isReady]);
+  }, [router.pathname, router.isReady, selectedProjectId]);
   return <>{children}</>;
 }
 
