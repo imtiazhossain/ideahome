@@ -21,6 +21,7 @@ import { IdeasService } from "./ideas.service";
 export class IdeasController {
   private readonly maxContextLength = 4000;
   private readonly maxModelLength = 120;
+  private readonly maxItemNameLength = 240;
 
   constructor(private readonly svc: IdeasService) {}
 
@@ -141,6 +142,29 @@ export class IdeasController {
     );
   }
 
+  @Post("assistant-chat")
+  generateListAssistantChat(
+    @Body()
+    body: {
+      projectId?: string;
+      itemName?: string;
+      context?: string;
+      model?: string;
+      includeWeb?: boolean;
+    },
+    @Req() req: AuthenticatedRequest
+  ) {
+    return this.svc.generateListAssistantChat(
+      this.normalizeProjectId(body?.projectId),
+      requireUserId(req),
+      this.normalizeItemName(body?.itemName),
+      this.normalizeContext(body?.context),
+      this.normalizeModel(body?.model),
+      req.user?.email,
+      this.normalizeBoolean(body?.includeWeb)
+    );
+  }
+
   private normalizeContext(context?: string): string | undefined {
     if (typeof context !== "string") return undefined;
     const trimmed = context.trim();
@@ -158,5 +182,15 @@ export class IdeasController {
   private normalizeBoolean(value: unknown): boolean | undefined {
     if (typeof value !== "boolean") return undefined;
     return value;
+  }
+
+  private normalizeProjectId(projectId?: string): string {
+    if (typeof projectId !== "string") return "";
+    return projectId.trim();
+  }
+
+  private normalizeItemName(itemName?: string): string {
+    if (typeof itemName !== "string") return "";
+    return itemName.trim().slice(0, this.maxItemNameLength);
   }
 }

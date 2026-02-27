@@ -66,6 +66,7 @@ describe("AuthController", () => {
     it("should return provider availability from env", () => {
       const prev = {
         GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID,
+        GOOGLE_CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET,
         GITHUB_CLIENT_ID: process.env.GITHUB_CLIENT_ID,
         GITHUB_CLIENT_SECRET: process.env.GITHUB_CLIENT_SECRET,
         APPLE_CLIENT_ID: process.env.APPLE_CLIENT_ID,
@@ -75,6 +76,7 @@ describe("AuthController", () => {
       };
       try {
         process.env.GOOGLE_CLIENT_ID = "google-id";
+        process.env.GOOGLE_CLIENT_SECRET = "google-secret";
         process.env.GITHUB_CLIENT_ID = "github-id";
         process.env.GITHUB_CLIENT_SECRET = "";
         process.env.APPLE_CLIENT_ID = "apple-client-id";
@@ -89,6 +91,7 @@ describe("AuthController", () => {
         });
       } finally {
         process.env.GOOGLE_CLIENT_ID = prev.GOOGLE_CLIENT_ID;
+        process.env.GOOGLE_CLIENT_SECRET = prev.GOOGLE_CLIENT_SECRET;
         process.env.GITHUB_CLIENT_ID = prev.GITHUB_CLIENT_ID;
         process.env.GITHUB_CLIENT_SECRET = prev.GITHUB_CLIENT_SECRET;
         process.env.APPLE_CLIENT_ID = prev.APPLE_CLIENT_ID;
@@ -313,6 +316,7 @@ describe("AuthController", () => {
   describe("google", () => {
     it("should redirect to Google when configured", async () => {
       process.env.GOOGLE_CLIENT_ID = "gid";
+      process.env.GOOGLE_CLIENT_SECRET = "gsecret";
       mockAuthService.createState.mockReturnValue("state-123");
       mockAuthService.getRedirectUri.mockReturnValue(
         "http://localhost:3001/auth/google/callback"
@@ -329,6 +333,22 @@ describe("AuthController", () => {
 
     it("should redirect with error when GOOGLE_CLIENT_ID is not set", async () => {
       delete process.env.GOOGLE_CLIENT_ID;
+      const res = mockRes();
+      mockAuthService.getFrontendCallbackUrl.mockReturnValue(
+        "http://localhost:3000/login/callback"
+      );
+      await controller.google(res as any);
+      expect(mockRedirect).toHaveBeenCalledWith(
+        expect.stringContaining("error=")
+      );
+      expect(mockRedirect).toHaveBeenCalledWith(
+        expect.stringContaining("Google%20SSO%20is%20not%20configured")
+      );
+    });
+
+    it("should redirect with error when GOOGLE_CLIENT_SECRET is not set", async () => {
+      process.env.GOOGLE_CLIENT_ID = "gid";
+      delete process.env.GOOGLE_CLIENT_SECRET;
       const res = mockRes();
       mockAuthService.getFrontendCallbackUrl.mockReturnValue(
         "http://localhost:3000/login/callback"

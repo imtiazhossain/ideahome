@@ -17,6 +17,7 @@ describe("IdeasController", () => {
     reorder: jest.fn(),
     generatePlan: jest.fn(),
     generateAssistantChat: jest.fn(),
+    generateListAssistantChat: jest.fn(),
   };
 
   beforeEach(async () => {
@@ -150,6 +151,28 @@ describe("IdeasController", () => {
     expect(mockSvc.generateAssistantChat).toHaveBeenCalledWith(
       "i1",
       "u1",
+      "ship fast",
+      "openai/gpt-4o-mini",
+      "u1@example.com",
+      undefined
+    );
+  });
+
+  it("generateListAssistantChat delegates to service", async () => {
+    mockSvc.generateListAssistantChat.mockResolvedValue({ createdCount: 0 });
+    await controller.generateListAssistantChat(
+      {
+        projectId: "p1",
+        itemName: "Fix login bug",
+        context: "ship fast",
+        model: "openai/gpt-4o-mini",
+      },
+      req as any
+    );
+    expect(mockSvc.generateListAssistantChat).toHaveBeenCalledWith(
+      "p1",
+      "u1",
+      "Fix login bug",
       "ship fast",
       "openai/gpt-4o-mini",
       "u1@example.com",

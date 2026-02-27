@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
 import type { Prisma } from "@prisma/client";
 import { ProjectScopedListService } from "../common/project-scoped-list.service";
 import { PrismaService } from "../prisma.service";
@@ -124,6 +124,50 @@ export class IdeasService {
 
     return {
       ideaId: id,
+      createdCount: 0,
+      todos: [],
+      previewGifUrl,
+      message: action.message,
+    };
+  }
+
+  async generateListAssistantChat(
+    projectId: string,
+    userId: string,
+    itemName: string,
+    context?: string,
+    preferredModel?: string,
+    requesterEmail?: string,
+    includeWeb?: boolean
+  ) {
+    if (!projectId) {
+      throw new BadRequestException("Project is required");
+    }
+    if (!itemName.trim()) {
+      throw new BadRequestException("Item name is required");
+    }
+    const orgId = await this.getOrgIdForUser(userId);
+    const project = await this.prisma.project.findUnique({
+      where: { id: projectId },
+      select: { name: true, organizationId: true },
+    });
+
+    if (!project || project.organizationId !== orgId) {
+      throw new NotFoundException("Project not found");
+    }
+
+    const action = await this.ideaPlanService.generateActionResponse({
+      ideaName: itemName,
+      projectName: project.name,
+      context,
+      preferredModel,
+      requesterEmail,
+      includeWeb,
+    });
+    const previewGifUrl = this.resolvePreviewGifUrl(itemName, context);
+
+    return {
+      ideaId: `list-item:${projectId}`,
       createdCount: 0,
       todos: [],
       previewGifUrl,

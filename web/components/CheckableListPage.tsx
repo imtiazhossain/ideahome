@@ -7,6 +7,7 @@ import { useTheme } from "../pages/_app";
 import {
   ASSISTANT_VOICE_CHANGE_EVENT,
   generateIdeaAssistantChat,
+  generateListItemAssistantChat,
   getStoredAssistantVoiceUri,
   getStoredOpenRouterModel,
   isAuthenticated,
@@ -358,12 +359,22 @@ export function CheckableListPage({
         return next;
       });
       try {
-        const result = await generateIdeaAssistantChat(
-          ideaId,
-          context,
-          resolveIdeaModel(),
-          includeWeb
-        );
+        const item = list.items.find((entry) => entry.id === ideaId);
+        const isIdeasPage = def.listType === "ideas";
+        const result = isIdeasPage
+          ? await generateIdeaAssistantChat(
+              ideaId,
+              context,
+              resolveIdeaModel(),
+              includeWeb
+            )
+          : await generateListItemAssistantChat(
+              layout.selectedProjectId ?? "",
+              item?.name ?? "",
+              context,
+              resolveIdeaModel(),
+              includeWeb
+            );
         setAssistantCollapsedById((prev) => ({ ...prev, [ideaId]: false }));
         appendChatAssistantMessage(
           ideaId,
@@ -390,7 +401,13 @@ export function CheckableListPage({
         setAssistantLoadingById((prev) => ({ ...prev, [ideaId]: false }));
       }
     },
-    [appendChatAssistantMessage, resolveIdeaModel]
+    [
+      appendChatAssistantMessage,
+      def.listType,
+      layout.selectedProjectId,
+      list.items,
+      resolveIdeaModel,
+    ]
   );
 
   const submitIdeaChatText = useCallback(

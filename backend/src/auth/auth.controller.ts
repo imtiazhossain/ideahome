@@ -126,7 +126,10 @@ export class AuthController {
   @Get("providers")
   providers() {
     return {
-      google: Boolean(process.env.GOOGLE_CLIENT_ID?.trim()),
+      google: Boolean(
+        process.env.GOOGLE_CLIENT_ID?.trim() &&
+          process.env.GOOGLE_CLIENT_SECRET?.trim()
+      ),
       github: Boolean(
         process.env.GITHUB_CLIENT_ID?.trim() &&
           process.env.GITHUB_CLIENT_SECRET?.trim()
@@ -215,7 +218,8 @@ export class AuthController {
   @Get("google")
   async google(@Res() res: Response) {
     const clientId = process.env.GOOGLE_CLIENT_ID;
-    if (!clientId) {
+    const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+    if (!clientId?.trim() || !clientSecret?.trim()) {
       return this.redirectWithError(
         res,
         "Google SSO is not configured. Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in backend .env."

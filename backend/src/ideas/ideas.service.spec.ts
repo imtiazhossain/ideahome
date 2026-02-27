@@ -1,5 +1,5 @@
 import { Test, TestingModule } from "@nestjs/testing";
-import { NotFoundException } from "@nestjs/common";
+import { BadRequestException, NotFoundException } from "@nestjs/common";
 import { IdeasService } from "./ideas.service";
 import { PrismaService } from "../prisma.service";
 import { IdeaPlanService } from "./idea-plan.service";
@@ -248,6 +248,46 @@ describe("IdeasService", () => {
       expect(result.createdCount).toBe(0);
       expect(result.todos).toEqual([]);
       expect(result.message).toBe("Hello!");
+    });
+  });
+
+  describe("generateListAssistantChat", () => {
+    it("should generate action response for a non-idea list item", async () => {
+      mockPrisma.project.findUnique.mockResolvedValue({
+        id: "p1",
+        name: "Project A",
+        organizationId: "o1",
+      });
+
+      const result = await service.generateListAssistantChat(
+        "p1",
+        "user-1",
+        "Fix login bug"
+      );
+
+      expect(mockIdeaPlanService.generateActionResponse).toHaveBeenCalledWith({
+        ideaName: "Fix login bug",
+        projectName: "Project A",
+        context: undefined,
+        preferredModel: undefined,
+        requesterEmail: undefined,
+        includeWeb: undefined,
+      });
+      expect(result.createdCount).toBe(0);
+      expect(result.todos).toEqual([]);
+      expect(result.message).toBe("Hello!");
+    });
+
+    it("throws on missing projectId", async () => {
+      await expect(
+        service.generateListAssistantChat("", "user-1", "Fix login bug")
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it("throws on missing itemName", async () => {
+      await expect(
+        service.generateListAssistantChat("p1", "user-1", "   ")
+      ).rejects.toThrow(BadRequestException);
     });
   });
 });

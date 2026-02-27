@@ -757,6 +757,35 @@ export async function generateIdeaAssistantChat(
   );
 }
 
+export async function generateListItemAssistantChat(
+  projectId: string,
+  itemName: string,
+  context?: string,
+  model?: string,
+  includeWeb?: boolean
+): Promise<IdeaAssistantChatResult> {
+  const payload: {
+    projectId: string;
+    itemName: string;
+    context?: string;
+    model?: string;
+    includeWeb?: boolean;
+  } = {
+    projectId: projectId.trim(),
+    itemName: itemName.trim(),
+  };
+  const normalizedContext = typeof context === "string" ? context.trim() : "";
+  const normalizedModel = typeof model === "string" ? model.trim() : "";
+  if (normalizedContext) payload.context = normalizedContext;
+  if (normalizedModel) payload.model = normalizedModel;
+  if (includeWeb === true) payload.includeWeb = true;
+  return requestJson<IdeaAssistantChatResult>("/ideas/assistant-chat", {
+    method: "POST",
+    body: payload,
+    errorMessage: "Failed to generate AI assistant response",
+  });
+}
+
 export async function fetchOpenRouterModels(): Promise<string[]> {
   const payload = (await requestJson<unknown>("/ideas/openrouter-models", {
     errorMessage: "Failed to fetch OpenRouter models",
