@@ -216,8 +216,23 @@ export function CheckableListPage({
     [def.showAddError, list.addItem]
   );
 
+  const handleCopyList = useCallback(() => {
+    if (typeof navigator === "undefined" || !navigator.clipboard?.writeText) {
+      setUndoSyncToast("Copy is not supported in this browser.");
+      return;
+    }
+    const text = list.items.map((item) => `- ${item.name}`).join("\n");
+    if (!text) {
+      setUndoSyncToast("List is empty.");
+      return;
+    }
+    void navigator.clipboard
+      .writeText(text)
+      .then(() => setUndoSyncToast("List copied."))
+      .catch(() => setUndoSyncToast("Could not copy list."));
+  }, [list.items]);
+
   const { theme: themeValue, toggleTheme } = theme;
-  const isIdeasPage = pageKey === "ideas";
 
   const createChatMessageId = useCallback(
     () => `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
@@ -817,7 +832,6 @@ export function CheckableListPage({
 
   const renderIdeaDetails = useCallback(
     (ideaId: string) => {
-      if (!isIdeasPage) return null;
       const messages = assistantChatById[ideaId] ?? [];
       const gifUrl = assistantGifById[ideaId];
       const loading = Boolean(assistantLoadingById[ideaId]);
@@ -875,7 +889,6 @@ export function CheckableListPage({
       assistantVoiceEnabledById,
       handleVoiceReplyControl,
       isMobileAssistantComposer,
-      isIdeasPage,
       submitIdeaChatText,
       toggleVoiceRecording,
     ]
@@ -946,6 +959,9 @@ export function CheckableListPage({
       itemCount={list.items.length}
       canUndo={list.canUndo}
       onUndo={list.undo}
+      onCopyList={handleCopyList}
+      copyListAriaLabel={`Copy ${def.listTitle}`}
+      copyListTitle={`Copy ${def.listTitle} as bullet points`}
       canBulkDelete={canBulkDelete}
       onBulkDelete={handleBulkDelete}
       toastMessage={undoSyncToast}
@@ -966,29 +982,20 @@ export function CheckableListPage({
         onDelete: list.removeItem,
         renderItemActions: (item) => {
           if (item.done) return null;
-          const aiEnabled = isIdeasPage;
-          const loading = aiEnabled
-            ? Boolean(assistantLoadingById[item.id])
-            : false;
-          const hasChat = aiEnabled
-            ? (assistantChatById[item.id]?.length ?? 0) > 0 ||
-              Boolean(assistantGifById[item.id])
-            : false;
-          const isCollapsed = aiEnabled
-            ? (assistantCollapsedById[item.id] ?? true)
-            : true;
-          const hasChatSession = aiEnabled
-            ? Object.prototype.hasOwnProperty.call(
-                assistantCollapsedById,
-                item.id
-              )
-            : false;
+          const loading = Boolean(assistantLoadingById[item.id]);
+          const hasChat =
+            (assistantChatById[item.id]?.length ?? 0) > 0 ||
+            Boolean(assistantGifById[item.id]);
+          const isCollapsed = assistantCollapsedById[item.id] ?? true;
+          const hasChatSession = Object.prototype.hasOwnProperty.call(
+            assistantCollapsedById,
+            item.id
+          );
           return (
             <button
               type="button"
-              className={`idea-plan-generate-btn${aiEnabled && !isCollapsed ? " is-active" : ""}${aiEnabled && (hasChat || hasChatSession) && isCollapsed ? " is-dimmed" : ""}${loading ? " is-thinking" : ""}`}
+              className={`idea-plan-generate-btn${!isCollapsed ? " is-active" : ""}${(hasChat || hasChatSession) && isCollapsed ? " is-dimmed" : ""}${loading ? " is-thinking" : ""}`}
               onClick={() => {
-                if (!aiEnabled) return;
                 const willOpen = isCollapsed;
                 setAssistantCollapsedById((prev) => ({
                   ...prev,
@@ -1001,17 +1008,15 @@ export function CheckableListPage({
                   }
                 }
               }}
-              disabled={isOptimisticId(item.id) || !aiEnabled}
+              disabled={isOptimisticId(item.id)}
               aria-label="AI Assistance"
-              title={aiEnabled ? "AI Assistance" : "AI Assistance (Ideas only)"}
+              title="AI Assistance"
             >
               <IconIdeas />
             </button>
           );
         },
-        renderItemDetails: isIdeasPage
-          ? (item) => renderIdeaDetails(item.id)
-          : undefined,
+        renderItemDetails: (item) => renderIdeaDetails(item.id),
       }}
       addGuard={{
         projectsLoaded: layout.projectsLoaded,

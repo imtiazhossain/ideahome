@@ -21,6 +21,7 @@ export default function CustomListPage() {
 
   const [items, setItems] = useState<CustomListItem[]>([]);
   const [hydrated, setHydrated] = useState(false);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   useEffect(() => {
     if (!slug) return;
@@ -34,6 +35,12 @@ export default function CustomListPage() {
     if (!slug || !hydrated) return;
     setCustomListItems(slug, items);
   }, [slug, hydrated, items]);
+
+  useEffect(() => {
+    if (!toastMessage) return;
+    const timer = window.setTimeout(() => setToastMessage(null), 2500);
+    return () => window.clearTimeout(timer);
+  }, [toastMessage]);
 
   const listState = useLocalCheckableList({
     items,
@@ -61,6 +68,22 @@ export default function CustomListPage() {
 
   const activeTab = getCustomListTabId(list.slug);
   const { theme: themeValue, toggleTheme } = theme;
+
+  const handleCopyList = React.useCallback(() => {
+    if (typeof navigator === "undefined" || !navigator.clipboard?.writeText) {
+      setToastMessage("Copy is not supported in this browser.");
+      return;
+    }
+    const text = listState.items.map((item) => `- ${item.name}`).join("\n");
+    if (!text) {
+      setToastMessage("List is empty.");
+      return;
+    }
+    void navigator.clipboard
+      .writeText(text)
+      .then(() => setToastMessage("List copied."))
+      .catch(() => setToastMessage("Could not copy list."));
+  }, [listState.items]);
 
   return (
     <CheckableListPageShell
@@ -106,6 +129,10 @@ export default function CustomListPage() {
       itemCount={listState.items.length}
       canUndo={listState.canUndo}
       onUndo={listState.undo}
+      onCopyList={handleCopyList}
+      copyListAriaLabel={`Copy ${list.name}`}
+      copyListTitle={`Copy ${list.name} as bullet points`}
+      toastMessage={toastMessage}
       checkableListProps={{
         items: listState.items,
         itemLabel: "entry",

@@ -2,7 +2,11 @@ import React, { useEffect, useState } from "react";
 import { useRouter } from "next/router";
 import Head from "next/head";
 import Link from "next/link";
-import { setStoredToken, clearStoredToken } from "../../lib/api";
+import {
+  setStoredToken,
+  clearStoredToken,
+  getUserScopedStorageKey,
+} from "../../lib/api";
 
 function safeDecodeURIComponent(value: string): string {
   try {
@@ -39,6 +43,16 @@ export default function LoginCallbackPage() {
     const resolvedToken = tokenFromHash || tokenFromQuery;
     if (resolvedToken) {
       setStoredToken(resolvedToken);
+      try {
+        localStorage.removeItem(
+          getUserScopedStorageKey(
+            "ideahome-selected-project-id",
+            "ideahome-selected-project-id"
+          )
+        );
+      } catch {
+        // ignore
+      }
       setStatus("done");
       router.replace("/", undefined, { shallow: false });
       return;

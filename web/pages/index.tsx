@@ -8,6 +8,19 @@ import React, {
 import Link from "next/link";
 import { useRouter } from "next/router";
 import {
+  closestCenter,
+  DndContext,
+  PointerSensor,
+  useDraggable,
+  useDroppable,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+  type DragOverEvent,
+  type DragStartEvent,
+} from "@dnd-kit/core";
+import { CSS } from "@dnd-kit/utilities";
+import {
   fetchProjects,
   fetchIssues,
   fetchIssue,
@@ -77,7 +90,7 @@ import {
   IconX,
 } from "../components/icons";
 import { IconTrash } from "../components/IconTrash";
-import { LoadingMessage } from "../components/LoadingMessage";
+import { SectionLoadingSpinner } from "../components/SectionLoadingSpinner";
 import { useMediaCapabilities } from "../lib/useMediaCapabilities";
 import { useSelectedProject } from "../lib/SelectedProjectContext";
 import {
@@ -428,73 +441,66 @@ function AssigneeAvatar({ issue }: { issue: Issue }) {
   );
 }
 
-const DRAG_ISSUE_KEY = "application/x-issue-id";
-
 function IssueCard({
   issue,
-  columnStatusId,
-  onStatusChange,
   onSelect,
-  onDragStart,
-  onDragEnd,
+  draggingIssueId,
   isPreview,
 }: {
   issue: Issue;
-  columnStatusId: string;
-  onStatusChange: (id: string, status: string) => void;
   onSelect: (issue: Issue) => void;
-  onDragStart?: (issueId: string) => void;
-  onDragEnd?: () => void;
+  draggingIssueId: string | null;
   isPreview?: boolean;
 }) {
-  const [wasDragging, setWasDragging] = React.useState(false);
+  const suppressClickRef = React.useRef(false);
+  const { attributes, listeners, setNodeRef, transform, isDragging } =
+    useDraggable({
+      id: `issue-${issue.id}`,
+      data: {
+        issueId: issue.id,
+        status: issue.status,
+      },
+    });
   const scoreDisplay = Math.round((computeQualityScore(issue) / 6) * 100);
   const scoreColor = getQualityScoreColor(scoreDisplay);
   const scoreTextColor =
     scoreDisplay >= 40 && scoreDisplay <= 65 ? "#1a1a1a" : "#fff";
 
-  const handleDragStart = (e: React.DragEvent) => {
-    e.dataTransfer.setData(DRAG_ISSUE_KEY, issue.id);
-    e.dataTransfer.effectAllowed = "move";
-    setWasDragging(true);
-    onDragStart?.(issue.id);
-  };
+  React.useEffect(() => {
+    if (!isDragging) return;
+    suppressClickRef.current = true;
+  }, [isDragging]);
 
-  const handleDragEnd = () => {
-    setWasDragging(false);
-    onDragEnd?.();
-  };
-
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    e.dataTransfer.dropEffect = "move";
-  };
-
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    const droppedId = e.dataTransfer.getData(DRAG_ISSUE_KEY);
-    if (droppedId && columnStatusId) onStatusChange(droppedId, columnStatusId);
-  };
+  React.useEffect(() => {
+    if (draggingIssueId !== null) return;
+    if (!suppressClickRef.current) return;
+    const timer = window.setTimeout(() => {
+      suppressClickRef.current = false;
+    }, 30);
+    return () => window.clearTimeout(timer);
+  }, [draggingIssueId]);
 
   const handleClick = () => {
-    if (wasDragging) {
-      setTimeout(() => setWasDragging(false), 0);
+    if (suppressClickRef.current || isDragging) {
       return;
     }
     onSelect(issue);
   };
 
+  const style = {
+    transform: CSS.Translate.toString(transform),
+    transition: isDragging ? "none" : undefined,
+    zIndex: isDragging ? 5 : undefined,
+  };
+
   return (
     <div
+      ref={setNodeRef}
+      style={style}
       className={`issue-card${isPreview ? " issue-card-preview" : ""}`}
-      draggable
       onClick={handleClick}
-      onDragStart={handleDragStart}
-      onDragEnd={handleDragEnd}
-      onDragOver={handleDragOver}
-      onDrop={handleDrop}
+      {...listeners}
+      {...attributes}
     >
       <div
         className="issue-card-quality-score"
@@ -512,6 +518,38 @@ function IssueCard({
         <span className="issue-key">{issueKey(issue)}</span>
         <AssigneeAvatar issue={issue} />
       </div>
+    </div>
+  );
+}
+
+function BoardColumn({
+  id,
+  label,
+  count,
+  isDropTarget,
+  children,
+}: {
+  id: string;
+  label: string;
+  count: number;
+  isDropTarget: boolean;
+  children: React.ReactNode;
+}) {
+  const { setNodeRef } = useDroppable({
+    id: `column-${id}`,
+    data: { status: id },
+  });
+
+  return (
+    <div
+      ref={setNodeRef}
+      className={`column column-${id}${isDropTarget ? " column-drop-target" : ""}`}
+    >
+      <div className="column-header">
+        <span className="column-title">{label}</span>
+        <span className="column-count">{count}</span>
+      </div>
+      {children}
     </div>
   );
 }
@@ -2983,6 +3021,45 @@ export default function Home() {
     return result;
   }, [issuesByStatus, draggingIssueId, dragOverColumnId, issues]);
 
+  const boardSensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: { distance: 8 },
+    })
+  );
+
+  const handleBoardDragStart = React.useCallback((event: DragStartEvent) => {
+    const issueId = (event.active.data.current as { issueId?: string } | undefined)
+      ?.issueId;
+    setDraggingIssueId(issueId ?? null);
+  }, []);
+
+  const handleBoardDragOver = React.useCallback((event: DragOverEvent) => {
+    const status = (event.over?.data.current as { status?: string } | undefined)
+      ?.status;
+    setDragOverColumnId(status ?? null);
+  }, []);
+
+  const handleBoardDragEnd = React.useCallback(
+    (event: DragEndEvent) => {
+      const issueId = (event.active.data.current as { issueId?: string } | undefined)
+        ?.issueId;
+      const targetStatus = (event.over?.data.current as { status?: string } | undefined)
+        ?.status;
+      setDraggingIssueId(null);
+      setDragOverColumnId(null);
+      if (!issueId || !targetStatus) return;
+      const issue = issues.find((item) => item.id === issueId);
+      if (!issue || issue.status === targetStatus) return;
+      handleStatusChange(issueId, targetStatus);
+    },
+    [issues, handleStatusChange]
+  );
+
+  const handleBoardDragCancel = React.useCallback(() => {
+    setDraggingIssueId(null);
+    setDragOverColumnId(null);
+  }, []);
+
   if (!authResolved || !isAuthenticated()) {
     return null;
   }
@@ -3032,70 +3109,50 @@ export default function Home() {
 
       <div className="board-container">
         {loading ? (
-          <LoadingMessage message="Loading issues…" className="loading" />
-        ) : (
-          <div className="board-columns">
-            {STATUSES.map(({ id, label }) => {
-              const handleColumnDragOver = (e: React.DragEvent) => {
-                e.preventDefault();
-                e.dataTransfer.dropEffect = "move";
-              };
-              const handleColumnDrop = (e: React.DragEvent) => {
-                e.preventDefault();
-                setDragOverColumnId(null);
-                const issueId = e.dataTransfer.getData(DRAG_ISSUE_KEY);
-                if (!issueId) return;
-                const issue = issues.find((i) => i.id === issueId);
-                if (issue && issue.status !== id) {
-                  handleStatusChange(issueId, id);
-                }
-              };
-              const handleColumnDragEnter = () => setDragOverColumnId(id);
-              const handleColumnDragLeave = (e: React.DragEvent) => {
-                if (!e.currentTarget.contains(e.relatedTarget as Node)) {
-                  setDragOverColumnId(null);
-                }
-              };
-              const columnIssues = issuesByStatusForDisplay[id] ?? [];
-              const isPreviewColumn =
-                dragOverColumnId === id && draggingIssueId;
-              return (
-                <div
-                  key={id}
-                  className={`column column-${id}${dragOverColumnId === id ? " column-drop-target" : ""}`}
-                  onDragOver={handleColumnDragOver}
-                  onDrop={handleColumnDrop}
-                  onDragEnter={handleColumnDragEnter}
-                  onDragLeave={handleColumnDragLeave}
-                >
-                  <div className="column-header">
-                    <span className="column-title">{label}</span>
-                    <span className="column-count">{columnIssues.length}</span>
-                  </div>
-                  {columnIssues.map((issue) => (
-                    <IssueCard
-                      key={issue.id}
-                      issue={issue}
-                      columnStatusId={id}
-                      onStatusChange={handleStatusChange}
-                      onSelect={(issue) => {
-                        setSelectedIssue(issue);
-                        setIssueDetailOriginal(issue);
-                      }}
-                      onDragStart={setDraggingIssueId}
-                      onDragEnd={() => {
-                        setDraggingIssueId(null);
-                        setDragOverColumnId(null);
-                      }}
-                      isPreview={
-                        !!(isPreviewColumn && issue.id === draggingIssueId)
-                      }
-                    />
-                  ))}
-                </div>
-              );
-            })}
+          <div className="tests-page-single-loading">
+            <SectionLoadingSpinner />
           </div>
+        ) : (
+          <DndContext
+            sensors={boardSensors}
+            collisionDetection={closestCenter}
+            onDragStart={handleBoardDragStart}
+            onDragOver={handleBoardDragOver}
+            onDragEnd={handleBoardDragEnd}
+            onDragCancel={handleBoardDragCancel}
+          >
+            <div className="board-columns">
+              {STATUSES.map(({ id, label }) => {
+                const columnIssues = issuesByStatusForDisplay[id] ?? [];
+                const isPreviewColumn =
+                  dragOverColumnId === id && draggingIssueId;
+                return (
+                  <BoardColumn
+                    key={id}
+                    id={id}
+                    label={label}
+                    count={columnIssues.length}
+                    isDropTarget={dragOverColumnId === id}
+                  >
+                    {columnIssues.map((issue) => (
+                      <IssueCard
+                        key={issue.id}
+                        issue={issue}
+                        onSelect={(nextIssue) => {
+                          setSelectedIssue(nextIssue);
+                          setIssueDetailOriginal(nextIssue);
+                        }}
+                        draggingIssueId={draggingIssueId}
+                        isPreview={
+                          !!(isPreviewColumn && issue.id === draggingIssueId)
+                        }
+                      />
+                    ))}
+                  </BoardColumn>
+                );
+              })}
+            </div>
+          </DndContext>
         )}
       </div>
 
@@ -3218,15 +3275,6 @@ export default function Home() {
             <div className="modal-header">
               <h2>{issueKey(selectedIssue)}</h2>
               <div className="modal-header-actions">
-                <button
-                  type="button"
-                  className="btn btn-secondary modal-header-btn"
-                  onClick={() => setIssueToDelete(selectedIssue)}
-                  aria-label={`Delete ${selectedIssue.title || "issue"}`}
-                  title="Delete issue"
-                >
-                  Delete
-                </button>
                 <button
                   type="button"
                   className="modal-close"
@@ -4296,10 +4344,7 @@ export default function Home() {
               <div className="form-group" ref={commentsSectionRef}>
                 <label>Comments</label>
                 {issueCommentsLoading ? (
-                  <LoadingMessage
-                    message="Loading comments…"
-                    style={{ fontSize: 13, color: "var(--text-muted)" }}
-                  />
+                  <SectionLoadingSpinner />
                 ) : (
                   <>
                     <div
@@ -5615,27 +5660,6 @@ export default function Home() {
                 )}
             </div>
             <div className="modal-actions">
-              <button
-                type="button"
-                className="btn btn-secondary"
-                onClick={() => {
-                  setSelectedIssue(null);
-                  setIssueDetailOriginal(null);
-                  setIssueSaveError(null);
-                  setIssueSaveSuccess(false);
-                  setAutomatedTestDropdownOpen(false);
-                  setAutomatedTestRunResults({});
-                  setPlayingRecordingId(null);
-                  setEditingRecordingId(null);
-                  setEditingScreenshotId(null);
-                  setEditingFileId(null);
-                  setRecordingError(null);
-                  setScreenshotError(null);
-                  setFileError(null);
-                }}
-              >
-                Close
-              </button>
               {hasIssueDetailChanges(selectedIssue, issueDetailOriginal) && (
                 <button
                   type="button"
@@ -5646,6 +5670,15 @@ export default function Home() {
                   {issueSaving ? "Saving…" : "Save"}
                 </button>
               )}
+              <button
+                type="button"
+                className="btn btn-icon"
+                onClick={() => setIssueToDelete(selectedIssue)}
+                aria-label={`Delete ${selectedIssue.title || "issue"}`}
+                title="Delete issue"
+              >
+                <IconTrash />
+              </button>
             </div>
           </div>
         </div>

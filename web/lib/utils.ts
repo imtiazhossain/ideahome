@@ -207,6 +207,7 @@ export function applyToggleDoneOrder<T extends { done: boolean }>(
   );
   const without = next.filter((_, i) => i !== index);
   if (newDone) {
+    // Keep all unchecked items first; newly checked item becomes the first item in checked area.
     const firstDoneIdx = without.findIndex((i) => i.done);
     const insertAt = firstDoneIdx === -1 ? without.length : firstDoneIdx;
     const result = [

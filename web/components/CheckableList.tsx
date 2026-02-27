@@ -99,6 +99,7 @@ function SortableItem({
   const [isSwiping, setIsSwiping] = useState(false);
   const startXRef = useRef(0);
   const startOffsetRef = useRef(0);
+  const lastInputTapAtRef = useRef(0);
 
   const {
     attributes,
@@ -227,8 +228,16 @@ function SortableItem({
       : dragHandle
     : null;
 
-  const actionSlot = !isEditing ? renderItemActions?.(item, index) : null;
+  const isSwipeActive = canSwipe && (isSwiping || swipeOffset < 0);
+  const actionSlot =
+    !isEditing && !isSwipeActive ? renderItemActions?.(item, index) : null;
   const detailsSlot = !isEditing ? renderItemDetails?.(item, index) : null;
+  const selectAllEditingText = (
+    e: React.SyntheticEvent<HTMLInputElement> | React.MouseEvent<HTMLInputElement>
+  ) => {
+    const input = e.currentTarget;
+    input.setSelectionRange(0, input.value.length);
+  };
 
   const mainContent = (
     <div className="features-list-item-body">
@@ -264,6 +273,17 @@ function SortableItem({
                 value={editingValue}
                 onChange={(e) => onEditingValueChange(e.target.value)}
                 onBlur={onSaveEdit}
+                onDoubleClick={selectAllEditingText}
+                onPointerUp={(e) => {
+                  if (e.pointerType !== "touch") return;
+                  const now = Date.now();
+                  if (now - lastInputTapAtRef.current < 320) {
+                    selectAllEditingText(
+                      e as unknown as React.SyntheticEvent<HTMLInputElement>
+                    );
+                  }
+                  lastInputTapAtRef.current = now;
+                }}
                 onKeyDown={(e) => {
                   if (e.key === "Enter") onSaveEdit();
                   if (e.key === "Escape") onCancelEdit();
@@ -337,6 +357,7 @@ function SortableItem({
   return (
     <li
       ref={setRefs}
+      data-item-id={item.id}
       style={style}
       className={`features-list-item ${item.done ? "features-list-item--done" : ""} ${isDragging ? "features-list-item--dragging" : ""}`}
     >
@@ -380,6 +401,26 @@ export function CheckableList({
 }: CheckableListProps) {
   const listRef = useRef<HTMLUListElement>(null);
 
+  const getSelectedItems = useCallback((): CheckableListItem[] => {
+    if (typeof window === "undefined") return items;
+    const listNode = listRef.current;
+    if (!listNode) return items;
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
+      return items;
+    }
+    const range = selection.getRangeAt(0);
+    const selected: CheckableListItem[] = [];
+    items.forEach((item) => {
+      const row = listNode.querySelector<HTMLElement>(
+        `li[data-item-id="${item.id}"]`
+      );
+      if (!row) return;
+      if (range.intersectsNode(row)) selected.push(item);
+    });
+    return selected.length > 0 ? selected : items;
+  }, [items]);
+
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: { distance: 8 },
@@ -408,8 +449,40 @@ export function CheckableList({
     onSaveEdit();
   };
 
+  const handleListCopyCapture = useCallback(
+    (e: React.ClipboardEvent<HTMLUListElement>) => {
+      const target = e.target as HTMLElement | null;
+      if (target?.closest("input, textarea, [contenteditable='true']")) return;
+      if (typeof window === "undefined") return;
+      const listNode = listRef.current;
+      const selection = window.getSelection();
+      if (!listNode || !selection) return;
+      const anchorInside =
+        selection.anchorNode && listNode.contains(selection.anchorNode);
+      const focusInside =
+        selection.focusNode && listNode.contains(selection.focusNode);
+      if (!anchorInside && !focusInside) return;
+      const selectedItems = getSelectedItems();
+      if (selectedItems.length === 0) return;
+      const bulletText = selectedItems.map((item) => `- ${item.name}`).join("\n");
+      e.preventDefault();
+      e.clipboardData.setData("text/plain", bulletText);
+    },
+    [getSelectedItems]
+  );
+
   if (loading) {
-    return <SectionLoadingSpinner />;
+    return (
+      <ul
+        ref={listRef}
+        className="features-list"
+        style={{ listStyle: "none", padding: 0, margin: "8px 0 0" }}
+      >
+        <li className="tests-page-section-loading">
+          <SectionLoadingSpinner />
+        </li>
+      </ul>
+    );
   }
   if (items.length === 0) {
     return <p className="tests-page-section-desc">{emptyMessage}</p>;
@@ -429,6 +502,7 @@ export function CheckableList({
           className="features-list"
           style={{ listStyle: "none", padding: 0, margin: "8px 0 0" }}
           onClickCapture={handleListClickCapture}
+          onCopyCapture={handleListCopyCapture}
         >
           {items.map((item, index) => (
             <SortableItem

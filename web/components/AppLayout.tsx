@@ -20,8 +20,8 @@ import {
   getCustomLists,
 } from "../lib/customLists";
 import { IconTrash } from "./IconTrash";
-import { IconFilter } from "./icons";
-import { IconIdeas } from "./icons";
+import { IconFilter, IconMic, IconSettings } from "./icons";
+import { IconHomeBulby } from "./icons";
 import {
   ProjectNavBar,
   DrawerCollapsedNav,
@@ -208,6 +208,7 @@ export function AppLayout({
   const drawerSettingsRef = React.useRef<HTMLDivElement>(null);
   const [drawerSettingsOpen, setDrawerSettingsOpen] = React.useState(false);
   const [drawerFiltersOpen, setDrawerFiltersOpen] = React.useState(false);
+  const [drawerVoicesOpen, setDrawerVoicesOpen] = React.useState(false);
   const [drawerDeleteSectionsOpen, setDrawerDeleteSectionsOpen] =
     React.useState(false);
   const [projectOrderIds, setProjectOrderIds] = React.useState<string[]>([]);
@@ -412,12 +413,18 @@ export function AppLayout({
     if (!drawerOpen) {
       setDrawerSettingsOpen(false);
       setDrawerFiltersOpen(false);
+      setDrawerVoicesOpen(false);
       setDrawerDeleteSectionsOpen(false);
     }
   }, [drawerOpen]);
 
   React.useEffect(() => {
-    if (!drawerSettingsOpen && !drawerFiltersOpen && !drawerDeleteSectionsOpen)
+    if (
+      !drawerSettingsOpen &&
+      !drawerFiltersOpen &&
+      !drawerVoicesOpen &&
+      !drawerDeleteSectionsOpen
+    )
       return;
     const onOutside = (e: MouseEvent | TouchEvent) => {
       const target = e.target as Node | null;
@@ -425,6 +432,7 @@ export function AppLayout({
       if (drawerSettingsRef.current?.contains(target)) return;
       setDrawerSettingsOpen(false);
       setDrawerFiltersOpen(false);
+      setDrawerVoicesOpen(false);
       setDrawerDeleteSectionsOpen(false);
     };
     document.addEventListener("mousedown", onOutside);
@@ -433,7 +441,12 @@ export function AppLayout({
       document.removeEventListener("mousedown", onOutside);
       document.removeEventListener("touchstart", onOutside);
     };
-  }, [drawerDeleteSectionsOpen, drawerFiltersOpen, drawerSettingsOpen]);
+  }, [
+    drawerDeleteSectionsOpen,
+    drawerFiltersOpen,
+    drawerVoicesOpen,
+    drawerSettingsOpen,
+  ]);
 
   React.useEffect(() => {
     if (creatingProject) creatingProjectInputRef.current?.focus();
@@ -526,6 +539,13 @@ export function AppLayout({
     return OPENROUTER_MODEL_SWITCHER_EMAILS.has(email);
   }, [currentUserEmail, openRouterModelOptions]);
 
+  const selectedVoiceLabel = React.useMemo(
+    () =>
+      availableVoices.find((voice) => voice.value === selectedVoiceUri)?.label ??
+      "Assistant voice",
+    [availableVoices, selectedVoiceUri]
+  );
+
   React.useEffect(() => {
     if (!canManageOpenRouterModel) return;
     let active = true;
@@ -564,17 +584,25 @@ export function AppLayout({
         >
           {drawerOpen ? (
             <>
-              <div className="drawer-logo" aria-hidden>
-                <span
-                  className="drawer-logo-mark"
-                  role="img"
-                  aria-hidden="true"
-                >
-                  <IconIdeas />
-                </span>
-              </div>
               <div className="drawer-header">
-                <div className="drawer-title">Idea Home</div>
+                <div className="drawer-brand">
+                  <button
+                    type="button"
+                    className="drawer-logo drawer-logo-btn"
+                    onClick={() => setDrawerOpen(false)}
+                    aria-label="Close sidebar"
+                    title="Close sidebar"
+                  >
+                    <span
+                      className="drawer-logo-mark"
+                      role="img"
+                      aria-hidden="true"
+                    >
+                      <IconHomeBulby />
+                    </span>
+                  </button>
+                  <div className="drawer-brand-title">Idea Home</div>
+                </div>
                 <button
                   type="button"
                   className="drawer-toggle"
@@ -824,6 +852,30 @@ export function AppLayout({
                     ))}
                   </div>
                 )}
+                {drawerVoicesOpen && (
+                  <div className="drawer-bottom-voices-menu">
+                    {availableVoices.map((voice) => {
+                      const selected = voice.value === selectedVoiceUri;
+                      return (
+                        <button
+                          key={voice.value}
+                          type="button"
+                          className={`drawer-bottom-voice-item${selected ? " is-selected" : ""}`}
+                          onClick={() => {
+                            setSelectedVoiceUri(voice.value);
+                            setStoredAssistantVoiceUri(voice.value);
+                            setDrawerVoicesOpen(false);
+                          }}
+                          title={voice.label}
+                          aria-label={voice.label}
+                        >
+                          {selected ? "✓ " : ""}
+                          {voice.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
                 {drawerDeleteSectionsOpen && (
                   <div className="drawer-bottom-delete-sections-menu">
                     {orderedNavLinks.map(({ tabId, label }) => {
@@ -852,105 +904,159 @@ export function AppLayout({
                 )}
                 {drawerSettingsOpen && (
                   <div className="drawer-bottom-settings-menu" role="menu">
-                    {availableVoices.length > 0 && (
-                      <label
-                        className="drawer-bottom-settings-model"
+                    {drawerVoicesOpen ? (
+                      <button
+                        type="button"
+                        className="drawer-bottom-settings-menu-item is-source-active"
+                        role="menuitem"
+                        onClick={() => {
+                          setDrawerVoicesOpen(false);
+                        }}
                         aria-label="Assistant voice"
+                        title={`Voice: ${selectedVoiceLabel}`}
                       >
-                        <span className="drawer-bottom-settings-model-label">
-                          Voice
+                        <span
+                          className="drawer-bottom-settings-voice-icon"
+                          aria-hidden
+                        >
+                          <span className="drawer-bottom-settings-voice-gear">
+                            <IconSettings />
+                          </span>
+                          <span className="drawer-bottom-settings-voice-mic">
+                            <IconMic />
+                          </span>
                         </span>
-                        <select
-                          className="drawer-bottom-settings-model-select"
-                          value={selectedVoiceUri}
-                          onChange={(e) => {
-                            const nextVoice = e.target.value;
-                            setSelectedVoiceUri(nextVoice);
-                            setStoredAssistantVoiceUri(nextVoice);
+                      </button>
+                    ) : drawerFiltersOpen ? (
+                      <button
+                        type="button"
+                        className="drawer-bottom-settings-menu-item is-source-active"
+                        role="menuitem"
+                        onClick={() => {
+                          setDrawerFiltersOpen(false);
+                        }}
+                        aria-label="Manage tabs"
+                        title="Manage tabs"
+                      >
+                        <IconFilter />
+                      </button>
+                    ) : drawerDeleteSectionsOpen ? (
+                      <button
+                        type="button"
+                        className="drawer-bottom-settings-menu-item is-source-active"
+                        role="menuitem"
+                        onClick={() => {
+                          setDrawerDeleteSectionsOpen(false);
+                        }}
+                        aria-label="Delete sections"
+                        title="Delete sections"
+                      >
+                        <IconTrash />
+                      </button>
+                    ) : (
+                      <>
+                        {availableVoices.length > 0 && (
+                        <button
+                          type="button"
+                          className="drawer-bottom-settings-menu-item drawer-bottom-settings-voice"
+                          role="menuitem"
+                          aria-label="Assistant voice"
+                          title={`Voice: ${selectedVoiceLabel}`}
+                          onClick={() => {
+                            setDrawerVoicesOpen((open) => !open);
+                            setDrawerFiltersOpen(false);
+                            setDrawerDeleteSectionsOpen(false);
                           }}
                         >
-                          {availableVoices.map((voice) => (
-                            <option key={voice.value} value={voice.value}>
-                              {voice.label}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                    )}
-                    {canManageOpenRouterModel && (
-                      <label
-                        className="drawer-bottom-settings-model"
-                        aria-label="OpenRouter model"
-                      >
-                        <span className="drawer-bottom-settings-model-label">
-                          LLM
-                        </span>
-                        <select
-                          className="drawer-bottom-settings-model-select"
-                          value={selectedAiModel}
-                          onChange={(e) => {
-                            const nextModel = e.target.value;
-                            setSelectedAiModel(nextModel);
-                            setStoredOpenRouterModel(nextModel);
+                          <span className="drawer-bottom-settings-voice-icon" aria-hidden>
+                            <span className="drawer-bottom-settings-voice-gear">
+                              <IconSettings />
+                            </span>
+                            <span className="drawer-bottom-settings-voice-mic">
+                              <IconMic />
+                            </span>
+                          </span>
+                        </button>
+                        )}
+                        {canManageOpenRouterModel && (
+                          <label
+                            className="drawer-bottom-settings-model"
+                            aria-label="OpenRouter model"
+                          >
+                            <span className="drawer-bottom-settings-model-label">
+                              LLM
+                            </span>
+                            <select
+                              className="drawer-bottom-settings-model-select"
+                              value={selectedAiModel}
+                              onChange={(e) => {
+                                const nextModel = e.target.value;
+                                setSelectedAiModel(nextModel);
+                                setStoredOpenRouterModel(nextModel);
+                              }}
+                            >
+                              {openRouterModelOptions.map((model) => (
+                                <option key={model} value={model}>
+                                  {model}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                        )}
+                        <button
+                          type="button"
+                          className="drawer-bottom-settings-menu-item"
+                          role="menuitem"
+                          onClick={() => {
+                            setDrawerFiltersOpen((open) => !open);
+                            setDrawerVoicesOpen(false);
+                            setDrawerDeleteSectionsOpen(false);
                           }}
+                          aria-label="Manage tabs"
+                          title="Manage tabs"
                         >
-                          {openRouterModelOptions.map((model) => (
-                            <option key={model} value={model}>
-                              {model}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
+                          <IconFilter />
+                        </button>
+                        <button
+                          type="button"
+                          className="drawer-bottom-settings-menu-item"
+                          role="menuitem"
+                          onClick={() => {
+                            setDrawerDeleteSectionsOpen((open) => !open);
+                            setDrawerFiltersOpen(false);
+                            setDrawerVoicesOpen(false);
+                          }}
+                          aria-label="Delete sections"
+                          title="Delete sections"
+                        >
+                          <IconTrash />
+                        </button>
+                        <button
+                          type="button"
+                          className="drawer-bottom-settings-menu-item"
+                          role="menuitem"
+                          onClick={() => {
+                            toggleTheme();
+                            setDrawerSettingsOpen(false);
+                            setDrawerFiltersOpen(false);
+                            setDrawerVoicesOpen(false);
+                            setDrawerDeleteSectionsOpen(false);
+                          }}
+                          aria-label={
+                            theme === "light"
+                              ? "Switch to dark theme"
+                              : "Switch to light theme"
+                          }
+                          title={
+                            theme === "light"
+                              ? "Switch to dark theme"
+                              : "Switch to light theme"
+                          }
+                        >
+                          {theme === "light" ? "☀" : "🌙"}
+                        </button>
+                      </>
                     )}
-                    <button
-                      type="button"
-                      className="drawer-bottom-settings-menu-item"
-                      role="menuitem"
-                      onClick={() => {
-                        setDrawerFiltersOpen((open) => !open);
-                        setDrawerDeleteSectionsOpen(false);
-                      }}
-                      aria-label="Manage tabs"
-                      title="Manage tabs"
-                    >
-                      <IconFilter />
-                    </button>
-                    <button
-                      type="button"
-                      className="drawer-bottom-settings-menu-item"
-                      role="menuitem"
-                      onClick={() => {
-                        setDrawerDeleteSectionsOpen((open) => !open);
-                        setDrawerFiltersOpen(false);
-                      }}
-                      aria-label="Delete sections"
-                      title="Delete sections"
-                    >
-                      <IconTrash />
-                    </button>
-                    <button
-                      type="button"
-                      className="drawer-bottom-settings-menu-item"
-                      role="menuitem"
-                      onClick={() => {
-                        toggleTheme();
-                        setDrawerSettingsOpen(false);
-                        setDrawerFiltersOpen(false);
-                        setDrawerDeleteSectionsOpen(false);
-                      }}
-                      aria-label={
-                        theme === "light"
-                          ? "Switch to dark theme"
-                          : "Switch to light theme"
-                      }
-                      title={
-                        theme === "light"
-                          ? "Switch to dark theme"
-                          : "Switch to light theme"
-                      }
-                    >
-                      {theme === "light" ? "☀" : "🌙"}
-                    </button>
                   </div>
                 )}
                 <button
@@ -961,6 +1067,7 @@ export function AppLayout({
                       const next = !open;
                       if (!next) {
                         setDrawerFiltersOpen(false);
+                        setDrawerVoicesOpen(false);
                         setDrawerDeleteSectionsOpen(false);
                       }
                       return next;

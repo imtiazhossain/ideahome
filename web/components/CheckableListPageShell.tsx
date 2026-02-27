@@ -5,6 +5,8 @@ import { ProjectSectionGuard } from "./ProjectSectionGuard";
 import { CheckableList } from "./CheckableList";
 import { IconUndo } from "./IconUndo";
 import { IconTrash } from "./IconTrash";
+import { IconCopy } from "./icons";
+import { SectionLoadingSpinner } from "./SectionLoadingSpinner";
 
 export interface CheckableListPageShellProps {
   appLayoutProps: Omit<React.ComponentProps<typeof AppLayout>, "children">;
@@ -14,6 +16,9 @@ export interface CheckableListPageShellProps {
   itemCount: number;
   canUndo: boolean;
   onUndo: () => void;
+  onCopyList?: () => void;
+  copyListAriaLabel?: string;
+  copyListTitle?: string;
   canBulkDelete?: boolean;
   onBulkDelete?: () => void;
   checkableListProps: React.ComponentProps<typeof CheckableList>;
@@ -38,6 +43,9 @@ export function CheckableListPageShell({
   itemCount: _itemCount,
   canUndo,
   onUndo,
+  onCopyList,
+  copyListAriaLabel = "Copy list",
+  copyListTitle = "Copy list as bullet points",
   canBulkDelete = false,
   onBulkDelete,
   checkableListProps,
@@ -45,6 +53,10 @@ export function CheckableListPageShell({
   listGuard,
   toastMessage = null,
 }: CheckableListPageShellProps) {
+  const isPageLoading =
+    Boolean(checkableListProps.loading) ||
+    (addGuard ? !addGuard.projectsLoaded : false) ||
+    (listGuard ? !listGuard.projectsLoaded : false);
   const addContent = <AddItemForm {...addFormProps} />;
 
   const listContent = <CheckableList {...checkableListProps} />;
@@ -52,61 +64,84 @@ export function CheckableListPageShell({
   return (
     <AppLayout {...appLayoutProps}>
       <div className="tests-page-content">
-        <section className="tests-page-section">
-          {addGuard ? (
-            <ProjectSectionGuard
-              projectsLoaded={addGuard.projectsLoaded}
-              selectedProjectId={addGuard.selectedProjectId}
-              message={addGuard.message}
-              variant="add"
-            >
-              {addContent}
-            </ProjectSectionGuard>
-          ) : (
-            addContent
-          )}
-        </section>
+        {isPageLoading ? (
+          <div className="tests-page-single-loading">
+            <SectionLoadingSpinner />
+          </div>
+        ) : (
+          <>
+            <section className="tests-page-section">
+              {addGuard ? (
+                <ProjectSectionGuard
+                  projectsLoaded={addGuard.projectsLoaded}
+                  selectedProjectId={addGuard.selectedProjectId}
+                  message={addGuard.message}
+                  variant="add"
+                >
+                  {addContent}
+                </ProjectSectionGuard>
+              ) : (
+                addContent
+              )}
+            </section>
 
-        <section className="tests-page-section">
-          {listGuard ? (
-            <ProjectSectionGuard
-              projectsLoaded={listGuard.projectsLoaded}
-              selectedProjectId={listGuard.selectedProjectId}
-              message={listGuard.message}
-              variant="list"
+            <section
+              className={`tests-page-section${onCopyList ? " tests-page-section--with-top-right" : ""}`}
             >
-              {listContent}
-            </ProjectSectionGuard>
-          ) : (
-            listContent
-          )}
-          {(canUndo || canBulkDelete) && (
-            <div className="tests-page-section-footer">
-              {canUndo ? (
-                <button
-                  type="button"
-                  className="tests-page-section-undo"
-                  onClick={onUndo}
-                  aria-label="Undo last change"
-                  title="Undo"
-                >
-                  <IconUndo />
-                </button>
+              {onCopyList ? (
+                <div className="tests-page-section-top-right">
+                  <button
+                    type="button"
+                    className="tests-page-section-copy-icon"
+                    onClick={onCopyList}
+                    aria-label={copyListAriaLabel}
+                    title={copyListTitle}
+                  >
+                    <IconCopy />
+                  </button>
+                </div>
               ) : null}
-              {canBulkDelete && onBulkDelete ? (
-                <button
-                  type="button"
-                  className="tests-page-section-bulk-delete"
-                  onClick={onBulkDelete}
-                  aria-label="Delete all completed items"
-                  title="Delete all completed items"
+              {listGuard ? (
+                <ProjectSectionGuard
+                  projectsLoaded={listGuard.projectsLoaded}
+                  selectedProjectId={listGuard.selectedProjectId}
+                  message={listGuard.message}
+                  variant="list"
                 >
-                  <IconTrash />
-                </button>
-              ) : null}
-            </div>
-          )}
-        </section>
+                  {listContent}
+                </ProjectSectionGuard>
+              ) : (
+                listContent
+              )}
+              {(canUndo || canBulkDelete) && (
+                <div className="tests-page-section-footer">
+                  {canUndo ? (
+                    <button
+                      type="button"
+                      className="tests-page-section-undo"
+                      onClick={onUndo}
+                      aria-label="Undo last change"
+                      title="Undo"
+                    >
+                      <IconUndo />
+                    </button>
+                  ) : null}
+                  {canBulkDelete && onBulkDelete ? (
+                    <button
+                      type="button"
+                      className="tests-page-section-bulk-delete"
+                      onClick={onBulkDelete}
+                      aria-label="Delete all completed items"
+                      title="Delete all completed items"
+                    >
+                      <IconTrash />
+                    </button>
+                  ) : null}
+                </div>
+              )}
+            </section>
+          </>
+        )}
       </div>
       {toastMessage ? (
         <div className="checkable-toast" role="status" aria-live="polite">

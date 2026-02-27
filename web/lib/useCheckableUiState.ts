@@ -52,7 +52,7 @@ export function useCheckableUiState<T extends CheckableUiItem>({
   }, []);
 
   const applyToggleDone = useCallback(
-    (index: number): number | null => {
+    (index: number): { newIndex: number; reorderedItems: T[] } | null => {
       if (!canEditAt(index)) return null;
       const item = items[index];
       if (!item) return null;
@@ -65,21 +65,23 @@ export function useCheckableUiState<T extends CheckableUiItem>({
         ? lastUncheckedIndexByIdRef.current[item.id]
         : undefined;
       let newIndex = 0;
+      let reorderedItems: T[] = [];
       setItems((prev: T[]) => {
-        const [reorderedItems, idx] = applyToggleDoneOrder(
+        const [nextItems, idx] = applyToggleDoneOrder(
           prev,
           index,
           newDone,
           restoreIndex
         );
         newIndex = idx;
-        return reorderedItems;
+        reorderedItems = nextItems;
+        return nextItems;
       });
       if (!newDone) {
         delete lastUncheckedIndexByIdRef.current[item.id];
       }
       if (editingIndex === index) setEditingIndex(newIndex);
-      return newIndex;
+      return { newIndex, reorderedItems };
     },
     [canEditAt, items, pushHistory, setItems, editingIndex]
   );

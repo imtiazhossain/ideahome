@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import type { ListCacheKey } from "./listCache";
 import { useCachedProjectList } from "./useCachedProjectList";
 import { useUndoList } from "./useUndoList";
@@ -66,6 +66,8 @@ export function useCheckableProjectList<T extends CheckableProjectItem>({
   onUndoSyncError,
 }: UseCheckableProjectListOptions<T>) {
   const projectId = selectedProjectId ?? "";
+  const toggleRequestVersionRef = useRef<Record<string, number>>({});
+  const normalizationAttemptKeyRef = useRef<string>("");
   const [items, setItems, loading] = useCachedProjectList<T>({
     listType,
     selectedProjectId: projectId,
@@ -101,6 +103,28 @@ export function useCheckableProjectList<T extends CheckableProjectItem>({
     canEditItem: (item) => !isOptimisticId(item?.id ?? ""),
   });
 
+  const isUncheckedFirstOrder = useCallback((list: T[]): boolean => {
+    let seenDone = false;
+    for (const item of list) {
+      if (item.done) {
+        seenDone = true;
+        continue;
+      }
+      if (seenDone) return false;
+    }
+    return true;
+  }, []);
+
+  const normalizeUncheckedFirst = useCallback((list: T[]): T[] => {
+    const unchecked: T[] = [];
+    const checked: T[] = [];
+    list.forEach((item) => {
+      if (item.done) checked.push(item);
+      else unchecked.push(item);
+    });
+    return [...unchecked, ...checked];
+  }, []);
+
   const refreshFromServer = useCallback(async (): Promise<T[] | null> => {
     if (!projectId) return null;
     const freshItems = await fetchList(projectId);
@@ -122,6 +146,33 @@ export function useCheckableProjectList<T extends CheckableProjectItem>({
     },
     [projectId, reorderItems, setItems, refreshFromServer, onReorderError]
   );
+
+  useEffect(() => {
+    if (!projectId) return;
+    if (items.length < 2) return;
+    if (items.some((item) => isOptimisticId(item.id))) return;
+    if (isUncheckedFirstOrder(items)) {
+      normalizationAttemptKeyRef.current = "";
+      return;
+    }
+    const key = items.map((item) => `${item.id}:${item.done ? 1 : 0}`).join("|");
+    if (normalizationAttemptKeyRef.current === key) return;
+    normalizationAttemptKeyRef.current = key;
+    const normalized = normalizeUncheckedFirst(items);
+    setItems(normalized);
+    void syncReorderOrRefresh(normalized.map((item) => item.id));
+  }, [
+    items,
+    projectId,
+    isUncheckedFirstOrder,
+    normalizeUncheckedFirst,
+    setItems,
+    syncReorderOrRefresh,
+  ]);
+
+  useEffect(() => {
+    normalizationAttemptKeyRef.current = "";
+  }, [projectId]);
 
   const addItem = useCallback(
     (e: React.FormEvent) => {
@@ -177,18 +228,42 @@ export function useCheckableProjectList<T extends CheckableProjectItem>({
   const toggleDone = useCallback(
     (index: number) => {
       const item = items[index];
+      if (!item) return;
       if (isOptimisticId(item.id)) return;
       const newDone = !item.done;
-      applyToggleDone(index);
-      updateItem(item.id, { done: newDone }).catch(() => {
-        if (!projectId) {
-          setItems((prev: T[]) => [...prev]);
-          return;
-        }
-        void refreshFromServer();
-      });
+      const requestVersion =
+        (toggleRequestVersionRef.current[item.id] ?? 0) + 1;
+      toggleRequestVersionRef.current[item.id] = requestVersion;
+      const toggleResult = applyToggleDone(index);
+      const reorderedIds = toggleResult?.reorderedItems.map((i) => i.id) ?? [];
+      updateItem(item.id, { done: newDone })
+        .then(() => {
+          if (toggleRequestVersionRef.current[item.id] !== requestVersion) return;
+          if (!projectId || reorderedIds.length === 0) return;
+          return reorderItems(projectId, reorderedIds).then((reordered) => {
+            if (toggleRequestVersionRef.current[item.id] !== requestVersion) return;
+            setItems(reordered as T[]);
+          });
+        })
+        .catch(() => {
+          if (toggleRequestVersionRef.current[item.id] !== requestVersion)
+            return;
+          if (!projectId) {
+            setItems((prev: T[]) => [...prev]);
+            return;
+          }
+          void refreshFromServer();
+        });
     },
-    [items, updateItem, applyToggleDone, projectId, setItems, refreshFromServer]
+    [
+      items,
+      updateItem,
+      applyToggleDone,
+      projectId,
+      reorderItems,
+      setItems,
+      refreshFromServer,
+    ]
   );
 
   const removeItem = useCallback(

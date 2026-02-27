@@ -37,6 +37,8 @@ import {
   IconHealth,
   IconHome,
   IconIdeas,
+  IconLogin,
+  IconLogout,
   IconMenu,
   IconPages,
   IconProfile,
@@ -781,6 +783,16 @@ export function ProjectNavBar({
   const tabsScrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (!window.matchMedia("(max-width: 1024px)").matches) return;
+    const container = tabsScrollRef.current;
+    if (!container) return;
+    const active = container.querySelector<HTMLElement>(".project-nav-tab.is-active");
+    if (!active) return;
+    active.scrollIntoView({ inline: "nearest", block: "nearest" });
+  }, [activeTab, tabOrder, hiddenTabIds]);
+
+  useEffect(() => {
     setTabOrder(loadTabOrder(deletedTabIds));
   }, [deletedTabIds, setTabOrder]);
 
@@ -887,6 +899,15 @@ export function ProjectNavBar({
     href?: string;
     hasDropdown?: boolean;
   }[];
+
+  const getTabLabel = useCallback(
+    (tabId: ProjectNavTabId, label: string) => {
+      if (!compactTabs) return label;
+      if (activeTab === tabId) return label;
+      return getCompactTabLabel(tabId, label);
+    },
+    [activeTab, compactTabs]
+  );
 
   return (
     <header className="project-nav">
@@ -1069,21 +1090,25 @@ export function ProjectNavBar({
                     {hasToken ? (
                       <button
                         type="button"
-                        className="project-nav-auth-menu-item"
+                        className="project-nav-auth-menu-item project-nav-auth-menu-item--icon"
                         role="menuitem"
                         onClick={handleLogout}
+                        aria-label="Log out"
+                        title="Log out"
                       >
-                        Log out
+                        <IconLogout />
                       </button>
                     ) : (
                       <Link
                         href="/login"
                         prefetch={false}
-                        className="project-nav-auth-menu-item"
+                        className="project-nav-auth-menu-item project-nav-auth-menu-item--icon"
                         role="menuitem"
                         onClick={() => setAuthMenuOpen(false)}
+                        aria-label="Log in"
+                        title="Log in"
                       >
-                        Log in
+                        <IconLogin />
                       </Link>
                     )}
                   </div>
@@ -1130,9 +1155,7 @@ export function ProjectNavBar({
                   >
                     <span className="project-nav-tab-icon">{tab.icon}</span>
                     <span className="project-nav-tab-label">
-                      {compactTabs
-                        ? getCompactTabLabel(tab.id, tab.label)
-                        : tab.label}
+                      {getTabLabel(tab.id, tab.label)}
                     </span>
                   </Link>
                 ) : (
@@ -1147,9 +1170,7 @@ export function ProjectNavBar({
                   >
                     <span className="project-nav-tab-icon">{tab.icon}</span>
                     <span className="project-nav-tab-label">
-                      {compactTabs
-                        ? getCompactTabLabel(tab.id, tab.label)
-                        : tab.label}
+                      {getTabLabel(tab.id, tab.label)}
                     </span>
                     {tab.hasDropdown && (
                       <span className="project-nav-tab-chevron" aria-hidden>

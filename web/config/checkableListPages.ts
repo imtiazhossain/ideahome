@@ -154,7 +154,7 @@ export const CHECKABLE_LIST_PAGES: Record<
     itemLabel: "bug",
     listTitle: "Bug List",
     emptyMessage: "No bugs yet. Add one above.",
-    addPlaceholder: "Bug name or description",
+    addPlaceholder: "No one wants a broken bulb...",
     addGuardMessage: "Select a project to add bugs.",
     listGuardMessage: "Select a project to see and manage bugs.",
     fetchList: fetchBugs,

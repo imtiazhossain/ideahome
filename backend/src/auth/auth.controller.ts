@@ -123,6 +123,23 @@ export class AuthController {
     });
   }
 
+  @Get("providers")
+  providers() {
+    return {
+      google: Boolean(process.env.GOOGLE_CLIENT_ID?.trim()),
+      github: Boolean(
+        process.env.GITHUB_CLIENT_ID?.trim() &&
+          process.env.GITHUB_CLIENT_SECRET?.trim()
+      ),
+      apple: Boolean(
+        process.env.APPLE_CLIENT_ID?.trim() &&
+          process.env.APPLE_TEAM_ID?.trim() &&
+          process.env.APPLE_KEY_ID?.trim() &&
+          process.env.APPLE_PRIVATE_KEY?.trim()
+      ),
+    };
+  }
+
   @Get("login")
   async login(@Res() res: Response) {
     const { generators } = await import("openid-client");

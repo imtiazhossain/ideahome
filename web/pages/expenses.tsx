@@ -14,8 +14,8 @@ import { useProjectLayout } from "../lib/useProjectLayout";
 import { AppLayout } from "../components/AppLayout";
 import { IconPlus } from "../components/IconPlus";
 import { IconTrash } from "../components/IconTrash";
-import { LoadingMessage } from "../components/LoadingMessage";
 import { ProjectSectionGuard } from "../components/ProjectSectionGuard";
+import { SectionLoadingSpinner } from "../components/SectionLoadingSpinner";
 import { useTheme } from "./_app";
 
 const EXPENSES_STORAGE_PREFIX = "ideahome-expenses";
@@ -119,9 +119,25 @@ export default function ExpensesPage() {
   );
   const migratedFromStorageRef = useRef(false);
 
+  const loadLocalExpensesForProject = (projectId: string): Expense[] => {
+    return loadStoredExpensesLegacy().map((item, index) => ({
+      id: `local-${projectId}-${index}-${item.date}`,
+      amount: item.amount,
+      description: item.description,
+      date: item.date,
+      category: item.category,
+      projectId,
+      createdAt: new Date().toISOString(),
+    }));
+  };
+
   useEffect(() => {
-    if (!isAuthenticated() || !selectedProjectId) {
+    if (!selectedProjectId) {
       setExpenses([]);
+      return;
+    }
+    if (!isAuthenticated()) {
+      setExpenses(loadLocalExpensesForProject(selectedProjectId));
       return;
     }
     let cancelled = false;
@@ -175,19 +191,17 @@ export default function ExpensesPage() {
     e.preventDefault();
     const num = parseFloat(amount.replace(/,/g, ""));
     if (Number.isNaN(num) || num <= 0) return;
-    const desc = description.trim();
-    if (!desc) {
-      descriptionInputRef.current?.focus();
-      return;
-    }
+    const desc = description.trim() || "Expense";
     if (!selectedProjectId) return;
+    const entryDate = date || new Date().toISOString().slice(0, 10);
+    const entryCategory = category || "Other";
     try {
       const created = await createExpense({
         projectId: selectedProjectId,
         amount: num,
         description: desc,
-        date: date || new Date().toISOString().slice(0, 10),
-        category: category || "Other",
+        date: entryDate,
+        category: entryCategory,
       });
       setExpenses((prev) => [created, ...prev]);
       setAmount("");
@@ -196,7 +210,33 @@ export default function ExpensesPage() {
       setCategory("Other");
       descriptionInputRef.current?.focus();
     } catch {
-      // leave form values for retry
+      const fallbackExpense: Expense = {
+        id: `local-${Date.now()}`,
+        amount: num,
+        description: desc,
+        date: entryDate,
+        category: entryCategory,
+        projectId: selectedProjectId,
+        createdAt: new Date().toISOString(),
+      };
+      setExpenses((prev) => [fallbackExpense, ...prev]);
+      try {
+        const local = loadStoredExpensesLegacy();
+        local.unshift({
+          amount: num,
+          description: desc,
+          date: entryDate,
+          category: entryCategory,
+        });
+        localStorage.setItem(getExpensesStorageKey(), JSON.stringify(local));
+      } catch {
+        // best effort local fallback
+      }
+      setAmount("");
+      setDescription("");
+      setDate(new Date().toISOString().slice(0, 10));
+      setCategory("Other");
+      descriptionInputRef.current?.focus();
     }
   };
 
@@ -255,6 +295,11 @@ export default function ExpensesPage() {
       handleDeleteProject={handleDeleteProject}
       onCreateProject={layout.createProjectByName}
     >
+      {!projectsLoaded || (Boolean(selectedProjectId) && expensesLoading) ? (
+        <div className="tests-page-single-loading">
+          <SectionLoadingSpinner />
+        </div>
+      ) : (
       <div className="tests-page-content expenses-page-content">
         <h1 className="tests-page-title">Expenses</h1>
 
@@ -368,9 +413,7 @@ export default function ExpensesPage() {
             message="Select a project to see and manage expenses."
             variant="list"
           >
-            {expensesLoading ? (
-              <LoadingMessage className="tests-page-section-desc" />
-            ) : expenses.length === 0 ? (
+            {expenses.length === 0 ? (
               <p className="tests-page-section-desc">
                 No expenses yet. Add one above.
               </p>
@@ -433,6 +476,7 @@ export default function ExpensesPage() {
           </ProjectSectionGuard>
         </section>
       </div>
+      )}
     </AppLayout>
   );
 }

@@ -62,6 +62,43 @@ describe("AuthController", () => {
     expect(controller).toBeDefined();
   });
 
+  describe("providers", () => {
+    it("should return provider availability from env", () => {
+      const prev = {
+        GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID,
+        GITHUB_CLIENT_ID: process.env.GITHUB_CLIENT_ID,
+        GITHUB_CLIENT_SECRET: process.env.GITHUB_CLIENT_SECRET,
+        APPLE_CLIENT_ID: process.env.APPLE_CLIENT_ID,
+        APPLE_TEAM_ID: process.env.APPLE_TEAM_ID,
+        APPLE_KEY_ID: process.env.APPLE_KEY_ID,
+        APPLE_PRIVATE_KEY: process.env.APPLE_PRIVATE_KEY,
+      };
+      try {
+        process.env.GOOGLE_CLIENT_ID = "google-id";
+        process.env.GITHUB_CLIENT_ID = "github-id";
+        process.env.GITHUB_CLIENT_SECRET = "";
+        process.env.APPLE_CLIENT_ID = "apple-client-id";
+        process.env.APPLE_TEAM_ID = "apple-team-id";
+        process.env.APPLE_KEY_ID = "apple-key-id";
+        process.env.APPLE_PRIVATE_KEY = "apple-private-key";
+
+        expect(controller.providers()).toEqual({
+          google: true,
+          github: false,
+          apple: true,
+        });
+      } finally {
+        process.env.GOOGLE_CLIENT_ID = prev.GOOGLE_CLIENT_ID;
+        process.env.GITHUB_CLIENT_ID = prev.GITHUB_CLIENT_ID;
+        process.env.GITHUB_CLIENT_SECRET = prev.GITHUB_CLIENT_SECRET;
+        process.env.APPLE_CLIENT_ID = prev.APPLE_CLIENT_ID;
+        process.env.APPLE_TEAM_ID = prev.APPLE_TEAM_ID;
+        process.env.APPLE_KEY_ID = prev.APPLE_KEY_ID;
+        process.env.APPLE_PRIVATE_KEY = prev.APPLE_PRIVATE_KEY;
+      }
+    });
+  });
+
   describe("login", () => {
     it("should redirect to authorization URL", async () => {
       const res = mockRes();
