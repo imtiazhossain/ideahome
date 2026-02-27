@@ -18,13 +18,39 @@ declare global {
 }
 
 function readValue(url: string, key: string): string {
-  const hash = url.includes("#") ? url.slice(url.indexOf("#") + 1) : "";
-  const hashParams = new URLSearchParams(hash);
-  const fromHash = hashParams.get(key)?.trim() ?? "";
-  if (fromHash) return fromHash;
-  const query = url.includes("?") ? url.slice(url.indexOf("?") + 1) : "";
-  const queryParams = new URLSearchParams(query);
-  return queryParams.get(key)?.trim() ?? "";
+  if (!url) return "";
+  const safeUrl = url.trim();
+  if (!safeUrl) return "";
+
+  try {
+    const parsed = new URL(safeUrl);
+    const queryValue = parsed.searchParams.get(key)?.trim() ?? "";
+    if (queryValue) return queryValue;
+    const hash = parsed.hash.startsWith("#") ? parsed.hash.slice(1) : parsed.hash;
+    const hashParams = new URLSearchParams(hash);
+    return hashParams.get(key)?.trim() ?? "";
+  } catch {
+    const withoutHash = safeUrl.includes("#")
+      ? safeUrl.slice(0, safeUrl.indexOf("#"))
+      : safeUrl;
+    const query = withoutHash.includes("?")
+      ? withoutHash.slice(withoutHash.indexOf("?") + 1)
+      : "";
+    const queryParams = new URLSearchParams(query);
+    const queryValue = queryParams.get(key)?.trim() ?? "";
+    if (queryValue) return queryValue;
+    const hash = safeUrl.includes("#")
+      ? safeUrl.slice(safeUrl.indexOf("#") + 1)
+      : "";
+    const hashParams = new URLSearchParams(hash);
+    return hashParams.get(key)?.trim() ?? "";
+  }
+}
+
+function sanitizeToken(rawValue: string): string {
+  const trimmed = rawValue.trim();
+  if (!trimmed) return "";
+  return trimmed.replace(/#+$/g, "");
 }
 
 function notifyNative(payload: NativeBridgePayload): void {
@@ -66,7 +92,7 @@ export default function MobileAuthCallbackPage() {
   useEffect(() => {
     if (!router.isReady || typeof window === "undefined") return;
 
-    const token = readValue(window.location.href, "token");
+    const token = sanitizeToken(readValue(window.location.href, "token"));
     const error = readValue(window.location.href, "error");
     const redirectUri = normalizeAppRedirectUri(
       readValue(window.location.href, "redirect_uri")
