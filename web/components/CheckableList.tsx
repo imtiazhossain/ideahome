@@ -97,6 +97,7 @@ function SortableItem({
   const disabled = isItemDisabled?.(item) ?? false;
   const itemRef = useRef<HTMLLIElement | null>(null);
   const [swipeOffset, setSwipeOffset] = useState(0);
+  const [isPointerTracking, setIsPointerTracking] = useState(false);
   const [isSwiping, setIsSwiping] = useState(false);
   const startXRef = useRef(0);
   const startYRef = useRef(0);
@@ -126,23 +127,24 @@ function SortableItem({
       startYRef.current = clientY;
       startOffsetRef.current = swipeOffset;
       swipeGestureActiveRef.current = false;
-      setIsSwiping(true);
+      setIsPointerTracking(true);
     },
     [canSwipe, swipeOffset]
   );
 
   const handlePointerMove = useCallback(
     (clientX: number, clientY: number) => {
-      if (!canSwipe || !isSwiping) return;
+      if (!canSwipe || !isPointerTracking) return;
       const delta = clientX - startXRef.current;
       if (!swipeGestureActiveRef.current) {
         const deltaY = clientY - startYRef.current;
         if (Math.abs(delta) < SWIPE_START_THRESHOLD) return;
         if (Math.abs(deltaY) > Math.abs(delta)) {
-          setIsSwiping(false);
+          setIsPointerTracking(false);
           return;
         }
         swipeGestureActiveRef.current = true;
+        setIsSwiping(true);
       }
       const next = Math.min(
         0,
@@ -150,30 +152,33 @@ function SortableItem({
       );
       setSwipeOffset(next);
     },
-    [canSwipe, isSwiping]
+    [canSwipe, isPointerTracking]
   );
 
   const handlePointerEnd = useCallback(() => {
-    if (!isSwiping) return;
+    if (!isPointerTracking) return;
+    setIsPointerTracking(false);
     setIsSwiping(false);
     if (!swipeGestureActiveRef.current) return;
     swipeGestureActiveRef.current = false;
     setSwipeOffset((prev) =>
       prev < -SWIPE_THRESHOLD ? -DELETE_BUTTON_WIDTH : 0
     );
-  }, [isSwiping]);
+  }, [isPointerTracking]);
 
   React.useEffect(() => {
-    if (!isSwiping) return;
+    if (!isPointerTracking) return;
     const onMove = (e: PointerEvent) => handlePointerMove(e.clientX, e.clientY);
     const onUp = () => handlePointerEnd();
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onUp);
     return () => {
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onUp);
     };
-  }, [handlePointerEnd, handlePointerMove, isSwiping]);
+  }, [handlePointerEnd, handlePointerMove, isPointerTracking]);
 
   const handleDeleteClick = useCallback(
     (e: React.MouseEvent) => {
