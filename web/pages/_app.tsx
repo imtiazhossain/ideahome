@@ -1,5 +1,6 @@
 import React, { useEffect } from "react";
 import type { AppProps } from "next/app";
+import Head from "next/head";
 import { useRouter } from "next/router";
 import {
   TabOrderProvider,
@@ -48,6 +49,10 @@ function RedirectToFirstTab({ children }: { children: React.ReactNode }) {
 export default function App({ Component, pageProps }: AppProps) {
   return (
     <ThemeProvider>
+      <Head>
+        <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+        <link rel="shortcut icon" href="/favicon.svg" />
+      </Head>
       <SelectedProjectProvider>
         <TabOrderProvider>
           <RedirectToFirstTab>

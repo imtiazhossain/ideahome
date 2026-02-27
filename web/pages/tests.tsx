@@ -203,7 +203,7 @@ export default function TestsPage() {
 
   return (
     <AppLayout
-      title="Tests · Idea Home"
+      title="Tests · IdeaHome"
       activeTab="tests"
       projectName={projectDisplayName}
       projectId={selectedProjectId || undefined}

@@ -411,7 +411,7 @@ function computeQualityScore(issue: {
   return score;
 }
 
-/** Project name to acronym, e.g. "Idea Home Launch" -> "IHL". */
+/** Project name to acronym, e.g. "IdeaHome Launch" -> "IHL". */
 function projectNameToAcronym(name: string): string {
   const trimmed = (name ?? "").trim();
   if (!trimmed) return "PRJ";
@@ -3073,7 +3073,7 @@ export default function Home() {
 
   return (
     <AppLayout
-      title="Idea Home"
+      title="IdeaHome"
       activeTab="board"
       projectName={projectDisplayName}
       projectId={selectedProjectId || undefined}

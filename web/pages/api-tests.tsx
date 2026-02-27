@@ -75,12 +75,12 @@ export default function ApiTestsPage() {
   return (
     <>
       <Head>
-        <title>API Tests · Idea Home</title>
+        <title>API Tests · IdeaHome</title>
       </Head>
       <div className="api-tests-page">
         <header className="api-tests-page-header">
           <Link href="/" className="api-tests-page-back">
-            ← Back to Idea Home
+            ← Back to IdeaHome
           </Link>
           <h1 className="api-tests-page-title">API Tests</h1>
         </header>

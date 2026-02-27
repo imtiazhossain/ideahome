@@ -601,7 +601,7 @@ export function AppLayout({
                       <IconHomeBulby />
                     </span>
                   </button>
-                  <div className="drawer-brand-title">Idea Home</div>
+                  <div className="drawer-brand-title">IdeaHome</div>
                 </div>
                 <button
                   type="button"

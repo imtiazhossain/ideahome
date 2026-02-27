@@ -88,7 +88,7 @@ export default function CustomListPage() {
   return (
     <CheckableListPageShell
       appLayoutProps={{
-        title: `${list.name} · Idea Home`,
+        title: `${list.name} · IdeaHome`,
         activeTab,
         projectName:
           layout.projects.find((p) => p.id === layout.selectedProjectId)

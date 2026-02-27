@@ -69,7 +69,7 @@ export default function LoginCallbackPage() {
   return (
     <>
       <Head>
-        <title>Signing in — Idea Home</title>
+        <title>Signing in — IdeaHome</title>
       </Head>
       <div
         style={{
