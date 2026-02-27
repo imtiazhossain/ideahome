@@ -6,7 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "test:e2e": "playwright test",
+    "test:e2e": "env -u NO_COLOR -u FORCE_COLOR playwright test",
     "test:e2e:one": "node scripts/verify-record.js"
   },
   "dependencies": {

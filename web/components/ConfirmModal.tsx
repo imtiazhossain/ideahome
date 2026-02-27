@@ -62,7 +62,9 @@ export function ConfirmModal({
           <button
             type="button"
             className="btn btn-primary"
-            style={danger ? { background: "var(--danger, #c53030)" } : undefined}
+            style={
+              danger ? { background: "var(--danger, #c53030)" } : undefined
+            }
             onClick={onConfirm}
             disabled={busy}
           >

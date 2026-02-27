@@ -18,7 +18,8 @@ export class OrganizationsService {
       throw new BadRequestException("Organization name is required");
     }
     const trimmed = name.trim();
-    if (!trimmed) throw new BadRequestException("Organization name is required");
+    if (!trimmed)
+      throw new BadRequestException("Organization name is required");
     if (trimmed.length > 120) {
       throw new BadRequestException(
         "Organization name must be 120 characters or fewer"

@@ -63,10 +63,35 @@ const SETTINGS_BUTTON_VISIBLE_PREFIX = "ideahome-project-nav-settings-visible";
 const SETTINGS_BUTTON_VISIBLE_LEGACY_KEY =
   "ideahome-project-nav-settings-visible";
 const TAB_PREFS_MIGRATION_VERSION = "default-tabs-v2";
+const COMPACT_TAB_LABELS: Partial<Record<ProjectNavTabId, string>> = {
+  todo: "To-Do",
+  ideas: "Ideas",
+  enhancements: "Enh",
+  summary: "Sum",
+  timeline: "Time",
+  board: "Board",
+  tests: "Tests",
+  calendar: "Cal",
+  list: "Feat",
+  forms: "Bugs",
+  goals: "Goals",
+  development: "Health",
+  expenses: "Exp",
+  code: "Code",
+  pages: "Pages",
+};
 
 /** Set when user explicitly clicks Board tab; tells _app to skip redirect away from /. */
 export const EXPLICIT_BOARD_SESSION_KEY = "ideahome-explicit-board";
 export const OPEN_SETTINGS_MENU_EVENT = "ideahome-open-settings-menu";
+
+function getCompactTabLabel(tabId: ProjectNavTabId, label: string): string {
+  const mapped = COMPACT_TAB_LABELS[tabId];
+  if (mapped) return mapped;
+  if (label.length <= 8) return label;
+  const firstWord = label.split(/\s+/)[0] ?? label;
+  return firstWord.slice(0, 8);
+}
 
 function getTabOrderStorageKey(): string {
   return getUserScopedStorageKey(
@@ -251,7 +276,9 @@ function migrateStoredTabPreferencesToNewDefaults() {
     const preferredPresent = preferredOrder.filter((id) =>
       loadedOrder.includes(id)
     );
-    const remaining = loadedOrder.filter((id) => !preferredPresent.includes(id));
+    const remaining = loadedOrder.filter(
+      (id) => !preferredPresent.includes(id)
+    );
     const nextOrder = [...preferredPresent, ...remaining];
 
     const nextHidden = loadHiddenTabIds().filter(
@@ -279,7 +306,9 @@ export function TabOrderProvider({ children }: { children: React.ReactNode }) {
   const [tabOrder, setTabOrderState] =
     useState<ProjectNavTabId[]>(DEFAULT_TAB_ORDER);
   const [hiddenTabIds, setHiddenTabIdsState] = useState<ProjectNavTabId[]>([]);
-  const [deletedTabIds, setDeletedTabIdsState] = useState<ProjectNavTabId[]>([]);
+  const [deletedTabIds, setDeletedTabIdsState] = useState<ProjectNavTabId[]>(
+    []
+  );
 
   useEffect(() => {
     const apply = () => {
@@ -372,7 +401,9 @@ export function DrawerCollapsedNav({
 
 const DEFAULT_TAB_ORDER: ProjectNavTabId[] = TABS.map((t) => t.id);
 
-function loadTabOrder(deletedTabIds: ProjectNavTabId[] = loadDeletedTabIds()): ProjectNavTabId[] {
+function loadTabOrder(
+  deletedTabIds: ProjectNavTabId[] = loadDeletedTabIds()
+): ProjectNavTabId[] {
   if (typeof window === "undefined") return DEFAULT_TAB_ORDER;
   try {
     const deletedSet = new Set<ProjectNavTabId>(deletedTabIds);
@@ -541,6 +572,7 @@ export function ProjectNavBar({
   >([]);
   const [projectSearchOpen, setProjectSearchOpen] = useState(false);
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
+  const [compactTabs, setCompactTabs] = useState(false);
   const [projectSearchLoading, setProjectSearchLoading] = useState(false);
   const projectSearchRef = useRef<HTMLDivElement>(null);
   const projectSearchInputRef = useRef<HTMLInputElement>(null);
@@ -548,6 +580,18 @@ export function ProjectNavBar({
   const { theme, toggleTheme } = useTheme();
   useEffect(() => {
     setHasToken(!!getStoredToken());
+  }, []);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const media = window.matchMedia("(max-width: 640px)");
+    const sync = () => setCompactTabs(media.matches);
+    sync();
+    if (typeof media.addEventListener === "function") {
+      media.addEventListener("change", sync);
+      return () => media.removeEventListener("change", sync);
+    }
+    media.addListener(sync);
+    return () => media.removeListener(sync);
   }, []);
   useEffect(() => {
     const handler = () => setHasToken(!!getStoredToken());
@@ -867,7 +911,7 @@ export function ProjectNavBar({
             <h1 className="project-nav-project-name">
               {projectName || "Project"}
             </h1>
-              <div
+            <div
               className={`project-nav-search-wrap${mobileSearchOpen ? " is-mobile-search-open" : ""}`}
               ref={projectSearchRef}
               style={projectId ? { position: "relative" } : undefined}
@@ -908,19 +952,19 @@ export function ProjectNavBar({
                     onSearchChange?.(e.target.value);
                   }
                 }}
-                onFocus={() =>
-                  {
-                    setMobileSearchOpen(true);
-                    if (projectId && projectSearchQuery.trim()) {
-                      setProjectSearchOpen(true);
-                    }
+                onFocus={() => {
+                  setMobileSearchOpen(true);
+                  if (projectId && projectSearchQuery.trim()) {
+                    setProjectSearchOpen(true);
                   }
-                }
+                }}
                 onBlur={() => {
                   if (
                     typeof window !== "undefined" &&
                     window.matchMedia("(max-width: 1024px)").matches &&
-                    !(projectId ? projectSearchQuery.trim() : searchValue.trim())
+                    !(projectId
+                      ? projectSearchQuery.trim()
+                      : searchValue.trim())
                   ) {
                     setMobileSearchOpen(false);
                   }
@@ -1085,7 +1129,11 @@ export function ProjectNavBar({
                     }}
                   >
                     <span className="project-nav-tab-icon">{tab.icon}</span>
-                    <span className="project-nav-tab-label">{tab.label}</span>
+                    <span className="project-nav-tab-label">
+                      {compactTabs
+                        ? getCompactTabLabel(tab.id, tab.label)
+                        : tab.label}
+                    </span>
                   </Link>
                 ) : (
                   <button
@@ -1098,7 +1146,11 @@ export function ProjectNavBar({
                     title={tab.label}
                   >
                     <span className="project-nav-tab-icon">{tab.icon}</span>
-                    <span className="project-nav-tab-label">{tab.label}</span>
+                    <span className="project-nav-tab-label">
+                      {compactTabs
+                        ? getCompactTabLabel(tab.id, tab.label)
+                        : tab.label}
+                    </span>
                     {tab.hasDropdown && (
                       <span className="project-nav-tab-chevron" aria-hidden>
                         <IconChevronDown />

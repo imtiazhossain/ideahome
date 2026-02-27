@@ -173,7 +173,10 @@ export class IdeaPlanService {
         );
       }
       if (response.status === 429 || response.status >= 500) {
-        lastRetryableError = { status: response.status, message: providerMessage };
+        lastRetryableError = {
+          status: response.status,
+          message: providerMessage,
+        };
         continue;
       }
       throw new BadGatewayException(providerMessage);
@@ -202,7 +205,9 @@ export class IdeaPlanService {
     try {
       parsed = JSON.parse(content);
     } catch {
-      throw new InternalServerErrorException("AI action response could not be parsed");
+      throw new InternalServerErrorException(
+        "AI action response could not be parsed"
+      );
     }
     const message = this.readActionMessage(parsed);
     if (!message) {
@@ -335,7 +340,9 @@ export class IdeaPlanService {
 
   async listAvailableModels(requesterEmail?: string | null): Promise<string[]> {
     if (!this.canUserOverrideModel(requesterEmail)) {
-      throw new ForbiddenException("Model switching is not enabled for this user");
+      throw new ForbiddenException(
+        "Model switching is not enabled for this user"
+      );
     }
 
     const apiKey = process.env.OPENROUTER_API_KEY?.trim();
@@ -371,12 +378,16 @@ export class IdeaPlanService {
     try {
       payload = await response.json();
     } catch {
-      throw new BadGatewayException("OpenRouter model list response was invalid");
+      throw new BadGatewayException(
+        "OpenRouter model list response was invalid"
+      );
     }
 
     const data = (payload as { data?: unknown[] })?.data;
     if (!Array.isArray(data)) {
-      throw new BadGatewayException("OpenRouter model list response was invalid");
+      throw new BadGatewayException(
+        "OpenRouter model list response was invalid"
+      );
     }
 
     const preferredModels = this.parseCsvEnv("OPENROUTER_MODEL_OPTIONS");
@@ -401,7 +412,10 @@ export class IdeaPlanService {
     return Array.from(new Set(modelIds));
   }
 
-  async searchWeb(query: string, limit = this.maxWebSources): Promise<WebSearchResult[]> {
+  async searchWeb(
+    query: string,
+    limit = this.maxWebSources
+  ): Promise<WebSearchResult[]> {
     return this.webSearchService.search(query, limit);
   }
 
@@ -423,14 +437,18 @@ export class IdeaPlanService {
       if (response.status === 429 || response.status >= 500) {
         throw new ServiceUnavailableException("ElevenLabs is unavailable");
       }
-      throw new BadGatewayException(`Failed to fetch ElevenLabs voices (${response.status})`);
+      throw new BadGatewayException(
+        `Failed to fetch ElevenLabs voices (${response.status})`
+      );
     }
 
     let payload: unknown;
     try {
       payload = await response.json();
     } catch {
-      throw new BadGatewayException("ElevenLabs voices response could not be parsed");
+      throw new BadGatewayException(
+        "ElevenLabs voices response could not be parsed"
+      );
     }
 
     const voices = (payload as { voices?: unknown[] })?.voices;
@@ -450,7 +468,10 @@ export class IdeaPlanService {
       .sort((a, b) => a.name.localeCompare(b.name));
   }
 
-  async synthesizeElevenLabsSpeech(text: string, voiceId?: string): Promise<Buffer> {
+  async synthesizeElevenLabsSpeech(
+    text: string,
+    voiceId?: string
+  ): Promise<Buffer> {
     const apiKey = process.env.ELEVENLABS_API_KEY?.trim();
     if (!apiKey) {
       throw new BadRequestException(
@@ -488,15 +509,23 @@ export class IdeaPlanService {
 
   private normalizePlan(raw: unknown): IdeaPlan {
     if (!raw || typeof raw !== "object") {
-      throw new InternalServerErrorException("AI planning response was invalid");
+      throw new InternalServerErrorException(
+        "AI planning response was invalid"
+      );
     }
 
     const source = raw as Record<string, unknown>;
     const summary = this.normalizeString(source.summary, "Plan summary");
-    const milestones = this.normalizeStringArray(source.milestones, "Milestones");
+    const milestones = this.normalizeStringArray(
+      source.milestones,
+      "Milestones"
+    );
     const tasks = this.normalizeStringArray(source.tasks, "Tasks");
     const risks = this.normalizeStringArray(source.risks, "Risks");
-    const firstSteps = this.normalizeStringArray(source.firstSteps, "First steps");
+    const firstSteps = this.normalizeStringArray(
+      source.firstSteps,
+      "First steps"
+    );
 
     return { summary, milestones, tasks, risks, firstSteps };
   }
@@ -591,7 +620,13 @@ export class IdeaPlanService {
                     maxItems: 6,
                   },
                 },
-                required: ["summary", "milestones", "tasks", "risks", "firstSteps"],
+                required: [
+                  "summary",
+                  "milestones",
+                  "tasks",
+                  "risks",
+                  "firstSteps",
+                ],
               },
             },
           },
@@ -673,7 +708,9 @@ export class IdeaPlanService {
 
     const nowIso = new Date().toISOString();
     const lines = results.map((row, idx) => {
-      const dateLine = row.publishedAt ? ` | published: ${row.publishedAt}` : "";
+      const dateLine = row.publishedAt
+        ? ` | published: ${row.publishedAt}`
+        : "";
       return `${idx + 1}. ${row.title} (${row.url}${dateLine}) - ${row.snippet}`;
     });
     return [
@@ -701,11 +738,12 @@ export class IdeaPlanService {
   }
 
   private canUserOverrideModel(email?: string | null): boolean {
-    const normalizedEmail = typeof email === "string" ? email.trim().toLowerCase() : "";
+    const normalizedEmail =
+      typeof email === "string" ? email.trim().toLowerCase() : "";
     if (!normalizedEmail) return false;
-    const allowlisted = this.parseCsvEnv("OPENROUTER_MODEL_SWITCHER_EMAILS").map(
-      (value) => value.toLowerCase()
-    );
+    const allowlisted = this.parseCsvEnv(
+      "OPENROUTER_MODEL_SWITCHER_EMAILS"
+    ).map((value) => value.toLowerCase());
     if (allowlisted.length === 0) return false;
     return allowlisted.includes(normalizedEmail);
   }
@@ -805,7 +843,9 @@ export class IdeaPlanService {
       if (error instanceof Error && error.name === "AbortError") {
         throw new ServiceUnavailableException(`Timed out after ${timeoutMs}ms`);
       }
-      throw new ServiceUnavailableException("Network request to ElevenLabs failed");
+      throw new ServiceUnavailableException(
+        "Network request to ElevenLabs failed"
+      );
     } finally {
       clearTimeout(timer);
     }
@@ -844,7 +884,9 @@ export class IdeaPlanService {
       if (error instanceof Error && error.name === "AbortError") {
         throw new ServiceUnavailableException(`Timed out after ${timeoutMs}ms`);
       }
-      throw new ServiceUnavailableException("Network request to ElevenLabs failed");
+      throw new ServiceUnavailableException(
+        "Network request to ElevenLabs failed"
+      );
     } finally {
       clearTimeout(timer);
     }

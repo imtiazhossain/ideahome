@@ -29,7 +29,11 @@ import {
 } from "./ProjectNavBar";
 import type { ProjectNavTabId } from "./ProjectNavBar";
 
-const SECTION_LINKS: { href?: string; label: string; tabId: ProjectNavTabId }[] = [
+const SECTION_LINKS: {
+  href?: string;
+  label: string;
+  tabId: ProjectNavTabId;
+}[] = [
   { tabId: "todo", label: "To-Do", href: "/todo" },
   { tabId: "ideas", label: "Ideas", href: "/ideas" },
   { tabId: "enhancements", label: "Enhancements", href: "/enhancements" },
@@ -64,7 +68,9 @@ function parseCsvValues(raw: string | undefined): string[] {
 }
 
 const INITIAL_OPENROUTER_MODEL_OPTIONS = (() => {
-  const fromEnv = parseCsvValues(process.env.NEXT_PUBLIC_OPENROUTER_MODEL_OPTIONS);
+  const fromEnv = parseCsvValues(
+    process.env.NEXT_PUBLIC_OPENROUTER_MODEL_OPTIONS
+  );
   return fromEnv.length > 0 ? fromEnv : DEFAULT_OPENROUTER_MODELS;
 })();
 
@@ -86,8 +92,12 @@ function mergeProjectOrder(
   orderIds: string[]
 ): string[] {
   const validIds = new Set(projects.map((p) => p.id));
-  const deduped = orderIds.filter((id, idx) => validIds.has(id) && orderIds.indexOf(id) === idx);
-  const missing = projects.map((p) => p.id).filter((id) => !deduped.includes(id));
+  const deduped = orderIds.filter(
+    (id, idx) => validIds.has(id) && orderIds.indexOf(id) === idx
+  );
+  const missing = projects
+    .map((p) => p.id)
+    .filter((id) => !deduped.includes(id));
   return [...deduped, ...missing];
 }
 
@@ -213,7 +223,8 @@ export function AppLayout({
   >(INITIAL_OPENROUTER_MODEL_OPTIONS);
   const [selectedAiModel, setSelectedAiModel] = React.useState<string>(() => {
     const stored = getStoredOpenRouterModel();
-    if (stored && INITIAL_OPENROUTER_MODEL_OPTIONS.includes(stored)) return stored;
+    if (stored && INITIAL_OPENROUTER_MODEL_OPTIONS.includes(stored))
+      return stored;
     return INITIAL_OPENROUTER_MODEL_OPTIONS[0] ?? "";
   });
   const [availableVoices, setAvailableVoices] = React.useState<
@@ -257,9 +268,10 @@ export function AppLayout({
   );
   const orderedNavLinks = React.useMemo(() => {
     const byId = new Map(SECTION_LINKS.map((l) => [l.tabId, l]));
-    const customById = new Map<string, (ReturnType<typeof getCustomLists>[number])>(
-      getCustomLists().map((l) => [getCustomListTabId(l.slug), l])
-    );
+    const customById = new Map<
+      string,
+      ReturnType<typeof getCustomLists>[number]
+    >(getCustomLists().map((l) => [getCustomListTabId(l.slug), l]));
     const ordered = tabOrder
       .map((id) => {
         const builtIn = byId.get(id);
@@ -351,7 +363,9 @@ export function AppLayout({
     const createProject =
       onCreateProject ??
       ((nextName: string) =>
-        router.push("/?createProject=1&projectName=" + encodeURIComponent(nextName)));
+        router.push(
+          "/?createProject=1&projectName=" + encodeURIComponent(nextName)
+        ));
     await Promise.resolve(createProject(name));
     setCreatingProject(false);
     setCreatingProjectName("");
@@ -480,9 +494,13 @@ export function AppLayout({
       const stored = getStoredAssistantVoiceUri();
       const normalizedStored =
         stored && !stored.includes(":") ? `browser:${stored}` : stored;
-      if (normalizedStored && voices.some((voice) => voice.value === normalizedStored)) {
+      if (
+        normalizedStored &&
+        voices.some((voice) => voice.value === normalizedStored)
+      ) {
         setSelectedVoiceUri(normalizedStored);
-        if (stored !== normalizedStored) setStoredAssistantVoiceUri(normalizedStored);
+        if (stored !== normalizedStored)
+          setStoredAssistantVoiceUri(normalizedStored);
       } else if (voices[0]) {
         setSelectedVoiceUri(voices[0].value);
       } else {
@@ -547,7 +565,11 @@ export function AppLayout({
           {drawerOpen ? (
             <>
               <div className="drawer-logo" aria-hidden>
-                <span className="drawer-logo-mark" role="img" aria-hidden="true">
+                <span
+                  className="drawer-logo-mark"
+                  role="img"
+                  aria-hidden="true"
+                >
                   <IconIdeas />
                 </span>
               </div>
@@ -916,8 +938,16 @@ export function AppLayout({
                         setDrawerFiltersOpen(false);
                         setDrawerDeleteSectionsOpen(false);
                       }}
-                      aria-label={theme === "light" ? "Switch to dark theme" : "Switch to light theme"}
-                      title={theme === "light" ? "Switch to dark theme" : "Switch to light theme"}
+                      aria-label={
+                        theme === "light"
+                          ? "Switch to dark theme"
+                          : "Switch to light theme"
+                      }
+                      title={
+                        theme === "light"
+                          ? "Switch to dark theme"
+                          : "Switch to light theme"
+                      }
                     >
                       {theme === "light" ? "☀" : "🌙"}
                     </button>

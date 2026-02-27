@@ -15,12 +15,7 @@ export function LoadingMessage({
   style,
 }: LoadingMessageProps) {
   return (
-    <div
-      className={className}
-      style={style}
-      role="status"
-      aria-live="polite"
-    >
+    <div className={className} style={style} role="status" aria-live="polite">
       {message}
     </div>
   );

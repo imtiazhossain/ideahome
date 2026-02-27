@@ -67,7 +67,10 @@ describe("FeaturesController", () => {
 
   it("reorder delegates to service", async () => {
     mockSvc.reorder.mockResolvedValue([]);
-    await controller.reorder({ projectId: "p1", featureIds: ["f1", "f2"] }, req as any);
+    await controller.reorder(
+      { projectId: "p1", featureIds: ["f1", "f2"] },
+      req as any
+    );
     expect(mockSvc.reorder).toHaveBeenCalledWith("p1", "u1", ["f1", "f2"]);
   });
 

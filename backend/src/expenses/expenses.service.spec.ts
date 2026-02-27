@@ -278,7 +278,9 @@ describe("ExpensesService", () => {
         project: { organizationId: "o1" },
       });
       await expect(
-        service.update("e1", "user-1", { description: 123 as unknown as string })
+        service.update("e1", "user-1", {
+          description: 123 as unknown as string,
+        })
       ).rejects.toThrow(BadRequestException);
       expect(mockPrisma.expense.update).not.toHaveBeenCalled();
     });

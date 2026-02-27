@@ -36,9 +36,7 @@ export function ProjectSelect({
           </option>
         ))}
       </select>
-      {projects.length === 0 && (
-        <span className="form-hint">{emptyHint}</span>
-      )}
+      {projects.length === 0 && <span className="form-hint">{emptyHint}</span>}
     </div>
   );
 }

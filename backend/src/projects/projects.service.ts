@@ -1,4 +1,8 @@
-import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from "@nestjs/common";
 import { PrismaClientKnownRequestError } from "@prisma/client/runtime/library";
 import { AuthService } from "../auth/auth.service";
 import { PrismaService } from "../prisma.service";
@@ -29,7 +33,9 @@ export class ProjectsService {
     const trimmed = name.trim();
     if (!trimmed) throw new BadRequestException(`${entity} name is required`);
     if (trimmed.length > 120) {
-      throw new BadRequestException(`${entity} name must be 120 characters or fewer`);
+      throw new BadRequestException(
+        `${entity} name must be 120 characters or fewer`
+      );
     }
     return trimmed;
   }
@@ -81,7 +87,9 @@ export class ProjectsService {
         await tx.issueComment.deleteMany({
           where: { issue: { projectId: id } },
         });
-        await tx.issueRecording.deleteMany({ where: { issue: { projectId: id } } });
+        await tx.issueRecording.deleteMany({
+          where: { issue: { projectId: id } },
+        });
         await tx.issueScreenshot.deleteMany({
           where: { issue: { projectId: id } },
         });

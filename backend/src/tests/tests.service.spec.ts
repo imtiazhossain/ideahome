@@ -608,7 +608,6 @@ describe("TestsService", () => {
       expect(result.success).toBe(true);
       expect(result.videoBase64).toBe(Buffer.from("video").toString("base64"));
     });
-
   });
 
   describe("runApiTest", () => {
@@ -638,7 +637,9 @@ describe("TestsService", () => {
     it("should return error when pattern exceeds max length", async () => {
       const result = await service.runApiTest("x".repeat(301));
       expect(result.success).toBe(false);
-      expect(result.errorOutput).toBe("test name pattern exceeds 300 characters");
+      expect(result.errorOutput).toBe(
+        "test name pattern exceeds 300 characters"
+      );
       expect(mockSpawn).not.toHaveBeenCalled();
     });
 

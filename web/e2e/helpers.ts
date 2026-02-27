@@ -1,3 +1,5 @@
+import { expect, type Page } from "@playwright/test";
+
 /**
  * E2E helpers. Use from Node (Playwright), not browser.
  * API base for backend when running e2e (backend must be running on 3001 for full flows).
@@ -41,5 +43,58 @@ export async function deleteTestProjectsByNames(
       "e2e cleanup: could not fetch/delete test projects (is backend running?):",
       e
     );
+  }
+}
+
+/** Home route now lands on /ideas in some flows; accept either. */
+export async function expectHomeUrl(page: Page): Promise<void> {
+  await expect(page).toHaveURL(/\/(?:ideas)?$/);
+}
+
+/**
+ * On empty workspaces the app can auto-open "Create project" on load.
+ * Close it so navigation interactions are not blocked by the overlay.
+ */
+export async function dismissCreateProjectModalIfPresent(
+  page: Page
+): Promise<void> {
+  const overlay = page.locator(".modal-overlay").first();
+  if (!(await overlay.isVisible().catch(() => false))) {
+    return;
+  }
+
+  for (let attempt = 0; attempt < 3; attempt++) {
+    // Try the most generic close actions first; the app has several modal implementations.
+    await page.keyboard.press("Escape").catch(() => {});
+    await overlay
+      .click({ position: { x: 8, y: 8 }, force: true })
+      .catch(() => {});
+    await page
+      .locator(".modal .modal-close")
+      .first()
+      .click()
+      .catch(() => {});
+    await page
+      .locator(".modal")
+      .getByRole("button", { name: "Cancel" })
+      .first()
+      .click()
+      .catch(() => {});
+    if (!(await overlay.isVisible().catch(() => false))) {
+      return;
+    }
+  }
+
+  await expect(overlay).not.toBeVisible({ timeout: 10000 });
+}
+
+/** Expand left drawer when currently collapsed. */
+export async function expandSidebarIfNeeded(page: Page): Promise<void> {
+  await dismissCreateProjectModalIfPresent(page);
+  const expandBtn = page.getByRole("button", { name: "Expand sidebar" });
+  if (await expandBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
+    await expandBtn.click({ trial: true }).catch(() => {});
+    await expandBtn.click({ force: true });
+    await expect(page.locator(".drawer-open")).toBeVisible({ timeout: 10000 });
   }
 }

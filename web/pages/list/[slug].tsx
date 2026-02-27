@@ -68,8 +68,8 @@ export default function CustomListPage() {
         title: `${list.name} · Idea Home`,
         activeTab,
         projectName:
-          layout.projects.find((p) => p.id === layout.selectedProjectId)?.name ??
-          (layout.selectedProjectId ? "Project" : list.name),
+          layout.projects.find((p) => p.id === layout.selectedProjectId)
+            ?.name ?? (layout.selectedProjectId ? "Project" : list.name),
         projectId: layout.selectedProjectId || undefined,
         searchPlaceholder: "Search",
         drawerOpen: layout.drawerOpen,

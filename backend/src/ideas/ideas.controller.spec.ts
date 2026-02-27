@@ -111,7 +111,10 @@ describe("IdeasController", () => {
 
   it("reorder delegates to service", async () => {
     mockSvc.reorder.mockResolvedValue([]);
-    await controller.reorder({ projectId: "p1", ideaIds: ["i1", "i2"] }, req as any);
+    await controller.reorder(
+      { projectId: "p1", ideaIds: ["i1", "i2"] },
+      req as any
+    );
     expect(mockSvc.reorder).toHaveBeenCalledWith("p1", "u1", ["i1", "i2"]);
   });
 

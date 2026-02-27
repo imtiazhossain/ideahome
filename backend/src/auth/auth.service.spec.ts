@@ -16,7 +16,9 @@ describe("AuthService", () => {
       create: jest.fn(),
     },
     organization: {
-      create: jest.fn().mockResolvedValue({ id: "org-1", name: "My Workspace" }),
+      create: jest
+        .fn()
+        .mockResolvedValue({ id: "org-1", name: "My Workspace" }),
     },
   };
 
@@ -178,7 +180,8 @@ describe("AuthService", () => {
     });
 
     it("returns profile when token and userinfo succeed", async () => {
-      global.fetch = jest.fn()
+      global.fetch = jest
+        .fn()
         .mockResolvedValueOnce({
           ok: true,
           json: () => Promise.resolve({ access_token: "at" }),
@@ -219,7 +222,8 @@ describe("AuthService", () => {
     });
 
     it("throws when userinfo fails", async () => {
-      global.fetch = jest.fn()
+      global.fetch = jest
+        .fn()
         .mockResolvedValueOnce({
           ok: true,
           json: () => Promise.resolve({ access_token: "at" }),
@@ -231,7 +235,8 @@ describe("AuthService", () => {
     });
 
     it("throws when profile missing email", async () => {
-      global.fetch = jest.fn()
+      global.fetch = jest
+        .fn()
         .mockResolvedValueOnce({
           ok: true,
           json: () => Promise.resolve({ access_token: "at" }),
@@ -257,7 +262,8 @@ describe("AuthService", () => {
     });
 
     it("returns profile when user has email", async () => {
-      global.fetch = jest.fn()
+      global.fetch = jest
+        .fn()
         .mockResolvedValueOnce({
           ok: true,
           json: () => Promise.resolve({ access_token: "at" }),
@@ -282,14 +288,16 @@ describe("AuthService", () => {
     });
 
     it("fetches emails when user has no email", async () => {
-      global.fetch = jest.fn()
+      global.fetch = jest
+        .fn()
         .mockResolvedValueOnce({
           ok: true,
           json: () => Promise.resolve({ access_token: "at" }),
         } as Response)
         .mockResolvedValueOnce({
           ok: true,
-          json: () => Promise.resolve({ id: 789, login: "nouser", email: null }),
+          json: () =>
+            Promise.resolve({ id: 789, login: "nouser", email: null }),
         } as Response)
         .mockResolvedValueOnce({
           ok: true,
@@ -322,7 +330,8 @@ describe("AuthService", () => {
     });
 
     it("throws when user API fails", async () => {
-      global.fetch = jest.fn()
+      global.fetch = jest
+        .fn()
         .mockResolvedValueOnce({
           ok: true,
           json: () => Promise.resolve({ access_token: "at" }),
@@ -334,7 +343,8 @@ describe("AuthService", () => {
     });
 
     it("throws when profile missing email", async () => {
-      global.fetch = jest.fn()
+      global.fetch = jest
+        .fn()
         .mockResolvedValueOnce({
           ok: true,
           json: () => Promise.resolve({ access_token: "at" }),
@@ -359,9 +369,15 @@ describe("AuthService", () => {
       process.env.APPLE_KEY_ID = "kid";
       process.env.APPLE_PRIVATE_KEY = "fake-key";
       jest.spyOn(jwtMod, "sign").mockReturnValue("mock-client-secret" as never);
-      jest
-        .spyOn(jwtMod, "decode")
-        .mockReturnValue({ sub: "apple-sub-123" } as never);
+      jest.spyOn(jwtMod, "verify").mockImplementation((...args: unknown[]) => {
+        const cb = args[3];
+        if (typeof cb === "function") {
+          (cb as (err: unknown, decoded?: unknown) => void)(null, {
+            sub: "apple-sub-123",
+          });
+        }
+        return { sub: "apple-sub-123" } as never;
+      });
     });
     afterEach(() => {
       global.fetch = origFetch;
@@ -381,13 +397,22 @@ describe("AuthService", () => {
     });
 
     it("throws when Invalid Apple id_token", async () => {
-      jest.spyOn(jwtMod, "decode").mockReturnValue(null as never);
+      jest.spyOn(jwtMod, "verify").mockImplementation((...args: unknown[]) => {
+        const cb = args[3];
+        if (typeof cb === "function") {
+          (cb as (err: unknown, decoded?: unknown) => void)(
+            new Error("invalid"),
+            undefined
+          );
+        }
+        return undefined as never;
+      });
       global.fetch = jest.fn().mockResolvedValue({
         ok: true,
         json: () => Promise.resolve({ id_token: "bad-token" }),
       } as Response);
       await expect(service.exchangeAppleCode("code")).rejects.toThrow(
-        "Invalid Apple id_token"
+        "invalid"
       );
     });
 

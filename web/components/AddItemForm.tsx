@@ -25,10 +25,7 @@ export function AddItemForm({
   onClearError,
 }: AddItemFormProps) {
   return (
-    <form
-      onSubmit={onSubmit}
-      className="features-add-form"
-    >
+    <form onSubmit={onSubmit} className="features-add-form">
       {error && (
         <p
           role="alert"

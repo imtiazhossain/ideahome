@@ -49,11 +49,17 @@ export class IssuesController {
     await this.svc.streamRecording(filename, res, this.userId(req));
   }
 
-  @Get(":id/comments")
-  listComments(
-    @Param("id") id: string,
+  @Get("screenshots/stream/:filename")
+  async streamScreenshotByFilename(
+    @Param("filename") filename: string,
+    @Res() res: Response,
     @Req() req: AuthenticatedRequest
   ) {
+    await this.svc.streamScreenshotByFilename(filename, res, this.userId(req));
+  }
+
+  @Get(":id/comments")
+  listComments(@Param("id") id: string, @Req() req: AuthenticatedRequest) {
     return this.commentsSvc.list(id, this.userId(req));
   }
 
@@ -262,10 +268,7 @@ export class IssuesController {
   }
 
   @Get(":id")
-  get(
-    @Param("id") id: string,
-    @Req() req: AuthenticatedRequest
-  ) {
+  get(@Param("id") id: string, @Req() req: AuthenticatedRequest) {
     return this.svc.get(id, this.userId(req));
   }
 
@@ -296,7 +299,11 @@ export class IssuesController {
     @Body() body: Record<string, unknown>,
     @Req() req: AuthenticatedRequest
   ) {
-    return this.svc.update(id, (body ?? {}) as Record<string, unknown>, this.userId(req));
+    return this.svc.update(
+      id,
+      (body ?? {}) as Record<string, unknown>,
+      this.userId(req)
+    );
   }
 
   @Patch(":id/status")
@@ -317,10 +324,7 @@ export class IssuesController {
   }
 
   @Delete(":id")
-  remove(
-    @Param("id") id: string,
-    @Req() req: AuthenticatedRequest
-  ) {
+  remove(@Param("id") id: string, @Req() req: AuthenticatedRequest) {
     return this.svc.delete(id, this.userId(req));
   }
 }

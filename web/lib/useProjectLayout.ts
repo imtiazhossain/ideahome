@@ -164,9 +164,7 @@ export function useProjectLayout(): UseProjectLayoutReturn {
       setLastKnownProjectName(trimmed);
       try {
         const project = await createProject({ name: trimmed });
-        setProjects((prev) =>
-          prev.map((p) => (p.id === tempId ? project : p))
-        );
+        setProjects((prev) => prev.map((p) => (p.id === tempId ? project : p)));
         if (selectedProjectIdRef.current === tempId) {
           setSelectedProjectId(project.id);
         }

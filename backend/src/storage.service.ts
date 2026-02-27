@@ -63,11 +63,20 @@ export class StorageService {
     const { put } = await import("@vercel/blob");
     const pathname = `${folder}/${filename}`;
     const result = await put(pathname, buffer, {
-      access: "public",
+      access: "private" as unknown as "public",
       contentType,
       addRandomSuffix: true,
     });
     return { url: result.url };
+  }
+
+  async download(
+    urlOrPath: string
+  ): Promise<{ buffer: Buffer; contentType: string | null }> {
+    if (this.isFullUrl(urlOrPath)) {
+      return this.downloadFromBlob(urlOrPath);
+    }
+    return this.downloadFromFilesystem(urlOrPath);
   }
 
   private async deleteFromBlob(url: string): Promise<void> {
@@ -101,5 +110,33 @@ export class StorageService {
     } catch {
       // ignore if file doesn't exist
     }
+  }
+
+  private async downloadFromBlob(
+    url: string
+  ): Promise<{ buffer: Buffer; contentType: string | null }> {
+    const token = process.env.BLOB_READ_WRITE_TOKEN?.trim();
+    const response = await fetch(url, {
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    });
+    if (!response.ok) {
+      throw new BadRequestException("Blob object not found");
+    }
+    const contentType = response.headers.get("content-type");
+    const arrayBuffer = await response.arrayBuffer();
+    return { buffer: Buffer.from(arrayBuffer), contentType };
+  }
+
+  private async downloadFromFilesystem(
+    urlOrPath: string
+  ): Promise<{ buffer: Buffer; contentType: string | null }> {
+    if (!StorageService.LOCAL_UPLOAD_PATH_RE.test(urlOrPath)) {
+      throw new BadRequestException("Unsafe file path");
+    }
+    const { readFile } = await import("fs/promises");
+    const { join } = await import("path");
+    const filePath = join(process.cwd(), urlOrPath);
+    const buffer = await readFile(filePath);
+    return { buffer, contentType: null };
   }
 }

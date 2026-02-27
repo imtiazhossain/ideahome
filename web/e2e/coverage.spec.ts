@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { expectHomeUrl, expandSidebarIfNeeded } from "./helpers";
 
 test.afterEach(async ({ page }) => {
   await page.close();
@@ -32,11 +33,8 @@ test.describe("Code Coverage page", () => {
       await page.getByRole("link", { name: /Back to Idea Home/ }).click();
     });
     await test.step("Verify home URL and Idea Home title", async () => {
-      await expect(page).toHaveURL("/");
-      const expandBtn = page.getByRole("button", { name: "Expand sidebar" });
-      if (await expandBtn.isVisible()) {
-        await expandBtn.click();
-      }
+      await expectHomeUrl(page);
+      await expandSidebarIfNeeded(page);
       await expect(page.locator(".drawer-title")).toHaveText("Idea Home", {
         timeout: 5000,
       });

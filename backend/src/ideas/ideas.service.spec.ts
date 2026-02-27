@@ -152,9 +152,9 @@ describe("IdeasService", () => {
       mockPrisma.idea.findMany
         .mockResolvedValueOnce([{ id: "i1" }, { id: "other" }])
         .mockResolvedValueOnce([{ id: "i1" }]);
-      await expect(service.reorder("p1", "user-1", ["i1", "other"])).rejects.toThrow(
-        NotFoundException
-      );
+      await expect(
+        service.reorder("p1", "user-1", ["i1", "other"])
+      ).rejects.toThrow(NotFoundException);
     });
   });
 
@@ -215,11 +215,13 @@ describe("IdeasService", () => {
 
   describe("synthesizeElevenLabsSpeech", () => {
     it("delegates to IdeaPlanService ElevenLabs synthesis", async () => {
-      const result = await service.synthesizeElevenLabsSpeech("hello", "voice-1");
-      expect(mockIdeaPlanService.synthesizeElevenLabsSpeech).toHaveBeenCalledWith(
+      const result = await service.synthesizeElevenLabsSpeech(
         "hello",
         "voice-1"
       );
+      expect(
+        mockIdeaPlanService.synthesizeElevenLabsSpeech
+      ).toHaveBeenCalledWith("hello", "voice-1");
       expect(Buffer.isBuffer(result)).toBe(true);
     });
   });

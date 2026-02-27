@@ -29,9 +29,9 @@ export class ProjectScopedListService {
   ) {}
 
   private get delegate(): ListEntityDelegate {
-    const delegate = (this.prisma as unknown as Record<string, ListEntityDelegate>)[
-      this.modelKey
-    ];
+    const delegate = (
+      this.prisma as unknown as Record<string, ListEntityDelegate>
+    )[this.modelKey];
     if (!delegate) {
       throw new InternalServerErrorException(
         `Unsupported list model key: ${this.modelKey}`
@@ -66,7 +66,10 @@ export class ProjectScopedListService {
     }
   }
 
-  private async verifyItemAccess(itemId: string, userId: string): Promise<void> {
+  private async verifyItemAccess(
+    itemId: string,
+    userId: string
+  ): Promise<void> {
     const orgId = await this.getOrgIdForUser(userId);
     const item = (await this.delegate.findUnique({
       where: { id: itemId },
@@ -127,7 +130,11 @@ export class ProjectScopedListService {
     return ids;
   }
 
-  async list(projectId: string, userId: string, search?: string): Promise<any[]> {
+  async list(
+    projectId: string,
+    userId: string,
+    search?: string
+  ): Promise<any[]> {
     const safeProjectId = this.normalizeProjectId(projectId);
     await this.verifyProjectAccess(safeProjectId, userId);
     const where: {
@@ -182,7 +189,9 @@ export class ProjectScopedListService {
     }
     if (body.done !== undefined) {
       if (typeof body.done !== "boolean") {
-        throw new BadRequestException(`${this.entityName} done must be a boolean`);
+        throw new BadRequestException(
+          `${this.entityName} done must be a boolean`
+        );
       }
       data.done = body.done;
     }

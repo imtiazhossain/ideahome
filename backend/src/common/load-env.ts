@@ -15,7 +15,10 @@ function parseValue(raw: string): string {
 
 export function loadEnvFromFileSystem(): void {
   const nodeEnv = (process.env.NODE_ENV ?? "").trim().toLowerCase();
-  if (nodeEnv === "production" && process.env.ALLOW_FILE_ENV_IN_PROD !== "true") {
+  if (
+    nodeEnv === "production" &&
+    process.env.ALLOW_FILE_ENV_IN_PROD !== "true"
+  ) {
     return;
   }
   const candidates = [

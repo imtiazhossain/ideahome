@@ -1,5 +1,4 @@
 import React, { useCallback, useState } from "react";
-import { CheckableList } from "./CheckableList";
 import { CheckableListPageShell } from "./CheckableListPageShell";
 import { isOptimisticId } from "../lib/utils";
 import { useCheckableProjectList } from "../lib/useCheckableProjectList";
@@ -17,25 +16,34 @@ import {
   CHECKABLE_LIST_PAGES,
   type CheckableListPageKey,
 } from "../config/checkableListPages";
-import { IconIdeas, IconMic, IconPlay, IconStop } from "./icons";
+import { IconIdeas } from "./icons";
+import {
+  IdeaAssistantPanel,
+  type AssistantChatMessage,
+  type AssistantPlaybackStatus,
+} from "./IdeaAssistantPanel";
 
-type AssistantPlaybackStatus = "idle" | "playing" | "paused";
-
-export function CheckableListPage({ pageKey }: { pageKey: CheckableListPageKey }) {
+export function CheckableListPage({
+  pageKey,
+}: {
+  pageKey: CheckableListPageKey;
+}) {
   const layout = useProjectLayout();
   const theme = useTheme();
   const def = CHECKABLE_LIST_PAGES[pageKey];
   const [addError, setAddError] = useState<string | null>(null);
-  const [assistantLoadingById, setAssistantLoadingById] = useState<Record<string, boolean>>(
-    {}
-  );
-  const [assistantChatById, setAssistantChatById] = useState<
-    Record<string, { id: string; role: "user" | "assistant"; text: string }[]>
+  const [assistantLoadingById, setAssistantLoadingById] = useState<
+    Record<string, boolean>
   >({});
-  const [assistantInputById, setAssistantInputById] = useState<Record<string, string>>(
-    {}
-  );
-  const [assistantGifById, setAssistantGifById] = useState<Record<string, string>>({});
+  const [assistantChatById, setAssistantChatById] = useState<
+    Record<string, AssistantChatMessage[]>
+  >({});
+  const [assistantInputById, setAssistantInputById] = useState<
+    Record<string, string>
+  >({});
+  const [assistantGifById, setAssistantGifById] = useState<
+    Record<string, string>
+  >({});
   const [assistantCollapsedById, setAssistantCollapsedById] = useState<
     Record<string, boolean>
   >({});
@@ -45,23 +53,29 @@ export function CheckableListPage({ pageKey }: { pageKey: CheckableListPageKey }
   const [assistantVoiceEnabledById, setAssistantVoiceEnabledById] = useState<
     Record<string, boolean>
   >({});
-  const [assistantPlaybackStatusById, setAssistantPlaybackStatusById] = useState<
-    Record<string, AssistantPlaybackStatus>
-  >({});
+  const [assistantPlaybackStatusById, setAssistantPlaybackStatusById] =
+    useState<Record<string, AssistantPlaybackStatus>>({});
   const [assistantRecordingById, setAssistantRecordingById] = useState<
     Record<string, boolean>
   >({});
-  const [pendingFocusIdeaId, setPendingFocusIdeaId] = useState<string | null>(null);
-  const [selectedVoiceUri, setSelectedVoiceUri] = useState<string>(() =>
-    getStoredAssistantVoiceUri() ?? ""
+  const [isMobileAssistantComposer, setIsMobileAssistantComposer] =
+    useState(false);
+  const [undoSyncToast, setUndoSyncToast] = useState<string | null>(null);
+  const [pendingFocusIdeaId, setPendingFocusIdeaId] = useState<string | null>(
+    null
   );
-  const assistantInputRefs = React.useRef<Record<string, HTMLTextAreaElement | null>>(
-    {}
+  const [selectedVoiceUri, setSelectedVoiceUri] = useState<string>(
+    () => getStoredAssistantVoiceUri() ?? ""
   );
-  const assistantThreadRefs = React.useRef<Record<string, HTMLDivElement | null>>({});
-  const loadingTickerRef = React.useRef<Record<string, ReturnType<typeof setInterval>>>(
-    {}
-  );
+  const assistantInputRefs = React.useRef<
+    Record<string, HTMLTextAreaElement | null>
+  >({});
+  const assistantThreadRefs = React.useRef<
+    Record<string, HTMLDivElement | null>
+  >({});
+  const loadingTickerRef = React.useRef<
+    Record<string, ReturnType<typeof setInterval>>
+  >({});
   const speechRecognitionRef = React.useRef<any | null>(null);
   const recordingIdeaIdRef = React.useRef<string | null>(null);
   const spokenMessageIdsRef = React.useRef<Record<string, string>>({});
@@ -87,17 +101,50 @@ export function CheckableListPage({ pageKey }: { pageKey: CheckableListPageKey }
   }, []);
 
   React.useEffect(() => {
+    if (typeof window === "undefined") return;
+    const media = window.matchMedia("(max-width: 640px)");
+    const sync = () => setIsMobileAssistantComposer(media.matches);
+    sync();
+    if (typeof media.addEventListener === "function") {
+      media.addEventListener("change", sync);
+      return () => media.removeEventListener("change", sync);
+    }
+    media.addListener(sync);
+    return () => media.removeListener(sync);
+  }, []);
+
+  React.useEffect(() => {
     if (!pendingFocusIdeaId) return;
     focusIdeaInput(pendingFocusIdeaId);
     setPendingFocusIdeaId(null);
-  }, [focusIdeaInput, pendingFocusIdeaId, assistantLoadingById, assistantChatById, assistantGifById]);
+  }, [
+    focusIdeaInput,
+    pendingFocusIdeaId,
+    assistantLoadingById,
+    assistantChatById,
+    assistantGifById,
+  ]);
 
   React.useEffect(() => {
-    Object.values(assistantThreadRefs.current).forEach((node) => {
-      if (!node) return;
-      node.scrollTop = node.scrollHeight;
+    if (!undoSyncToast) return;
+    const timer = window.setTimeout(() => setUndoSyncToast(null), 3600);
+    return () => window.clearTimeout(timer);
+  }, [undoSyncToast]);
+
+  React.useEffect(() => {
+    const frame = requestAnimationFrame(() => {
+      Object.values(assistantThreadRefs.current).forEach((node) => {
+        if (!node) return;
+        node.scrollTop = node.scrollHeight;
+      });
     });
-  }, [assistantChatById, assistantLoadingById]);
+    return () => cancelAnimationFrame(frame);
+  }, [
+    assistantChatById,
+    assistantLoadingById,
+    assistantGifById,
+    assistantCollapsedById,
+  ]);
 
   React.useEffect(
     () => () => {
@@ -127,7 +174,8 @@ export function CheckableListPage({ pageKey }: { pageKey: CheckableListPageKey }
   );
 
   React.useEffect(() => {
-    const syncVoice = () => setSelectedVoiceUri(getStoredAssistantVoiceUri() ?? "");
+    const syncVoice = () =>
+      setSelectedVoiceUri(getStoredAssistantVoiceUri() ?? "");
     syncVoice();
     if (typeof window === "undefined") return;
     window.addEventListener(ASSISTANT_VOICE_CHANGE_EVENT, syncVoice);
@@ -157,6 +205,7 @@ export function CheckableListPage({ pageKey }: { pageKey: CheckableListPageKey }
       onReorderError: () =>
         setAddError("Order could not be saved. Item was added."),
     }),
+    onUndoSyncError: (message) => setUndoSyncToast(message),
   });
 
   const handleAddSubmit = useCallback(
@@ -182,8 +231,9 @@ export function CheckableListPage({ pageKey }: { pageKey: CheckableListPageKey }
     ) => {
       const recent = messages.slice(-8);
       const transcript = recent
-        .map((message) =>
-          `${message.role === "user" ? "User" : "Assistant"}: ${message.text}`
+        .map(
+          (message) =>
+            `${message.role === "user" ? "User" : "Assistant"}: ${message.text}`
         )
         .join("\n");
       return [
@@ -267,7 +317,10 @@ export function CheckableListPage({ pageKey }: { pageKey: CheckableListPageKey }
             "Still fetching details...",
             "Still working, almost there...",
           ];
-      setAssistantLoadingStatusById((prev) => ({ ...prev, [ideaId]: phases[0] }));
+      setAssistantLoadingStatusById((prev) => ({
+        ...prev,
+        [ideaId]: phases[0],
+      }));
       loadingTickerRef.current[ideaId] = setInterval(() => {
         const elapsedSec = Math.max(
           1,
@@ -297,14 +350,25 @@ export function CheckableListPage({ pageKey }: { pageKey: CheckableListPageKey }
           includeWeb
         );
         setAssistantCollapsedById((prev) => ({ ...prev, [ideaId]: false }));
-        appendChatAssistantMessage(ideaId, typeof result.message === "string" ? result.message : "");
-        if (typeof result.previewGifUrl === "string" && result.previewGifUrl.trim()) {
-          setAssistantGifById((prev) => ({ ...prev, [ideaId]: result.previewGifUrl! }));
+        appendChatAssistantMessage(
+          ideaId,
+          typeof result.message === "string" ? result.message : ""
+        );
+        if (
+          typeof result.previewGifUrl === "string" &&
+          result.previewGifUrl.trim()
+        ) {
+          setAssistantGifById((prev) => ({
+            ...prev,
+            [ideaId]: result.previewGifUrl!,
+          }));
         }
       } catch (err) {
         appendChatAssistantMessage(
           ideaId,
-          err instanceof Error ? err.message : "Failed to generate AI assistant response"
+          err instanceof Error
+            ? err.message
+            : "Failed to generate AI assistant response"
         );
       } finally {
         clearLoadingTicker();
@@ -312,42 +376,6 @@ export function CheckableListPage({ pageKey }: { pageKey: CheckableListPageKey }
       }
     },
     [appendChatAssistantMessage, resolveIdeaModel]
-  );
-
-  const handleSendIdeaChat = useCallback(
-    async (ideaId: string) => {
-      const draft = assistantInputById[ideaId]?.trim();
-      if (!draft) return;
-      if (assistantLoadingById[ideaId]) return;
-
-      const userMessage = {
-        id: createChatMessageId(),
-        role: "user" as const,
-        text: draft,
-      };
-      const prior = assistantChatById[ideaId] ?? [];
-      const context = buildIdeaChatContext(prior, draft);
-      const includeWeb = shouldUseWebSearch(draft);
-
-      setAssistantChatById((prev) => ({
-        ...prev,
-        [ideaId]: [...(prev[ideaId] ?? []), userMessage],
-      }));
-      setAssistantInputById((prev) => ({ ...prev, [ideaId]: "" }));
-
-      await handleAssistantChatRequest(ideaId, context, includeWeb);
-      focusIdeaInput(ideaId);
-    },
-    [
-      assistantChatById,
-      assistantInputById,
-      assistantLoadingById,
-      buildIdeaChatContext,
-      createChatMessageId,
-      focusIdeaInput,
-      handleAssistantChatRequest,
-      shouldUseWebSearch,
-    ]
   );
 
   const submitIdeaChatText = useCallback(
@@ -391,7 +419,8 @@ export function CheckableListPage({ pageKey }: { pageKey: CheckableListPageKey }
       }
       const SpeechRecognitionCtor =
         typeof window !== "undefined"
-          ? (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
+          ? (window as any).SpeechRecognition ||
+            (window as any).webkitSpeechRecognition
           : null;
       if (!SpeechRecognitionCtor) {
         appendChatAssistantMessage(
@@ -483,7 +512,10 @@ export function CheckableListPage({ pageKey }: { pageKey: CheckableListPageKey }
 
   const pauseAssistantPlayback = useCallback(
     (ideaId: string) => {
-      if (assistantAudioMetaRef.current.ideaId === ideaId && assistantAudioRef.current) {
+      if (
+        assistantAudioMetaRef.current.ideaId === ideaId &&
+        assistantAudioRef.current
+      ) {
         if (!assistantAudioRef.current.paused) {
           assistantAudioRef.current.pause();
         }
@@ -636,7 +668,11 @@ export function CheckableListPage({ pageKey }: { pageKey: CheckableListPageKey }
           return;
         } catch {
           // Fall back to browser speech when ElevenLabs is unavailable.
-          assistantAudioMetaRef.current = { ideaId: null, messageId: null, voiceUri: null };
+          assistantAudioMetaRef.current = {
+            ideaId: null,
+            messageId: null,
+            voiceUri: null,
+          };
         }
       }
 
@@ -682,7 +718,10 @@ export function CheckableListPage({ pageKey }: { pageKey: CheckableListPageKey }
 
   const resumeAssistantPlayback = useCallback(
     async (ideaId: string, message: { id: string; text: string }) => {
-      if (assistantAudioMetaRef.current.ideaId === ideaId && assistantAudioRef.current) {
+      if (
+        assistantAudioMetaRef.current.ideaId === ideaId &&
+        assistantAudioRef.current
+      ) {
         await assistantAudioRef.current.play();
         setPlaybackStatus(ideaId, "playing");
         return;
@@ -709,7 +748,10 @@ export function CheckableListPage({ pageKey }: { pageKey: CheckableListPageKey }
     async (ideaId: string) => {
       const latestAssistant = getLatestAssistantMessage(ideaId);
       if (!latestAssistant) {
-        appendChatAssistantMessage(ideaId, "No assistant response to play yet.");
+        appendChatAssistantMessage(
+          ideaId,
+          "No assistant response to play yet."
+        );
         return;
       }
       setAssistantVoiceEnabledById((prev) => ({ ...prev, [ideaId]: true }));
@@ -750,12 +792,17 @@ export function CheckableListPage({ pageKey }: { pageKey: CheckableListPageKey }
         if (!(assistantVoiceEnabledById[ideaId] ?? false)) continue;
         const latestAssistant = [...messages]
           .reverse()
-          .find((message) => message.role === "assistant" && message.text.trim());
+          .find(
+            (message) => message.role === "assistant" && message.text.trim()
+          );
         if (!latestAssistant) continue;
-        if (spokenMessageIdsRef.current[ideaId] === latestAssistant.id) continue;
+        if (spokenMessageIdsRef.current[ideaId] === latestAssistant.id)
+          continue;
         spokenMessageIdsRef.current[ideaId] = latestAssistant.id;
         try {
-          await playAssistantMessage(ideaId, latestAssistant, { restart: true });
+          await playAssistantMessage(ideaId, latestAssistant, {
+            restart: true,
+          });
         } catch {
           // keep chat usable even if audio playback fails
         }
@@ -777,124 +824,43 @@ export function CheckableListPage({ pageKey }: { pageKey: CheckableListPageKey }
       const recording = Boolean(assistantRecordingById[ideaId]);
       const voiceRepliesEnabled = Boolean(assistantVoiceEnabledById[ideaId]);
       const playbackStatus = assistantPlaybackStatusById[ideaId] ?? "idle";
-      const isPlaybackActive = playbackStatus !== "idle";
-      const voiceButtonLabel =
-        playbackStatus === "playing"
-          ? "Pause voice reply"
-          : playbackStatus === "paused"
-            ? "Resume voice reply"
-            : "Play voice reply";
       const loadingStatus = assistantLoadingStatusById[ideaId] ?? "Thinking...";
       const inputValue = assistantInputById[ideaId] ?? "";
       const isCollapsed = assistantCollapsedById[ideaId] ?? true;
-      if (isCollapsed) return null;
       return (
-        <div className="idea-plan-card">
-          <div className="idea-plan-card-head">
-            <span className="idea-plan-card-badge">AI chat</span>
-          </div>
-          <div
-            className="idea-chat-thread"
-            ref={(node) => {
-              assistantThreadRefs.current[ideaId] = node;
-            }}
-          >
-            {messages.map((message) => (
-              <div
-                key={message.id}
-                className={`idea-chat-message idea-chat-message--${message.role}`}
-              >
-                <p className="idea-plan-summary">{message.text}</p>
-              </div>
-            ))}
-            {loading ? (
-              <div className="idea-chat-message idea-chat-message--assistant">
-                <p className="idea-plan-summary">{loadingStatus}</p>
-              </div>
-            ) : null}
-            {gifUrl ? (
-              <div className="idea-chat-message idea-chat-message--assistant">
-                <img
-                  src={gifUrl}
-                  alt="AI generated action preview"
-                  className="idea-action-gif"
-                  loading="lazy"
-                />
-              </div>
-            ) : null}
-          </div>
-          <div className="idea-chat-input-row">
-            <textarea
-              className="idea-chat-input"
-              ref={(node) => {
-                assistantInputRefs.current[ideaId] = node;
-              }}
-              value={inputValue}
-              onChange={(e) =>
-                setAssistantInputById((prev) => ({
-                  ...prev,
-                  [ideaId]: e.target.value,
-                }))
-              }
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  void handleSendIdeaChat(ideaId);
-                }
-              }}
-              placeholder="Ask AI a follow-up..."
-              rows={1}
-              aria-label="Ask AI a follow-up"
-            />
-            <button
-              type="button"
-              className={`idea-chat-voice-btn${recording ? " is-recording" : ""}`}
-              onPointerDown={(e) => e.preventDefault()}
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                void toggleVoiceRecording(ideaId);
-              }}
-              disabled={loading}
-              aria-label={recording ? "Stop recording" : "Record voice message"}
-              title={recording ? "Stop recording" : "Record voice message"}
-            >
-              {recording ? <IconStop size={14} /> : <IconMic size={14} />}
-            </button>
-            <button
-              type="button"
-              className={`idea-chat-voice-btn${isPlaybackActive || voiceRepliesEnabled ? " is-active" : ""}`}
-              onPointerDown={(e) => e.preventDefault()}
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                void handleVoiceReplyControl(ideaId);
-              }}
-              aria-label={voiceButtonLabel}
-              title={voiceButtonLabel}
-            >
-              {playbackStatus === "playing" ? (
-                <IconStop size={12} />
-              ) : (
-                <IconPlay size={12} />
-              )}
-            </button>
-            <button
-              type="button"
-              className="idea-chat-send-btn"
-              onPointerDown={(e) => e.preventDefault()}
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                void submitIdeaChatText(ideaId, inputValue);
-              }}
-              disabled={loading || !inputValue.trim()}
-            >
-              Send
-            </button>
-          </div>
-        </div>
+        <IdeaAssistantPanel
+          messages={messages}
+          gifUrl={gifUrl}
+          loading={loading}
+          recording={recording}
+          voiceRepliesEnabled={voiceRepliesEnabled}
+          playbackStatus={playbackStatus}
+          loadingStatus={loadingStatus}
+          inputValue={inputValue}
+          isMobileAssistantComposer={isMobileAssistantComposer}
+          isCollapsed={isCollapsed}
+          onThreadRef={(node) => {
+            assistantThreadRefs.current[ideaId] = node;
+          }}
+          onInputRef={(node) => {
+            assistantInputRefs.current[ideaId] = node;
+          }}
+          onInputChange={(value) =>
+            setAssistantInputById((prev) => ({
+              ...prev,
+              [ideaId]: value,
+            }))
+          }
+          onSend={() => {
+            void submitIdeaChatText(ideaId, inputValue);
+          }}
+          onToggleVoiceRecording={() => {
+            void toggleVoiceRecording(ideaId);
+          }}
+          onVoiceReplyControl={() => {
+            void handleVoiceReplyControl(ideaId);
+          }}
+        />
       );
     },
     [
@@ -908,6 +874,7 @@ export function CheckableListPage({ pageKey }: { pageKey: CheckableListPageKey }
       assistantRecordingById,
       assistantVoiceEnabledById,
       handleVoiceReplyControl,
+      isMobileAssistantComposer,
       isIdeasPage,
       submitIdeaChatText,
       toggleVoiceRecording,
@@ -981,6 +948,7 @@ export function CheckableListPage({ pageKey }: { pageKey: CheckableListPageKey }
       onUndo={list.undo}
       canBulkDelete={canBulkDelete}
       onBulkDelete={handleBulkDelete}
+      toastMessage={undoSyncToast}
       checkableListProps={{
         items: list.items,
         itemLabel: def.itemLabel,
@@ -999,13 +967,21 @@ export function CheckableListPage({ pageKey }: { pageKey: CheckableListPageKey }
         renderItemActions: (item) => {
           if (item.done) return null;
           const aiEnabled = isIdeasPage;
-          const loading = aiEnabled ? Boolean(assistantLoadingById[item.id]) : false;
-          const hasChat = aiEnabled
-            ? (assistantChatById[item.id]?.length ?? 0) > 0 || Boolean(assistantGifById[item.id])
+          const loading = aiEnabled
+            ? Boolean(assistantLoadingById[item.id])
             : false;
-          const isCollapsed = aiEnabled ? assistantCollapsedById[item.id] ?? true : true;
+          const hasChat = aiEnabled
+            ? (assistantChatById[item.id]?.length ?? 0) > 0 ||
+              Boolean(assistantGifById[item.id])
+            : false;
+          const isCollapsed = aiEnabled
+            ? (assistantCollapsedById[item.id] ?? true)
+            : true;
           const hasChatSession = aiEnabled
-            ? Object.prototype.hasOwnProperty.call(assistantCollapsedById, item.id)
+            ? Object.prototype.hasOwnProperty.call(
+                assistantCollapsedById,
+                item.id
+              )
             : false;
           return (
             <button

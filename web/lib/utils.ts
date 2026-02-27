@@ -74,9 +74,7 @@ export function getProjectDisplayName(
   if (found) return found;
   if (selectedProjectId && lastKnownProjectName) return lastKnownProjectName;
   if (selectedProjectId) return "Project";
-  return projectsLoaded && projects.length
-    ? "Select a project"
-    : "Project";
+  return projectsLoaded && projects.length ? "Select a project" : "Project";
 }
 
 /** Parse test cases from stored string (JSON array or legacy plain text). */
@@ -141,10 +139,8 @@ export function getRecordingKind(rec: {
   const isAudio = rec.mediaType === "audio" || fromUrl === "audio";
   if (isAudio) return "audio";
   const rt = rec.recordingType;
-  const fromRec =
-    rt === "screen" || rt === "camera" ? rt : undefined;
-  const result =
-    (fromUrl as "screen" | "camera" | null) ?? fromRec ?? "screen";
+  const fromRec = rt === "screen" || rt === "camera" ? rt : undefined;
+  const result = (fromUrl as "screen" | "camera" | null) ?? fromRec ?? "screen";
   return result as "audio" | "screen" | "camera";
 }
 
@@ -189,7 +185,11 @@ function moveToUncheckedBottom<T extends { done: boolean }>(
   const without = items.filter((_, i) => i !== index);
   const firstDoneIdx = without.findIndex((i) => i.done);
   const insertAt = firstDoneIdx === -1 ? without.length : firstDoneIdx;
-  const result = [...without.slice(0, insertAt), item, ...without.slice(insertAt)];
+  const result = [
+    ...without.slice(0, insertAt),
+    item,
+    ...without.slice(insertAt),
+  ];
   return [result, insertAt];
 }
 
@@ -199,12 +199,36 @@ function moveToUncheckedBottom<T extends { done: boolean }>(
 export function applyToggleDoneOrder<T extends { done: boolean }>(
   items: T[],
   index: number,
-  newDone: boolean
+  newDone: boolean,
+  restoreIndex?: number
 ): [T[], number] {
   const next = items.map((item, i) =>
     i === index ? { ...item, done: newDone } : item
   );
   const without = next.filter((_, i) => i !== index);
-  if (newDone) return [[...without, next[index]], without.length];
+  if (newDone) {
+    const firstDoneIdx = without.findIndex((i) => i.done);
+    const insertAt = firstDoneIdx === -1 ? without.length : firstDoneIdx;
+    const result = [
+      ...without.slice(0, insertAt),
+      next[index],
+      ...without.slice(insertAt),
+    ];
+    return [result, insertAt];
+  }
+  if (typeof restoreIndex === "number" && Number.isFinite(restoreIndex)) {
+    const firstDoneIdx = without.findIndex((i) => i.done);
+    const uncheckedCount = firstDoneIdx === -1 ? without.length : firstDoneIdx;
+    const insertAt = Math.max(
+      0,
+      Math.min(Math.trunc(restoreIndex), uncheckedCount)
+    );
+    const result = [
+      ...without.slice(0, insertAt),
+      next[index],
+      ...without.slice(insertAt),
+    ];
+    return [result, insertAt];
+  }
   return moveToUncheckedBottom(next, index);
 }

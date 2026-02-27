@@ -68,8 +68,8 @@ describe("ProjectsService", () => {
   beforeEach(async () => {
     jest.clearAllMocks();
     mockPrisma.user.findUnique.mockResolvedValue({ organizationId: "o1" });
-    mockPrisma.$transaction.mockImplementation((fn: (tx: typeof mockPrisma) => unknown) =>
-      fn(mockPrisma)
+    mockPrisma.$transaction.mockImplementation(
+      (fn: (tx: typeof mockPrisma) => unknown) => fn(mockPrisma)
     );
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -225,9 +225,9 @@ describe("ProjectsService", () => {
         id: "1",
         organizationId: "o1",
       });
-      await expect(service.update("1", "user-1", { name: "   " })).rejects.toThrow(
-        BadRequestException
-      );
+      await expect(
+        service.update("1", "user-1", { name: "   " })
+      ).rejects.toThrow(BadRequestException);
       expect(mockPrisma.project.update).not.toHaveBeenCalled();
     });
 

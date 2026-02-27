@@ -82,24 +82,28 @@ export function useLocalCheckableList<T extends LocalCheckableItem>({
     [applyRemove]
   );
 
-  const saveEdit = useCallback(
-    () => {
-      if (editingIndex === null) return;
-      pushHistory();
-      const trimmed = editingValue.trim();
-      if (trimmed) {
-        setItems((prev: T[]) => {
-          const next = [...prev];
-          next[editingIndex] = { ...next[editingIndex], name: trimmed };
-          return next;
-        });
-      } else {
-        removeItem(editingIndex, true);
-      }
-      cancelEdit();
-    },
-    [editingIndex, editingValue, pushHistory, removeItem, setItems, cancelEdit]
-  );
+  const saveEdit = useCallback(() => {
+    if (editingIndex === null) return;
+    pushHistory();
+    const trimmed = editingValue.trim();
+    if (trimmed) {
+      setItems((prev: T[]) => {
+        const next = [...prev];
+        next[editingIndex] = { ...next[editingIndex], name: trimmed };
+        return next;
+      });
+    } else {
+      removeItem(editingIndex, true);
+    }
+    cancelEdit();
+  }, [
+    editingIndex,
+    editingValue,
+    pushHistory,
+    removeItem,
+    setItems,
+    cancelEdit,
+  ]);
 
   const handleReorder = useCallback(
     (fromIndex: number, toIndex: number) => {

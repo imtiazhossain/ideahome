@@ -32,9 +32,10 @@ export function useUndoList<T>(
 
   const undo = useCallback(() => {
     const prev = historyRef.current.pop();
-    if (!prev) return;
+    if (!prev) return null;
     setItems(prev);
     setCanUndo(historyRef.current.length > 0);
+    return prev;
   }, [setItems]);
 
   return { pushHistory, undo, canUndo };

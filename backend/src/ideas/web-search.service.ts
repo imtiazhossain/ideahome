@@ -50,7 +50,9 @@ export class WebSearchService {
 
     if (!response.ok) {
       if (response.status === 429 || response.status >= 500) {
-        throw new ServiceUnavailableException("Web search provider is unavailable");
+        throw new ServiceUnavailableException(
+          "Web search provider is unavailable"
+        );
       }
       throw new BadGatewayException(
         `Web search request failed (${response.status})`
@@ -113,7 +115,9 @@ export class WebSearchService {
           `Web search timed out after ${this.defaultTimeoutMs}ms`
         );
       }
-      throw new ServiceUnavailableException("Web search network request failed");
+      throw new ServiceUnavailableException(
+        "Web search network request failed"
+      );
     } finally {
       clearTimeout(timer);
     }

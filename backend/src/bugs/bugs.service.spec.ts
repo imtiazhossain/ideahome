@@ -142,9 +142,9 @@ describe("BugsService", () => {
     it("should throw NotFoundException when bug not found", async () => {
       mockPrisma.bug.findUnique.mockResolvedValue(null);
 
-      await expect(service.update("b1", "user-1", { name: "x" })).rejects.toThrow(
-        NotFoundException
-      );
+      await expect(
+        service.update("b1", "user-1", { name: "x" })
+      ).rejects.toThrow(NotFoundException);
     });
   });
 
@@ -181,9 +181,9 @@ describe("BugsService", () => {
       mockPrisma.bug.findMany
         .mockResolvedValueOnce([{ id: "b1" }, { id: "other" }])
         .mockResolvedValueOnce([{ id: "b1" }]);
-      await expect(service.reorder("p1", "user-1", ["b1", "other"])).rejects.toThrow(
-        NotFoundException
-      );
+      await expect(
+        service.reorder("p1", "user-1", ["b1", "other"])
+      ).rejects.toThrow(NotFoundException);
     });
   });
 });

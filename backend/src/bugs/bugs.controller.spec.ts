@@ -76,7 +76,10 @@ describe("BugsController", () => {
     mockSvc.reorder.mockResolvedValue([]);
     const req = { user: { sub: "u1" } };
 
-    await controller.reorder({ projectId: "p1", bugIds: ["b1", "b2"] }, req as any);
+    await controller.reorder(
+      { projectId: "p1", bugIds: ["b1", "b2"] },
+      req as any
+    );
     expect(mockSvc.reorder).toHaveBeenCalledWith("p1", "u1", ["b1", "b2"]);
   });
 

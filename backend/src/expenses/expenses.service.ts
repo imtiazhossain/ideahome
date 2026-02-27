@@ -39,8 +39,13 @@ export class ExpensesService {
       throw new BadRequestException("date must be in YYYY-MM-DD format");
     }
     const parsed = new Date(`${raw}T00:00:00.000Z`);
-    if (Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== raw) {
-      throw new BadRequestException("date must be a valid calendar date in YYYY-MM-DD format");
+    if (
+      Number.isNaN(parsed.getTime()) ||
+      parsed.toISOString().slice(0, 10) !== raw
+    ) {
+      throw new BadRequestException(
+        "date must be a valid calendar date in YYYY-MM-DD format"
+      );
     }
     return raw;
   }
@@ -144,7 +149,8 @@ export class ExpensesService {
       date?: string;
       category?: string;
     } = {};
-    if (body.amount !== undefined) data.amount = this.normalizeAmount(body.amount);
+    if (body.amount !== undefined)
+      data.amount = this.normalizeAmount(body.amount);
     if (body.description !== undefined)
       data.description = this.normalizeDescription(body.description);
     if (body.date !== undefined) data.date = this.normalizeDate(body.date);

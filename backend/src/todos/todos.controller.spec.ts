@@ -67,7 +67,10 @@ describe("TodosController", () => {
 
   it("reorder delegates to service", async () => {
     mockSvc.reorder.mockResolvedValue([]);
-    await controller.reorder({ projectId: "p1", todoIds: ["t1", "t2"] }, req as any);
+    await controller.reorder(
+      { projectId: "p1", todoIds: ["t1", "t2"] },
+      req as any
+    );
     expect(mockSvc.reorder).toHaveBeenCalledWith("p1", "u1", ["t1", "t2"]);
   });
 

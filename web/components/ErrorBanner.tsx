@@ -24,11 +24,7 @@ const dismissButtonStyle: React.CSSProperties = {
   opacity: 0.8,
 };
 
-export function ErrorBanner({
-  message,
-  onDismiss,
-  style,
-}: ErrorBannerProps) {
+export function ErrorBanner({ message, onDismiss, style }: ErrorBannerProps) {
   return (
     <div className="error-banner" style={{ ...baseStyle, ...style }}>
       <span>{message}</span>

@@ -131,7 +131,10 @@ export class IdeasService {
     };
   }
 
-  private resolvePreviewGifUrl(ideaName: string, context?: string): string | null {
+  private resolvePreviewGifUrl(
+    ideaName: string,
+    context?: string
+  ): string | null {
     const text = `${ideaName} ${context ?? ""}`.toLowerCase();
     const requestsGif = text.includes("gif");
     const requestsCat = text.includes("cat");

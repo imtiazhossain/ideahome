@@ -10,6 +10,25 @@ import { FirebaseService } from "./firebase.service";
 import { AuthService } from "./auth.service";
 import { getJwtSecret } from "./jwt-secret";
 
+const AUTH_TOKEN_COOKIE_KEY = "ideahome_token";
+
+function getTokenFromCookie(rawCookie: unknown): string {
+  if (typeof rawCookie !== "string" || !rawCookie.trim()) return "";
+  const parts = rawCookie.split(";");
+  for (const part of parts) {
+    const [name, ...valueParts] = part.trim().split("=");
+    if (name !== AUTH_TOKEN_COOKIE_KEY) continue;
+    const value = valueParts.join("=");
+    if (!value) return "";
+    try {
+      return decodeURIComponent(value).trim();
+    } catch {
+      return value.trim();
+    }
+  }
+  return "";
+}
+
 @Injectable()
 export class JwtAuthGuard implements CanActivate {
   constructor(
@@ -21,17 +40,15 @@ export class JwtAuthGuard implements CanActivate {
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const req = context.switchToHttp().getRequest();
     const auth = req.headers["authorization"] ?? req.headers["Authorization"];
-    const queryToken =
-      req.method === "GET" && typeof req.query?.access_token === "string"
-        ? req.query.access_token.trim()
-        : "";
-    const authFromQuery = queryToken ? `Bearer ${queryToken}` : "";
-    const authValue = auth ?? authFromQuery;
+    const cookieToken = getTokenFromCookie(req.headers?.cookie);
+    const authValue = auth ?? (cookieToken ? `Bearer ${cookieToken}` : "");
     let hadAuth = false;
 
     if (authValue) {
       hadAuth = true;
-      const parts = (Array.isArray(authValue) ? authValue[0] : authValue).split(" ");
+      const parts = (Array.isArray(authValue) ? authValue[0] : authValue).split(
+        " "
+      );
       if (parts.length !== 2 || parts[0] !== "Bearer") {
         throw new UnauthorizedException("Invalid Authorization format");
       }

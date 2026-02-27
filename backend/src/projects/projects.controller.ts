@@ -24,10 +24,7 @@ export class ProjectsController {
   }
 
   @Get(":id")
-  get(
-    @Param("id") id: string,
-    @Req() req: AuthenticatedRequest
-  ) {
+  get(@Param("id") id: string, @Req() req: AuthenticatedRequest) {
     return this.svc.get(id, requireUserId(req));
   }
 
@@ -51,10 +48,7 @@ export class ProjectsController {
   }
 
   @Delete(":id")
-  remove(
-    @Param("id") id: string,
-    @Req() req: AuthenticatedRequest
-  ) {
+  remove(@Param("id") id: string, @Req() req: AuthenticatedRequest) {
     return this.svc.delete(id, requireUserId(req));
   }
 }

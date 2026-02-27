@@ -19,7 +19,9 @@ export interface CheckableProjectItem {
   createdAt?: string;
 }
 
-export interface UseCheckableProjectListOptions<T extends CheckableProjectItem> {
+export interface UseCheckableProjectListOptions<
+  T extends CheckableProjectItem,
+> {
   listType: ListCacheKey;
   selectedProjectId: string | null;
   authenticated: boolean;
@@ -46,6 +48,7 @@ export interface UseCheckableProjectListOptions<T extends CheckableProjectItem> 
   };
   onAddError?: (err: Error) => void;
   onReorderError?: () => void;
+  onUndoSyncError?: (message: string) => void;
 }
 
 export function useCheckableProjectList<T extends CheckableProjectItem>({
@@ -60,6 +63,7 @@ export function useCheckableProjectList<T extends CheckableProjectItem>({
   legacyMigration,
   onAddError,
   onReorderError,
+  onUndoSyncError,
 }: UseCheckableProjectListOptions<T>) {
   const projectId = selectedProjectId ?? "";
   const [items, setItems, loading] = useCachedProjectList<T>({
@@ -69,7 +73,11 @@ export function useCheckableProjectList<T extends CheckableProjectItem>({
     fetchList,
     legacyMigration,
   });
-  const { pushHistory, undo, canUndo } = useUndoList(
+  const {
+    pushHistory,
+    undo: undoInMemory,
+    canUndo,
+  } = useUndoList(
     items,
     setItems as (items: T[]) => void,
     20,
@@ -92,6 +100,28 @@ export function useCheckableProjectList<T extends CheckableProjectItem>({
     pushHistory,
     canEditItem: (item) => !isOptimisticId(item?.id ?? ""),
   });
+
+  const refreshFromServer = useCallback(async (): Promise<T[] | null> => {
+    if (!projectId) return null;
+    const freshItems = await fetchList(projectId);
+    setItems(freshItems);
+    return freshItems;
+  }, [projectId, fetchList, setItems]);
+
+  const syncReorderOrRefresh = useCallback(
+    async (ids: string[], opts?: { onError?: () => void }): Promise<void> => {
+      if (!projectId) return;
+      try {
+        const reordered = await reorderItems(projectId, ids);
+        setItems(reordered as T[]);
+      } catch {
+        await refreshFromServer();
+        opts?.onError?.();
+        onReorderError?.();
+      }
+    },
+    [projectId, reorderItems, setItems, refreshFromServer, onReorderError]
+  );
 
   const addItem = useCallback(
     (e: React.FormEvent) => {
@@ -124,21 +154,11 @@ export function useCheckableProjectList<T extends CheckableProjectItem>({
             const withCreated = inserted.map((i) =>
               i.id === optimisticId ? created : i
             );
-            reorderItems(
-              projectId,
-              withCreated.map((i) => i.id)
-            )
-              .then(setItems as (items: T[]) => void)
-              .catch(() => {
-                fetchList(projectId).then(setItems as (items: T[]) => void);
-                onReorderError?.();
-              });
+            void syncReorderOrRefresh(withCreated.map((i) => i.id));
           }
         })
         .catch((err) => {
-          setItems((prev: T[]) =>
-            prev.filter((i) => i.id !== optimisticId)
-          );
+          setItems((prev: T[]) => prev.filter((i) => i.id !== optimisticId));
           onAddError?.(err instanceof Error ? err : new Error(String(err)));
         });
     },
@@ -148,11 +168,9 @@ export function useCheckableProjectList<T extends CheckableProjectItem>({
       projectId,
       pushHistory,
       createItem,
-      fetchList,
-      reorderItems,
       setItems,
       onAddError,
-      onReorderError,
+      syncReorderOrRefresh,
     ]
   );
 
@@ -167,10 +185,10 @@ export function useCheckableProjectList<T extends CheckableProjectItem>({
           setItems((prev: T[]) => [...prev]);
           return;
         }
-        fetchList(projectId).then(setItems as (items: T[]) => void);
+        void refreshFromServer();
       });
     },
-    [items, updateItem, applyToggleDone, projectId, fetchList, setItems]
+    [items, updateItem, applyToggleDone, projectId, setItems, refreshFromServer]
   );
 
   const removeItem = useCallback(
@@ -180,76 +198,62 @@ export function useCheckableProjectList<T extends CheckableProjectItem>({
       const removed = { ...item };
       applyRemove(index, skipHistory);
       deleteItem(item.id).catch(() => {
-        setItems((prev: T[]) => [
-          ...prev.slice(0, index),
-          removed,
-          ...prev.slice(index),
-        ]);
+        setItems((prev: T[]) => {
+          if (prev.some((current) => current.id === removed.id)) return prev;
+          return [...prev, removed].sort((a, b) => a.order - b.order);
+        });
       });
     },
     [items, applyRemove, deleteItem, setItems]
   );
 
-  const saveEdit = useCallback(
-    async () => {
-      if (editingIndex === null) return;
-      const item = items[editingIndex];
-      if (isOptimisticId(item.id)) return;
-      pushHistory();
-      const trimmed = editingValue.trim();
-      if (trimmed) {
-        try {
-          await updateItem(item.id, { name: trimmed });
-          setItems((prev: T[]) => {
-            const next = [...prev];
-            next[editingIndex] = { ...next[editingIndex], name: trimmed };
-            return next;
-          });
-        } catch {
-          // keep previous name
-        }
-      } else {
-        removeItem(editingIndex, true);
+  const saveEdit = useCallback(async () => {
+    if (editingIndex === null) return;
+    const item = items[editingIndex];
+    if (isOptimisticId(item.id)) return;
+    pushHistory();
+    const trimmed = editingValue.trim();
+    if (trimmed) {
+      try {
+        await updateItem(item.id, { name: trimmed });
+        setItems((prev: T[]) => {
+          const next = [...prev];
+          next[editingIndex] = { ...next[editingIndex], name: trimmed };
+          return next;
+        });
+      } catch {
+        // keep previous name
       }
-      cancelEdit();
-    },
-    [
-      items,
-      editingIndex,
-      editingValue,
-      pushHistory,
-      updateItem,
-      removeItem,
-      setItems,
-      cancelEdit,
-    ]
-  );
+    } else {
+      removeItem(editingIndex, true);
+    }
+    cancelEdit();
+  }, [
+    items,
+    editingIndex,
+    editingValue,
+    pushHistory,
+    updateItem,
+    removeItem,
+    setItems,
+    cancelEdit,
+  ]);
 
   const handleReorder = useCallback(
     (fromIndex: number, toIndex: number) => {
       if (!projectId) return;
       const reordered = applyReorder(fromIndex, toIndex);
-      reorderItems(projectId, reordered.map((i) => i.id))
-        .then(setItems as (items: T[]) => void)
-        .catch(() => {
-          fetchList(projectId).then(setItems as (items: T[]) => void);
-          onReorderError?.();
-        });
+      void syncReorderOrRefresh(reordered.map((i) => i.id));
     },
-    [
-      projectId,
-      reorderItems,
-      fetchList,
-      setItems,
-      onReorderError,
-      applyReorder,
-    ]
+    [projectId, syncReorderOrRefresh, applyReorder]
   );
 
   const patchItemById = useCallback(
     (id: string, patch: Partial<T>) => {
       setItems((prev: T[]) =>
-        prev.map((item) => (item.id === id ? ({ ...item, ...patch } as T) : item))
+        prev.map((item) =>
+          item.id === id ? ({ ...item, ...patch } as T) : item
+        )
       );
     },
     [setItems]
@@ -263,7 +267,9 @@ export function useCheckableProjectList<T extends CheckableProjectItem>({
 
     pushHistory();
     const targetIds = new Set(targets.map(({ item }) => item.id));
-    const removedById = new Map(targets.map(({ item }) => [item.id, item] as const));
+    const removedById = new Map(
+      targets.map(({ item }) => [item.id, item] as const)
+    );
 
     setItems((prev: T[]) => prev.filter((item) => !targetIds.has(item.id)));
 
@@ -282,14 +288,73 @@ export function useCheckableProjectList<T extends CheckableProjectItem>({
           .filter((item): item is T => Boolean(item));
         return [...prev, ...restored].sort((a, b) => a.order - b.order);
       });
-      if (projectId) {
-        fetchList(projectId).then(setItems as (items: T[]) => void);
-      }
+      void refreshFromServer();
       return targets.length - failedSet.size;
     }
 
     return targets.length;
-  }, [items, pushHistory, setItems, deleteItem, projectId, fetchList]);
+  }, [items, pushHistory, setItems, deleteItem, refreshFromServer]);
+
+  const undo = useCallback(() => {
+    const beforeUndo = items;
+    const restored = undoInMemory();
+    if (!restored || !projectId) return;
+
+    const existingIds = new Set(beforeUndo.map((item) => item.id));
+    const restoredDeletes = restored.filter(
+      (item) => !existingIds.has(item.id) && !isOptimisticId(item.id)
+    );
+    if (restoredDeletes.length === 0) return;
+
+    void (async () => {
+      const recreatedPairs = await Promise.all(
+        restoredDeletes.map(async (item) => {
+          try {
+            const recreated = await createItem({
+              projectId,
+              name: item.name,
+              done: item.done,
+            });
+            return [item.id, recreated] as const;
+          } catch {
+            return null;
+          }
+        })
+      );
+
+      const recreatedMap = new Map<string, T>();
+      recreatedPairs.forEach((entry) => {
+        if (!entry) return;
+        recreatedMap.set(entry[0], entry[1]);
+      });
+
+      if (recreatedMap.size !== restoredDeletes.length) {
+        onUndoSyncError?.(
+          "Undo restored locally, but sync was partial. Refreshed from server."
+        );
+        void refreshFromServer();
+        return;
+      }
+
+      const reorderedIds = restored.map(
+        (item) => recreatedMap.get(item.id)?.id ?? item.id
+      );
+      await syncReorderOrRefresh(reorderedIds, {
+        onError: () =>
+          onUndoSyncError?.(
+            "Undo restored locally, but ordering sync failed. Refreshed from server."
+          ),
+      });
+    })();
+  }, [
+    items,
+    undoInMemory,
+    projectId,
+    createItem,
+    refreshFromServer,
+    syncReorderOrRefresh,
+    onUndoSyncError,
+  ]);
 
   return {
     items,

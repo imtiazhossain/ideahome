@@ -221,6 +221,11 @@ function SortableItem({
       <IconTrash />
     </button>
   );
+  const trailingControl = canSwipe
+    ? swipeOffset <= -SWIPE_THRESHOLD
+      ? deleteHandle
+      : dragHandle
+    : null;
 
   const actionSlot = !isEditing ? renderItemActions?.(item, index) : null;
   const detailsSlot = !isEditing ? renderItemDetails?.(item, index) : null;
@@ -228,101 +233,104 @@ function SortableItem({
   const mainContent = (
     <div className="features-list-item-body">
       <div className="features-list-item-main">
-      {isEditing ? (
-        <>
-          <button
-            type="button"
-            className="features-list-done-toggle"
-            onClick={() => !disabled && onToggleDone(index)}
-            disabled={disabled}
-            aria-label={
-              item.done
-                ? `Mark "${item.name}" not done`
-                : `Mark "${item.name}" done`
-            }
-            title={item.done ? "Mark not done" : "Mark done"}
-          >
-            {item.done ? (
-              <span className="features-list-done-check" aria-hidden>
-                <IconCheck />
-              </span>
-            ) : (
-              <span className="features-list-done-empty" aria-hidden />
-            )}
-          </button>
-          <span className="features-list-input-wrap">
-            <span className="features-list-input-sizer" aria-hidden>
-              {editingValue || "\u00A0"}
-            </span>
-            <input
-              type="text"
-              value={editingValue}
-              onChange={(e) => onEditingValueChange(e.target.value)}
-              onBlur={onSaveEdit}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") onSaveEdit();
-                if (e.key === "Escape") onCancelEdit();
-              }}
-              className="features-list-input"
-              aria-label={`Edit ${itemLabel}`}
-              autoFocus
-            />
-          </span>
-          {item.done && (
-            <span className="features-list-done-badge" aria-label="Done">
-              Done
-            </span>
-          )}
-        </>
-      ) : (
-        <>
-          <button
-            type="button"
-            className="features-list-done-toggle"
-            onClick={() => !disabled && onToggleDone(index)}
-            disabled={disabled}
-            aria-label={
-              item.done
-                ? `Mark "${item.name}" not done`
-                : `Mark "${item.name}" done`
-            }
-            title={item.done ? "Mark not done" : "Mark done"}
-          >
-            {item.done ? (
-              <span className="features-list-done-check" aria-hidden>
-                <IconCheck />
-              </span>
-            ) : (
-              <span className="features-list-done-empty" aria-hidden />
-            )}
-          </button>
-          <span
-            className="features-list-label"
-            onClick={() => !disabled && onStartEdit(index)}
-            onKeyDown={(e) => {
-              if (!disabled && (e.key === "Enter" || e.key === " ")) {
-                e.preventDefault();
-                onStartEdit(index);
+        {isEditing ? (
+          <>
+            <button
+              type="button"
+              className="features-list-done-toggle"
+              onClick={() => !disabled && onToggleDone(index)}
+              disabled={disabled}
+              aria-label={
+                item.done
+                  ? `Mark "${item.name}" not done`
+                  : `Mark "${item.name}" done`
               }
-            }}
-            role="button"
-            tabIndex={disabled ? -1 : 0}
-            aria-label={`Edit ${item.name}`}
-            title={`Edit "${item.name}"`}
-            style={{ cursor: disabled ? "default" : "pointer" }}
-          >
-            {item.name}
-          </span>
-          {actionSlot}
-          {item.done && (
-            <span className="features-list-done-badge" aria-label="Done">
-              Done
+              title={item.done ? "Mark not done" : "Mark done"}
+            >
+              {item.done ? (
+                <span className="features-list-done-check" aria-hidden>
+                  <IconCheck />
+                </span>
+              ) : (
+                <span className="features-list-done-empty" aria-hidden />
+              )}
+            </button>
+            <span className="features-list-input-wrap">
+              <span className="features-list-input-sizer" aria-hidden>
+                {editingValue || "\u00A0"}
+              </span>
+              <input
+                type="text"
+                value={editingValue}
+                onChange={(e) => onEditingValueChange(e.target.value)}
+                onBlur={onSaveEdit}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") onSaveEdit();
+                  if (e.key === "Escape") onCancelEdit();
+                }}
+                className="features-list-input"
+                aria-label={`Edit ${itemLabel}`}
+                autoFocus
+              />
             </span>
-          )}
-        </>
-      )}
+            {item.done && (
+              <span className="features-list-done-badge" aria-label="Done">
+                Done
+              </span>
+            )}
+          </>
+        ) : (
+          <>
+            <button
+              type="button"
+              className="features-list-done-toggle"
+              onClick={() => !disabled && onToggleDone(index)}
+              disabled={disabled}
+              aria-label={
+                item.done
+                  ? `Mark "${item.name}" not done`
+                  : `Mark "${item.name}" done`
+              }
+              title={item.done ? "Mark not done" : "Mark done"}
+            >
+              {item.done ? (
+                <span className="features-list-done-check" aria-hidden>
+                  <IconCheck />
+                </span>
+              ) : (
+                <span className="features-list-done-empty" aria-hidden />
+              )}
+            </button>
+            <span
+              className="features-list-label"
+              onClick={() => !disabled && onStartEdit(index)}
+              onKeyDown={(e) => {
+                if (!disabled && (e.key === "Enter" || e.key === " ")) {
+                  e.preventDefault();
+                  onStartEdit(index);
+                }
+              }}
+              role="button"
+              tabIndex={disabled ? -1 : 0}
+              aria-label={`Edit ${item.name}`}
+              title={`Edit "${item.name}"`}
+              style={{ cursor: disabled ? "default" : "pointer" }}
+            >
+              {item.name}
+            </span>
+            {actionSlot}
+            {item.done && (
+              <span className="features-list-done-badge" aria-label="Done">
+                Done
+              </span>
+            )}
+          </>
+        )}
+        {trailingControl}
       </div>
-      {detailsSlot && <div className="features-list-item-details">{detailsSlot}</div>}
+      {detailsSlot && (
+        <div className="features-list-item-details">{detailsSlot}</div>
+      )}
     </div>
   );
 
@@ -348,7 +356,6 @@ function SortableItem({
       ) : (
         mainContent
       )}
-      {canSwipe && swipeOffset <= -SWIPE_THRESHOLD ? deleteHandle : dragHandle}
     </li>
   );
 }

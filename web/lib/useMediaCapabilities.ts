@@ -23,12 +23,9 @@ export function useMediaCapabilities(): MediaCapabilities {
     const mediaDevices = nav?.mediaDevices;
 
     setCapabilities({
-      canScreenRecord:
-        !!mediaDevices?.getDisplayMedia && hasMediaRecorder,
-      canCameraRecord:
-        !!mediaDevices?.getUserMedia && hasMediaRecorder,
-      canAudioRecord:
-        !!mediaDevices?.getUserMedia && hasMediaRecorder,
+      canScreenRecord: !!mediaDevices?.getDisplayMedia && hasMediaRecorder,
+      canCameraRecord: !!mediaDevices?.getUserMedia && hasMediaRecorder,
+      canAudioRecord: !!mediaDevices?.getUserMedia && hasMediaRecorder,
     });
   }, []);
 

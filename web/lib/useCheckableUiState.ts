@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import {
   adjustEditingIndexAfterRemove,
   adjustEditingIndexAfterReorder,
@@ -28,6 +28,7 @@ export function useCheckableUiState<T extends CheckableUiItem>({
   const [newItem, setNewItem] = useState("");
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [editingValue, setEditingValue] = useState("");
+  const lastUncheckedIndexByIdRef = useRef<Record<string, number>>({});
 
   const canEditAt = useCallback(
     (index: number): boolean => {
@@ -57,12 +58,26 @@ export function useCheckableUiState<T extends CheckableUiItem>({
       if (!item) return null;
       pushHistory();
       const newDone = !item.done;
+      if (newDone) {
+        lastUncheckedIndexByIdRef.current[item.id] = index;
+      }
+      const restoreIndex = !newDone
+        ? lastUncheckedIndexByIdRef.current[item.id]
+        : undefined;
       let newIndex = 0;
       setItems((prev: T[]) => {
-        const [reorderedItems, idx] = applyToggleDoneOrder(prev, index, newDone);
+        const [reorderedItems, idx] = applyToggleDoneOrder(
+          prev,
+          index,
+          newDone,
+          restoreIndex
+        );
         newIndex = idx;
         return reorderedItems;
       });
+      if (!newDone) {
+        delete lastUncheckedIndexByIdRef.current[item.id];
+      }
       if (editingIndex === index) setEditingIndex(newIndex);
       return newIndex;
     },

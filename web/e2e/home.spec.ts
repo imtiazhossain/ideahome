@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { deleteTestProjectsByNames } from "./helpers";
+import { deleteTestProjectsByNames, expandSidebarIfNeeded } from "./helpers";
 
 // Ensure / stays on Board (avoids redirect to first tab like /todo).
 test.beforeEach(async ({ page }) => {
@@ -28,18 +28,16 @@ test.describe("Idea Home home", () => {
       await page.goto("/");
     });
     await test.step("Expand sidebar if closed", async () => {
-      const expandBtn = page.getByRole("button", { name: "Expand sidebar" });
-      if (await expandBtn.isVisible()) {
-        await expandBtn.click();
-        await expect(page.locator(".drawer-open")).toBeVisible();
-      }
+      await expandSidebarIfNeeded(page);
     });
     await test.step("Verify drawer title is Idea Home", async () => {
       await expect(page.locator(".drawer-title")).toHaveText("Idea Home");
     });
     await test.step("Verify Create Deck and New project button are visible", async () => {
       await expect(
-        page.locator(".project-nav").getByRole("button", { name: "Create Deck" })
+        page
+          .locator(".project-nav")
+          .getByRole("button", { name: "Create Deck" })
       ).toBeVisible();
       await expect(
         page.getByRole("button", { name: "+ New project" })
@@ -54,11 +52,7 @@ test.describe("Idea Home home", () => {
       await page.goto("/");
     });
     await test.step("Expand sidebar if closed", async () => {
-      const expandBtn = page.getByRole("button", { name: "Expand sidebar" });
-      if (await expandBtn.isVisible()) {
-        await expandBtn.click();
-        await expect(page.locator(".drawer-open")).toBeVisible();
-      }
+      await expandSidebarIfNeeded(page);
     });
     await test.step("Verify drawer title and Projects section", async () => {
       await expect(page.locator(".drawer-title")).toHaveText("Idea Home");
@@ -109,10 +103,7 @@ test.describe("Idea Home home", () => {
       await page.goto("/");
     });
     await test.step("Expand sidebar if closed", async () => {
-      const expandBtn = page.getByRole("button", { name: "Expand sidebar" });
-      if (await expandBtn.isVisible()) {
-        await expandBtn.click();
-      }
+      await expandSidebarIfNeeded(page);
     });
     await test.step("Verify sidebar is open", async () => {
       await expect(page.locator(".drawer-open")).toBeVisible();
@@ -158,10 +149,7 @@ test.describe("Idea Home home", () => {
 test.describe("Create project", () => {
   test.beforeEach(async ({ page }) => {
     await page.goto("/");
-    const expandBtn = page.getByRole("button", { name: "Expand sidebar" });
-    if (await expandBtn.isVisible()) {
-      await expandBtn.click();
-    }
+    await expandSidebarIfNeeded(page);
   });
 
   test("opens create project modal and shows form", async ({ page }) => {
@@ -376,10 +364,7 @@ test.describe("Delete project", () => {
   }) => {
     await test.step("Navigate to home and open create project modal", async () => {
       await page.goto("/");
-      const expandBtn = page.getByRole("button", { name: "Expand sidebar" });
-      if (await expandBtn.isVisible()) {
-        await expandBtn.click();
-      }
+      await expandSidebarIfNeeded(page);
       await page.getByRole("button", { name: "+ New project" }).click();
       const createModal = page
         .locator(".modal")
@@ -441,13 +426,12 @@ test.describe("Delete project", () => {
         .locator(".modal")
         .filter({ hasText: "Create project" });
       if (!(await createModal.isVisible())) {
-        const expandBtn = page.getByRole("button", { name: "Expand sidebar" });
-        if (await expandBtn.isVisible()) {
-          await expandBtn.click();
-        }
+        await expandSidebarIfNeeded(page);
         await page.getByRole("button", { name: "+ New project" }).click();
       }
-      createModal = page.locator(".modal").filter({ hasText: "Create project" });
+      createModal = page
+        .locator(".modal")
+        .filter({ hasText: "Create project" });
       await expect(createModal).toBeVisible({ timeout: 5000 });
       if (await createModal.getByPlaceholder("My Organization").isVisible()) {
         await createModal.getByPlaceholder("My Organization").fill("Del Org");
@@ -489,10 +473,7 @@ test.describe("Delete project", () => {
 
     await test.step("Reload page and verify deleted project does not reappear", async () => {
       await page.reload();
-      const expandBtn = page.getByRole("button", { name: "Expand sidebar" });
-      if (await expandBtn.isVisible()) {
-        await expandBtn.click();
-      }
+      await expandSidebarIfNeeded(page);
       await expect(
         page.getByRole("button", {
           name: "Delete Me Persist Project",
@@ -506,10 +487,7 @@ test.describe("Delete project", () => {
 test.describe("Issue detail", () => {
   test.beforeEach(async ({ page }) => {
     await page.goto("/");
-    const expandBtn = page.getByRole("button", { name: "Expand sidebar" });
-    if (await expandBtn.isVisible()) {
-      await expandBtn.click();
-    }
+    await expandSidebarIfNeeded(page);
     const newProjectBtn = page.getByRole("button", { name: "+ New project" });
     if (await newProjectBtn.isVisible()) {
       await newProjectBtn.click();
@@ -755,10 +733,7 @@ test.describe("Run automated test", () => {
   }) => {
     await test.step("Navigate to home and click Tests link", async () => {
       await page.goto("/");
-      const expandBtn = page.getByRole("button", { name: "Expand sidebar" });
-      if (await expandBtn.isVisible()) {
-        await expandBtn.click();
-      }
+      await expandSidebarIfNeeded(page);
       await page
         .locator("aside.drawer")
         .getByRole("link", { name: "Tests" })

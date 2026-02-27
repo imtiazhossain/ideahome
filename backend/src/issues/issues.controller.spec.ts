@@ -105,9 +105,9 @@ describe("IssuesController", () => {
     });
 
     it("should throw UnauthorizedException when req.user.sub is missing", async () => {
-      expect(() =>
-        controller.list(undefined, undefined, {} as any)
-      ).toThrow(UnauthorizedException);
+      expect(() => controller.list(undefined, undefined, {} as any)).toThrow(
+        UnauthorizedException
+      );
       expect(mockIssuesService.list).not.toHaveBeenCalled();
     });
   });
@@ -155,7 +155,12 @@ describe("IssuesController", () => {
 
     it("should pass empty attachment body safely when request body is missing", async () => {
       mockIssueCommentsService.addAttachment.mockResolvedValue({ id: "a1" });
-      await controller.addCommentAttachment("1", "c1", undefined as any, req as any);
+      await controller.addCommentAttachment(
+        "1",
+        "c1",
+        undefined as any,
+        req as any
+      );
       expect(mockIssueCommentsService.addAttachment).toHaveBeenCalledWith(
         "1",
         "c1",
@@ -391,7 +396,12 @@ describe("IssuesController", () => {
 
     it("should pass undefined name safely when body is missing", async () => {
       mockIssuesService.updateScreenshot.mockResolvedValue({ id: "1" });
-      await controller.updateScreenshot("1", "s1", undefined as any, req as any);
+      await controller.updateScreenshot(
+        "1",
+        "s1",
+        undefined as any,
+        req as any
+      );
       expect(mockIssuesService.updateScreenshot).toHaveBeenCalledWith(
         "1",
         "s1",

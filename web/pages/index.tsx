@@ -686,11 +686,8 @@ export default function Home() {
   );
   const [editingScreenshotName, setEditingScreenshotName] = useState("");
   const [editingFileId, setEditingFileId] = useState<string | null>(null);
-  const {
-    canScreenRecord,
-    canCameraRecord,
-    canAudioRecord,
-  } = useMediaCapabilities();
+  const { canScreenRecord, canCameraRecord, canAudioRecord } =
+    useMediaCapabilities();
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const recordedChunksRef = useRef<Blob[]>([]);
   const mediaStreamRef = useRef<MediaStream | null>(null);
@@ -1866,9 +1863,7 @@ export default function Home() {
           setOrganizations(list);
         }
         const project = await createProject({ name: trimmed });
-        setProjects((prev) =>
-          prev.map((p) => (p.id === tempId ? project : p))
-        );
+        setProjects((prev) => prev.map((p) => (p.id === tempId ? project : p)));
         if (selectedProjectIdRef.current === tempId) {
           setSelectedProjectId(project.id);
         }
@@ -2217,9 +2212,7 @@ export default function Home() {
         if (list.length > 0) setNewProjectOrgId(list[0].id);
       }
       const project = await createProject({ name: projectName });
-      setProjects((prev) =>
-        prev.map((p) => (p.id === tempId ? project : p))
-      );
+      setProjects((prev) => prev.map((p) => (p.id === tempId ? project : p)));
       if (selectedProjectIdRef.current === tempId) {
         setSelectedProjectId(project.id);
       }
@@ -3034,158 +3027,156 @@ export default function Home() {
       deleteAllIssuesDisabled={loading || issues.length === 0}
     >
       {error && (
-            <ErrorBanner message={error} onDismiss={() => setError(null)} />
-          )}
+        <ErrorBanner message={error} onDismiss={() => setError(null)} />
+      )}
 
-          <div className="board-container">
-            {loading ? (
-              <LoadingMessage message="Loading issues…" className="loading" />
-            ) : (
-              <div className="board-columns">
-                {STATUSES.map(({ id, label }) => {
-                  const handleColumnDragOver = (e: React.DragEvent) => {
-                    e.preventDefault();
-                    e.dataTransfer.dropEffect = "move";
-                  };
-                  const handleColumnDrop = (e: React.DragEvent) => {
-                    e.preventDefault();
-                    setDragOverColumnId(null);
-                    const issueId = e.dataTransfer.getData(DRAG_ISSUE_KEY);
-                    if (!issueId) return;
-                    const issue = issues.find((i) => i.id === issueId);
-                    if (issue && issue.status !== id) {
-                      handleStatusChange(issueId, id);
-                    }
-                  };
-                  const handleColumnDragEnter = () => setDragOverColumnId(id);
-                  const handleColumnDragLeave = (e: React.DragEvent) => {
-                    if (!e.currentTarget.contains(e.relatedTarget as Node)) {
-                      setDragOverColumnId(null);
-                    }
-                  };
-                  const columnIssues = issuesByStatusForDisplay[id] ?? [];
-                  const isPreviewColumn =
-                    dragOverColumnId === id && draggingIssueId;
-                  return (
-                    <div
-                      key={id}
-                      className={`column column-${id}${dragOverColumnId === id ? " column-drop-target" : ""}`}
-                      onDragOver={handleColumnDragOver}
-                      onDrop={handleColumnDrop}
-                      onDragEnter={handleColumnDragEnter}
-                      onDragLeave={handleColumnDragLeave}
-                    >
-                      <div className="column-header">
-                        <span className="column-title">{label}</span>
-                        <span className="column-count">
-                          {columnIssues.length}
-                        </span>
-                      </div>
-                      {columnIssues.map((issue) => (
-                        <IssueCard
-                          key={issue.id}
-                          issue={issue}
-                          columnStatusId={id}
-                          onStatusChange={handleStatusChange}
-                          onSelect={(issue) => {
-                            setSelectedIssue(issue);
-                            setIssueDetailOriginal(issue);
-                          }}
-                          onDragStart={setDraggingIssueId}
-                          onDragEnd={() => {
-                            setDraggingIssueId(null);
-                            setDragOverColumnId(null);
-                          }}
-                          isPreview={
-                            !!(isPreviewColumn && issue.id === draggingIssueId)
-                          }
-                        />
-                      ))}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
+      <div className="board-container">
+        {loading ? (
+          <LoadingMessage message="Loading issues…" className="loading" />
+        ) : (
+          <div className="board-columns">
+            {STATUSES.map(({ id, label }) => {
+              const handleColumnDragOver = (e: React.DragEvent) => {
+                e.preventDefault();
+                e.dataTransfer.dropEffect = "move";
+              };
+              const handleColumnDrop = (e: React.DragEvent) => {
+                e.preventDefault();
+                setDragOverColumnId(null);
+                const issueId = e.dataTransfer.getData(DRAG_ISSUE_KEY);
+                if (!issueId) return;
+                const issue = issues.find((i) => i.id === issueId);
+                if (issue && issue.status !== id) {
+                  handleStatusChange(issueId, id);
+                }
+              };
+              const handleColumnDragEnter = () => setDragOverColumnId(id);
+              const handleColumnDragLeave = (e: React.DragEvent) => {
+                if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+                  setDragOverColumnId(null);
+                }
+              };
+              const columnIssues = issuesByStatusForDisplay[id] ?? [];
+              const isPreviewColumn =
+                dragOverColumnId === id && draggingIssueId;
+              return (
+                <div
+                  key={id}
+                  className={`column column-${id}${dragOverColumnId === id ? " column-drop-target" : ""}`}
+                  onDragOver={handleColumnDragOver}
+                  onDrop={handleColumnDrop}
+                  onDragEnter={handleColumnDragEnter}
+                  onDragLeave={handleColumnDragLeave}
+                >
+                  <div className="column-header">
+                    <span className="column-title">{label}</span>
+                    <span className="column-count">{columnIssues.length}</span>
+                  </div>
+                  {columnIssues.map((issue) => (
+                    <IssueCard
+                      key={issue.id}
+                      issue={issue}
+                      columnStatusId={id}
+                      onStatusChange={handleStatusChange}
+                      onSelect={(issue) => {
+                        setSelectedIssue(issue);
+                        setIssueDetailOriginal(issue);
+                      }}
+                      onDragStart={setDraggingIssueId}
+                      onDragEnd={() => {
+                        setDraggingIssueId(null);
+                        setDragOverColumnId(null);
+                      }}
+                      isPreview={
+                        !!(isPreviewColumn && issue.id === draggingIssueId)
+                      }
+                    />
+                  ))}
+                </div>
+              );
+            })}
           </div>
+        )}
+      </div>
 
-          <CreateIssueModal
-            open={createOpen}
-            onClose={() => setCreateOpen(false)}
-            projects={projects}
-            selectedProjectId={selectedProjectId}
-            setSelectedProjectId={setSelectedProjectId}
-            title={createTitle}
-            setTitle={setCreateTitle}
-            description={createDescription}
-            setDescription={setCreateDescription}
-            acceptanceCriteria={createAcceptanceCriteria}
-            setAcceptanceCriteria={setCreateAcceptanceCriteria}
-            database={createDatabase}
-            setDatabase={setCreateDatabase}
-            api={createApi}
-            setApi={setCreateApi}
-            testCases={createTestCases}
-            setTestCases={setCreateTestCases}
-            assigneeId={createAssigneeId}
-            setAssigneeId={setCreateAssigneeId}
-            users={users}
-            error={createError}
-            onDismissError={() => setCreateError(null)}
-            submitting={submitting}
-            onSubmit={handleCreate}
-          />
+      <CreateIssueModal
+        open={createOpen}
+        onClose={() => setCreateOpen(false)}
+        projects={projects}
+        selectedProjectId={selectedProjectId}
+        setSelectedProjectId={setSelectedProjectId}
+        title={createTitle}
+        setTitle={setCreateTitle}
+        description={createDescription}
+        setDescription={setCreateDescription}
+        acceptanceCriteria={createAcceptanceCriteria}
+        setAcceptanceCriteria={setCreateAcceptanceCriteria}
+        database={createDatabase}
+        setDatabase={setCreateDatabase}
+        api={createApi}
+        setApi={setCreateApi}
+        testCases={createTestCases}
+        setTestCases={setCreateTestCases}
+        assigneeId={createAssigneeId}
+        setAssigneeId={setCreateAssigneeId}
+        users={users}
+        error={createError}
+        onDismissError={() => setCreateError(null)}
+        submitting={submitting}
+        onSubmit={handleCreate}
+      />
 
-          {issueToDelete && (
-            <ConfirmModal
-              title="Delete issue"
-              message={
-                <>
-                  Delete &quot;{issueToDelete.title || "Untitled"}&quot;? This
-                  will permanently remove the issue.
-                </>
-              }
-              confirmLabel="Delete"
-              confirmBusyLabel="Deleting…"
-              busy={issueDeleting}
-              onClose={() => setIssueToDelete(null)}
-              onConfirm={handleDeleteIssue}
-              modalStyle={{ maxWidth: 400 }}
-              overlayClassName="modal-overlay--above-detail"
-            />
-          )}
+      {issueToDelete && (
+        <ConfirmModal
+          title="Delete issue"
+          message={
+            <>
+              Delete &quot;{issueToDelete.title || "Untitled"}&quot;? This will
+              permanently remove the issue.
+            </>
+          }
+          confirmLabel="Delete"
+          confirmBusyLabel="Deleting…"
+          busy={issueDeleting}
+          onClose={() => setIssueToDelete(null)}
+          onConfirm={handleDeleteIssue}
+          modalStyle={{ maxWidth: 400 }}
+          overlayClassName="modal-overlay--above-detail"
+        />
+      )}
 
-          {deleteAllConfirmOpen && (
-            <ConfirmModal
-              title="Delete all issues"
-              message={
-                selectedProjectId
-                  ? "Permanently delete all issues in this project?"
-                  : "Permanently delete all issues? This cannot be undone."
-              }
-              confirmLabel="Delete all"
-              confirmBusyLabel="Deleting…"
-              busy={deleteAllDeleting}
-              onClose={() => setDeleteAllConfirmOpen(false)}
-              onConfirm={handleDeleteAllIssues}
-              modalStyle={{ maxWidth: 400 }}
-            />
-          )}
+      {deleteAllConfirmOpen && (
+        <ConfirmModal
+          title="Delete all issues"
+          message={
+            selectedProjectId
+              ? "Permanently delete all issues in this project?"
+              : "Permanently delete all issues? This cannot be undone."
+          }
+          confirmLabel="Delete all"
+          confirmBusyLabel="Deleting…"
+          busy={deleteAllDeleting}
+          onClose={() => setDeleteAllConfirmOpen(false)}
+          onConfirm={handleDeleteAllIssues}
+          modalStyle={{ maxWidth: 400 }}
+        />
+      )}
 
-          <CreateProjectModal
-            open={createProjectOpen}
-            onClose={() => setCreateProjectOpen(false)}
-            organizations={organizations}
-            newOrgName={newOrgName}
-            setNewOrgName={setNewOrgName}
-            newProjectOrgId={newProjectOrgId}
-            setNewProjectOrgId={setNewProjectOrgId}
-            newProjectName={newProjectName}
-            setNewProjectName={setNewProjectName}
-            error={projectCreateError}
-            onDismissError={() => setProjectCreateError(null)}
-            submitting={projectSubmitting}
-            onSubmit={handleCreateProject}
-          />
+      <CreateProjectModal
+        open={createProjectOpen}
+        onClose={() => setCreateProjectOpen(false)}
+        organizations={organizations}
+        newOrgName={newOrgName}
+        setNewOrgName={setNewOrgName}
+        newProjectOrgId={newProjectOrgId}
+        setNewProjectOrgId={setNewProjectOrgId}
+        newProjectName={newProjectName}
+        setNewProjectName={setNewProjectName}
+        error={projectCreateError}
+        onDismissError={() => setProjectCreateError(null)}
+        submitting={projectSubmitting}
+        onSubmit={handleCreateProject}
+      />
 
       {selectedIssue && (
         <div
@@ -4149,7 +4140,8 @@ export default function Home() {
                                     className="btn btn-secondary"
                                     onClick={() => startCameraRecording()}
                                   >
-                                    <IconRecordCamera size={14} /> Record with Camera
+                                    <IconRecordCamera size={14} /> Record with
+                                    Camera
                                   </button>
                                 )}
                               </>
@@ -4948,7 +4940,10 @@ export default function Home() {
                                               rec
                                             ) + 1;
                                           const defaultLabel =
-                                            getRecordingDisplayLabel(kind, rIdx);
+                                            getRecordingDisplayLabel(
+                                              kind,
+                                              rIdx
+                                            );
                                           const displayLabel =
                                             rec.name ?? defaultLabel;
                                           return (
@@ -5066,7 +5061,7 @@ export default function Home() {
                                         recordingMode === "audio" ? (
                                           <button
                                             type="button"
-className="btn btn-danger-outline btn-sm"
+                                            className="btn btn-danger-outline btn-sm"
                                             onMouseDown={(e) => {
                                               e.preventDefault();
                                               stopRecording();
@@ -5100,7 +5095,7 @@ className="btn btn-danger-outline btn-sm"
                                         recordingMode === "screen" ? (
                                           <button
                                             type="button"
-className="btn btn-danger-outline btn-sm"
+                                            className="btn btn-danger-outline btn-sm"
                                             onMouseDown={(e) => {
                                               e.preventDefault();
                                               stopRecording();
@@ -5134,7 +5129,7 @@ className="btn btn-danger-outline btn-sm"
                                         recordingMode === "camera" ? (
                                           <button
                                             type="button"
-className="btn btn-danger-outline btn-sm"
+                                            className="btn btn-danger-outline btn-sm"
                                             onMouseDown={(e) => {
                                               e.preventDefault();
                                               stopRecording();
@@ -5306,8 +5301,8 @@ className="btn btn-danger-outline btn-sm"
                                           {canScreenRecord && (
                                             <button
                                               type="button"
-className="btn btn-secondary btn-sm"
-                                            onClick={
+                                              className="btn btn-secondary btn-sm"
+                                              onClick={
                                                 handleTakeScreenshotAndAddToComment
                                               }
                                               disabled={
@@ -5326,7 +5321,7 @@ className="btn btn-secondary btn-sm"
                                             recordingMode === "audio" ? (
                                               <button
                                                 type="button"
-className="btn btn-danger-outline btn-sm"
+                                                className="btn btn-danger-outline btn-sm"
                                                 onMouseDown={(e) => {
                                                   e.preventDefault();
                                                   stopRecording();
@@ -5357,7 +5352,7 @@ className="btn btn-danger-outline btn-sm"
                                             recordingMode === "screen" ? (
                                               <button
                                                 type="button"
-className="btn btn-danger-outline btn-sm"
+                                                className="btn btn-danger-outline btn-sm"
                                                 onMouseDown={(e) => {
                                                   e.preventDefault();
                                                   stopRecording();
@@ -5388,7 +5383,7 @@ className="btn btn-danger-outline btn-sm"
                                             recordingMode === "camera" ? (
                                               <button
                                                 type="button"
-className="btn btn-danger-outline btn-sm"
+                                                className="btn btn-danger-outline btn-sm"
                                                 onMouseDown={(e) => {
                                                   e.preventDefault();
                                                   stopRecording();

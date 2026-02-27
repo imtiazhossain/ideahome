@@ -17,14 +17,12 @@ function resolveApiBase(raw: string): string {
 
 const API_BASE_RESOLVED = resolveApiBase(API_BASE_RAW);
 
-function isHttpUrl(value: string): boolean {
-  return /^https?:\/\//i.test(value);
-}
-
 /** localStorage fallback key for SSO JWT (also cleaned on logout). */
 export const AUTH_TOKEN_KEY = "ideahome_token";
 /** sessionStorage key for SSO JWT. */
 export const AUTH_TOKEN_SESSION_KEY = "ideahome_token_session";
+/** cookie key for browser-managed auth (used by media tags that cannot set Authorization headers). */
+export const AUTH_TOKEN_COOKIE_KEY = "ideahome_token";
 
 function safeSessionStorageGet(key: string): string | null {
   try {
@@ -72,6 +70,41 @@ function safeLocalStorageRemove(key: string): void {
   } catch {
     // ignore storage restrictions
   }
+}
+
+function readCookie(name: string): string | null {
+  if (typeof document === "undefined") return null;
+  const needle = `${name}=`;
+  const parts = document.cookie.split(";");
+  for (const part of parts) {
+    const trimmed = part.trim();
+    if (!trimmed.startsWith(needle)) continue;
+    const rawValue = trimmed.slice(needle.length);
+    try {
+      return decodeURIComponent(rawValue);
+    } catch {
+      return rawValue;
+    }
+  }
+  return null;
+}
+
+function setCookie(name: string, value: string): void {
+  if (typeof document === "undefined") return;
+  const secure =
+    typeof window !== "undefined" && window.location.protocol === "https:"
+      ? "; Secure"
+      : "";
+  document.cookie = `${name}=${encodeURIComponent(value)}; Path=/; SameSite=Lax${secure}`;
+}
+
+function clearCookie(name: string): void {
+  if (typeof document === "undefined") return;
+  const secure =
+    typeof window !== "undefined" && window.location.protocol === "https:"
+      ? "; Secure"
+      : "";
+  document.cookie = `${name}=; Path=/; Max-Age=0; SameSite=Lax${secure}`;
 }
 
 function authHeaders(): Record<string, string> {
@@ -159,6 +192,54 @@ async function throwFromResponse(
   throw new Error(message);
 }
 
+type RequestOptions = {
+  method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
+  body?: unknown;
+  headers?: HeadersInit;
+  errorMessage: string;
+};
+
+function buildRequestInit(options: RequestOptions): RequestInit {
+  const { method, body, headers } = options;
+  const mergedHeaders = new Headers(headers);
+  if (body !== undefined && !mergedHeaders.has("Content-Type")) {
+    mergedHeaders.set("Content-Type", "application/json");
+  }
+  return {
+    ...(method ? { method } : {}),
+    ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+    ...(Array.from(mergedHeaders.keys()).length > 0
+      ? { headers: mergedHeaders }
+      : {}),
+  };
+}
+
+async function requestJson<T>(
+  path: string,
+  options: RequestOptions
+): Promise<T> {
+  const r = await apiFetch(`${getApiBase()}${path}`, buildRequestInit(options));
+  if (!r.ok) await throwFromResponse(r, options.errorMessage);
+  return r.json();
+}
+
+async function requestBlob(
+  path: string,
+  options: RequestOptions
+): Promise<Blob> {
+  const r = await apiFetch(`${getApiBase()}${path}`, buildRequestInit(options));
+  if (!r.ok) await throwFromResponse(r, options.errorMessage);
+  return r.blob();
+}
+
+async function requestVoid(
+  path: string,
+  options: RequestOptions
+): Promise<void> {
+  const r = await apiFetch(`${getApiBase()}${path}`, buildRequestInit(options));
+  if (!r.ok) await throwFromResponse(r, options.errorMessage);
+}
+
 /** When true, app does not redirect to login (use with backend SKIP_AUTH_DEV in local dev). */
 export function isSkipLoginDev(): boolean {
   return process.env.NEXT_PUBLIC_SKIP_LOGIN_DEV === "true";
@@ -168,10 +249,17 @@ export function getStoredToken(): string | null {
   if (typeof window === "undefined") return null;
   const sessionToken = safeSessionStorageGet(AUTH_TOKEN_SESSION_KEY)?.trim();
   if (sessionToken) return sessionToken;
+  const cookieToken = readCookie(AUTH_TOKEN_COOKIE_KEY)?.trim();
+  if (cookieToken) {
+    safeSessionStorageSet(AUTH_TOKEN_SESSION_KEY, cookieToken);
+    safeLocalStorageSet(AUTH_TOKEN_KEY, cookieToken);
+    return cookieToken;
+  }
   const fallbackToken = safeLocalStorageGet(AUTH_TOKEN_KEY)?.trim();
   if (!fallbackToken) return null;
   // Rehydrate session token for code paths that expect sessionStorage.
   safeSessionStorageSet(AUTH_TOKEN_SESSION_KEY, fallbackToken);
+  setCookie(AUTH_TOKEN_COOKIE_KEY, fallbackToken);
   return fallbackToken;
 }
 
@@ -190,6 +278,7 @@ export function setStoredToken(token: string): void {
   safeSessionStorageSet(AUTH_TOKEN_SESSION_KEY, token);
   // Keep a local fallback for browsers/webviews where sessionStorage is volatile.
   safeLocalStorageSet(AUTH_TOKEN_KEY, token);
+  setCookie(AUTH_TOKEN_COOKIE_KEY, token);
   dispatchAuthChange();
 }
 
@@ -197,6 +286,7 @@ export function clearStoredToken(): void {
   if (typeof window === "undefined") return;
   safeLocalStorageRemove(AUTH_TOKEN_KEY);
   safeSessionStorageRemove(AUTH_TOKEN_SESSION_KEY);
+  clearCookie(AUTH_TOKEN_COOKIE_KEY);
   dispatchAuthChange();
 }
 
@@ -404,70 +494,60 @@ export const STATUSES = [
 ] as const;
 
 export async function fetchOrganizations(): Promise<Organization[]> {
-  const r = await apiFetch(`${getApiBase()}/organizations`);
-  if (!r.ok) await throwFromResponse(r, "Failed to fetch organizations");
-  return r.json();
+  return requestJson<Organization[]>("/organizations", {
+    errorMessage: "Failed to fetch organizations",
+  });
 }
 
 export async function createOrganization(body: {
   name: string;
 }): Promise<Organization> {
-  const r = await apiFetch(`${getApiBase()}/organizations`, {
+  return requestJson<Organization>("/organizations", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
+    body,
+    errorMessage: "Failed to create organization",
   });
-  if (!r.ok) await throwFromResponse(r, "Failed to create organization");
-  return r.json();
 }
 
 /** Ensure the user has an organization (creates "My Workspace" if none). Returns the org. */
 export async function ensureOrganization(): Promise<Organization> {
-  const r = await apiFetch(`${getApiBase()}/organizations/ensure`, {
+  return requestJson<Organization>("/organizations/ensure", {
     method: "POST",
+    errorMessage: "Failed to ensure organization",
   });
-  if (!r.ok) await throwFromResponse(r, "Failed to ensure organization");
-  return r.json();
 }
 
 export async function fetchProjects(): Promise<Project[]> {
-  const r = await apiFetch(`${getApiBase()}/projects`);
-  if (!r.ok) await throwFromResponse(r, "Failed to fetch projects");
-  return r.json();
+  return requestJson<Project[]>("/projects", {
+    errorMessage: "Failed to fetch projects",
+  });
 }
 
 /** Create a project in the current user's workspace. Backend assigns the user's org. */
 export async function createProject(body: { name: string }): Promise<Project> {
-  const r = await apiFetch(`${getApiBase()}/projects`, {
+  return requestJson<Project>("/projects", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
+    body,
+    errorMessage: "Failed to create project",
   });
-  if (!r.ok) await throwFromResponse(r, "Failed to create project");
-  return r.json();
 }
 
 export async function updateProject(
   id: string,
   data: { name: string }
 ): Promise<Project> {
-  const r = await apiFetch(
-    `${getApiBase()}/projects/${encodeURIComponent(id)}`,
-    {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(data),
-    }
-  );
-  if (!r.ok) await throwFromResponse(r, "Failed to update project");
-  return r.json();
+  return requestJson<Project>(`/projects/${encodeURIComponent(id)}`, {
+    method: "PUT",
+    body: data,
+    errorMessage: "Failed to update project",
+  });
 }
 
 export async function deleteProject(id: string): Promise<void> {
-  const r = await apiFetch(`${getApiBase()}/projects/${encodeURIComponent(id)}`, {
+  return requestVoid(`/projects/${encodeURIComponent(id)}`, {
     method: "DELETE",
+    errorMessage: "Failed to delete project",
   });
-  if (!r.ok) await throwFromResponse(r, "Failed to delete project");
 }
 
 export type Todo = {
@@ -550,61 +630,53 @@ function createCheckableEntityApi<T extends CheckableEntity>(
 ) {
   return {
     async fetch(projectId: string): Promise<T[]> {
-      const r = await apiFetch(
-        `${getApiBase()}/${resource}?projectId=${encodeURIComponent(projectId)}`
+      return requestJson<T[]>(
+        `/${resource}?projectId=${encodeURIComponent(projectId)}`,
+        { errorMessage: `Failed to fetch ${pluralLabel}` }
       );
-      if (!r.ok) await throwFromResponse(r, `Failed to fetch ${pluralLabel}`);
-      return r.json();
     },
     async search(projectId: string, search: string): Promise<T[]> {
       if (!search.trim()) return [];
-      const r = await apiFetch(
-        `${getApiBase()}/${resource}?projectId=${encodeURIComponent(projectId)}&search=${encodeURIComponent(search.trim())}`
+      return requestJson<T[]>(
+        `/${resource}?projectId=${encodeURIComponent(projectId)}&search=${encodeURIComponent(search.trim())}`,
+        { errorMessage: `Failed to search ${pluralLabel}` }
       );
-      if (!r.ok) await throwFromResponse(r, `Failed to search ${pluralLabel}`);
-      return r.json();
     },
     async create(body: {
       projectId: string;
       name: string;
       done?: boolean;
     }): Promise<T> {
-      const r = await apiFetch(`${getApiBase()}/${resource}`, {
+      return requestJson<T>(`/${resource}`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
+        body,
+        errorMessage: `Failed to create ${singularLabel}`,
       });
-      if (!r.ok) await throwFromResponse(r, `Failed to create ${singularLabel}`);
-      return r.json();
     },
     async update(
       id: string,
       data: { name?: string; done?: boolean; order?: number }
     ): Promise<T> {
-      const r = await apiFetch(`${getApiBase()}/${resource}/${id}`, {
+      return requestJson<T>(`/${resource}/${id}`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
+        body: data,
+        errorMessage: `Failed to update ${singularLabel}`,
       });
-      if (!r.ok) await throwFromResponse(r, `Failed to update ${singularLabel}`);
-      return r.json();
     },
     async remove(id: string): Promise<void> {
-      const r = await apiFetch(`${getApiBase()}/${resource}/${id}`, {
+      return requestVoid(`/${resource}/${id}`, {
         method: "DELETE",
+        errorMessage: `Failed to delete ${singularLabel}`,
       });
-      if (!r.ok) await throwFromResponse(r, `Failed to delete ${singularLabel}`);
     },
     async reorder(projectId: string, ids: string[]): Promise<T[]> {
       const payload: Record<string, unknown> = { projectId };
       payload[reorderIdsKey] = ids;
-      const r = await apiFetch(`${getApiBase()}/${resource}/reorder`, {
+      return requestJson<T[]>(`/${resource}/reorder`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        body: payload,
+        errorMessage: `Failed to reorder ${pluralLabel}`,
       });
-      if (!r.ok) await throwFromResponse(r, `Failed to reorder ${pluralLabel}`);
-      return r.json();
     },
   };
 }
@@ -655,13 +727,11 @@ export async function generateIdeaPlan(
   const normalizedModel = typeof model === "string" ? model.trim() : "";
   if (normalizedContext) payload.context = normalizedContext;
   if (normalizedModel) payload.model = normalizedModel;
-  const r = await apiFetch(`${getApiBase()}/ideas/${encodeURIComponent(ideaId)}/plan`, {
+  return requestJson<Idea>(`/ideas/${encodeURIComponent(ideaId)}/plan`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
+    body: payload,
+    errorMessage: "Failed to generate idea plan",
   });
-  if (!r.ok) await throwFromResponse(r, "Failed to generate idea plan");
-  return r.json();
 }
 
 export async function generateIdeaAssistantChat(
@@ -670,28 +740,27 @@ export async function generateIdeaAssistantChat(
   model?: string,
   includeWeb?: boolean
 ): Promise<IdeaAssistantChatResult> {
-  const payload: { context?: string; model?: string; includeWeb?: boolean } = {};
+  const payload: { context?: string; model?: string; includeWeb?: boolean } =
+    {};
   const normalizedContext = typeof context === "string" ? context.trim() : "";
   const normalizedModel = typeof model === "string" ? model.trim() : "";
   if (normalizedContext) payload.context = normalizedContext;
   if (normalizedModel) payload.model = normalizedModel;
   if (includeWeb === true) payload.includeWeb = true;
-  const r = await apiFetch(
-    `${getApiBase()}/ideas/${encodeURIComponent(ideaId)}/assistant-chat`,
+  return requestJson<IdeaAssistantChatResult>(
+    `/ideas/${encodeURIComponent(ideaId)}/assistant-chat`,
     {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
+      body: payload,
+      errorMessage: "Failed to generate AI assistant response",
     }
   );
-  if (!r.ok) await throwFromResponse(r, "Failed to generate AI assistant response");
-  return r.json();
 }
 
 export async function fetchOpenRouterModels(): Promise<string[]> {
-  const r = await apiFetch(`${getApiBase()}/ideas/openrouter-models`);
-  if (!r.ok) await throwFromResponse(r, "Failed to fetch OpenRouter models");
-  const payload = (await r.json()) as unknown;
+  const payload = (await requestJson<unknown>("/ideas/openrouter-models", {
+    errorMessage: "Failed to fetch OpenRouter models",
+  })) as unknown;
   if (!Array.isArray(payload)) return [];
   return payload
     .filter((entry): entry is string => typeof entry === "string")
@@ -702,19 +771,18 @@ export async function fetchOpenRouterModels(): Promise<string[]> {
 export type ElevenLabsVoice = { id: string; name: string };
 
 export async function fetchElevenLabsVoices(): Promise<ElevenLabsVoice[]> {
-  const r = await apiFetch(`${getApiBase()}/ideas/elevenlabs-voices`);
-  if (!r.ok) await throwFromResponse(r, "Failed to fetch ElevenLabs voices");
-  const payload = (await r.json()) as unknown;
+  const payload = (await requestJson<unknown>("/ideas/elevenlabs-voices", {
+    errorMessage: "Failed to fetch ElevenLabs voices",
+  })) as unknown;
   if (!Array.isArray(payload)) return [];
   return payload
-    .filter(
-      (entry): entry is ElevenLabsVoice =>
-        Boolean(
-          entry &&
-            typeof entry === "object" &&
-            typeof (entry as ElevenLabsVoice).id === "string" &&
-            typeof (entry as ElevenLabsVoice).name === "string"
-        )
+    .filter((entry): entry is ElevenLabsVoice =>
+      Boolean(
+        entry &&
+        typeof entry === "object" &&
+        typeof (entry as ElevenLabsVoice).id === "string" &&
+        typeof (entry as ElevenLabsVoice).name === "string"
+      )
     )
     .map((entry) => ({ id: entry.id.trim(), name: entry.name.trim() }))
     .filter((entry) => Boolean(entry.id) && Boolean(entry.name));
@@ -726,13 +794,11 @@ export async function synthesizeIdeaChatSpeech(
 ): Promise<Blob> {
   const payload: { text: string; voiceId?: string } = { text: text.trim() };
   if (voiceId?.trim()) payload.voiceId = voiceId.trim();
-  const r = await apiFetch(`${getApiBase()}/ideas/tts`, {
+  return requestBlob("/ideas/tts", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
+    body: payload,
+    errorMessage: "Failed to synthesize speech",
   });
-  if (!r.ok) await throwFromResponse(r, "Failed to synthesize speech");
-  return r.blob();
 }
 
 export const fetchBugs = bugApi.fetch;
@@ -768,18 +834,17 @@ function loadEnhancementsStore(): Enhancement[] {
     if (!raw) return [];
     const parsed = JSON.parse(raw) as unknown;
     if (!Array.isArray(parsed)) return [];
-    return parsed.filter(
-      (item): item is Enhancement =>
-        Boolean(
-          item &&
-            typeof item === "object" &&
-            typeof (item as Enhancement).id === "string" &&
-            typeof (item as Enhancement).name === "string" &&
-            typeof (item as Enhancement).done === "boolean" &&
-            typeof (item as Enhancement).order === "number" &&
-            typeof (item as Enhancement).projectId === "string" &&
-            typeof (item as Enhancement).createdAt === "string"
-        )
+    return parsed.filter((item): item is Enhancement =>
+      Boolean(
+        item &&
+        typeof item === "object" &&
+        typeof (item as Enhancement).id === "string" &&
+        typeof (item as Enhancement).name === "string" &&
+        typeof (item as Enhancement).done === "boolean" &&
+        typeof (item as Enhancement).order === "number" &&
+        typeof (item as Enhancement).projectId === "string" &&
+        typeof (item as Enhancement).createdAt === "string"
+      )
     );
   } catch {
     return [];
@@ -800,15 +865,22 @@ function sortEnhancementsByOrder(items: Enhancement[]): Enhancement[] {
 }
 
 function createEnhancementId(): string {
-  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+  if (
+    typeof crypto !== "undefined" &&
+    typeof crypto.randomUUID === "function"
+  ) {
     return crypto.randomUUID();
   }
   return `enh-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
-export async function fetchEnhancements(projectId: string): Promise<Enhancement[]> {
+export async function fetchEnhancements(
+  projectId: string
+): Promise<Enhancement[]> {
   const all = loadEnhancementsStore();
-  return sortEnhancementsByOrder(all.filter((item) => item.projectId === projectId));
+  return sortEnhancementsByOrder(
+    all.filter((item) => item.projectId === projectId)
+  );
 }
 
 export async function createEnhancement(body: {
@@ -894,11 +966,12 @@ export type Expense = {
 };
 
 export async function fetchExpenses(projectId: string): Promise<Expense[]> {
-  const r = await apiFetch(
-    `${getApiBase()}/expenses?projectId=${encodeURIComponent(projectId)}`
+  return requestJson<Expense[]>(
+    `/expenses?projectId=${encodeURIComponent(projectId)}`,
+    {
+      errorMessage: "Failed to fetch expenses",
+    }
   );
-  if (!r.ok) await throwFromResponse(r, "Failed to fetch expenses");
-  return r.json();
 }
 
 export async function createExpense(body: {
@@ -908,13 +981,11 @@ export async function createExpense(body: {
   date: string;
   category?: string;
 }): Promise<Expense> {
-  const r = await apiFetch(`${getApiBase()}/expenses`, {
+  return requestJson<Expense>("/expenses", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
+    body,
+    errorMessage: "Failed to create expense",
   });
-  if (!r.ok) await throwFromResponse(r, "Failed to create expense");
-  return r.json();
 }
 
 export async function updateExpense(
@@ -926,36 +997,31 @@ export async function updateExpense(
     category?: string;
   }
 ): Promise<Expense> {
-  const r = await apiFetch(`${getApiBase()}/expenses/${encodeURIComponent(id)}`, {
+  return requestJson<Expense>(`/expenses/${encodeURIComponent(id)}`, {
     method: "PATCH",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(data),
+    body: data,
+    errorMessage: "Failed to update expense",
   });
-  if (!r.ok) await throwFromResponse(r, "Failed to update expense");
-  return r.json();
 }
 
 export async function deleteExpense(id: string): Promise<void> {
-  const r = await apiFetch(`${getApiBase()}/expenses/${encodeURIComponent(id)}`, {
+  return requestVoid(`/expenses/${encodeURIComponent(id)}`, {
     method: "DELETE",
+    errorMessage: "Failed to delete expense",
   });
-  if (!r.ok) await throwFromResponse(r, "Failed to delete expense");
 }
 
 export async function fetchUsers(): Promise<User[]> {
-  const r = await apiFetch(`${getApiBase()}/users`);
-  if (!r.ok) await throwFromResponse(r, "Failed to fetch users");
-  return r.json();
+  return requestJson<User[]>("/users", {
+    errorMessage: "Failed to fetch users",
+  });
 }
 
 export async function fetchIssues(projectId?: string): Promise<Issue[]> {
-  const base = getApiBase();
-  const url = projectId
-    ? `${base}/issues?projectId=${encodeURIComponent(projectId)}`
-    : `${base}/issues`;
-  const r = await apiFetch(url);
-  if (!r.ok) await throwFromResponse(r, "Failed to fetch issues");
-  return r.json();
+  const path = projectId
+    ? `/issues?projectId=${encodeURIComponent(projectId)}`
+    : "/issues";
+  return requestJson<Issue[]>(path, { errorMessage: "Failed to fetch issues" });
 }
 
 /** Fetch a single issue by id. */
@@ -974,11 +1040,10 @@ export async function fetchIssueSearch(
   search: string
 ): Promise<Issue[]> {
   if (!search.trim()) return [];
-  const base = getApiBase();
-  const url = `${base}/issues?projectId=${encodeURIComponent(projectId)}&search=${encodeURIComponent(search.trim())}`;
-  const r = await apiFetch(url);
-  if (!r.ok) await throwFromResponse(r, "Failed to search issues");
-  return r.json();
+  const path = `/issues?projectId=${encodeURIComponent(projectId)}&search=${encodeURIComponent(search.trim())}`;
+  return requestJson<Issue[]>(path, {
+    errorMessage: "Failed to search issues",
+  });
 }
 
 export async function createIssue(body: {
@@ -993,13 +1058,11 @@ export async function createIssue(body: {
   assigneeId?: string;
   qualityScore?: number;
 }): Promise<Issue> {
-  const r = await apiFetch(`${getApiBase()}/issues`, {
+  return requestJson<Issue>("/issues", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
+    body,
+    errorMessage: "Failed to create issue",
   });
-  if (!r.ok) await throwFromResponse(r, "Failed to create issue");
-  return r.json();
 }
 
 export async function updateIssue(
@@ -1051,20 +1114,21 @@ export async function updateIssueStatus(
 }
 
 export async function deleteIssue(id: string): Promise<void> {
-  const r = await apiFetch(`${getApiBase()}/issues/${encodeURIComponent(id)}`, {
+  return requestVoid(`/issues/${encodeURIComponent(id)}`, {
     method: "DELETE",
+    errorMessage: "Failed to delete issue",
   });
-  if (!r.ok) await throwFromResponse(r, "Failed to delete issue");
 }
 
 /** Delete all issues, optionally scoped by projectId. */
 export async function deleteAllIssues(projectId?: string): Promise<void> {
-  const base = getApiBase();
-  const url = projectId
-    ? `${base}/issues/bulk?projectId=${encodeURIComponent(projectId)}`
-    : `${base}/issues/bulk`;
-  const r = await apiFetch(url, { method: "DELETE" });
-  if (!r.ok) await throwFromResponse(r, "Failed to delete issues");
+  const path = projectId
+    ? `/issues/bulk?projectId=${encodeURIComponent(projectId)}`
+    : "/issues/bulk";
+  return requestVoid(path, {
+    method: "DELETE",
+    errorMessage: "Failed to delete issues",
+  });
 }
 
 export type IssueCommentEditHistoryEntry = {
@@ -1124,16 +1188,14 @@ export async function createIssueComment(
   issueId: string,
   body: string
 ): Promise<IssueComment> {
-  const r = await apiFetch(
-    `${getApiBase()}/issues/${encodeURIComponent(issueId)}/comments`,
+  return requestJson<IssueComment>(
+    `/issues/${encodeURIComponent(issueId)}/comments`,
     {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ body }),
+      body: { body },
+      errorMessage: "Failed to add comment",
     }
   );
-  if (!r.ok) await throwFromResponse(r, "Failed to add comment");
-  return r.json();
 }
 
 export async function updateIssueComment(
@@ -1141,27 +1203,24 @@ export async function updateIssueComment(
   commentId: string,
   body: string
 ): Promise<IssueComment> {
-  const r = await apiFetch(
-    `${getApiBase()}/issues/${encodeURIComponent(issueId)}/comments/${encodeURIComponent(commentId)}`,
+  return requestJson<IssueComment>(
+    `/issues/${encodeURIComponent(issueId)}/comments/${encodeURIComponent(commentId)}`,
     {
       method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ body }),
+      body: { body },
+      errorMessage: "Failed to update comment",
     }
   );
-  if (!r.ok) await throwFromResponse(r, "Failed to update comment");
-  return r.json();
 }
 
 export async function deleteIssueComment(
   issueId: string,
   commentId: string
 ): Promise<void> {
-  const r = await apiFetch(
-    `${getApiBase()}/issues/${encodeURIComponent(issueId)}/comments/${encodeURIComponent(commentId)}`,
-    { method: "DELETE" }
+  return requestVoid(
+    `/issues/${encodeURIComponent(issueId)}/comments/${encodeURIComponent(commentId)}`,
+    { method: "DELETE", errorMessage: "Failed to delete comment" }
   );
-  if (!r.ok) await throwFromResponse(r, "Failed to delete comment");
 }
 
 export async function addCommentAttachment(
@@ -1173,16 +1232,14 @@ export async function addCommentAttachment(
     videoBase64?: string;
   }
 ): Promise<IssueComment> {
-  const r = await apiFetch(
-    `${getApiBase()}/issues/${encodeURIComponent(issueId)}/comments/${encodeURIComponent(commentId)}/attachments`,
+  return requestJson<IssueComment>(
+    `/issues/${encodeURIComponent(issueId)}/comments/${encodeURIComponent(commentId)}/attachments`,
     {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
+      body,
+      errorMessage: "Failed to add attachment to comment",
     }
   );
-  if (!r.ok) await throwFromResponse(r, "Failed to add attachment to comment");
-  return r.json();
 }
 
 export async function deleteCommentAttachment(
@@ -1190,12 +1247,10 @@ export async function deleteCommentAttachment(
   commentId: string,
   attachmentId: string
 ): Promise<IssueComment> {
-  const r = await apiFetch(
-    `${getApiBase()}/issues/${encodeURIComponent(issueId)}/comments/${encodeURIComponent(commentId)}/attachments/${encodeURIComponent(attachmentId)}`,
-    { method: "DELETE" }
+  return requestJson<IssueComment>(
+    `/issues/${encodeURIComponent(issueId)}/comments/${encodeURIComponent(commentId)}/attachments/${encodeURIComponent(attachmentId)}`,
+    { method: "DELETE", errorMessage: "Failed to remove attachment" }
   );
-  if (!r.ok) await throwFromResponse(r, "Failed to remove attachment");
-  return r.json();
 }
 
 export type RunUiTestStep = { title: string; duration?: number };
@@ -1214,13 +1269,11 @@ export type RunUiTestResult = {
 };
 
 export async function runUiTest(grep: string): Promise<RunUiTestResult> {
-  const r = await apiFetch(`${getApiBase()}/tests/run-ui`, {
+  return requestJson<RunUiTestResult>("/tests/run-ui", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ grep }),
+    body: { grep },
+    errorMessage: "Failed to run test",
   });
-  if (!r.ok) await throwFromResponse(r, "Failed to run test");
-  return r.json();
 }
 
 export type RunApiTestResult = {
@@ -1233,13 +1286,11 @@ export type RunApiTestResult = {
 export async function runApiTest(
   testNamePattern: string
 ): Promise<RunApiTestResult> {
-  const r = await apiFetch(`${getApiBase()}/tests/run-api`, {
+  return requestJson<RunApiTestResult>("/tests/run-api", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ testNamePattern }),
+    body: { testNamePattern },
+    errorMessage: "Failed to run API test",
   });
-  if (!r.ok) await throwFromResponse(r, "Failed to run API test");
-  return r.json();
 }
 
 export async function uploadIssueRecording(
@@ -1249,16 +1300,14 @@ export async function uploadIssueRecording(
   recordingType: "screen" | "camera" | "audio" = "screen",
   fileName?: string
 ): Promise<Issue> {
-  const r = await apiFetch(
-    `${getApiBase()}/issues/${encodeURIComponent(issueId)}/recordings`,
+  return requestJson<Issue>(
+    `/issues/${encodeURIComponent(issueId)}/recordings`,
     {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ videoBase64, mediaType, recordingType, fileName }),
+      body: { videoBase64, mediaType, recordingType, fileName },
+      errorMessage: "Failed to upload recording",
     }
   );
-  if (!r.ok) await throwFromResponse(r, "Failed to upload recording");
-  return r.json();
 }
 
 export async function updateIssueRecording(
@@ -1270,37 +1319,30 @@ export async function updateIssueRecording(
     name?: string | null;
   }
 ): Promise<Issue> {
-  const r = await apiFetch(
-    `${getApiBase()}/issues/${encodeURIComponent(issueId)}/recordings/${encodeURIComponent(recordingId)}`,
+  return requestJson<Issue>(
+    `/issues/${encodeURIComponent(issueId)}/recordings/${encodeURIComponent(recordingId)}`,
     {
       method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(data),
+      body: data,
+      errorMessage: "Failed to update recording",
     }
   );
-  if (!r.ok) await throwFromResponse(r, "Failed to update recording");
-  return r.json();
 }
 
 export async function deleteIssueRecording(
   issueId: string,
   recordingId: string
 ): Promise<Issue> {
-  const r = await apiFetch(
-    `${getApiBase()}/issues/${encodeURIComponent(issueId)}/recordings/${encodeURIComponent(recordingId)}`,
-    { method: "DELETE" }
+  return requestJson<Issue>(
+    `/issues/${encodeURIComponent(issueId)}/recordings/${encodeURIComponent(recordingId)}`,
+    { method: "DELETE", errorMessage: "Failed to delete recording" }
   );
-  if (!r.ok) await throwFromResponse(r, "Failed to delete recording");
-  return r.json();
 }
 
 /** Full URL to stream a recording file from the backend (uses stream endpoint with correct Content-Type). */
 export function getRecordingUrl(videoUrl: string): string {
-  if (isHttpUrl(videoUrl)) return videoUrl;
-  const filename = videoUrl.replace(/^.*\//, "");
-  return withAccessToken(
-    `${getApiBase()}/issues/recordings/stream/${encodeURIComponent(filename)}`
-  );
+  const filename = videoUrl.replace(/^.*\//, "").split("?")[0] ?? "";
+  return `${getApiBase()}/issues/recordings/stream/${encodeURIComponent(filename)}`;
 }
 
 export async function uploadIssueScreenshot(
@@ -1308,51 +1350,45 @@ export async function uploadIssueScreenshot(
   imageBase64: string,
   fileName?: string
 ): Promise<Issue> {
-  const r = await apiFetch(
-    `${getApiBase()}/issues/${encodeURIComponent(issueId)}/screenshots`,
+  return requestJson<Issue>(
+    `/issues/${encodeURIComponent(issueId)}/screenshots`,
     {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ imageBase64, fileName: fileName ?? undefined }),
+      body: { imageBase64, fileName: fileName ?? undefined },
+      errorMessage: "Failed to upload screenshot",
     }
   );
-  if (!r.ok) await throwFromResponse(r, "Failed to upload screenshot");
-  return r.json();
 }
 
 export async function updateIssueScreenshot(
-    issueId: string,
+  issueId: string,
   screenshotId: string,
   data: { name?: string | null }
 ): Promise<Issue> {
-  const r = await apiFetch(
-    `${getApiBase()}/issues/${encodeURIComponent(issueId)}/screenshots/${encodeURIComponent(screenshotId)}`,
+  return requestJson<Issue>(
+    `/issues/${encodeURIComponent(issueId)}/screenshots/${encodeURIComponent(screenshotId)}`,
     {
       method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(data),
+      body: data,
+      errorMessage: "Failed to update screenshot",
     }
   );
-  if (!r.ok) await throwFromResponse(r, "Failed to update screenshot");
-  return r.json();
 }
 
 export async function deleteIssueScreenshot(
   issueId: string,
   screenshotId: string
 ): Promise<Issue> {
-  const r = await apiFetch(
-    `${getApiBase()}/issues/${encodeURIComponent(issueId)}/screenshots/${encodeURIComponent(screenshotId)}`,
-    { method: "DELETE" }
+  return requestJson<Issue>(
+    `/issues/${encodeURIComponent(issueId)}/screenshots/${encodeURIComponent(screenshotId)}`,
+    { method: "DELETE", errorMessage: "Failed to delete screenshot" }
   );
-  if (!r.ok) await throwFromResponse(r, "Failed to delete screenshot");
-  return r.json();
 }
 
-/** Full URL to load a screenshot image from the backend. */
+/** Full URL to load a screenshot image from the backend through authenticated stream endpoint. */
 export function getScreenshotUrl(imageUrl: string): string {
-  if (isHttpUrl(imageUrl)) return imageUrl;
-  return withAccessToken(`${getApiBase()}/${imageUrl}`);
+  const filename = imageUrl.replace(/^.*\//, "").split("?")[0] ?? "";
+  return `${getApiBase()}/issues/screenshots/stream/${encodeURIComponent(filename)}`;
 }
 
 export async function uploadIssueFile(
@@ -1360,13 +1396,11 @@ export async function uploadIssueFile(
   fileBase64: string,
   fileName: string
 ): Promise<Issue> {
-  const r = await apiFetch(`${getApiBase()}/issues/${encodeURIComponent(issueId)}/files`, {
+  return requestJson<Issue>(`/issues/${encodeURIComponent(issueId)}/files`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ fileBase64, fileName }),
+    body: { fileBase64, fileName },
+    errorMessage: "Failed to upload file",
   });
-  if (!r.ok) await throwFromResponse(r, "Failed to upload file");
-  return r.json();
 }
 
 export async function updateIssueFile(
@@ -1374,43 +1408,30 @@ export async function updateIssueFile(
   fileId: string,
   data: { fileName?: string }
 ): Promise<Issue> {
-  const r = await apiFetch(
-    `${getApiBase()}/issues/${encodeURIComponent(issueId)}/files/${encodeURIComponent(fileId)}`,
+  return requestJson<Issue>(
+    `/issues/${encodeURIComponent(issueId)}/files/${encodeURIComponent(fileId)}`,
     {
       method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(data),
+      body: data,
+      errorMessage: "Failed to update file",
     }
   );
-  if (!r.ok) await throwFromResponse(r, "Failed to update file");
-  return r.json();
 }
 
 export async function deleteIssueFile(
   issueId: string,
   fileId: string
 ): Promise<Issue> {
-  const r = await apiFetch(
-    `${getApiBase()}/issues/${encodeURIComponent(issueId)}/files/${encodeURIComponent(fileId)}`,
+  return requestJson<Issue>(
+    `/issues/${encodeURIComponent(issueId)}/files/${encodeURIComponent(fileId)}`,
     {
       method: "DELETE",
+      errorMessage: "Failed to delete file",
     }
   );
-  if (!r.ok) await throwFromResponse(r, "Failed to delete file");
-  return r.json();
 }
 
 /** Full URL to download an issue file (stream endpoint sets Content-Disposition). */
 export function getIssueFileUrl(issueId: string, fileId: string): string {
-  return withAccessToken(
-    `${getApiBase()}/issues/${encodeURIComponent(issueId)}/files/${encodeURIComponent(fileId)}/stream`
-  );
-}
-
-function withAccessToken(url: string): string {
-  if (typeof window === "undefined") return url;
-  const token = getStoredToken();
-  if (!token) return url;
-  const sep = url.includes("?") ? "&" : "?";
-  return `${url}${sep}access_token=${encodeURIComponent(token)}`;
+  return `${getApiBase()}/issues/${encodeURIComponent(issueId)}/files/${encodeURIComponent(fileId)}/stream`;
 }

@@ -84,7 +84,10 @@ describe("FeaturesService", () => {
         id: "f1",
         project: { organizationId: "o1" },
       });
-      mockPrisma.feature.update.mockResolvedValue({ id: "f1", name: "Updated" });
+      mockPrisma.feature.update.mockResolvedValue({
+        id: "f1",
+        name: "Updated",
+      });
 
       const result = await service.update("f1", "user-1", { name: "Updated" });
       expect(result.name).toBe("Updated");
@@ -123,9 +126,9 @@ describe("FeaturesService", () => {
       mockPrisma.feature.findMany
         .mockResolvedValueOnce([{ id: "f1" }, { id: "other" }])
         .mockResolvedValueOnce([{ id: "f1" }]);
-      await expect(service.reorder("p1", "user-1", ["f1", "other"])).rejects.toThrow(
-        NotFoundException
-      );
+      await expect(
+        service.reorder("p1", "user-1", ["f1", "other"])
+      ).rejects.toThrow(NotFoundException);
     });
   });
 });

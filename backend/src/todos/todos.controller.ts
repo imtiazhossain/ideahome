@@ -46,10 +46,7 @@ export class TodosController {
   }
 
   @Delete(":id")
-  remove(
-    @Param("id") id: string,
-    @Req() req: AuthenticatedRequest
-  ) {
+  remove(@Param("id") id: string, @Req() req: AuthenticatedRequest) {
     return this.svc.remove(id, requireUserId(req));
   }
 

@@ -38,7 +38,10 @@ function projectNameToAcronym(name: string): string {
 
 @Injectable()
 export class IssuesService {
-  private static readonly LOCAL_FILE_URL_RE = /^uploads\/files\/[a-zA-Z0-9_.-]+$/;
+  private static readonly LOCAL_FILE_URL_RE =
+    /^uploads\/files\/[a-zA-Z0-9_.-]+$/;
+  private static readonly LOCAL_SCREENSHOT_URL_RE =
+    /^uploads\/screenshots\/[a-zA-Z0-9_.-]+$/;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -124,10 +127,10 @@ export class IssuesService {
     return value;
   }
 
-  private normalizeOptionalAssigneeId(value: unknown): string | null | undefined {
-    if (value === undefined || value === null) return value as
-      | null
-      | undefined;
+  private normalizeOptionalAssigneeId(
+    value: unknown
+  ): string | null | undefined {
+    if (value === undefined || value === null) return value as null | undefined;
     if (typeof value !== "string") {
       throw new BadRequestException("assigneeId must be a string or null");
     }
@@ -245,10 +248,7 @@ export class IssuesService {
           include: ISSUE_INCLUDE,
         });
       } catch (e) {
-        if (
-          e instanceof PrismaClientKnownRequestError &&
-          e.code === "P2002"
-        ) {
+        if (e instanceof PrismaClientKnownRequestError && e.code === "P2002") {
           continue;
         }
         throw e;
@@ -260,7 +260,10 @@ export class IssuesService {
     );
   }
 
-  private async nextIssueKey(projectId: string, acronym: string): Promise<string> {
+  private async nextIssueKey(
+    projectId: string,
+    acronym: string
+  ): Promise<string> {
     const prefix = `${acronym}-`;
     const rows = await this.prisma.issue.findMany({
       where: { projectId, key: { startsWith: prefix } },
@@ -318,7 +321,8 @@ export class IssuesService {
       payload.assigneeId = this.normalizeOptionalAssigneeId(payload.assigneeId);
     }
     if ("status" in payload) this.validateStatus(payload.status);
-    if ("qualityScore" in payload) this.validateQualityScore(payload.qualityScore);
+    if ("qualityScore" in payload)
+      this.validateQualityScore(payload.qualityScore);
     if ("assigneeId" in payload) {
       await this.validateAssigneeInProjectOrg(
         existing.projectId,
@@ -336,7 +340,8 @@ export class IssuesService {
     projectId: string,
     assigneeId?: string | null
   ): Promise<void> {
-    if (assigneeId === undefined || assigneeId === null || assigneeId === "") return;
+    if (assigneeId === undefined || assigneeId === null || assigneeId === "")
+      return;
     const project = await this.prisma.project.findUnique({
       where: { id: projectId },
       select: { organizationId: true },
@@ -347,7 +352,9 @@ export class IssuesService {
       select: { organizationId: true },
     });
     if (!assignee || assignee.organizationId !== project.organizationId) {
-      throw new BadRequestException("Assignee must belong to the issue project organization");
+      throw new BadRequestException(
+        "Assignee must belong to the issue project organization"
+      );
     }
   }
 
@@ -383,7 +390,9 @@ export class IssuesService {
       score < 0 ||
       score > 100
     ) {
-      throw new BadRequestException("qualityScore must be a number between 0 and 100");
+      throw new BadRequestException(
+        "qualityScore must be a number between 0 and 100"
+      );
     }
   }
 
@@ -401,9 +410,7 @@ export class IssuesService {
     return value as "video" | "audio";
   }
 
-  private validateRecordingType(
-    value: unknown
-  ): "screen" | "camera" | "audio" {
+  private validateRecordingType(value: unknown): "screen" | "camera" | "audio" {
     if (typeof value !== "string" || !ISSUE_RECORDING_TYPES.has(value)) {
       throw new BadRequestException(
         "recordingType must be one of: screen, camera, audio"
@@ -498,7 +505,16 @@ export class IssuesService {
       }
     }
     if (this.storage.isFullUrl(recording.videoUrl)) {
-      res.redirect(recording.videoUrl);
+      const { buffer, contentType } = await this.storage.download(
+        recording.videoUrl
+      );
+      const ext = filename.match(/\.[a-z0-9]+$/i)?.[0]?.toLowerCase() ?? "";
+      const fallbackType =
+        IssuesService.RECORDING_CONTENT_TYPES[ext] ??
+        (filename.includes("-audio") ? "audio/webm" : "video/webm");
+      res.setHeader("Content-Type", contentType ?? fallbackType);
+      res.setHeader("Accept-Ranges", "bytes");
+      res.send(buffer);
       return;
     }
     if (!/^[a-zA-Z0-9_.-]+\.(webm|mp4|mov|mp3|m4a|ogg|wav)$/i.test(filename)) {
@@ -515,6 +531,50 @@ export class IssuesService {
       (filename.includes("-audio") ? "audio/webm" : "video/webm");
     res.setHeader("Content-Type", contentType);
     res.setHeader("Accept-Ranges", "bytes");
+    const stream = createReadStream(filePath);
+    stream.on("error", () => {
+      if (!res.headersSent) {
+        res.status(500).end();
+        return;
+      }
+      res.end();
+    });
+    stream.pipe(res);
+  }
+
+  async streamScreenshotByFilename(
+    filename: string,
+    res: Response,
+    userId?: string
+  ): Promise<void> {
+    const screenshot = await this.prisma.issueScreenshot.findFirst({
+      where: { imageUrl: { endsWith: filename } },
+      include: { issue: { include: { project: true } } },
+    });
+    if (!screenshot) throw new NotFoundException("Screenshot not found");
+    if (userId) {
+      const orgId = await this.getOrgIdForUser(userId);
+      if (screenshot.issue.project.organizationId !== orgId) {
+        throw new NotFoundException("Screenshot not found");
+      }
+    }
+    if (this.storage.isFullUrl(screenshot.imageUrl)) {
+      const { buffer, contentType } = await this.storage.download(
+        screenshot.imageUrl
+      );
+      res.setHeader("Content-Type", contentType ?? "image/png");
+      res.setHeader("Cache-Control", "private, no-store");
+      res.send(buffer);
+      return;
+    }
+    if (!IssuesService.LOCAL_SCREENSHOT_URL_RE.test(screenshot.imageUrl)) {
+      throw new NotFoundException("Screenshot not found");
+    }
+    const filePath = join(process.cwd(), screenshot.imageUrl);
+    if (!existsSync(filePath))
+      throw new NotFoundException("Screenshot not found");
+    res.setHeader("Content-Type", "image/png");
+    res.setHeader("Cache-Control", "private, no-store");
     const stream = createReadStream(filePath);
     stream.on("error", () => {
       if (!res.headersSent) {
@@ -692,7 +752,11 @@ export class IssuesService {
       throw new BadRequestException("name must be a string or null");
     }
     const value =
-      name === undefined ? undefined : name === null || name.trim() === "" ? null : name.trim();
+      name === undefined
+        ? undefined
+        : name === null || name.trim() === ""
+          ? null
+          : name.trim();
     await this.prisma.issueScreenshot.update({
       where: { id: screenshotId },
       data: value === undefined ? {} : { name: value },
@@ -803,8 +867,22 @@ export class IssuesService {
       where: { id: fileId, issueId },
     });
     if (!file) throw new NotFoundException("File not found");
+    const safeName = file.fileName.replace(/[^\w.-]/g, "_");
+    const isPdf = /\.pdf$/i.test(file.fileName);
     if (this.storage.isFullUrl(file.fileUrl)) {
-      res.redirect(file.fileUrl);
+      const { buffer, contentType } = await this.storage.download(file.fileUrl);
+      res.setHeader(
+        "Content-Type",
+        contentType ?? (isPdf ? "application/pdf" : "application/octet-stream")
+      );
+      res.setHeader(
+        "Content-Disposition",
+        isPdf
+          ? `inline; filename="${safeName}"`
+          : `attachment; filename="${safeName}"`
+      );
+      res.setHeader("Cache-Control", "private, no-store");
+      res.send(buffer);
       return;
     }
     if (!IssuesService.LOCAL_FILE_URL_RE.test(file.fileUrl)) {
@@ -812,8 +890,6 @@ export class IssuesService {
     }
     const filePath = join(process.cwd(), file.fileUrl);
     if (!existsSync(filePath)) throw new NotFoundException("File not found");
-    const safeName = file.fileName.replace(/[^\w.-]/g, "_");
-    const isPdf = /\.pdf$/i.test(file.fileName);
     res.setHeader(
       "Content-Type",
       isPdf ? "application/pdf" : "application/octet-stream"

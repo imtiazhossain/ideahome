@@ -1,5 +1,10 @@
 import { defineConfig, devices } from "@playwright/test";
 
+// Avoid Node warning: "NO_COLOR is ignored due to FORCE_COLOR being set"
+// in Playwright worker/web-server child processes.
+delete process.env.NO_COLOR;
+process.env.FORCE_COLOR = "0";
+
 /**
  * UI (e2e) tests for the web app. Requires the backend (and DB) to be running
  * for full flows. Start with: pnpm db:up && pnpm dev:backend (in another terminal),
@@ -25,13 +30,10 @@ export default defineConfig({
     { name: "webkit", use: { ...devices["Desktop Safari"], headless: true } },
   ],
   webServer: {
-    command: "node node_modules/next/dist/bin/next dev -p 3099",
+    command:
+      'env -i PATH="$PATH" HOME="$HOME" SHELL="$SHELL" TERM="$TERM" NEXT_TELEMETRY_DISABLED=1 NEXT_PUBLIC_SKIP_LOGIN_DEV=true NEXT_PUBLIC_API_URL="${NEXT_PUBLIC_API_URL:-http://localhost:3001}" node node_modules/next/dist/bin/next dev -p 3099',
     url: process.env.PLAYWRIGHT_BASE_URL || "http://localhost:3099",
     reuseExistingServer: !process.env.CI,
     timeout: 120000,
-    env: {
-      NEXT_PUBLIC_SKIP_LOGIN_DEV: "true",
-      NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001",
-    },
   },
 });

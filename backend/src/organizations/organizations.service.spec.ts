@@ -1,5 +1,8 @@
 import { Test, TestingModule } from "@nestjs/testing";
-import { BadRequestException, InternalServerErrorException } from "@nestjs/common";
+import {
+  BadRequestException,
+  InternalServerErrorException,
+} from "@nestjs/common";
 import { OrganizationsService } from "./organizations.service";
 import { AuthService } from "../auth/auth.service";
 import { PrismaService } from "../prisma.service";
@@ -109,9 +112,9 @@ describe("OrganizationsService", () => {
         organizationId: null,
       });
 
-      await expect(
-        service.ensureForUser("u1")
-      ).rejects.toThrow(InternalServerErrorException);
+      await expect(service.ensureForUser("u1")).rejects.toThrow(
+        InternalServerErrorException
+      );
       await expect(service.ensureForUser("u1")).rejects.toThrow(
         "Unexpected: no organization after ensure"
       );

@@ -1,5 +1,10 @@
 import { test, expect } from "@playwright/test";
-import { deleteTestProjectsByNames } from "./helpers";
+import {
+  deleteTestProjectsByNames,
+  dismissCreateProjectModalIfPresent,
+  expectHomeUrl,
+  expandSidebarIfNeeded,
+} from "./helpers";
 
 test.afterEach(async ({ page }) => {
   await page.close();
@@ -16,18 +21,12 @@ test.describe("Navigation", () => {
       await expect(page).toHaveURL(/\/tests/);
     });
     await test.step("Expand sidebar and click Dashboard link", async () => {
-      const expandBtn = page.getByRole("button", { name: "Expand sidebar" });
-      if (await expandBtn.isVisible()) {
-        await expandBtn.click();
-      }
+      await expandSidebarIfNeeded(page);
       await page.getByRole("link", { name: "Dashboard" }).click();
     });
     await test.step("Verify home URL and Idea Home title", async () => {
-      await expect(page).toHaveURL("/");
-      const expandBtn = page.getByRole("button", { name: "Expand sidebar" });
-      if (await expandBtn.isVisible()) {
-        await expandBtn.click();
-      }
+      await expectHomeUrl(page);
+      await expandSidebarIfNeeded(page);
       await expect(page.locator(".drawer-title")).toHaveText("Idea Home");
     });
   });
@@ -37,13 +36,14 @@ test.describe("Navigation", () => {
       await page.goto("/tests");
     });
     await test.step("Click Board tab", async () => {
+      await dismissCreateProjectModalIfPresent(page);
       await page
         .locator(".project-nav-tab")
         .filter({ hasText: "Board" })
         .click();
     });
     await test.step("Verify home URL and Backlog column", async () => {
-      await expect(page).toHaveURL("/");
+      await expectHomeUrl(page);
       await expect(page.locator(".column-backlog .column-title")).toHaveText(
         "Backlog"
       );
@@ -55,10 +55,7 @@ test.describe("Navigation", () => {
       await page.goto("/");
     });
     await test.step("Expand sidebar if needed and click Tests link", async () => {
-      const expandBtn = page.getByRole("button", { name: "Expand sidebar" });
-      if (await expandBtn.isVisible()) {
-        await expandBtn.click();
-      }
+      await expandSidebarIfNeeded(page);
       await page.getByRole("link", { name: "Tests" }).click();
     });
     await test.step("Verify tests page URL and title", async () => {
@@ -72,10 +69,7 @@ test.describe("Navigation", () => {
       await page.goto("/");
     });
     await test.step("Expand sidebar and click All projects", async () => {
-      const expandBtn = page.getByRole("button", { name: "Expand sidebar" });
-      if (await expandBtn.isVisible()) {
-        await expandBtn.click();
-      }
+      await expandSidebarIfNeeded(page);
       await page.getByRole("button", { name: "All projects" }).click();
     });
     await test.step("Verify Select a project and backlog column", async () => {
@@ -93,10 +87,7 @@ test.describe("Navigation", () => {
       await page.goto("/");
     });
     await test.step("Expand sidebar if closed", async () => {
-      const expandBtn = page.getByRole("button", { name: "Expand sidebar" });
-      if (await expandBtn.isVisible()) {
-        await expandBtn.click();
-      }
+      await expandSidebarIfNeeded(page);
     });
     await test.step("Create Nav Project if needed", async () => {
       const newProjectBtn = page.getByRole("button", { name: "+ New project" });
@@ -142,10 +133,7 @@ test.describe("Navigation", () => {
       await expect(page).toHaveURL(/\/tests/);
     });
     await test.step("Expand sidebar if closed", async () => {
-      const expandBtn = page.getByRole("button", { name: "Expand sidebar" });
-      if (await expandBtn.isVisible()) {
-        await expandBtn.click();
-      }
+      await expandSidebarIfNeeded(page);
     });
     await test.step("Create project from sidebar inline input", async () => {
       await page.getByRole("button", { name: "Add project" }).click();

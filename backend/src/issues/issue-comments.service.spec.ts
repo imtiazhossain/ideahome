@@ -252,12 +252,7 @@ describe("IssueCommentsService", () => {
       });
 
       await expect(
-        service.update(
-          "issue-1",
-          "c1",
-          123 as unknown as string,
-          TEST_USER_ID
-        )
+        service.update("issue-1", "c1", 123 as unknown as string, TEST_USER_ID)
       ).rejects.toThrow(BadRequestException);
       expect(mockPrisma.$transaction).not.toHaveBeenCalled();
     });

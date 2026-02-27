@@ -66,10 +66,7 @@ export function CreateIssueModal({
   };
 
   return (
-    <div
-      className="modal-overlay"
-      onClick={() => !submitting && onClose()}
-    >
+    <div className="modal-overlay" onClick={() => !submitting && onClose()}>
       <div
         className="modal modal--fit-screen"
         onClick={(e) => e.stopPropagation()}
@@ -154,9 +151,7 @@ export function CreateIssueModal({
                         updateCases(next);
                       }}
                       placeholder="e.g. Given X when Y then Z"
-                      className={
-                        idx > 0 ? "test-case-input-with-action" : ""
-                      }
+                      className={idx > 0 ? "test-case-input-with-action" : ""}
                     />
                     {idx > 0 && (
                       <button

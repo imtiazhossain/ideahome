@@ -6,7 +6,11 @@ export function IconGrip() {
       width="16"
       height="16"
       viewBox="0 0 24 24"
-      fill="currentColor"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.75"
+      strokeLinecap="round"
+      strokeLinejoin="round"
       aria-hidden
     >
       <circle cx="9" cy="6" r="1.5" />

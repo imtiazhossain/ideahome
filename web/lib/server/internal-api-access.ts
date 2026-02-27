@@ -41,14 +41,19 @@ export function ensureInternalApiAccess(
   }
 
   const tokenHeaderName = options.tokenHeaderName ?? "x-run-coverage-token";
-  const requiredTokenEnvName = options.requiredTokenEnvName ?? "RUN_COVERAGE_TOKEN";
+  const requiredTokenEnvName =
+    options.requiredTokenEnvName ?? "RUN_COVERAGE_TOKEN";
   const tokenHeader = req.headers[tokenHeaderName];
   if (Array.isArray(tokenHeader) && tokenHeader.length !== 1) {
     return { allowed: false, status: 401, error: "Unauthorized" };
   }
-  const providedTokenRaw = Array.isArray(tokenHeader) ? tokenHeader[0] : tokenHeader;
+  const providedTokenRaw = Array.isArray(tokenHeader)
+    ? tokenHeader[0]
+    : tokenHeader;
   const providedToken =
-    typeof providedTokenRaw === "string" ? providedTokenRaw.trim() : providedTokenRaw;
+    typeof providedTokenRaw === "string"
+      ? providedTokenRaw.trim()
+      : providedTokenRaw;
   const requiredToken = process.env[requiredTokenEnvName];
 
   if (requiredToken) {

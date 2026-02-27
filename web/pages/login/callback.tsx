@@ -20,14 +20,16 @@ export default function LoginCallbackPage() {
   useEffect(() => {
     if (!router.isReady) return;
     const hash = typeof window !== "undefined" ? window.location.hash : "";
-    const hashParams = new URLSearchParams(hash.startsWith("#") ? hash.slice(1) : hash);
+    const hashParams = new URLSearchParams(
+      hash.startsWith("#") ? hash.slice(1) : hash
+    );
     const tokenFromHash = hashParams.get("token")?.trim() ?? "";
     const errorFromHash = hashParams.get("error")?.trim() ?? "";
     const { token, error } = router.query;
     const tokenFromQuery = typeof token === "string" ? token.trim() : "";
-    const errorFromQuery = typeof error === "string" ? safeDecodeURIComponent(error).trim() : "";
-    const resolvedError =
-      errorFromHash || errorFromQuery || null;
+    const errorFromQuery =
+      typeof error === "string" ? safeDecodeURIComponent(error).trim() : "";
+    const resolvedError = errorFromHash || errorFromQuery || null;
     if (resolvedError) {
       clearStoredToken();
       setErrorMessage(resolvedError);

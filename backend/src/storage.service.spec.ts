@@ -127,7 +127,7 @@ describe("StorageService", () => {
       expect(mockPut).toHaveBeenCalledWith(
         "screenshots/img.png",
         Buffer.from("png"),
-        { access: "public", contentType: "image/png", addRandomSuffix: true }
+        { access: "private", contentType: "image/png", addRandomSuffix: true }
       );
     });
 

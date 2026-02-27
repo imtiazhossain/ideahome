@@ -7,6 +7,8 @@ import { getJwtSecret } from "./jwt-secret";
 const STATE_TTL_MS = 10 * 60 * 1000; // 10 minutes
 const STATE_FUTURE_SKEW_MS = 60 * 1000; // 1 minute
 const OAUTH_FETCH_TIMEOUT_MS = 15_000;
+const APPLE_KEYS_URL = "https://appleid.apple.com/auth/keys";
+const APPLE_KEYS_CACHE_TTL_MS = 60 * 60 * 1000;
 
 async function fetchWithTimeout(
   url: string,
@@ -54,6 +56,9 @@ async function postForm(
 
 @Injectable()
 export class AuthService {
+  private applePublicKeysByKid: Record<string, string> | null = null;
+  private applePublicKeysExpiresAt = 0;
+
   constructor(private readonly prisma: PrismaService) {}
 
   getRedirectUri(provider: "google" | "github" | "apple"): string {
@@ -369,10 +374,7 @@ export class AuthService {
     })) as { id_token?: string };
     const idToken = tokenRes.id_token;
     if (!idToken) throw new Error("No id_token from Apple");
-    const payload = jwt.decode(idToken) as {
-      sub: string;
-      email?: string;
-    } | null;
+    const payload = await this.verifyAppleIdToken(idToken, clientId);
     if (!payload?.sub) throw new Error("Invalid Apple id_token");
     const email =
       payload.email ?? `apple-${payload.sub}@privaterelay.appleid.com`;
@@ -381,5 +383,84 @@ export class AuthService {
       email,
       name: null,
     };
+  }
+
+  private async verifyAppleIdToken(
+    idToken: string,
+    audience: string
+  ): Promise<{ sub: string; email?: string }> {
+    const payload = await new Promise<jwt.JwtPayload>((resolve, reject) => {
+      jwt.verify(
+        idToken,
+        (header, cb) => {
+          const kid = typeof header.kid === "string" ? header.kid : "";
+          if (!kid) {
+            cb(new Error("Apple id_token missing key id"));
+            return;
+          }
+          this.getApplePublicKeyPem(kid)
+            .then((key) => cb(null, key))
+            .catch((err) =>
+              cb(err instanceof Error ? err : new Error(String(err)))
+            );
+        },
+        {
+          algorithms: ["RS256"],
+          issuer: "https://appleid.apple.com",
+          audience,
+        },
+        (err, decoded) => {
+          if (err) {
+            reject(err);
+            return;
+          }
+          if (!decoded || typeof decoded !== "object") {
+            reject(new Error("Invalid Apple id_token payload"));
+            return;
+          }
+          resolve(decoded as jwt.JwtPayload);
+        }
+      );
+    });
+    const sub = typeof payload.sub === "string" ? payload.sub : "";
+    const email = typeof payload.email === "string" ? payload.email : undefined;
+    if (!sub) throw new Error("Apple id_token missing subject");
+    return { sub, email };
+  }
+
+  private async getApplePublicKeyPem(kid: string): Promise<string> {
+    const now = Date.now();
+    if (this.applePublicKeysByKid && now < this.applePublicKeysExpiresAt) {
+      const cached = this.applePublicKeysByKid[kid];
+      if (cached) return cached;
+    }
+    const response = await fetchWithTimeout(APPLE_KEYS_URL);
+    if (!response.ok) {
+      throw new Error("Failed to fetch Apple signing keys");
+    }
+    const body = (await response.json()) as {
+      keys?: Array<Record<string, unknown>>;
+    };
+    const map: Record<string, string> = {};
+    for (const entry of body.keys ?? []) {
+      const entryKid = typeof entry.kid === "string" ? entry.kid : "";
+      const kty = typeof entry.kty === "string" ? entry.kty : "";
+      const n = typeof entry.n === "string" ? entry.n : "";
+      const e = typeof entry.e === "string" ? entry.e : "";
+      if (!entryKid || kty !== "RSA" || !n || !e) continue;
+      const keyObject = crypto.createPublicKey({
+        key: { kty, n, e },
+        format: "jwk",
+      });
+      const pem = keyObject.export({ format: "pem", type: "spki" });
+      map[entryKid] = pem.toString();
+    }
+    this.applePublicKeysByKid = map;
+    this.applePublicKeysExpiresAt = now + APPLE_KEYS_CACHE_TTL_MS;
+    const resolved = map[kid];
+    if (!resolved) {
+      throw new Error("Apple signing key not found");
+    }
+    return resolved;
   }
 }

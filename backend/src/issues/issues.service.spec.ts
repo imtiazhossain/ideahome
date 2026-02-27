@@ -13,6 +13,10 @@ const mockStorageService = {
   upload: jest.fn().mockResolvedValue({ url: "uploads/test/file" }),
   delete: jest.fn().mockResolvedValue(undefined),
   isFullUrl: jest.fn().mockReturnValue(false),
+  download: jest.fn().mockResolvedValue({
+    buffer: Buffer.from("mock"),
+    contentType: "application/octet-stream",
+  }),
 };
 
 jest.mock("fs/promises", () => ({
@@ -22,7 +26,9 @@ jest.mock("fs/promises", () => ({
 }));
 jest.mock("fs", () => ({
   existsSync: jest.fn(),
-  createReadStream: jest.fn().mockReturnValue({ pipe: jest.fn(), on: jest.fn() }),
+  createReadStream: jest
+    .fn()
+    .mockReturnValue({ pipe: jest.fn(), on: jest.fn() }),
 }));
 
 const ISSUE_INCLUDE = {
@@ -78,6 +84,10 @@ describe("IssuesService", () => {
     mockStorageService.upload.mockResolvedValue({ url: "uploads/test/file" });
     mockStorageService.delete.mockResolvedValue(undefined);
     mockStorageService.isFullUrl.mockReturnValue(false);
+    mockStorageService.download.mockResolvedValue({
+      buffer: Buffer.from("mock"),
+      contentType: "application/octet-stream",
+    });
     mockPrisma.user.findUnique.mockResolvedValue({ organizationId: "o1" });
     const fs = require("fs");
     fs.existsSync.mockReturnValue(false);
@@ -284,7 +294,9 @@ describe("IssuesService", () => {
         name: "Project 1",
         organizationId: "o1",
       });
-      mockPrisma.user.findUnique.mockResolvedValueOnce({ organizationId: "o2" });
+      mockPrisma.user.findUnique.mockResolvedValueOnce({
+        organizationId: "o2",
+      });
 
       await expect(
         service.create({
@@ -298,14 +310,22 @@ describe("IssuesService", () => {
 
     it("should throw BadRequestException for invalid status on create", async () => {
       await expect(
-        service.create({ title: "New", projectId: "p1", status: "invalid" } as any)
+        service.create({
+          title: "New",
+          projectId: "p1",
+          status: "invalid",
+        } as any)
       ).rejects.toThrow(BadRequestException);
       expect(mockPrisma.issue.create).not.toHaveBeenCalled();
     });
 
     it("should throw BadRequestException for out-of-range qualityScore on create", async () => {
       await expect(
-        service.create({ title: "New", projectId: "p1", qualityScore: 101 } as any)
+        service.create({
+          title: "New",
+          projectId: "p1",
+          qualityScore: 101,
+        } as any)
       ).rejects.toThrow(BadRequestException);
       expect(mockPrisma.issue.create).not.toHaveBeenCalled();
     });
@@ -379,9 +399,9 @@ describe("IssuesService", () => {
       mockPrisma.issue.findMany.mockResolvedValue([]);
       mockPrisma.issue.create.mockRejectedValue(conflict);
 
-      await expect(service.create({ title: "New", projectId: "p1" })).rejects.toThrow(
-        InternalServerErrorException
-      );
+      await expect(
+        service.create({ title: "New", projectId: "p1" })
+      ).rejects.toThrow(InternalServerErrorException);
       expect(mockPrisma.issue.create).toHaveBeenCalledTimes(5);
     });
   });
@@ -491,7 +511,9 @@ describe("IssuesService", () => {
     it("should throw BadRequestException when assigning user outside issue org", async () => {
       mockPrisma.issue.findUnique.mockResolvedValue({ projectId: "p1" });
       mockPrisma.project.findUnique.mockResolvedValue({ organizationId: "o1" });
-      mockPrisma.user.findUnique.mockResolvedValueOnce({ organizationId: "o2" });
+      mockPrisma.user.findUnique.mockResolvedValueOnce({
+        organizationId: "o2",
+      });
 
       await expect(
         service.update("1", { assigneeId: "u-other" })
@@ -667,19 +689,26 @@ describe("IssuesService", () => {
   });
 
   describe("streamRecording", () => {
-    it("should redirect when recording has full URL (Blob)", async () => {
+    it("should stream blob content when recording has full URL (Blob)", async () => {
       mockPrisma.issueRecording.findFirst.mockResolvedValue({
         videoUrl: "https://blob.vercel-storage.com/x.webm",
         issue: { project: { organizationId: "o1" } },
       });
       mockStorageService.isFullUrl.mockReturnValue(true);
-      const redirect = jest.fn();
-      const res = { redirect };
+      mockStorageService.download.mockResolvedValue({
+        buffer: Buffer.from("video"),
+        contentType: "video/webm",
+      });
+      const setHeader = jest.fn();
+      const send = jest.fn();
+      const res = { setHeader, send };
 
       await service.streamRecording("x.webm", res as any);
-      expect(redirect).toHaveBeenCalledWith(
+      expect(mockStorageService.download).toHaveBeenCalledWith(
         "https://blob.vercel-storage.com/x.webm"
       );
+      expect(setHeader).toHaveBeenCalledWith("Content-Type", "video/webm");
+      expect(send).toHaveBeenCalledWith(Buffer.from("video"));
     });
 
     it("should throw on invalid filename", async () => {
@@ -1273,7 +1302,7 @@ describe("IssuesService", () => {
       );
     });
 
-    it("should redirect when file has full URL (Blob)", async () => {
+    it("should stream blob content when file has full URL (Blob)", async () => {
       mockPrisma.issueFile.findFirst.mockResolvedValue({
         id: "f1",
         issueId: "i1",
@@ -1281,13 +1310,20 @@ describe("IssuesService", () => {
         fileName: "doc.pdf",
       });
       mockStorageService.isFullUrl.mockReturnValue(true);
-      const redirect = jest.fn();
-      const res = { redirect };
+      mockStorageService.download.mockResolvedValue({
+        buffer: Buffer.from("pdf"),
+        contentType: "application/pdf",
+      });
+      const setHeader = jest.fn();
+      const send = jest.fn();
+      const res = { setHeader, send };
 
       await service.streamFile("i1", "f1", res as any);
-      expect(redirect).toHaveBeenCalledWith(
+      expect(mockStorageService.download).toHaveBeenCalledWith(
         "https://blob.vercel-storage.com/doc.pdf"
       );
+      expect(setHeader).toHaveBeenCalledWith("Content-Type", "application/pdf");
+      expect(send).toHaveBeenCalledWith(Buffer.from("pdf"));
     });
 
     it("should throw when file path does not exist on disk", async () => {

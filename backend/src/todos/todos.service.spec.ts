@@ -214,16 +214,16 @@ describe("TodosService", () => {
       mockPrisma.todo.findMany
         .mockResolvedValueOnce([{ id: "t1" }, { id: "other" }])
         .mockResolvedValueOnce([{ id: "t1" }]);
-      await expect(service.reorder("p1", "user-1", ["t1", "other"])).rejects.toThrow(
-        NotFoundException
-      );
+      await expect(
+        service.reorder("p1", "user-1", ["t1", "other"])
+      ).rejects.toThrow(NotFoundException);
     });
 
     it("should throw BadRequestException when reorder contains duplicates", async () => {
       mockPrisma.todo.findMany.mockResolvedValue([{ id: "t1" }, { id: "t2" }]);
-      await expect(service.reorder("p1", "user-1", ["t1", "t1"])).rejects.toThrow(
-        BadRequestException
-      );
+      await expect(
+        service.reorder("p1", "user-1", ["t1", "t1"])
+      ).rejects.toThrow(BadRequestException);
     });
 
     it("should throw BadRequestException when reorder IDs are not an array", async () => {

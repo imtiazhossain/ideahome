@@ -4,6 +4,7 @@ import { AddItemForm } from "./AddItemForm";
 import { ProjectSectionGuard } from "./ProjectSectionGuard";
 import { CheckableList } from "./CheckableList";
 import { IconUndo } from "./IconUndo";
+import { IconTrash } from "./IconTrash";
 
 export interface CheckableListPageShellProps {
   appLayoutProps: Omit<React.ComponentProps<typeof AppLayout>, "children">;
@@ -16,8 +17,17 @@ export interface CheckableListPageShellProps {
   canBulkDelete?: boolean;
   onBulkDelete?: () => void;
   checkableListProps: React.ComponentProps<typeof CheckableList>;
-  addGuard?: { projectsLoaded: boolean; selectedProjectId: string; message: string };
-  listGuard?: { projectsLoaded: boolean; selectedProjectId: string; message: string };
+  addGuard?: {
+    projectsLoaded: boolean;
+    selectedProjectId: string;
+    message: string;
+  };
+  listGuard?: {
+    projectsLoaded: boolean;
+    selectedProjectId: string;
+    message: string;
+  };
+  toastMessage?: string | null;
 }
 
 export function CheckableListPageShell({
@@ -33,14 +43,11 @@ export function CheckableListPageShell({
   checkableListProps,
   addGuard,
   listGuard,
+  toastMessage = null,
 }: CheckableListPageShellProps) {
-  const addContent = (
-    <AddItemForm {...addFormProps} />
-  );
+  const addContent = <AddItemForm {...addFormProps} />;
 
-  const listContent = (
-    <CheckableList {...checkableListProps} />
-  );
+  const listContent = <CheckableList {...checkableListProps} />;
 
   return (
     <AppLayout {...appLayoutProps}>
@@ -75,17 +82,6 @@ export function CheckableListPageShell({
           )}
           {(canUndo || canBulkDelete) && (
             <div className="tests-page-section-footer">
-              {canBulkDelete && onBulkDelete ? (
-                <button
-                  type="button"
-                  className="tests-page-section-bulk-delete"
-                  onClick={onBulkDelete}
-                  aria-label="Delete all completed items"
-                  title="Delete all completed items"
-                >
-                  Delete Done
-                </button>
-              ) : null}
               {canUndo ? (
                 <button
                   type="button"
@@ -95,13 +91,28 @@ export function CheckableListPageShell({
                   title="Undo"
                 >
                   <IconUndo />
-                  Undo
+                </button>
+              ) : null}
+              {canBulkDelete && onBulkDelete ? (
+                <button
+                  type="button"
+                  className="tests-page-section-bulk-delete"
+                  onClick={onBulkDelete}
+                  aria-label="Delete all completed items"
+                  title="Delete all completed items"
+                >
+                  <IconTrash />
                 </button>
               ) : null}
             </div>
           )}
         </section>
       </div>
+      {toastMessage ? (
+        <div className="checkable-toast" role="status" aria-live="polite">
+          {toastMessage}
+        </div>
+      ) : null}
     </AppLayout>
   );
 }

@@ -262,7 +262,10 @@ export default function ExpensesPage() {
           <h2 className="tests-page-section-title">Summary</h2>
           <p className="tests-page-section-desc expenses-total">
             Total: {formatCurrency(total)}{" "}
-            <span className="tests-page-section-count" aria-label="Number of expenses">
+            <span
+              className="tests-page-section-count"
+              aria-label="Number of expenses"
+            >
               ({expenses.length} expenses)
             </span>
           </p>
@@ -271,7 +274,9 @@ export default function ExpensesPage() {
               {Object.entries(byCategory)
                 .sort((a, b) => b[1] - a[1])
                 .map(([cat, sum]) => (
-                  <li key={cat}>{cat}: {formatCurrency(sum)}</li>
+                  <li key={cat}>
+                    {cat}: {formatCurrency(sum)}
+                  </li>
                 ))}
             </ul>
           )}
@@ -366,21 +371,29 @@ export default function ExpensesPage() {
             {expensesLoading ? (
               <LoadingMessage className="tests-page-section-desc" />
             ) : expenses.length === 0 ? (
-              <p className="tests-page-section-desc">No expenses yet. Add one above.</p>
+              <p className="tests-page-section-desc">
+                No expenses yet. Add one above.
+              </p>
             ) : (
               <ul className="expenses-list">
                 {expenses.map((item) => (
                   <li key={item.id} className="expenses-item">
                     <div className="expenses-item-main">
-                      <span className="expenses-item-amount">{formatCurrency(item.amount)}</span>
-                      <span className="expenses-item-description">{item.description}</span>
+                      <span className="expenses-item-amount">
+                        {formatCurrency(item.amount)}
+                      </span>
+                      <span className="expenses-item-description">
+                        {item.description}
+                      </span>
                     </div>
                     <div className="expenses-item-meta">
                       <span className="expenses-item-date">{item.date}</span>
                       {editingCategoryId === item.id ? (
                         <select
                           value={item.category}
-                          onChange={(e) => updateExpenseCategory(item.id, e.target.value)}
+                          onChange={(e) =>
+                            updateExpenseCategory(item.id, e.target.value)
+                          }
                           onBlur={() => setEditingCategoryId(null)}
                           autoFocus
                           aria-label={`Edit category for ${item.description}`}

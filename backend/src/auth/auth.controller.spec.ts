@@ -145,11 +145,14 @@ describe("AuthController", () => {
         state,
       });
 
-      expect(mockAuthService.findOrCreateUserBySso).toHaveBeenCalledWith("oidc", {
-        providerId: "oidc-sub-2",
-        email: "nobody@example.com",
-        name: null,
-      });
+      expect(mockAuthService.findOrCreateUserBySso).toHaveBeenCalledWith(
+        "oidc",
+        {
+          providerId: "oidc-sub-2",
+          email: "nobody@example.com",
+          name: null,
+        }
+      );
     });
 
     it("should coerce non-string userinfo name to null", async () => {
@@ -170,11 +173,14 @@ describe("AuthController", () => {
         state,
       });
 
-      expect(mockAuthService.findOrCreateUserBySso).toHaveBeenCalledWith("oidc", {
-        providerId: "oidc-sub-3",
-        email: "n3@example.com",
-        name: null,
-      });
+      expect(mockAuthService.findOrCreateUserBySso).toHaveBeenCalledWith(
+        "oidc",
+        {
+          providerId: "oidc-sub-3",
+          email: "n3@example.com",
+          name: null,
+        }
+      );
     });
 
     it("should return 400 when userinfo has no email", async () => {
@@ -242,7 +248,9 @@ describe("AuthController", () => {
         state: "invalid",
       });
       expect(res.status).toHaveBeenCalledWith(400);
-      expect(res.json).toHaveBeenCalledWith({ error: "Invalid or expired state" });
+      expect(res.json).toHaveBeenCalledWith({
+        error: "Invalid or expired state",
+      });
     });
 
     it("should return 400 when OIDC state iat is too far in the future", async () => {
@@ -616,7 +624,9 @@ describe("AuthController", () => {
       mockFirebase.verifyIdToken.mockResolvedValue(null);
       const res = mockRes();
       await controller.firebaseSession(res as any, "  token-with-space  ");
-      expect(mockFirebase.verifyIdToken).toHaveBeenCalledWith("token-with-space");
+      expect(mockFirebase.verifyIdToken).toHaveBeenCalledWith(
+        "token-with-space"
+      );
     });
   });
 });

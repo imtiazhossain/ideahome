@@ -14,10 +14,7 @@ export class OrganizationsController {
   }
 
   @Post()
-  create(
-    @Req() req: AuthenticatedRequest,
-    @Body() body: { name: string }
-  ) {
+  create(@Req() req: AuthenticatedRequest, @Body() body: { name: string }) {
     return this.svc.create(requireUserId(req), body ?? {});
   }
 
