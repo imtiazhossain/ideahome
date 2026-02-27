@@ -76,6 +76,7 @@ interface SortableItemProps {
 
 const DELETE_BUTTON_WIDTH = 80;
 const SWIPE_THRESHOLD = 40;
+const SWIPE_START_THRESHOLD = 10;
 
 function SortableItem({
   item,
@@ -98,7 +99,9 @@ function SortableItem({
   const [swipeOffset, setSwipeOffset] = useState(0);
   const [isSwiping, setIsSwiping] = useState(false);
   const startXRef = useRef(0);
+  const startYRef = useRef(0);
   const startOffsetRef = useRef(0);
+  const swipeGestureActiveRef = useRef(false);
   const lastInputTapAtRef = useRef(0);
 
   const {
@@ -116,19 +119,31 @@ function SortableItem({
   const canSwipe = Boolean(onDelete) && !isEditing;
 
   const handlePointerStart = useCallback(
-    (clientX: number) => {
+    (clientX: number, clientY: number, pointerType: string) => {
       if (!canSwipe) return;
+      if (pointerType !== "touch") return;
       startXRef.current = clientX;
+      startYRef.current = clientY;
       startOffsetRef.current = swipeOffset;
+      swipeGestureActiveRef.current = false;
       setIsSwiping(true);
     },
     [canSwipe, swipeOffset]
   );
 
   const handlePointerMove = useCallback(
-    (clientX: number) => {
+    (clientX: number, clientY: number) => {
       if (!canSwipe || !isSwiping) return;
       const delta = clientX - startXRef.current;
+      if (!swipeGestureActiveRef.current) {
+        const deltaY = clientY - startYRef.current;
+        if (Math.abs(delta) < SWIPE_START_THRESHOLD) return;
+        if (Math.abs(deltaY) > Math.abs(delta)) {
+          setIsSwiping(false);
+          return;
+        }
+        swipeGestureActiveRef.current = true;
+      }
       const next = Math.min(
         0,
         Math.max(-DELETE_BUTTON_WIDTH, startOffsetRef.current + delta)
@@ -141,6 +156,8 @@ function SortableItem({
   const handlePointerEnd = useCallback(() => {
     if (!isSwiping) return;
     setIsSwiping(false);
+    if (!swipeGestureActiveRef.current) return;
+    swipeGestureActiveRef.current = false;
     setSwipeOffset((prev) =>
       prev < -SWIPE_THRESHOLD ? -DELETE_BUTTON_WIDTH : 0
     );
@@ -148,7 +165,7 @@ function SortableItem({
 
   React.useEffect(() => {
     if (!isSwiping) return;
-    const onMove = (e: PointerEvent) => handlePointerMove(e.clientX);
+    const onMove = (e: PointerEvent) => handlePointerMove(e.clientX, e.clientY);
     const onUp = () => handlePointerEnd();
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp);
@@ -369,7 +386,9 @@ function SortableItem({
               transform: `translateX(${swipeOffset}px)`,
               transition: isSwiping ? "none" : "transform 0.2s ease-out",
             }}
-            onPointerDown={(e) => handlePointerStart(e.clientX)}
+            onPointerDown={(e) =>
+              handlePointerStart(e.clientX, e.clientY, e.pointerType)
+            }
           >
             {mainContent}
           </div>
