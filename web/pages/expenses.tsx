@@ -94,6 +94,17 @@ function saveStoredExpensesLegacy(
   }
 }
 
+function formatExpenseDateDisplay(value: string): string {
+  if (!value) return "Select date";
+  const parsed = new Date(`${value}T00:00:00`);
+  if (Number.isNaN(parsed.getTime())) return value;
+  return parsed.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
 export default function ExpensesPage() {
   const router = useRouter();
   const layout = useProjectLayout();
@@ -294,6 +305,11 @@ export default function ExpensesPage() {
     acc[c] = (acc[c] ?? 0) + e.amount;
     return acc;
   }, {});
+  const parsedAmount = parseFloat(amount.replace(/,/g, ""));
+  const canAddExpense =
+    Boolean(selectedProjectId) &&
+    Number.isFinite(parsedAmount) &&
+    parsedAmount > 0;
 
   return (
     <AppLayout
@@ -390,14 +406,19 @@ export default function ExpensesPage() {
               </div>
               <div className="expenses-field expenses-field-date">
                 <label htmlFor="expenses-date">Date</label>
-                <input
-                  id="expenses-date"
-                  type="date"
-                  value={date}
-                  onChange={(e) => setDate(e.target.value)}
-                  aria-label="Date"
-                  className="expenses-input"
-                />
+                <div className="expenses-date-control">
+                  <input
+                    id="expenses-date"
+                    type="date"
+                    value={date}
+                    onChange={(e) => setDate(e.target.value)}
+                    aria-label="Date"
+                    className="expenses-input expenses-date-native"
+                  />
+                  <span className="expenses-date-display" aria-hidden="true">
+                    {formatExpenseDateDisplay(date)}
+                  </span>
+                </div>
               </div>
               <div className="expenses-field expenses-field-category">
                 <label htmlFor="expenses-category">Category</label>
@@ -420,6 +441,7 @@ export default function ExpensesPage() {
                 className="project-nav-add expenses-add-btn"
                 aria-label="Add expense"
                 title="Add expense"
+                disabled={!canAddExpense}
               >
                 <IconPlus />
               </button>
@@ -449,6 +471,7 @@ export default function ExpensesPage() {
                 {expenses.map((item) => (
                   <li key={item.id} className="expenses-item">
                     <div className="expenses-item-main">
+                      <span className="expenses-item-date">{item.date}</span>
                       <span className="expenses-item-amount">
                         {formatCurrency(item.amount)}
                       </span>
@@ -457,7 +480,6 @@ export default function ExpensesPage() {
                       </span>
                     </div>
                     <div className="expenses-item-meta">
-                      <span className="expenses-item-date">{item.date}</span>
                       {editingCategoryId === item.id ? (
                         <select
                           value={item.category}

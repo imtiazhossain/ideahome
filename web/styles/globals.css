@@ -5375,21 +5375,48 @@ a.automated-tests-chip-text:hover {
   min-width: 140px;
 }
 
-.expenses-field-date .expenses-input[type="date"] {
+.expenses-date-control {
+  position: relative;
   width: 100%;
-  max-width: 100%;
-  min-width: 0;
-  inline-size: 100%;
-  display: block;
 }
 
-.expenses-field-date .expenses-input[type="date"]::-webkit-date-and-time-value {
-  min-width: 0;
+.expenses-date-native {
+  position: relative;
+  z-index: 2;
+  opacity: 0;
+  color: transparent;
+  -webkit-appearance: none;
+  appearance: none;
 }
 
-.expenses-field-date
-  .expenses-input[type="date"]::-webkit-calendar-picker-indicator {
+.expenses-date-native::-webkit-calendar-picker-indicator {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
   margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.expenses-date-display {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 12px;
+  border: 1px solid var(--border-input);
+  border-radius: 8px;
+  background: var(--bg-page);
+  color: var(--text);
+  box-sizing: border-box;
+  pointer-events: none;
+}
+
+.expenses-date-native:focus + .expenses-date-display {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
 }
 
 .expenses-field-category .expenses-input {
@@ -5463,6 +5490,8 @@ a.automated-tests-chip-text:hover {
 .expenses-item-date {
   color: var(--text-muted);
   font-size: 0.9rem;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .expenses-category-btn {
@@ -5629,10 +5658,6 @@ a.automated-tests-chip-text:hover {
     gap: 6px;
     flex-wrap: nowrap;
     flex: 0 0 auto;
-  }
-
-  .expenses-item-date {
-    display: none;
   }
 
   .expenses-category-btn {
