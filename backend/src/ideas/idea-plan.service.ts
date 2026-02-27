@@ -22,7 +22,7 @@ export type IdeaPlan = {
 type OpenAiChatCompletionResponse = {
   choices?: Array<{
     message?: {
-      content?: string;
+      content?: unknown;
     };
   }>;
 };
@@ -197,14 +197,12 @@ export class IdeaPlanService {
       throw new InternalServerErrorException("AI action request failed");
     }
 
-    const content = payload.choices?.[0]?.message?.content;
+    const content = this.extractMessageContent(payload);
     if (!content) {
       throw new InternalServerErrorException("AI action response was empty");
     }
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(content);
-    } catch {
+    const parsed = this.parseJsonLikeContent(content);
+    if (!parsed) {
       throw new InternalServerErrorException(
         "AI action response could not be parsed"
       );
@@ -321,15 +319,13 @@ export class IdeaPlanService {
       throw new InternalServerErrorException("AI planning request failed");
     }
 
-    const content = payload.choices?.[0]?.message?.content;
+    const content = this.extractMessageContent(payload);
     if (!content) {
       throw new InternalServerErrorException("AI planning response was empty");
     }
 
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(content);
-    } catch {
+    const parsed = this.parseJsonLikeContent(content);
+    if (!parsed) {
       throw new InternalServerErrorException(
         "AI planning response could not be parsed"
       );
@@ -663,6 +659,58 @@ export class IdeaPlanService {
     const payload = raw as Partial<ActionMessagePayload>;
     if (typeof payload.message !== "string") return "";
     return payload.message.trim();
+  }
+
+  private extractMessageContent(payload: OpenAiChatCompletionResponse): string {
+    const raw = payload.choices?.[0]?.message?.content;
+    if (typeof raw === "string") return raw;
+    // Some providers return content as structured chunks.
+    if (Array.isArray(raw)) {
+      const text = raw
+        .map((entry) => {
+          if (!entry || typeof entry !== "object") return "";
+          const row = entry as { text?: unknown };
+          return typeof row.text === "string" ? row.text : "";
+        })
+        .join("")
+        .trim();
+      return text;
+    }
+    if (raw == null) return "";
+    return String(raw);
+  }
+
+  private parseJsonLikeContent(content: string): unknown | null {
+    const trimmed = content.trim();
+    if (!trimmed) return null;
+
+    const direct = this.tryParseJson(trimmed);
+    if (direct) return direct;
+
+    const fencedMatch = trimmed.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+    if (fencedMatch?.[1]) {
+      const fromFence = this.tryParseJson(fencedMatch[1].trim());
+      if (fromFence) return fromFence;
+    }
+
+    const firstBrace = trimmed.indexOf("{");
+    const lastBrace = trimmed.lastIndexOf("}");
+    if (firstBrace >= 0 && lastBrace > firstBrace) {
+      const fromObjectSlice = this.tryParseJson(
+        trimmed.slice(firstBrace, lastBrace + 1)
+      );
+      if (fromObjectSlice) return fromObjectSlice;
+    }
+
+    return null;
+  }
+
+  private tryParseJson(value: string): unknown | null {
+    try {
+      return JSON.parse(value);
+    } catch {
+      return null;
+    }
   }
 
   private buildDateContext(): string {
