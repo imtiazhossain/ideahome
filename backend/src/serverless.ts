@@ -8,6 +8,9 @@ import { json, urlencoded } from "express";
 import type { Request, Response } from "express";
 import { getJwtSecret } from "./auth/jwt-secret";
 import { getCorsOptions } from "./common/cors";
+import { loadEnvFromFileSystem } from "./common/load-env";
+
+loadEnvFromFileSystem();
 
 let cachedApp: ReturnType<typeof createApp> | null = null;
 

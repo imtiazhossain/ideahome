@@ -86,13 +86,15 @@ let unauthorizedBlocked = false;
 
 function handleUnauthorizedResponse(): void {
   if (typeof window === "undefined") return;
+  if (isSkipLoginDev()) {
+    clearStoredToken();
+    return;
+  }
   if (unauthorizedBlocked) return;
   unauthorizedBlocked = true;
   clearStoredToken();
   // In normal auth mode, move to login immediately.
-  if (!isSkipLoginDev()) {
-    window.location.replace("/login");
-  }
+  window.location.replace("/login");
 }
 
 /** fetch that includes JWT when present (for SSO). */
@@ -175,6 +177,7 @@ export function getStoredToken(): string | null {
 
 /** Custom event dispatched when auth token changes (login/logout). */
 export const AUTH_CHANGE_EVENT = "ideahome-auth-change";
+export const ASSISTANT_VOICE_CHANGE_EVENT = "ideahome-assistant-voice-change";
 
 function dispatchAuthChange(): void {
   if (typeof window === "undefined") return;
@@ -183,6 +186,7 @@ function dispatchAuthChange(): void {
 
 export function setStoredToken(token: string): void {
   if (typeof window === "undefined") return;
+  unauthorizedBlocked = false;
   safeSessionStorageSet(AUTH_TOKEN_SESSION_KEY, token);
   // Keep a local fallback for browsers/webviews where sessionStorage is volatile.
   safeLocalStorageSet(AUTH_TOKEN_KEY, token);
@@ -196,8 +200,12 @@ export function clearStoredToken(): void {
   dispatchAuthChange();
 }
 
-/** Decode JWT payload to get user id (sub). Used for user-scoped localStorage keys. */
-export function getUserIdFromToken(): string | null {
+type JwtPayload = {
+  sub?: unknown;
+  email?: unknown;
+};
+
+function getDecodedTokenPayload(): JwtPayload | null {
   if (typeof window === "undefined") return null;
   const token = getStoredToken();
   if (!token) return null;
@@ -209,13 +217,27 @@ export function getUserIdFromToken(): string | null {
     const padLen = (4 - (base64Raw.length % 4)) % 4;
     const base64 = base64Raw + "=".repeat(padLen);
     const json = atob(base64);
-    const decoded = JSON.parse(json) as { sub?: string };
-    return typeof decoded.sub === "string" && decoded.sub.trim()
-      ? decoded.sub.trim()
-      : null;
+    return JSON.parse(json) as JwtPayload;
   } catch {
     return null;
   }
+}
+
+/** Decode JWT payload to get user id (sub). Used for user-scoped localStorage keys. */
+export function getUserIdFromToken(): string | null {
+  const payload = getDecodedTokenPayload();
+  if (!payload) return null;
+  return typeof payload.sub === "string" && payload.sub.trim()
+    ? payload.sub.trim()
+    : null;
+}
+
+export function getUserEmailFromToken(): string | null {
+  const payload = getDecodedTokenPayload();
+  if (!payload) return null;
+  return typeof payload.email === "string" && payload.email.trim()
+    ? payload.email.trim()
+    : null;
 }
 
 /** User-scoped localStorage key. Returns prefix-{userId} when authenticated, else legacyKey or prefix. */
@@ -249,6 +271,53 @@ export function clearUserSavedData(): void {
 export function isAuthenticated(): boolean {
   if (isSkipLoginDev()) return true;
   return Boolean(getStoredToken());
+}
+
+const OPENROUTER_MODEL_STORAGE_PREFIX = "ideahome-openrouter-model";
+const OPENROUTER_MODEL_STORAGE_LEGACY_KEY = "ideahome-openrouter-model";
+
+function getOpenRouterModelStorageKey(): string {
+  return getUserScopedStorageKey(
+    OPENROUTER_MODEL_STORAGE_PREFIX,
+    OPENROUTER_MODEL_STORAGE_LEGACY_KEY
+  );
+}
+
+export function getStoredOpenRouterModel(): string | null {
+  if (typeof window === "undefined") return null;
+  const value = safeLocalStorageGet(getOpenRouterModelStorageKey())?.trim();
+  return value || null;
+}
+
+export function setStoredOpenRouterModel(model: string): void {
+  if (typeof window === "undefined") return;
+  const normalized = model.trim();
+  if (!normalized) return;
+  safeLocalStorageSet(getOpenRouterModelStorageKey(), normalized);
+}
+
+const ASSISTANT_VOICE_STORAGE_PREFIX = "ideahome-assistant-voice-uri";
+const ASSISTANT_VOICE_STORAGE_LEGACY_KEY = "ideahome-assistant-voice-uri";
+
+function getAssistantVoiceStorageKey(): string {
+  return getUserScopedStorageKey(
+    ASSISTANT_VOICE_STORAGE_PREFIX,
+    ASSISTANT_VOICE_STORAGE_LEGACY_KEY
+  );
+}
+
+export function getStoredAssistantVoiceUri(): string | null {
+  if (typeof window === "undefined") return null;
+  const value = safeLocalStorageGet(getAssistantVoiceStorageKey())?.trim();
+  return value || null;
+}
+
+export function setStoredAssistantVoiceUri(voiceUri: string): void {
+  if (typeof window === "undefined") return;
+  const normalized = voiceUri.trim();
+  if (!normalized) return;
+  safeLocalStorageSet(getAssistantVoiceStorageKey(), normalized);
+  window.dispatchEvent(new CustomEvent(ASSISTANT_VOICE_CHANGE_EVENT));
 }
 
 export function logout(redirectTo: string = "/login"): void {
@@ -429,7 +498,7 @@ export type IdeaPlan = {
   firstSteps: string[];
 };
 
-export type IdeaActionTodosResult = {
+export type IdeaAssistantChatResult = {
   ideaId: string;
   createdCount: number;
   todos: Todo[];
@@ -578,39 +647,92 @@ export const reorderIdeas = ideaApi.reorder;
 
 export async function generateIdeaPlan(
   ideaId: string,
-  context?: string
+  context?: string,
+  model?: string
 ): Promise<Idea> {
+  const payload: { context?: string; model?: string } = {};
+  const normalizedContext = typeof context === "string" ? context.trim() : "";
+  const normalizedModel = typeof model === "string" ? model.trim() : "";
+  if (normalizedContext) payload.context = normalizedContext;
+  if (normalizedModel) payload.model = normalizedModel;
   const r = await apiFetch(`${getApiBase()}/ideas/${encodeURIComponent(ideaId)}/plan`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(
-      typeof context === "string" && context.trim()
-        ? { context: context.trim() }
-        : {}
-    ),
+    body: JSON.stringify(payload),
   });
   if (!r.ok) await throwFromResponse(r, "Failed to generate idea plan");
   return r.json();
 }
 
-export async function generateIdeaActionTodos(
+export async function generateIdeaAssistantChat(
   ideaId: string,
-  context?: string
-): Promise<IdeaActionTodosResult> {
+  context?: string,
+  model?: string,
+  includeWeb?: boolean
+): Promise<IdeaAssistantChatResult> {
+  const payload: { context?: string; model?: string; includeWeb?: boolean } = {};
+  const normalizedContext = typeof context === "string" ? context.trim() : "";
+  const normalizedModel = typeof model === "string" ? model.trim() : "";
+  if (normalizedContext) payload.context = normalizedContext;
+  if (normalizedModel) payload.model = normalizedModel;
+  if (includeWeb === true) payload.includeWeb = true;
   const r = await apiFetch(
-    `${getApiBase()}/ideas/${encodeURIComponent(ideaId)}/action-todos`,
+    `${getApiBase()}/ideas/${encodeURIComponent(ideaId)}/assistant-chat`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(
-        typeof context === "string" && context.trim()
-          ? { context: context.trim() }
-          : {}
-      ),
+      body: JSON.stringify(payload),
     }
   );
-  if (!r.ok) await throwFromResponse(r, "Failed to create AI action todos");
+  if (!r.ok) await throwFromResponse(r, "Failed to generate AI assistant response");
   return r.json();
+}
+
+export async function fetchOpenRouterModels(): Promise<string[]> {
+  const r = await apiFetch(`${getApiBase()}/ideas/openrouter-models`);
+  if (!r.ok) await throwFromResponse(r, "Failed to fetch OpenRouter models");
+  const payload = (await r.json()) as unknown;
+  if (!Array.isArray(payload)) return [];
+  return payload
+    .filter((entry): entry is string => typeof entry === "string")
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+}
+
+export type ElevenLabsVoice = { id: string; name: string };
+
+export async function fetchElevenLabsVoices(): Promise<ElevenLabsVoice[]> {
+  const r = await apiFetch(`${getApiBase()}/ideas/elevenlabs-voices`);
+  if (!r.ok) await throwFromResponse(r, "Failed to fetch ElevenLabs voices");
+  const payload = (await r.json()) as unknown;
+  if (!Array.isArray(payload)) return [];
+  return payload
+    .filter(
+      (entry): entry is ElevenLabsVoice =>
+        Boolean(
+          entry &&
+            typeof entry === "object" &&
+            typeof (entry as ElevenLabsVoice).id === "string" &&
+            typeof (entry as ElevenLabsVoice).name === "string"
+        )
+    )
+    .map((entry) => ({ id: entry.id.trim(), name: entry.name.trim() }))
+    .filter((entry) => Boolean(entry.id) && Boolean(entry.name));
+}
+
+export async function synthesizeIdeaChatSpeech(
+  text: string,
+  voiceId?: string
+): Promise<Blob> {
+  const payload: { text: string; voiceId?: string } = { text: text.trim() };
+  if (voiceId?.trim()) payload.voiceId = voiceId.trim();
+  const r = await apiFetch(`${getApiBase()}/ideas/tts`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!r.ok) await throwFromResponse(r, "Failed to synthesize speech");
+  return r.blob();
 }
 
 export const fetchBugs = bugApi.fetch;

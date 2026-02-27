@@ -7,12 +7,16 @@ describe("IdeasController", () => {
   let controller: IdeasController;
   const mockSvc = {
     list: jest.fn(),
+    listOpenRouterModels: jest.fn(),
+    searchWeb: jest.fn(),
+    listElevenLabsVoices: jest.fn(),
+    synthesizeElevenLabsSpeech: jest.fn(),
     create: jest.fn(),
     update: jest.fn(),
     remove: jest.fn(),
     reorder: jest.fn(),
     generatePlan: jest.fn(),
-    generateActionTodos: jest.fn(),
+    generateAssistantChat: jest.fn(),
   };
 
   beforeEach(async () => {
@@ -32,12 +36,50 @@ describe("IdeasController", () => {
     expect(controller).toBeDefined();
   });
 
-  const req = { user: { sub: "u1" } };
+  const req = { user: { sub: "u1", email: "u1@example.com" } };
 
   it("list delegates to service", async () => {
     mockSvc.list.mockResolvedValue([]);
     await controller.list("p1", "search", req as any);
     expect(mockSvc.list).toHaveBeenCalledWith("p1", "u1", "search");
+  });
+
+  it("listOpenRouterModels delegates to service", async () => {
+    mockSvc.listOpenRouterModels.mockResolvedValue(["openai/gpt-5-mini"]);
+    await controller.listOpenRouterModels(req as any);
+    expect(mockSvc.listOpenRouterModels).toHaveBeenCalledWith("u1@example.com");
+  });
+
+  it("searchWeb delegates to service", async () => {
+    mockSvc.searchWeb.mockResolvedValue([]);
+    await controller.searchWeb("latest ai news", "3", req as any);
+    expect(mockSvc.searchWeb).toHaveBeenCalledWith("latest ai news", 3);
+  });
+
+  it("listElevenLabsVoices delegates to service", async () => {
+    mockSvc.listElevenLabsVoices.mockResolvedValue([]);
+    await controller.listElevenLabsVoices(req as any);
+    expect(mockSvc.listElevenLabsVoices).toHaveBeenCalled();
+  });
+
+  it("synthesizeTts delegates to service and sends audio", async () => {
+    const buffer = Buffer.from("audio");
+    mockSvc.synthesizeElevenLabsSpeech.mockResolvedValue(buffer);
+    const res = {
+      setHeader: jest.fn(),
+      send: jest.fn(),
+    };
+    await controller.synthesizeTts(
+      { text: "hello world", voiceId: "voice-1" },
+      req as any,
+      res as any
+    );
+    expect(mockSvc.synthesizeElevenLabsSpeech).toHaveBeenCalledWith(
+      "hello world",
+      "voice-1"
+    );
+    expect(res.setHeader).toHaveBeenCalledWith("Content-Type", "audio/mpeg");
+    expect(res.send).toHaveBeenCalledWith(buffer);
   });
 
   it("create delegates to service", async () => {
@@ -81,21 +123,34 @@ describe("IdeasController", () => {
 
   it("generatePlan delegates to service", async () => {
     mockSvc.generatePlan.mockResolvedValue({ id: "i1" });
-    await controller.generatePlan("i1", { context: "mobile-first" }, req as any);
-    expect(mockSvc.generatePlan).toHaveBeenCalledWith("i1", "u1", "mobile-first");
-  });
-
-  it("generateActionTodos delegates to service", async () => {
-    mockSvc.generateActionTodos.mockResolvedValue({ createdCount: 3 });
-    await controller.generateActionTodos(
+    await controller.generatePlan(
       "i1",
-      { context: "ship fast" },
+      { context: "mobile-first", model: "openai/gpt-5-mini" },
       req as any
     );
-    expect(mockSvc.generateActionTodos).toHaveBeenCalledWith(
+    expect(mockSvc.generatePlan).toHaveBeenCalledWith(
       "i1",
       "u1",
-      "ship fast"
+      "mobile-first",
+      "openai/gpt-5-mini",
+      "u1@example.com"
+    );
+  });
+
+  it("generateAssistantChat delegates to service", async () => {
+    mockSvc.generateAssistantChat.mockResolvedValue({ createdCount: 3 });
+    await controller.generateAssistantChat(
+      "i1",
+      { context: "ship fast", model: "openai/gpt-4o-mini" },
+      req as any
+    );
+    expect(mockSvc.generateAssistantChat).toHaveBeenCalledWith(
+      "i1",
+      "u1",
+      "ship fast",
+      "openai/gpt-4o-mini",
+      "u1@example.com",
+      undefined
     );
   });
 });

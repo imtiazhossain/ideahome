@@ -90,12 +90,17 @@ export class JwtAuthGuard implements CanActivate {
     id: string;
     email: string;
   } | null> {
-    const devUserId = process.env.DEV_USER_ID;
-    if (!devUserId) return null;
-    const user = await this.prisma.user.findUnique({
-      where: { id: devUserId },
+    const devUserId = process.env.DEV_USER_ID?.trim();
+    if (devUserId) {
+      const user = await this.prisma.user.findUnique({
+        where: { id: devUserId },
+        select: { id: true, email: true },
+      });
+      if (user) return user;
+    }
+    return this.prisma.user.findFirst({
+      orderBy: { createdAt: "asc" },
       select: { id: true, email: true },
     });
-    return user;
   }
 }

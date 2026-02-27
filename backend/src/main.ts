@@ -7,6 +7,9 @@ import type { NextFunction, Request, Response } from "express";
 import * as jwt from "jsonwebtoken";
 import { getJwtSecret } from "./auth/jwt-secret";
 import { getCorsOptions } from "./common/cors";
+import { loadEnvFromFileSystem } from "./common/load-env";
+
+loadEnvFromFileSystem();
 
 async function bootstrap() {
   const jwtSecret = getJwtSecret();

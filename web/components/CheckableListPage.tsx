@@ -6,41 +6,78 @@ import { useCheckableProjectList } from "../lib/useCheckableProjectList";
 import { useProjectLayout } from "../lib/useProjectLayout";
 import { useTheme } from "../pages/_app";
 import {
-  generateIdeaActionTodos,
+  ASSISTANT_VOICE_CHANGE_EVENT,
+  generateIdeaAssistantChat,
+  getStoredAssistantVoiceUri,
+  getStoredOpenRouterModel,
   isAuthenticated,
+  synthesizeIdeaChatSpeech,
 } from "../lib/api";
 import {
   CHECKABLE_LIST_PAGES,
   type CheckableListPageKey,
 } from "../config/checkableListPages";
-import { IconIdeas } from "./icons";
+import { IconIdeas, IconMic, IconPlay, IconStop } from "./icons";
+
+type AssistantPlaybackStatus = "idle" | "playing" | "paused";
 
 export function CheckableListPage({ pageKey }: { pageKey: CheckableListPageKey }) {
   const layout = useProjectLayout();
   const theme = useTheme();
   const def = CHECKABLE_LIST_PAGES[pageKey];
   const [addError, setAddError] = useState<string | null>(null);
-  const [actionLoadingById, setActionLoadingById] = useState<Record<string, boolean>>(
+  const [assistantLoadingById, setAssistantLoadingById] = useState<Record<string, boolean>>(
     {}
   );
-  const [actionChatById, setActionChatById] = useState<
+  const [assistantChatById, setAssistantChatById] = useState<
     Record<string, { id: string; role: "user" | "assistant"; text: string }[]>
   >({});
-  const [actionInputById, setActionInputById] = useState<Record<string, string>>(
+  const [assistantInputById, setAssistantInputById] = useState<Record<string, string>>(
     {}
   );
-  const [actionGifById, setActionGifById] = useState<Record<string, string>>({});
-  const [actionCollapsedById, setActionCollapsedById] = useState<
+  const [assistantGifById, setAssistantGifById] = useState<Record<string, string>>({});
+  const [assistantCollapsedById, setAssistantCollapsedById] = useState<
+    Record<string, boolean>
+  >({});
+  const [assistantLoadingStatusById, setAssistantLoadingStatusById] = useState<
+    Record<string, string>
+  >({});
+  const [assistantVoiceEnabledById, setAssistantVoiceEnabledById] = useState<
+    Record<string, boolean>
+  >({});
+  const [assistantPlaybackStatusById, setAssistantPlaybackStatusById] = useState<
+    Record<string, AssistantPlaybackStatus>
+  >({});
+  const [assistantRecordingById, setAssistantRecordingById] = useState<
     Record<string, boolean>
   >({});
   const [pendingFocusIdeaId, setPendingFocusIdeaId] = useState<string | null>(null);
-  const actionInputRefs = React.useRef<Record<string, HTMLTextAreaElement | null>>(
+  const [selectedVoiceUri, setSelectedVoiceUri] = useState<string>(() =>
+    getStoredAssistantVoiceUri() ?? ""
+  );
+  const assistantInputRefs = React.useRef<Record<string, HTMLTextAreaElement | null>>(
     {}
   );
-  const actionThreadRefs = React.useRef<Record<string, HTMLDivElement | null>>({});
+  const assistantThreadRefs = React.useRef<Record<string, HTMLDivElement | null>>({});
+  const loadingTickerRef = React.useRef<Record<string, ReturnType<typeof setInterval>>>(
+    {}
+  );
+  const speechRecognitionRef = React.useRef<any | null>(null);
+  const recordingIdeaIdRef = React.useRef<string | null>(null);
+  const spokenMessageIdsRef = React.useRef<Record<string, string>>({});
+  const assistantAudioRef = React.useRef<HTMLAudioElement | null>(null);
+  const assistantAudioMetaRef = React.useRef<{
+    ideaId: string | null;
+    messageId: string | null;
+    voiceUri: string | null;
+  }>({ ideaId: null, messageId: null, voiceUri: null });
+  const assistantSpeechMetaRef = React.useRef<{
+    ideaId: string | null;
+    messageId: string | null;
+  }>({ ideaId: null, messageId: null });
 
   const focusIdeaInput = useCallback((ideaId: string) => {
-    const node = actionInputRefs.current[ideaId];
+    const node = assistantInputRefs.current[ideaId];
     if (!node) return;
     requestAnimationFrame(() => {
       node.focus({ preventScroll: true });
@@ -53,14 +90,53 @@ export function CheckableListPage({ pageKey }: { pageKey: CheckableListPageKey }
     if (!pendingFocusIdeaId) return;
     focusIdeaInput(pendingFocusIdeaId);
     setPendingFocusIdeaId(null);
-  }, [focusIdeaInput, pendingFocusIdeaId, actionLoadingById, actionChatById, actionGifById]);
+  }, [focusIdeaInput, pendingFocusIdeaId, assistantLoadingById, assistantChatById, assistantGifById]);
 
   React.useEffect(() => {
-    Object.values(actionThreadRefs.current).forEach((node) => {
+    Object.values(assistantThreadRefs.current).forEach((node) => {
       if (!node) return;
       node.scrollTop = node.scrollHeight;
     });
-  }, [actionChatById, actionLoadingById]);
+  }, [assistantChatById, assistantLoadingById]);
+
+  React.useEffect(
+    () => () => {
+      Object.values(loadingTickerRef.current).forEach((timer) =>
+        clearInterval(timer)
+      );
+      loadingTickerRef.current = {};
+      if (speechRecognitionRef.current) {
+        try {
+          speechRecognitionRef.current.stop();
+        } catch {
+          // ignore
+        }
+      }
+      if (typeof window !== "undefined" && "speechSynthesis" in window) {
+        window.speechSynthesis.cancel();
+      }
+      if (assistantAudioRef.current) {
+        assistantAudioRef.current.pause();
+        if (assistantAudioRef.current.src.startsWith("blob:")) {
+          URL.revokeObjectURL(assistantAudioRef.current.src);
+        }
+        assistantAudioRef.current.src = "";
+      }
+    },
+    []
+  );
+
+  React.useEffect(() => {
+    const syncVoice = () => setSelectedVoiceUri(getStoredAssistantVoiceUri() ?? "");
+    syncVoice();
+    if (typeof window === "undefined") return;
+    window.addEventListener(ASSISTANT_VOICE_CHANGE_EVENT, syncVoice);
+    window.addEventListener("storage", syncVoice);
+    return () => {
+      window.removeEventListener(ASSISTANT_VOICE_CHANGE_EVENT, syncVoice);
+      window.removeEventListener("storage", syncVoice);
+    };
+  }, []);
 
   const list = useCheckableProjectList({
     listType: def.listType,
@@ -121,11 +197,11 @@ export function CheckableListPage({ pageKey }: { pageKey: CheckableListPageKey }
     []
   );
 
-  const appendAssistantMessage = useCallback(
+  const appendChatAssistantMessage = useCallback(
     (ideaId: string, text: string) => {
       const trimmed = text.trim();
       if (!trimmed) return;
-      setActionChatById((prev) => ({
+      setAssistantChatById((prev) => ({
         ...prev,
         [ideaId]: [
           ...(prev[ideaId] ?? []),
@@ -149,75 +225,568 @@ export function CheckableListPage({ pageKey }: { pageKey: CheckableListPageKey }
     []
   );
 
-  const handleGenerateActionTodos = useCallback(
-    async (ideaId: string, context?: string) => {
-      setActionLoadingById((prev) => ({ ...prev, [ideaId]: true }));
-      setActionGifById((prev) => {
+  const resolveIdeaModel = useCallback(() => {
+    const model = getStoredOpenRouterModel();
+    return model ?? undefined;
+  }, []);
+
+  const shouldUseWebSearch = useCallback((text: string) => {
+    const normalized = text.trim().toLowerCase();
+    if (!normalized) return false;
+    return /(?:latest|today|current|news|recent|right now|this week|this month|weather|forecast|temperature|rain|snow|humidity|wind)/i.test(
+      normalized
+    );
+  }, []);
+
+  const handleAssistantChatRequest = useCallback(
+    async (ideaId: string, context?: string, includeWeb?: boolean) => {
+      const clearLoadingTicker = () => {
+        const timer = loadingTickerRef.current[ideaId];
+        if (timer) {
+          clearInterval(timer);
+          delete loadingTickerRef.current[ideaId];
+        }
+        setAssistantLoadingStatusById((prev) => {
+          const next = { ...prev };
+          delete next[ideaId];
+          return next;
+        });
+      };
+      clearLoadingTicker();
+      const startMs = Date.now();
+      const phases = includeWeb
+        ? [
+            "Starting live web lookup...",
+            "Fetching fresh sources...",
+            "Still fetching live updates...",
+            "Still working, validating sources...",
+          ]
+        : [
+            "Thinking...",
+            "Still working on it...",
+            "Still fetching details...",
+            "Still working, almost there...",
+          ];
+      setAssistantLoadingStatusById((prev) => ({ ...prev, [ideaId]: phases[0] }));
+      loadingTickerRef.current[ideaId] = setInterval(() => {
+        const elapsedSec = Math.max(
+          1,
+          Math.round((Date.now() - startMs) / 1000)
+        );
+        const phaseIndex = Math.min(
+          phases.length - 1,
+          Math.floor(elapsedSec / 4)
+        );
+        setAssistantLoadingStatusById((prev) => ({
+          ...prev,
+          [ideaId]: `${phases[phaseIndex]} (${elapsedSec}s)`,
+        }));
+      }, 1000);
+
+      setAssistantLoadingById((prev) => ({ ...prev, [ideaId]: true }));
+      setAssistantGifById((prev) => {
         const next = { ...prev };
         delete next[ideaId];
         return next;
       });
       try {
-        const result = await generateIdeaActionTodos(ideaId, context);
-        setActionCollapsedById((prev) => ({ ...prev, [ideaId]: false }));
-        appendAssistantMessage(ideaId, typeof result.message === "string" ? result.message : "");
+        const result = await generateIdeaAssistantChat(
+          ideaId,
+          context,
+          resolveIdeaModel(),
+          includeWeb
+        );
+        setAssistantCollapsedById((prev) => ({ ...prev, [ideaId]: false }));
+        appendChatAssistantMessage(ideaId, typeof result.message === "string" ? result.message : "");
         if (typeof result.previewGifUrl === "string" && result.previewGifUrl.trim()) {
-          setActionGifById((prev) => ({ ...prev, [ideaId]: result.previewGifUrl! }));
+          setAssistantGifById((prev) => ({ ...prev, [ideaId]: result.previewGifUrl! }));
         }
       } catch (err) {
-        appendAssistantMessage(
+        appendChatAssistantMessage(
           ideaId,
-          err instanceof Error ? err.message : "Failed to create action items"
+          err instanceof Error ? err.message : "Failed to generate AI assistant response"
         );
       } finally {
-        setActionLoadingById((prev) => ({ ...prev, [ideaId]: false }));
+        clearLoadingTicker();
+        setAssistantLoadingById((prev) => ({ ...prev, [ideaId]: false }));
       }
     },
-    [appendAssistantMessage]
+    [appendChatAssistantMessage, resolveIdeaModel]
   );
 
   const handleSendIdeaChat = useCallback(
     async (ideaId: string) => {
-      const draft = actionInputById[ideaId]?.trim();
+      const draft = assistantInputById[ideaId]?.trim();
       if (!draft) return;
-      if (actionLoadingById[ideaId]) return;
+      if (assistantLoadingById[ideaId]) return;
 
       const userMessage = {
         id: createChatMessageId(),
         role: "user" as const,
         text: draft,
       };
-      const prior = actionChatById[ideaId] ?? [];
+      const prior = assistantChatById[ideaId] ?? [];
       const context = buildIdeaChatContext(prior, draft);
+      const includeWeb = shouldUseWebSearch(draft);
 
-      setActionChatById((prev) => ({
+      setAssistantChatById((prev) => ({
         ...prev,
         [ideaId]: [...(prev[ideaId] ?? []), userMessage],
       }));
-      setActionInputById((prev) => ({ ...prev, [ideaId]: "" }));
+      setAssistantInputById((prev) => ({ ...prev, [ideaId]: "" }));
 
-      await handleGenerateActionTodos(ideaId, context);
+      await handleAssistantChatRequest(ideaId, context, includeWeb);
       focusIdeaInput(ideaId);
     },
     [
-      actionChatById,
-      actionInputById,
-      actionLoadingById,
+      assistantChatById,
+      assistantInputById,
+      assistantLoadingById,
       buildIdeaChatContext,
       createChatMessageId,
       focusIdeaInput,
-      handleGenerateActionTodos,
+      handleAssistantChatRequest,
+      shouldUseWebSearch,
     ]
   );
+
+  const submitIdeaChatText = useCallback(
+    async (ideaId: string, draftRaw: string) => {
+      const draft = draftRaw.trim();
+      if (!draft) return;
+      if (assistantLoadingById[ideaId]) return;
+      const userMessage = {
+        id: createChatMessageId(),
+        role: "user" as const,
+        text: draft,
+      };
+      const prior = assistantChatById[ideaId] ?? [];
+      const context = buildIdeaChatContext(prior, draft);
+      const includeWeb = shouldUseWebSearch(draft);
+      setAssistantChatById((prev) => ({
+        ...prev,
+        [ideaId]: [...(prev[ideaId] ?? []), userMessage],
+      }));
+      setAssistantInputById((prev) => ({ ...prev, [ideaId]: "" }));
+      await handleAssistantChatRequest(ideaId, context, includeWeb);
+      focusIdeaInput(ideaId);
+    },
+    [
+      assistantChatById,
+      assistantLoadingById,
+      buildIdeaChatContext,
+      createChatMessageId,
+      focusIdeaInput,
+      handleAssistantChatRequest,
+      shouldUseWebSearch,
+    ]
+  );
+
+  const toggleVoiceRecording = useCallback(
+    async (ideaId: string) => {
+      const activeIdea = recordingIdeaIdRef.current;
+      if (activeIdea === ideaId && speechRecognitionRef.current) {
+        speechRecognitionRef.current.stop();
+        return;
+      }
+      const SpeechRecognitionCtor =
+        typeof window !== "undefined"
+          ? (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
+          : null;
+      if (!SpeechRecognitionCtor) {
+        appendChatAssistantMessage(
+          ideaId,
+          "Voice input is not supported in this browser."
+        );
+        return;
+      }
+
+      if (speechRecognitionRef.current) {
+        try {
+          speechRecognitionRef.current.stop();
+        } catch {
+          // ignore
+        }
+      }
+
+      let finalTranscript = "";
+      const recognition = new SpeechRecognitionCtor();
+      speechRecognitionRef.current = recognition;
+      recordingIdeaIdRef.current = ideaId;
+      recognition.lang = "en-US";
+      recognition.interimResults = true;
+      recognition.maxAlternatives = 1;
+      recognition.continuous = false;
+      setAssistantRecordingById((prev) => ({ ...prev, [ideaId]: true }));
+
+      recognition.onresult = (event: any) => {
+        let transcript = "";
+        for (let i = event.resultIndex; i < event.results.length; i += 1) {
+          const piece = event.results[i]?.[0]?.transcript ?? "";
+          if (event.results[i].isFinal) finalTranscript += piece;
+          transcript += piece;
+        }
+        const merged = (finalTranscript || transcript).trim();
+        setAssistantInputById((prev) => ({ ...prev, [ideaId]: merged }));
+      };
+
+      recognition.onerror = (event: any) => {
+        appendChatAssistantMessage(
+          ideaId,
+          `Voice input error: ${String(event?.error ?? "unknown error")}`
+        );
+      };
+
+      recognition.onend = () => {
+        setAssistantRecordingById((prev) => ({ ...prev, [ideaId]: false }));
+        if (recordingIdeaIdRef.current === ideaId) {
+          recordingIdeaIdRef.current = null;
+        }
+        if (speechRecognitionRef.current === recognition) {
+          speechRecognitionRef.current = null;
+        }
+        const transcript = finalTranscript.trim();
+        if (transcript) {
+          void submitIdeaChatText(ideaId, transcript);
+        }
+      };
+
+      try {
+        recognition.start();
+      } catch {
+        setAssistantRecordingById((prev) => ({ ...prev, [ideaId]: false }));
+        appendChatAssistantMessage(
+          ideaId,
+          "Could not start voice input. Please allow microphone access."
+        );
+      }
+    },
+    [appendChatAssistantMessage, submitIdeaChatText]
+  );
+
+  const setPlaybackStatus = useCallback(
+    (ideaId: string, status: AssistantPlaybackStatus) => {
+      setAssistantPlaybackStatusById((prev) => ({ ...prev, [ideaId]: status }));
+    },
+    []
+  );
+
+  const getLatestAssistantMessage = useCallback(
+    (ideaId: string) => {
+      const messages = assistantChatById[ideaId] ?? [];
+      return [...messages]
+        .reverse()
+        .find((message) => message.role === "assistant" && message.text.trim());
+    },
+    [assistantChatById]
+  );
+
+  const pauseAssistantPlayback = useCallback(
+    (ideaId: string) => {
+      if (assistantAudioMetaRef.current.ideaId === ideaId && assistantAudioRef.current) {
+        if (!assistantAudioRef.current.paused) {
+          assistantAudioRef.current.pause();
+        }
+        setPlaybackStatus(ideaId, "paused");
+        return;
+      }
+      if (typeof window !== "undefined" && "speechSynthesis" in window) {
+        const synth = window.speechSynthesis;
+        if (
+          assistantSpeechMetaRef.current.ideaId === ideaId &&
+          synth.speaking &&
+          !synth.paused
+        ) {
+          synth.pause();
+          setPlaybackStatus(ideaId, "paused");
+        }
+      }
+    },
+    [setPlaybackStatus]
+  );
+
+  const playAssistantMessage = useCallback(
+    async (
+      ideaId: string,
+      message: { id: string; text: string },
+      opts?: { restart?: boolean }
+    ) => {
+      if (typeof window === "undefined") return;
+      const restart = opts?.restart ?? false;
+      const playBrowserSpeech = async () => {
+        if (!("speechSynthesis" in window)) {
+          throw new Error("Speech synthesis is not available in this browser.");
+        }
+        const synth = window.speechSynthesis;
+        const sameSpeechMessage =
+          assistantSpeechMetaRef.current.ideaId === ideaId &&
+          assistantSpeechMetaRef.current.messageId === message.id;
+
+        if (sameSpeechMessage && synth.speaking && synth.paused && !restart) {
+          synth.resume();
+          setPlaybackStatus(ideaId, "playing");
+          return;
+        }
+
+        synth.cancel();
+        const browserVoiceUri = selectedVoiceUri.startsWith("browser:")
+          ? selectedVoiceUri.replace(/^browser:/, "")
+          : selectedVoiceUri;
+        const utterance = new SpeechSynthesisUtterance(message.text);
+        const selectedVoice = synth
+          .getVoices()
+          .find((voice) => voice.voiceURI === browserVoiceUri);
+        if (selectedVoice) utterance.voice = selectedVoice;
+        utterance.rate = 1;
+        utterance.pitch = 1;
+        utterance.onend = () => {
+          if (assistantSpeechMetaRef.current.ideaId === ideaId) {
+            setPlaybackStatus(ideaId, "idle");
+          }
+        };
+        utterance.onerror = () => {
+          if (assistantSpeechMetaRef.current.ideaId === ideaId) {
+            setPlaybackStatus(ideaId, "idle");
+          }
+        };
+        assistantSpeechMetaRef.current = { ideaId, messageId: message.id };
+        synth.speak(utterance);
+        setPlaybackStatus(ideaId, "playing");
+        await new Promise((resolve) => setTimeout(resolve, 400));
+        if (!synth.speaking && !synth.pending) {
+          throw new Error("Browser speech did not start");
+        }
+      };
+
+      if ("speechSynthesis" in window) {
+        const currentSpeechIdeaId = assistantSpeechMetaRef.current.ideaId;
+        if (currentSpeechIdeaId && currentSpeechIdeaId !== ideaId) {
+          window.speechSynthesis.cancel();
+          setPlaybackStatus(currentSpeechIdeaId, "idle");
+          assistantSpeechMetaRef.current = { ideaId: null, messageId: null };
+        }
+      }
+      if (assistantAudioRef.current) {
+        const currentAudioIdeaId = assistantAudioMetaRef.current.ideaId;
+        if (currentAudioIdeaId && currentAudioIdeaId !== ideaId) {
+          assistantAudioRef.current.pause();
+          setPlaybackStatus(currentAudioIdeaId, "idle");
+        }
+      }
+
+      if (selectedVoiceUri.startsWith("elevenlabs:")) {
+        const voiceId = selectedVoiceUri.replace(/^elevenlabs:/, "").trim();
+        if (!assistantAudioRef.current) {
+          assistantAudioRef.current = new Audio();
+        }
+        const audio = assistantAudioRef.current;
+        audio.preload = "auto";
+        audio.volume = 1;
+        audio.onplay = () => {
+          const activeIdeaId = assistantAudioMetaRef.current.ideaId;
+          if (activeIdeaId) setPlaybackStatus(activeIdeaId, "playing");
+        };
+        audio.onpause = () => {
+          const activeIdeaId = assistantAudioMetaRef.current.ideaId;
+          if (!activeIdeaId) return;
+          if (!audio.ended) setPlaybackStatus(activeIdeaId, "paused");
+        };
+        audio.onended = () => {
+          const activeIdeaId = assistantAudioMetaRef.current.ideaId;
+          if (activeIdeaId) setPlaybackStatus(activeIdeaId, "idle");
+        };
+        audio.onerror = () => {
+          const activeIdeaId = assistantAudioMetaRef.current.ideaId;
+          if (activeIdeaId) setPlaybackStatus(activeIdeaId, "idle");
+        };
+
+        try {
+          const canReuseSource =
+            assistantAudioMetaRef.current.ideaId === ideaId &&
+            assistantAudioMetaRef.current.messageId === message.id &&
+            assistantAudioMetaRef.current.voiceUri === selectedVoiceUri &&
+            Boolean(audio.src);
+
+          if (!canReuseSource) {
+            const blob = await synthesizeIdeaChatSpeech(
+              message.text,
+              voiceId || undefined
+            );
+            const previousSrc = audio.src;
+            const nextUrl = URL.createObjectURL(blob);
+            audio.pause();
+            audio.src = nextUrl;
+            if (previousSrc?.startsWith("blob:")) {
+              URL.revokeObjectURL(previousSrc);
+            }
+            assistantAudioMetaRef.current = {
+              ideaId,
+              messageId: message.id,
+              voiceUri: selectedVoiceUri,
+            };
+          }
+
+          if (restart) audio.currentTime = 0;
+          await audio.play();
+          await new Promise((resolve) => setTimeout(resolve, 300));
+          if (audio.paused) {
+            throw new Error("ElevenLabs audio did not start");
+          }
+          setPlaybackStatus(ideaId, "playing");
+          return;
+        } catch {
+          // Fall back to browser speech when ElevenLabs is unavailable.
+          assistantAudioMetaRef.current = { ideaId: null, messageId: null, voiceUri: null };
+        }
+      }
+
+      try {
+        await playBrowserSpeech();
+      } catch {
+        try {
+          if (!assistantAudioRef.current) {
+            assistantAudioRef.current = new Audio();
+          }
+          const audio = assistantAudioRef.current;
+          const blob = await synthesizeIdeaChatSpeech(message.text);
+          const previousSrc = audio.src;
+          const nextUrl = URL.createObjectURL(blob);
+          audio.pause();
+          audio.src = nextUrl;
+          if (previousSrc?.startsWith("blob:")) {
+            URL.revokeObjectURL(previousSrc);
+          }
+          assistantAudioMetaRef.current = {
+            ideaId,
+            messageId: message.id,
+            voiceUri: "elevenlabs:default",
+          };
+          if (restart) audio.currentTime = 0;
+          await audio.play();
+          await new Promise((resolve) => setTimeout(resolve, 300));
+          if (audio.paused) {
+            throw new Error("Fallback ElevenLabs audio did not start");
+          }
+          setPlaybackStatus(ideaId, "playing");
+        } catch {
+          appendChatAssistantMessage(
+            ideaId,
+            "Voice playback failed. Try selecting a different voice in Settings."
+          );
+          setPlaybackStatus(ideaId, "idle");
+        }
+      }
+    },
+    [appendChatAssistantMessage, selectedVoiceUri, setPlaybackStatus]
+  );
+
+  const resumeAssistantPlayback = useCallback(
+    async (ideaId: string, message: { id: string; text: string }) => {
+      if (assistantAudioMetaRef.current.ideaId === ideaId && assistantAudioRef.current) {
+        await assistantAudioRef.current.play();
+        setPlaybackStatus(ideaId, "playing");
+        return;
+      }
+      if (typeof window !== "undefined" && "speechSynthesis" in window) {
+        const synth = window.speechSynthesis;
+        if (
+          assistantSpeechMetaRef.current.ideaId === ideaId &&
+          assistantSpeechMetaRef.current.messageId === message.id &&
+          synth.speaking &&
+          synth.paused
+        ) {
+          synth.resume();
+          setPlaybackStatus(ideaId, "playing");
+          return;
+        }
+      }
+      await playAssistantMessage(ideaId, message);
+    },
+    [playAssistantMessage, setPlaybackStatus]
+  );
+
+  const handleVoiceReplyControl = useCallback(
+    async (ideaId: string) => {
+      const latestAssistant = getLatestAssistantMessage(ideaId);
+      if (!latestAssistant) {
+        appendChatAssistantMessage(ideaId, "No assistant response to play yet.");
+        return;
+      }
+      setAssistantVoiceEnabledById((prev) => ({ ...prev, [ideaId]: true }));
+      const playbackStatus = assistantPlaybackStatusById[ideaId] ?? "idle";
+      try {
+        if (playbackStatus === "playing") {
+          pauseAssistantPlayback(ideaId);
+          return;
+        }
+        if (playbackStatus === "paused") {
+          await resumeAssistantPlayback(ideaId, latestAssistant);
+          return;
+        }
+        await playAssistantMessage(ideaId, latestAssistant, { restart: true });
+      } catch {
+        appendChatAssistantMessage(
+          ideaId,
+          "Voice playback failed. Check browser sound and try a different voice."
+        );
+        setPlaybackStatus(ideaId, "idle");
+      }
+    },
+    [
+      appendChatAssistantMessage,
+      assistantPlaybackStatusById,
+      getLatestAssistantMessage,
+      pauseAssistantPlayback,
+      playAssistantMessage,
+      resumeAssistantPlayback,
+    ]
+  );
+
+  React.useEffect(() => {
+    if (typeof window === "undefined") return;
+    let cancelled = false;
+    const playReplies = async () => {
+      for (const [ideaId, messages] of Object.entries(assistantChatById)) {
+        if (!(assistantVoiceEnabledById[ideaId] ?? false)) continue;
+        const latestAssistant = [...messages]
+          .reverse()
+          .find((message) => message.role === "assistant" && message.text.trim());
+        if (!latestAssistant) continue;
+        if (spokenMessageIdsRef.current[ideaId] === latestAssistant.id) continue;
+        spokenMessageIdsRef.current[ideaId] = latestAssistant.id;
+        try {
+          await playAssistantMessage(ideaId, latestAssistant, { restart: true });
+        } catch {
+          // keep chat usable even if audio playback fails
+        }
+        if (cancelled) return;
+      }
+    };
+    void playReplies();
+    return () => {
+      cancelled = true;
+    };
+  }, [assistantChatById, assistantVoiceEnabledById, playAssistantMessage]);
 
   const renderIdeaDetails = useCallback(
     (ideaId: string) => {
       if (!isIdeasPage) return null;
-      const messages = actionChatById[ideaId] ?? [];
-      const gifUrl = actionGifById[ideaId];
-      const loading = Boolean(actionLoadingById[ideaId]);
-      const inputValue = actionInputById[ideaId] ?? "";
-      const isCollapsed = actionCollapsedById[ideaId] ?? true;
+      const messages = assistantChatById[ideaId] ?? [];
+      const gifUrl = assistantGifById[ideaId];
+      const loading = Boolean(assistantLoadingById[ideaId]);
+      const recording = Boolean(assistantRecordingById[ideaId]);
+      const voiceRepliesEnabled = Boolean(assistantVoiceEnabledById[ideaId]);
+      const playbackStatus = assistantPlaybackStatusById[ideaId] ?? "idle";
+      const isPlaybackActive = playbackStatus !== "idle";
+      const voiceButtonLabel =
+        playbackStatus === "playing"
+          ? "Pause voice reply"
+          : playbackStatus === "paused"
+            ? "Resume voice reply"
+            : "Play voice reply";
+      const loadingStatus = assistantLoadingStatusById[ideaId] ?? "Thinking...";
+      const inputValue = assistantInputById[ideaId] ?? "";
+      const isCollapsed = assistantCollapsedById[ideaId] ?? true;
       if (isCollapsed) return null;
       return (
         <div className="idea-plan-card">
@@ -227,7 +796,7 @@ export function CheckableListPage({ pageKey }: { pageKey: CheckableListPageKey }
           <div
             className="idea-chat-thread"
             ref={(node) => {
-              actionThreadRefs.current[ideaId] = node;
+              assistantThreadRefs.current[ideaId] = node;
             }}
           >
             {messages.map((message) => (
@@ -240,7 +809,7 @@ export function CheckableListPage({ pageKey }: { pageKey: CheckableListPageKey }
             ))}
             {loading ? (
               <div className="idea-chat-message idea-chat-message--assistant">
-                <p className="idea-plan-summary">Thinking...</p>
+                <p className="idea-plan-summary">{loadingStatus}</p>
               </div>
             ) : null}
             {gifUrl ? (
@@ -258,11 +827,11 @@ export function CheckableListPage({ pageKey }: { pageKey: CheckableListPageKey }
             <textarea
               className="idea-chat-input"
               ref={(node) => {
-                actionInputRefs.current[ideaId] = node;
+                assistantInputRefs.current[ideaId] = node;
               }}
               value={inputValue}
               onChange={(e) =>
-                setActionInputById((prev) => ({
+                setAssistantInputById((prev) => ({
                   ...prev,
                   [ideaId]: e.target.value,
                 }))
@@ -270,6 +839,7 @@ export function CheckableListPage({ pageKey }: { pageKey: CheckableListPageKey }
               onKeyDown={(e) => {
                 if (e.key === "Enter" && !e.shiftKey) {
                   e.preventDefault();
+                  e.stopPropagation();
                   void handleSendIdeaChat(ideaId);
                 }
               }}
@@ -279,9 +849,46 @@ export function CheckableListPage({ pageKey }: { pageKey: CheckableListPageKey }
             />
             <button
               type="button"
+              className={`idea-chat-voice-btn${recording ? " is-recording" : ""}`}
+              onPointerDown={(e) => e.preventDefault()}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                void toggleVoiceRecording(ideaId);
+              }}
+              disabled={loading}
+              aria-label={recording ? "Stop recording" : "Record voice message"}
+              title={recording ? "Stop recording" : "Record voice message"}
+            >
+              {recording ? <IconStop size={14} /> : <IconMic size={14} />}
+            </button>
+            <button
+              type="button"
+              className={`idea-chat-voice-btn${isPlaybackActive || voiceRepliesEnabled ? " is-active" : ""}`}
+              onPointerDown={(e) => e.preventDefault()}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                void handleVoiceReplyControl(ideaId);
+              }}
+              aria-label={voiceButtonLabel}
+              title={voiceButtonLabel}
+            >
+              {playbackStatus === "playing" ? (
+                <IconStop size={12} />
+              ) : (
+                <IconPlay size={12} />
+              )}
+            </button>
+            <button
+              type="button"
               className="idea-chat-send-btn"
               onPointerDown={(e) => e.preventDefault()}
-              onClick={() => void handleSendIdeaChat(ideaId)}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                void submitIdeaChatText(ideaId, inputValue);
+              }}
               disabled={loading || !inputValue.trim()}
             >
               Send
@@ -291,13 +898,19 @@ export function CheckableListPage({ pageKey }: { pageKey: CheckableListPageKey }
       );
     },
     [
-      actionChatById,
-      actionCollapsedById,
-      actionGifById,
-      actionInputById,
-      actionLoadingById,
-      handleSendIdeaChat,
+      assistantChatById,
+      assistantCollapsedById,
+      assistantGifById,
+      assistantInputById,
+      assistantLoadingStatusById,
+      assistantLoadingById,
+      assistantPlaybackStatusById,
+      assistantRecordingById,
+      assistantVoiceEnabledById,
+      handleVoiceReplyControl,
       isIdeasPage,
+      submitIdeaChatText,
+      toggleVoiceRecording,
     ]
   );
 
@@ -313,10 +926,10 @@ export function CheckableListPage({ pageKey }: { pageKey: CheckableListPageKey }
     );
     await list.removeDoneItems();
     if (removedIds.size > 0) {
-      setActionChatById((prev) => pruneIdsFromRecord(prev, removedIds));
-      setActionInputById((prev) => pruneIdsFromRecord(prev, removedIds));
-      setActionCollapsedById((prev) => pruneIdsFromRecord(prev, removedIds));
-      setActionGifById((prev) => pruneIdsFromRecord(prev, removedIds));
+      setAssistantChatById((prev) => pruneIdsFromRecord(prev, removedIds));
+      setAssistantInputById((prev) => pruneIdsFromRecord(prev, removedIds));
+      setAssistantCollapsedById((prev) => pruneIdsFromRecord(prev, removedIds));
+      setAssistantGifById((prev) => pruneIdsFromRecord(prev, removedIds));
     }
   }, [list, pruneIdsFromRecord]);
 
@@ -383,46 +996,43 @@ export function CheckableListPage({ pageKey }: { pageKey: CheckableListPageKey }
         onToggleDone: list.toggleDone,
         onReorder: list.handleReorder,
         onDelete: list.removeItem,
-        renderItemActions: isIdeasPage
-          ? (item) => {
-              if (item.done) return null;
-              const loading = Boolean(actionLoadingById[item.id]);
-              const hasChat =
-                (actionChatById[item.id]?.length ?? 0) > 0 ||
-                Boolean(actionGifById[item.id]);
-              const isCollapsed = actionCollapsedById[item.id] ?? true;
-              const hasChatSession = Object.prototype.hasOwnProperty.call(
-                actionCollapsedById,
-                item.id
-              );
-              return (
-                <>
-                  <button
-                    type="button"
-                    className={`idea-plan-generate-btn${!isCollapsed ? " is-active" : ""}${(hasChat || hasChatSession) && isCollapsed ? " is-dimmed" : ""}${loading ? " is-thinking" : ""}`}
-                    onClick={() => {
-                      const willOpen = isCollapsed;
-                      setActionCollapsedById((prev) => ({
-                        ...prev,
-                        [item.id]: !isCollapsed,
-                      }));
-                      if (willOpen) {
-                        setPendingFocusIdeaId(item.id);
-                        if (!hasChat && !loading) {
-                          void handleGenerateActionTodos(item.id);
-                        }
-                      }
-                    }}
-                    disabled={isOptimisticId(item.id)}
-                    aria-label="AI Assistance"
-                    title="AI Assistance"
-                  >
-                    <IconIdeas />
-                  </button>
-                </>
-              );
-            }
-          : undefined,
+        renderItemActions: (item) => {
+          if (item.done) return null;
+          const aiEnabled = isIdeasPage;
+          const loading = aiEnabled ? Boolean(assistantLoadingById[item.id]) : false;
+          const hasChat = aiEnabled
+            ? (assistantChatById[item.id]?.length ?? 0) > 0 || Boolean(assistantGifById[item.id])
+            : false;
+          const isCollapsed = aiEnabled ? assistantCollapsedById[item.id] ?? true : true;
+          const hasChatSession = aiEnabled
+            ? Object.prototype.hasOwnProperty.call(assistantCollapsedById, item.id)
+            : false;
+          return (
+            <button
+              type="button"
+              className={`idea-plan-generate-btn${aiEnabled && !isCollapsed ? " is-active" : ""}${aiEnabled && (hasChat || hasChatSession) && isCollapsed ? " is-dimmed" : ""}${loading ? " is-thinking" : ""}`}
+              onClick={() => {
+                if (!aiEnabled) return;
+                const willOpen = isCollapsed;
+                setAssistantCollapsedById((prev) => ({
+                  ...prev,
+                  [item.id]: !isCollapsed,
+                }));
+                if (willOpen) {
+                  setPendingFocusIdeaId(item.id);
+                  if (!hasChat && !loading) {
+                    void handleAssistantChatRequest(item.id);
+                  }
+                }
+              }}
+              disabled={isOptimisticId(item.id) || !aiEnabled}
+              aria-label="AI Assistance"
+              title={aiEnabled ? "AI Assistance" : "AI Assistance (Ideas only)"}
+            >
+              <IconIdeas />
+            </button>
+          );
+        },
         renderItemDetails: isIdeasPage
           ? (item) => renderIdeaDetails(item.id)
           : undefined,

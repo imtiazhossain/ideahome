@@ -27,6 +27,10 @@ describe("IdeasService", () => {
   const mockIdeaPlanService = {
     generatePlan: jest.fn(),
     generateActionResponse: jest.fn(),
+    listAvailableModels: jest.fn(),
+    searchWeb: jest.fn(),
+    listElevenLabsVoices: jest.fn(),
+    synthesizeElevenLabsSpeech: jest.fn(),
   };
 
   beforeEach(async () => {
@@ -47,6 +51,23 @@ describe("IdeasService", () => {
     mockIdeaPlanService.generateActionResponse.mockResolvedValue({
       message: "Hello!",
     });
+    mockIdeaPlanService.listAvailableModels.mockResolvedValue([
+      "openai/gpt-5-mini",
+    ]);
+    mockIdeaPlanService.searchWeb.mockResolvedValue([
+      {
+        title: "Result",
+        url: "https://example.com",
+        snippet: "Snippet",
+        publishedAt: null,
+      },
+    ]);
+    mockIdeaPlanService.listElevenLabsVoices.mockResolvedValue([
+      { id: "voice-1", name: "Rachel" },
+    ]);
+    mockIdeaPlanService.synthesizeElevenLabsSpeech.mockResolvedValue(
+      Buffer.from("audio")
+    );
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -155,13 +176,55 @@ describe("IdeasService", () => {
         ideaName: "Idea One",
         projectName: "Project A",
         context: "mobile app",
+        preferredModel: undefined,
+        requesterEmail: undefined,
       });
       expect(mockPrisma.idea.update).toHaveBeenCalled();
       expect(result).toEqual({ id: "i1", planJson: { summary: "summary" } });
     });
   });
 
-  describe("generateActionTodos", () => {
+  describe("listOpenRouterModels", () => {
+    it("should delegate model lookup to IdeaPlanService", async () => {
+      const result = await service.listOpenRouterModels("user@example.com");
+      expect(mockIdeaPlanService.listAvailableModels).toHaveBeenCalledWith(
+        "user@example.com"
+      );
+      expect(result).toEqual(["openai/gpt-5-mini"]);
+    });
+  });
+
+  describe("searchWeb", () => {
+    it("delegates to IdeaPlanService web search", async () => {
+      const result = await service.searchWeb("latest llm news", 2);
+      expect(mockIdeaPlanService.searchWeb).toHaveBeenCalledWith(
+        "latest llm news",
+        2
+      );
+      expect(result).toHaveLength(1);
+    });
+  });
+
+  describe("listElevenLabsVoices", () => {
+    it("delegates to IdeaPlanService ElevenLabs voice list", async () => {
+      const result = await service.listElevenLabsVoices();
+      expect(mockIdeaPlanService.listElevenLabsVoices).toHaveBeenCalled();
+      expect(result).toEqual([{ id: "voice-1", name: "Rachel" }]);
+    });
+  });
+
+  describe("synthesizeElevenLabsSpeech", () => {
+    it("delegates to IdeaPlanService ElevenLabs synthesis", async () => {
+      const result = await service.synthesizeElevenLabsSpeech("hello", "voice-1");
+      expect(mockIdeaPlanService.synthesizeElevenLabsSpeech).toHaveBeenCalledWith(
+        "hello",
+        "voice-1"
+      );
+      expect(Buffer.isBuffer(result)).toBe(true);
+    });
+  });
+
+  describe("generateAssistantChat", () => {
     it("should generate direct action response without creating todos", async () => {
       mockPrisma.idea.findUnique.mockResolvedValue({
         id: "i1",
@@ -170,12 +233,15 @@ describe("IdeasService", () => {
         project: { name: "Project A", organizationId: "o1" },
       });
 
-      const result = await service.generateActionTodos("i1", "user-1");
+      const result = await service.generateAssistantChat("i1", "user-1");
 
       expect(mockIdeaPlanService.generateActionResponse).toHaveBeenCalledWith({
         ideaName: "Idea One",
         projectName: "Project A",
         context: undefined,
+        preferredModel: undefined,
+        requesterEmail: undefined,
+        includeWeb: undefined,
       });
       expect(result.createdCount).toBe(0);
       expect(result.todos).toEqual([]);

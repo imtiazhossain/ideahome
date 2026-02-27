@@ -101,11 +101,9 @@ export class AuthController {
       );
       const token = this.authService.signToken(user);
       return res.redirect(this.authService.getFrontendCallbackUrl(token));
-    } catch (e) {
-      return this.redirectWithError(
-        res,
-        e instanceof Error ? e.message : "Unknown error"
-      );
+    } catch {
+      // Do not leak provider/internal error details in redirect query params.
+      return this.redirectWithError(res, "sso_callback_failed");
     }
   }
 

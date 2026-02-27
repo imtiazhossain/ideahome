@@ -345,7 +345,7 @@ describe("AuthController", () => {
       const res = mockRes();
       await controller.googleCallback(res as any, "code", "state");
       expect(mockRedirect).toHaveBeenCalledWith(
-        expect.stringContaining("OAuth%20failed")
+        expect.stringContaining("sso_callback_failed")
       );
     });
 

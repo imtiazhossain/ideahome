@@ -53,6 +53,7 @@ describe("JwtAuthGuard", () => {
     mockFirebase.isConfigured.mockReturnValue(false);
     delete process.env.JWT_SECRET;
     delete process.env.SKIP_AUTH_DEV;
+    delete process.env.ALLOW_DEV_AUTH_BYPASS;
     delete process.env.DEV_USER_ID;
     process.env.NODE_ENV = originalNodeEnv;
   });
@@ -81,21 +82,21 @@ describe("JwtAuthGuard", () => {
     const ctx = createMockContext({ authorization: "Bearer token" });
     mockVerify.mockReturnValue({ sub: "user1" } as never);
     expect(await canActivate(ctx)).toBe(true);
-    expect(mockVerify).toHaveBeenCalledWith("token", "dev-secret");
+    expect(mockVerify).toHaveBeenCalledWith("token", "test-jwt-secret");
   });
 
   it("should use capitalized Authorization header", async () => {
     const ctx = createMockContext({ Authorization: "Bearer token2" });
     mockVerify.mockReturnValue({ sub: "user2" } as never);
     expect(await canActivate(ctx)).toBe(true);
-    expect(mockVerify).toHaveBeenCalledWith("token2", "dev-secret");
+    expect(mockVerify).toHaveBeenCalledWith("token2", "test-jwt-secret");
   });
 
   it("should use first element when authorization is an array", async () => {
     const ctx = createMockContext({ authorization: ["Bearer array-token"] });
     mockVerify.mockReturnValue({ sub: "user3" } as never);
     expect(await canActivate(ctx)).toBe(true);
-    expect(mockVerify).toHaveBeenCalledWith("array-token", "dev-secret");
+    expect(mockVerify).toHaveBeenCalledWith("array-token", "test-jwt-secret");
   });
 
   it("should throw when format has wrong number of parts", async () => {
@@ -128,7 +129,7 @@ describe("JwtAuthGuard", () => {
 
     expect(await canActivate(ctx)).toBe(true);
     expect(req.user).toEqual(payload);
-    expect(mockVerify).toHaveBeenCalledWith("valid-token", "dev-secret");
+    expect(mockVerify).toHaveBeenCalledWith("valid-token", "test-jwt-secret");
   });
 
   it("should use JWT_SECRET from env when set", async () => {
@@ -180,6 +181,10 @@ describe("JwtAuthGuard", () => {
 
   describe("SKIP_AUTH_DEV", () => {
     const devUser = { id: "dev-user-id", email: "dev@localhost" };
+
+    beforeEach(() => {
+      process.env.ALLOW_DEV_AUTH_BYPASS = "true";
+    });
 
     it("should allow no token and set req.user when SKIP_AUTH_DEV and first user exists", async () => {
       process.env.SKIP_AUTH_DEV = "true";
@@ -246,6 +251,30 @@ describe("JwtAuthGuard", () => {
       expect(mockAuthService.ensureUserOrganization).toHaveBeenCalledWith(
         "custom-dev-id"
       );
+    });
+
+    it("should fall back to first user when DEV_USER_ID is set but not found", async () => {
+      process.env.SKIP_AUTH_DEV = "true";
+      process.env.DEV_USER_ID = "missing-dev-id";
+      mockPrisma.user.findUnique.mockResolvedValue(null);
+      mockPrisma.user.findFirst.mockResolvedValue(devUser);
+      const req: { headers: Record<string, string>; user?: unknown } = {
+        headers: {},
+      };
+      const ctx = {
+        switchToHttp: () => ({ getRequest: () => req }),
+      } as unknown as ExecutionContext;
+
+      expect(await canActivate(ctx)).toBe(true);
+      expect(req.user).toEqual({ sub: devUser.id, email: devUser.email });
+      expect(mockPrisma.user.findUnique).toHaveBeenCalledWith({
+        where: { id: "missing-dev-id" },
+        select: { id: true, email: true },
+      });
+      expect(mockPrisma.user.findFirst).toHaveBeenCalledWith({
+        orderBy: { createdAt: "asc" },
+        select: { id: true, email: true },
+      });
     });
 
     it("should throw when SKIP_AUTH_DEV but no user in DB", async () => {

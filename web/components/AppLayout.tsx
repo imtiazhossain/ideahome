@@ -2,7 +2,18 @@ import React from "react";
 import Head from "next/head";
 import Link from "next/link";
 import { useRouter } from "next/router";
-import { getUserScopedStorageKey } from "../lib/api";
+import {
+  AUTH_CHANGE_EVENT,
+  ASSISTANT_VOICE_CHANGE_EVENT,
+  fetchElevenLabsVoices,
+  fetchOpenRouterModels,
+  getStoredAssistantVoiceUri,
+  getStoredOpenRouterModel,
+  getUserEmailFromToken,
+  getUserScopedStorageKey,
+  setStoredAssistantVoiceUri,
+  setStoredOpenRouterModel,
+} from "../lib/api";
 import {
   addCustomList,
   getCustomListTabId,
@@ -38,6 +49,30 @@ const SECTION_LINKS: { href?: string; label: string; tabId: ProjectNavTabId }[] 
 
 const PROJECT_ORDER_STORAGE_PREFIX = "ideahome-drawer-project-order";
 const PROJECT_ORDER_LEGACY_KEY = "ideahome-drawer-project-order";
+const DEFAULT_OPENROUTER_MODELS = ["openai/gpt-4o-mini", "openai/gpt-5-mini"];
+
+function parseCsvValues(raw: string | undefined): string[] {
+  if (!raw) return [];
+  return Array.from(
+    new Set(
+      raw
+        .split(",")
+        .map((value) => value.trim())
+        .filter(Boolean)
+    )
+  );
+}
+
+const INITIAL_OPENROUTER_MODEL_OPTIONS = (() => {
+  const fromEnv = parseCsvValues(process.env.NEXT_PUBLIC_OPENROUTER_MODEL_OPTIONS);
+  return fromEnv.length > 0 ? fromEnv : DEFAULT_OPENROUTER_MODELS;
+})();
+
+const OPENROUTER_MODEL_SWITCHER_EMAILS = new Set(
+  parseCsvValues(process.env.NEXT_PUBLIC_OPENROUTER_MODEL_SWITCHER_EMAILS).map(
+    (email) => email.toLowerCase()
+  )
+);
 
 function getProjectOrderStorageKey(): string {
   return getUserScopedStorageKey(
@@ -170,6 +205,21 @@ export function AppLayout({
   const [creatingProjectName, setCreatingProjectName] = React.useState("");
   const [creatingSection, setCreatingSection] = React.useState(false);
   const [creatingSectionName, setCreatingSectionName] = React.useState("");
+  const [currentUserEmail, setCurrentUserEmail] = React.useState<string | null>(
+    null
+  );
+  const [openRouterModelOptions, setOpenRouterModelOptions] = React.useState<
+    string[]
+  >(INITIAL_OPENROUTER_MODEL_OPTIONS);
+  const [selectedAiModel, setSelectedAiModel] = React.useState<string>(() => {
+    const stored = getStoredOpenRouterModel();
+    if (stored && INITIAL_OPENROUTER_MODEL_OPTIONS.includes(stored)) return stored;
+    return INITIAL_OPENROUTER_MODEL_OPTIONS[0] ?? "";
+  });
+  const [availableVoices, setAvailableVoices] = React.useState<
+    Array<{ value: string; label: string }>
+  >([]);
+  const [selectedVoiceUri, setSelectedVoiceUri] = React.useState<string>("");
   const creatingProjectInputRef = React.useRef<HTMLInputElement>(null);
   const creatingSectionInputRef = React.useRef<HTMLInputElement>(null);
 
@@ -378,6 +428,105 @@ export function AppLayout({
   React.useEffect(() => {
     if (creatingSection) creatingSectionInputRef.current?.focus();
   }, [creatingSection]);
+
+  React.useEffect(() => {
+    const syncFromAuth = () => {
+      const email = getUserEmailFromToken();
+      setCurrentUserEmail(email);
+      setSelectedVoiceUri(getStoredAssistantVoiceUri() ?? "");
+      const stored = getStoredOpenRouterModel();
+      if (stored && openRouterModelOptions.includes(stored)) {
+        setSelectedAiModel(stored);
+        return;
+      }
+      setSelectedAiModel(openRouterModelOptions[0] ?? "");
+    };
+
+    syncFromAuth();
+    window.addEventListener(AUTH_CHANGE_EVENT, syncFromAuth);
+    return () => window.removeEventListener(AUTH_CHANGE_EVENT, syncFromAuth);
+  }, [openRouterModelOptions]);
+
+  React.useEffect(() => {
+    if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
+    const synth = window.speechSynthesis;
+    const syncVoices = async () => {
+      const browserVoices = synth
+        .getVoices()
+        .map((voice) => ({
+          value: `browser:${voice.voiceURI}`,
+          label: `${voice.name} (${voice.lang})`,
+        }))
+        .filter((voice, idx, arr) => {
+          const voiceUri = voice.value.replace(/^browser:/, "");
+          if (!voiceUri) return false;
+          return arr.findIndex((v) => v.value === voice.value) === idx;
+        })
+        .sort((a, b) => a.label.localeCompare(b.label));
+
+      let elevenLabsVoices: Array<{ value: string; label: string }> = [];
+      try {
+        const voices = await fetchElevenLabsVoices();
+        elevenLabsVoices = voices.map((voice) => ({
+          value: `elevenlabs:${voice.id}`,
+          label: `11Labs: ${voice.name}`,
+        }));
+      } catch {
+        // keep browser voices only when ElevenLabs is unavailable
+      }
+
+      const voices = [...elevenLabsVoices, ...browserVoices];
+      setAvailableVoices(voices);
+      const stored = getStoredAssistantVoiceUri();
+      const normalizedStored =
+        stored && !stored.includes(":") ? `browser:${stored}` : stored;
+      if (normalizedStored && voices.some((voice) => voice.value === normalizedStored)) {
+        setSelectedVoiceUri(normalizedStored);
+        if (stored !== normalizedStored) setStoredAssistantVoiceUri(normalizedStored);
+      } else if (voices[0]) {
+        setSelectedVoiceUri(voices[0].value);
+      } else {
+        setSelectedVoiceUri("");
+      }
+    };
+    void syncVoices();
+    const onVoicesChanged = () => {
+      void syncVoices();
+    };
+    synth.addEventListener("voiceschanged", onVoicesChanged);
+    window.addEventListener(ASSISTANT_VOICE_CHANGE_EVENT, onVoicesChanged);
+    return () => {
+      synth.removeEventListener("voiceschanged", onVoicesChanged);
+      window.removeEventListener(ASSISTANT_VOICE_CHANGE_EVENT, onVoicesChanged);
+    };
+  }, []);
+
+  const canManageOpenRouterModel = React.useMemo(() => {
+    const email = currentUserEmail?.toLowerCase().trim();
+    if (!email) return false;
+    if (openRouterModelOptions.length === 0) return false;
+    return OPENROUTER_MODEL_SWITCHER_EMAILS.has(email);
+  }, [currentUserEmail, openRouterModelOptions]);
+
+  React.useEffect(() => {
+    if (!canManageOpenRouterModel) return;
+    let active = true;
+    (async () => {
+      try {
+        const models = await fetchOpenRouterModels();
+        if (!active || models.length === 0) return;
+        setOpenRouterModelOptions((prev) => {
+          const merged = Array.from(new Set([...models, ...prev]));
+          return merged;
+        });
+      } catch {
+        // Keep env/default list when live fetch fails.
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [canManageOpenRouterModel]);
 
   return (
     <>
@@ -681,6 +830,56 @@ export function AppLayout({
                 )}
                 {drawerSettingsOpen && (
                   <div className="drawer-bottom-settings-menu" role="menu">
+                    {availableVoices.length > 0 && (
+                      <label
+                        className="drawer-bottom-settings-model"
+                        aria-label="Assistant voice"
+                      >
+                        <span className="drawer-bottom-settings-model-label">
+                          Voice
+                        </span>
+                        <select
+                          className="drawer-bottom-settings-model-select"
+                          value={selectedVoiceUri}
+                          onChange={(e) => {
+                            const nextVoice = e.target.value;
+                            setSelectedVoiceUri(nextVoice);
+                            setStoredAssistantVoiceUri(nextVoice);
+                          }}
+                        >
+                          {availableVoices.map((voice) => (
+                            <option key={voice.value} value={voice.value}>
+                              {voice.label}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    )}
+                    {canManageOpenRouterModel && (
+                      <label
+                        className="drawer-bottom-settings-model"
+                        aria-label="OpenRouter model"
+                      >
+                        <span className="drawer-bottom-settings-model-label">
+                          LLM
+                        </span>
+                        <select
+                          className="drawer-bottom-settings-model-select"
+                          value={selectedAiModel}
+                          onChange={(e) => {
+                            const nextModel = e.target.value;
+                            setSelectedAiModel(nextModel);
+                            setStoredOpenRouterModel(nextModel);
+                          }}
+                        >
+                          {openRouterModelOptions.map((model) => (
+                            <option key={model} value={model}>
+                              {model}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    )}
                     <button
                       type="button"
                       className="drawer-bottom-settings-menu-item"

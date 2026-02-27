@@ -42,7 +42,29 @@ export class IdeasService {
     return this.listService.reorder(projectId, userId, ideaIds);
   }
 
-  async generatePlan(id: string, userId: string, context?: string) {
+  async listOpenRouterModels(userEmail?: string) {
+    return this.ideaPlanService.listAvailableModels(userEmail);
+  }
+
+  async searchWeb(query: string, limit?: number) {
+    return this.ideaPlanService.searchWeb(query, limit);
+  }
+
+  async listElevenLabsVoices() {
+    return this.ideaPlanService.listElevenLabsVoices();
+  }
+
+  async synthesizeElevenLabsSpeech(text: string, voiceId?: string) {
+    return this.ideaPlanService.synthesizeElevenLabsSpeech(text, voiceId);
+  }
+
+  async generatePlan(
+    id: string,
+    userId: string,
+    context?: string,
+    preferredModel?: string,
+    requesterEmail?: string
+  ) {
     const orgId = await this.getOrgIdForUser(userId);
     const idea = await this.prisma.idea.findUnique({
       where: { id },
@@ -57,6 +79,8 @@ export class IdeasService {
       ideaName: idea.name,
       projectName: idea.project.name,
       context,
+      preferredModel,
+      requesterEmail,
     });
 
     return this.prisma.idea.update({
@@ -68,7 +92,14 @@ export class IdeasService {
     });
   }
 
-  async generateActionTodos(id: string, userId: string, context?: string) {
+  async generateAssistantChat(
+    id: string,
+    userId: string,
+    context?: string,
+    preferredModel?: string,
+    requesterEmail?: string,
+    includeWeb?: boolean
+  ) {
     const orgId = await this.getOrgIdForUser(userId);
     const idea = await this.prisma.idea.findUnique({
       where: { id },
@@ -85,6 +116,9 @@ export class IdeasService {
       ideaName: idea.name,
       projectName: idea.project.name,
       context,
+      preferredModel,
+      requesterEmail,
+      includeWeb,
     });
     const previewGifUrl = this.resolvePreviewGifUrl(idea.name, context);
 

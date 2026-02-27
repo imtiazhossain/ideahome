@@ -1,6 +1,7 @@
 import {
   BadGatewayException,
   BadRequestException,
+  ForbiddenException,
   HttpException,
   HttpStatus,
   Injectable,
@@ -8,6 +9,7 @@ import {
   ServiceUnavailableException,
   UnauthorizedException,
 } from "@nestjs/common";
+import { WebSearchResult, WebSearchService } from "./web-search.service";
 
 export type IdeaPlan = {
   summary: string;
@@ -44,15 +46,35 @@ export type IdeaActionResponse = {
   message: string;
 };
 
+export type ElevenLabsVoice = {
+  id: string;
+  name: string;
+};
+
 @Injectable()
 export class IdeaPlanService {
   private readonly defaultProviderTimeoutMs = 30000;
+  private readonly defaultOpenRouterModel = "openai/gpt-4o-mini";
+  private readonly maxModelLength = 120;
+  private readonly maxWebSources = 5;
+  private readonly defaultElevenLabsVoiceId = "21m00Tcm4TlvDq8ikWAM";
+  private readonly maxTtsTextLength = 1200;
+
+  constructor(private readonly webSearchService: WebSearchService) {}
 
   async generateActionResponse(input: {
     ideaName: string;
     projectName?: string | null;
     context?: string | null;
+    preferredModel?: string | null;
+    requesterEmail?: string | null;
+    includeWeb?: boolean;
   }): Promise<IdeaActionResponse> {
+    const directTimeAnswer = this.tryResolveDirectTimeAnswer(input.ideaName);
+    if (directTimeAnswer) {
+      return { message: directTimeAnswer };
+    }
+
     const apiKey = process.env.OPENROUTER_API_KEY?.trim();
     if (!apiKey) {
       throw new BadRequestException(
@@ -60,22 +82,26 @@ export class IdeaPlanService {
       );
     }
 
-    const primaryModel =
-      process.env.OPENROUTER_MODEL?.trim() || "openai/gpt-4o-mini";
-    const fallbackModelsRaw = process.env.OPENROUTER_FALLBACK_MODELS?.trim() || "";
-    const fallbackModels = fallbackModelsRaw
-      .split(",")
-      .map((entry) => entry.trim())
-      .filter(Boolean);
-    const models = Array.from(new Set([primaryModel, ...fallbackModels]));
+    const models = this.resolveModelsForRequest({
+      preferredModel: input.preferredModel,
+      requesterEmail: input.requesterEmail,
+    });
     const referer = process.env.OPENROUTER_SITE_URL?.trim();
     const appName = process.env.OPENROUTER_APP_NAME?.trim();
     const context = (input.context ?? "").trim();
     const projectName = (input.projectName ?? "").trim();
+    const webContext = await this.buildWebContext({
+      includeWeb: input.includeWeb === true,
+      ideaName: input.ideaName,
+      context,
+    });
+    const dateContext = this.buildDateContext();
     const userPrompt = [
+      dateContext,
       `User request: ${input.ideaName.trim()}`,
       projectName ? `Project: ${projectName}` : null,
       context ? `Extra context: ${context}` : null,
+      webContext,
       "Do the request directly in assistant form. Keep it short and useful.",
     ]
       .filter(Boolean)
@@ -210,6 +236,8 @@ export class IdeaPlanService {
     ideaName: string;
     projectName?: string | null;
     context?: string | null;
+    preferredModel?: string | null;
+    requesterEmail?: string | null;
   }): Promise<IdeaPlan> {
     const apiKey = process.env.OPENROUTER_API_KEY?.trim();
     if (!apiKey) {
@@ -218,19 +246,17 @@ export class IdeaPlanService {
       );
     }
 
-    const primaryModel =
-      process.env.OPENROUTER_MODEL?.trim() || "openai/gpt-4o-mini";
-    const fallbackModelsRaw = process.env.OPENROUTER_FALLBACK_MODELS?.trim() || "";
-    const fallbackModels = fallbackModelsRaw
-      .split(",")
-      .map((entry) => entry.trim())
-      .filter(Boolean);
-    const models = Array.from(new Set([primaryModel, ...fallbackModels]));
+    const models = this.resolveModelsForRequest({
+      preferredModel: input.preferredModel,
+      requesterEmail: input.requesterEmail,
+    });
     const referer = process.env.OPENROUTER_SITE_URL?.trim();
     const appName = process.env.OPENROUTER_APP_NAME?.trim();
     const context = (input.context ?? "").trim();
     const projectName = (input.projectName ?? "").trim();
+    const dateContext = this.buildDateContext();
     const userPrompt = [
+      dateContext,
       `Idea: ${input.ideaName.trim()}`,
       projectName ? `Project: ${projectName}` : null,
       context ? `Extra context: ${context}` : null,
@@ -305,6 +331,159 @@ export class IdeaPlanService {
     }
 
     return this.normalizePlan(parsed);
+  }
+
+  async listAvailableModels(requesterEmail?: string | null): Promise<string[]> {
+    if (!this.canUserOverrideModel(requesterEmail)) {
+      throw new ForbiddenException("Model switching is not enabled for this user");
+    }
+
+    const apiKey = process.env.OPENROUTER_API_KEY?.trim();
+    const headers: Record<string, string> = {};
+    if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
+    const referer = process.env.OPENROUTER_SITE_URL?.trim();
+    const appName = process.env.OPENROUTER_APP_NAME?.trim();
+    if (referer) headers["HTTP-Referer"] = referer;
+    if (appName) headers["X-Title"] = appName;
+
+    let response: Response;
+    try {
+      response = await this.fetchOpenRouterModels(headers);
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Failed to fetch OpenRouter models";
+      throw new ServiceUnavailableException(message);
+    }
+
+    if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        throw new UnauthorizedException("AI provider rejected the key");
+      }
+      if (response.status === 429 || response.status >= 500) {
+        throw new ServiceUnavailableException("AI provider is unavailable");
+      }
+      throw new BadGatewayException("Failed to fetch OpenRouter models");
+    }
+
+    let payload: unknown;
+    try {
+      payload = await response.json();
+    } catch {
+      throw new BadGatewayException("OpenRouter model list response was invalid");
+    }
+
+    const data = (payload as { data?: unknown[] })?.data;
+    if (!Array.isArray(data)) {
+      throw new BadGatewayException("OpenRouter model list response was invalid");
+    }
+
+    const preferredModels = this.parseCsvEnv("OPENROUTER_MODEL_OPTIONS");
+    const allowedPreferred = new Set(preferredModels);
+    const modelIds = data
+      .map((entry) =>
+        entry && typeof entry === "object"
+          ? (entry as { id?: unknown }).id
+          : undefined
+      )
+      .filter((id): id is string => typeof id === "string")
+      .map((id) => id.trim())
+      .filter(Boolean)
+      .filter((id) => this.isAllowedOverrideModel(id))
+      .sort((a, b) => {
+        const aPreferred = allowedPreferred.has(a);
+        const bPreferred = allowedPreferred.has(b);
+        if (aPreferred !== bPreferred) return aPreferred ? -1 : 1;
+        return a.localeCompare(b);
+      });
+
+    return Array.from(new Set(modelIds));
+  }
+
+  async searchWeb(query: string, limit = this.maxWebSources): Promise<WebSearchResult[]> {
+    return this.webSearchService.search(query, limit);
+  }
+
+  async listElevenLabsVoices(): Promise<ElevenLabsVoice[]> {
+    const apiKey = process.env.ELEVENLABS_API_KEY?.trim();
+    if (!apiKey) {
+      throw new BadRequestException(
+        "ElevenLabs is not configured. Set ELEVENLABS_API_KEY in backend/.env."
+      );
+    }
+
+    const response = await this.fetchElevenLabsVoices(apiKey);
+    if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        // Some restricted keys allow TTS but do not allow listing voices.
+        // In that case, keep voice features usable by returning an empty list.
+        return [];
+      }
+      if (response.status === 429 || response.status >= 500) {
+        throw new ServiceUnavailableException("ElevenLabs is unavailable");
+      }
+      throw new BadGatewayException(`Failed to fetch ElevenLabs voices (${response.status})`);
+    }
+
+    let payload: unknown;
+    try {
+      payload = await response.json();
+    } catch {
+      throw new BadGatewayException("ElevenLabs voices response could not be parsed");
+    }
+
+    const voices = (payload as { voices?: unknown[] })?.voices;
+    if (!Array.isArray(voices)) return [];
+    return voices
+      .map((entry) => {
+        if (!entry || typeof entry !== "object") return null;
+        const id = (entry as { voice_id?: unknown }).voice_id;
+        const name = (entry as { name?: unknown }).name;
+        if (typeof id !== "string" || typeof name !== "string") return null;
+        const normalizedId = id.trim();
+        const normalizedName = name.trim();
+        if (!normalizedId || !normalizedName) return null;
+        return { id: normalizedId, name: normalizedName };
+      })
+      .filter((entry): entry is ElevenLabsVoice => Boolean(entry))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }
+
+  async synthesizeElevenLabsSpeech(text: string, voiceId?: string): Promise<Buffer> {
+    const apiKey = process.env.ELEVENLABS_API_KEY?.trim();
+    if (!apiKey) {
+      throw new BadRequestException(
+        "ElevenLabs is not configured. Set ELEVENLABS_API_KEY in backend/.env."
+      );
+    }
+    const normalizedText = text.trim();
+    if (!normalizedText) {
+      throw new BadRequestException("Text is required for speech synthesis");
+    }
+    const safeText = normalizedText.slice(0, this.maxTtsTextLength);
+    const resolvedVoiceId =
+      voiceId?.trim() ||
+      process.env.ELEVENLABS_DEFAULT_VOICE_ID?.trim() ||
+      this.defaultElevenLabsVoiceId;
+    const response = await this.fetchElevenLabsSpeech({
+      apiKey,
+      voiceId: resolvedVoiceId,
+      text: safeText,
+    });
+    if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        throw new UnauthorizedException("ElevenLabs rejected the API key");
+      }
+      if (response.status === 429 || response.status >= 500) {
+        throw new ServiceUnavailableException("ElevenLabs is unavailable");
+      }
+      throw new BadGatewayException(
+        `Failed to synthesize ElevenLabs speech (${response.status})`
+      );
+    }
+    const bytes = await response.arrayBuffer();
+    return Buffer.from(bytes);
   }
 
   private normalizePlan(raw: unknown): IdeaPlan {
@@ -451,6 +630,109 @@ export class IdeaPlanService {
     return payload.message.trim();
   }
 
+  private buildDateContext(): string {
+    const now = new Date();
+    return `Current server date/time (ISO): ${now.toISOString()} | Current year: ${now.getUTCFullYear()}`;
+  }
+
+  private tryResolveDirectTimeAnswer(rawPrompt: string): string | null {
+    const prompt = rawPrompt.trim().toLowerCase();
+    if (!prompt) return null;
+    const now = new Date();
+    if (/\b(current|what(?:'s| is)?|today(?:'s)?)\s+year\b/.test(prompt)) {
+      return `The current year is ${now.getUTCFullYear()}.`;
+    }
+    if (/\b(current|what(?:'s| is)?|today(?:'s)?)\s+date\b/.test(prompt)) {
+      return `Today's date is ${now.toISOString().slice(0, 10)} (UTC).`;
+    }
+    if (/\b(current|what(?:'s| is)?)\s+time\b/.test(prompt)) {
+      return `The current time is ${now.toISOString()} (UTC).`;
+    }
+    return null;
+  }
+
+  private async buildWebContext(input: {
+    includeWeb: boolean;
+    ideaName: string;
+    context: string;
+  }): Promise<string | null> {
+    if (!input.includeWeb) return null;
+    if (!this.webSearchService.isConfigured()) return null;
+    const query = [input.ideaName.trim(), input.context.trim()]
+      .filter(Boolean)
+      .join(" ");
+    if (!query) return null;
+
+    let results: WebSearchResult[];
+    try {
+      results = await this.webSearchService.search(query, this.maxWebSources);
+    } catch {
+      return null;
+    }
+    if (results.length === 0) return null;
+
+    const nowIso = new Date().toISOString();
+    const lines = results.map((row, idx) => {
+      const dateLine = row.publishedAt ? ` | published: ${row.publishedAt}` : "";
+      return `${idx + 1}. ${row.title} (${row.url}${dateLine}) - ${row.snippet}`;
+    });
+    return [
+      `Fresh web context retrieved at ${nowIso}:`,
+      ...lines,
+      "Use this web context when answering time-sensitive questions and cite the source URLs in plain text.",
+    ].join("\n");
+  }
+
+  private resolveModelsForRequest(input: {
+    preferredModel?: string | null;
+    requesterEmail?: string | null;
+  }): string[] {
+    const primaryModel =
+      process.env.OPENROUTER_MODEL?.trim() || this.defaultOpenRouterModel;
+    const fallbackModels = this.parseCsvEnv("OPENROUTER_FALLBACK_MODELS");
+    const preferredModel: string =
+      this.canUserOverrideModel(input.requesterEmail) &&
+      this.isAllowedOverrideModel(input.preferredModel)
+        ? (input.preferredModel?.trim() ?? "")
+        : "";
+    return Array.from(
+      new Set([preferredModel, primaryModel, ...fallbackModels].filter(Boolean))
+    );
+  }
+
+  private canUserOverrideModel(email?: string | null): boolean {
+    const normalizedEmail = typeof email === "string" ? email.trim().toLowerCase() : "";
+    if (!normalizedEmail) return false;
+    const allowlisted = this.parseCsvEnv("OPENROUTER_MODEL_SWITCHER_EMAILS").map(
+      (value) => value.toLowerCase()
+    );
+    if (allowlisted.length === 0) return false;
+    return allowlisted.includes(normalizedEmail);
+  }
+
+  private isAllowedOverrideModel(model?: string | null): boolean {
+    const normalized = typeof model === "string" ? model.trim() : "";
+    if (!normalized) return false;
+    if (normalized.length > this.maxModelLength) return false;
+    if (!/^[A-Za-z0-9._:/-]+$/.test(normalized)) return false;
+    const allowedModels = this.parseCsvEnv("OPENROUTER_MODEL_OPTIONS");
+    if (allowedModels.length === 0) return true;
+    return allowedModels.includes(normalized);
+  }
+
+  private parseCsvEnv(name: string): string[] {
+    const raw = process.env[name]?.trim() || "";
+    if (!raw) return [];
+    return Array.from(
+      new Set(
+        raw
+          .split(",")
+          .map((entry) => entry.trim())
+          .filter(Boolean)
+      )
+    );
+  }
+
   private getProviderTimeoutMs(): number {
     const raw = process.env.OPENROUTER_TIMEOUT_MS;
     if (!raw) return this.defaultProviderTimeoutMs;
@@ -479,6 +761,90 @@ export class IdeaPlanService {
         throw new Error(`Timed out after ${timeoutMs}ms`);
       }
       throw new Error("Network request to AI provider failed");
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  private async fetchOpenRouterModels(
+    headers: Record<string, string>
+  ): Promise<Response> {
+    const timeoutMs = this.getProviderTimeoutMs();
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+    try {
+      return await fetch("https://openrouter.ai/api/v1/models", {
+        method: "GET",
+        headers,
+        signal: controller.signal,
+      });
+    } catch (error) {
+      if (error instanceof Error && error.name === "AbortError") {
+        throw new Error(`Timed out after ${timeoutMs}ms`);
+      }
+      throw new Error("Network request to AI provider failed");
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  private async fetchElevenLabsVoices(apiKey: string): Promise<Response> {
+    const timeoutMs = this.getProviderTimeoutMs();
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      return await fetch("https://api.elevenlabs.io/v1/voices", {
+        method: "GET",
+        headers: {
+          "xi-api-key": apiKey,
+        },
+        signal: controller.signal,
+      });
+    } catch (error) {
+      if (error instanceof Error && error.name === "AbortError") {
+        throw new ServiceUnavailableException(`Timed out after ${timeoutMs}ms`);
+      }
+      throw new ServiceUnavailableException("Network request to ElevenLabs failed");
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  private async fetchElevenLabsSpeech(input: {
+    apiKey: string;
+    voiceId: string;
+    text: string;
+  }): Promise<Response> {
+    const timeoutMs = this.getProviderTimeoutMs();
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      return await fetch(
+        `https://api.elevenlabs.io/v1/text-to-speech/${encodeURIComponent(input.voiceId)}`,
+        {
+          method: "POST",
+          headers: {
+            "xi-api-key": input.apiKey,
+            "Content-Type": "application/json",
+            Accept: "audio/mpeg",
+          },
+          body: JSON.stringify({
+            model_id: "eleven_turbo_v2_5",
+            text: input.text,
+            voice_settings: {
+              stability: 0.45,
+              similarity_boost: 0.75,
+            },
+          }),
+          signal: controller.signal,
+        }
+      );
+    } catch (error) {
+      if (error instanceof Error && error.name === "AbortError") {
+        throw new ServiceUnavailableException(`Timed out after ${timeoutMs}ms`);
+      }
+      throw new ServiceUnavailableException("Network request to ElevenLabs failed");
     } finally {
       clearTimeout(timer);
     }

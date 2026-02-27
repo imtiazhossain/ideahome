@@ -1,7 +1,9 @@
 import { UnauthorizedException } from "@nestjs/common";
 import { Request } from "express";
 
-export type AuthenticatedRequest = Request & { user?: { sub?: string } };
+export type AuthenticatedRequest = Request & {
+  user?: { sub?: string; email?: string };
+};
 
 export function requireUserId(req: AuthenticatedRequest): string {
   const userId = req.user?.sub;
