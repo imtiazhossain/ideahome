@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post, Query, Res } from "@nestjs/common";
+import { Body, Controller, Get, Param, Post, Query, Res } from "@nestjs/common";
 import { Response } from "express";
 import * as crypto from "crypto";
 import { AuthService } from "./auth.service";
@@ -10,6 +10,7 @@ const OIDC_STATE_TTL_MS = 10 * 60 * 1000;
 const OIDC_STATE_FUTURE_SKEW_MS = 60 * 1000;
 
 type OAuthCallbackQuery = { code?: string; state?: string };
+type OAuthProvider = "google" | "github" | "apple";
 
 @Controller("auth")
 export class AuthController {
@@ -76,13 +77,22 @@ export class AuthController {
   }
 
   private redirectWithError(res: Response, error: string) {
-    const url = `${this.authService.getFrontendCallbackUrl("")}?error=${encodeURIComponent(error)}`;
+    const url = this.authService.getErrorRedirectUrl(error);
+    return res.redirect(url);
+  }
+
+  private redirectWithErrorForTarget(
+    res: Response,
+    error: string,
+    mobileRedirectUri?: string | null
+  ) {
+    const url = this.authService.getErrorRedirectUrl(error, mobileRedirectUri);
     return res.redirect(url);
   }
 
   private async handleSsoCallback(
     res: Response,
-    provider: "google" | "github" | "apple",
+    provider: OAuthProvider,
     state: string,
     code: string,
     exchangeCode: (code: string) => Promise<SsoProfile>
@@ -90,8 +100,12 @@ export class AuthController {
     const safeState = typeof state === "string" ? state.trim() : "";
     const safeCode = typeof code === "string" ? code.trim() : "";
     const consumed = this.authService.consumeState(safeState);
-    if (consumed !== provider || !safeCode) {
-      return this.redirectWithError(res, "invalid_callback");
+    if (consumed?.provider !== provider || !safeCode) {
+      return this.redirectWithErrorForTarget(
+        res,
+        "invalid_callback",
+        consumed?.mobileRedirectUri
+      );
     }
     try {
       const profile = await exchangeCode(safeCode);
@@ -100,11 +114,24 @@ export class AuthController {
         profile
       );
       const token = this.authService.signToken(user);
-      return res.redirect(this.authService.getFrontendCallbackUrl(token));
+      return res.redirect(
+        this.authService.getFrontendCallbackUrl(token, consumed.mobileRedirectUri)
+      );
     } catch {
       // Do not leak provider/internal error details in redirect query params.
-      return this.redirectWithError(res, "sso_callback_failed");
+      return this.redirectWithErrorForTarget(
+        res,
+        "sso_callback_failed",
+        consumed.mobileRedirectUri
+      );
     }
+  }
+
+  private resolveProvider(rawProvider: string): OAuthProvider | null {
+    if (rawProvider === "google") return "google";
+    if (rawProvider === "github") return "github";
+    if (rawProvider === "apple") return "apple";
+    return null;
   }
 
   private async getOidcClient() {
@@ -308,6 +335,80 @@ export class AuthController {
     return this.handleSsoCallback(res, "apple", state, code, (c) =>
       this.authService.exchangeAppleCode(c)
     );
+  }
+
+  @Get("mobile/:provider")
+  async mobileProviderLogin(
+    @Param("provider") providerRaw: string,
+    @Res() res: Response,
+    @Query("redirect_uri") redirectUri: string
+  ) {
+    const provider = this.resolveProvider((providerRaw ?? "").trim());
+    if (!provider) {
+      return this.redirectWithError(res, "unsupported_provider");
+    }
+    const mobileRedirectUri =
+      this.authService.normalizeMobileRedirectUri(redirectUri);
+    if (!mobileRedirectUri) {
+      return this.redirectWithError(res, "invalid_mobile_redirect_uri");
+    }
+    const state = this.authService.createState(provider, mobileRedirectUri);
+    const backendBase = process.env.BACKEND_URL ?? "http://localhost:3001";
+    const callbackUrl = `${backendBase}/auth/${provider}/callback`;
+
+    if (provider === "google") {
+      const clientId = process.env.GOOGLE_CLIENT_ID;
+      const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+      if (!clientId?.trim() || !clientSecret?.trim()) {
+        return this.redirectWithErrorForTarget(
+          res,
+          "google_not_configured",
+          mobileRedirectUri
+        );
+      }
+      const url = new URL("https://accounts.google.com/o/oauth2/v2/auth");
+      url.searchParams.set("client_id", clientId);
+      url.searchParams.set("redirect_uri", callbackUrl);
+      url.searchParams.set("response_type", "code");
+      url.searchParams.set("scope", "openid email profile");
+      url.searchParams.set("state", state);
+      url.searchParams.set("prompt", "select_account");
+      return res.redirect(url.toString());
+    }
+
+    if (provider === "github") {
+      const clientId = process.env.GITHUB_CLIENT_ID;
+      if (!clientId?.trim()) {
+        return this.redirectWithErrorForTarget(
+          res,
+          "github_not_configured",
+          mobileRedirectUri
+        );
+      }
+      const url = new URL("https://github.com/login/oauth/authorize");
+      url.searchParams.set("client_id", clientId);
+      url.searchParams.set("redirect_uri", callbackUrl);
+      url.searchParams.set("scope", "user:email read:user");
+      url.searchParams.set("state", state);
+      return res.redirect(url.toString());
+    }
+
+    const clientId = process.env.APPLE_CLIENT_ID;
+    if (!clientId?.trim()) {
+      return this.redirectWithErrorForTarget(
+        res,
+        "apple_not_configured",
+        mobileRedirectUri
+      );
+    }
+    const url = new URL("https://appleid.apple.com/auth/authorize");
+    url.searchParams.set("client_id", clientId);
+    url.searchParams.set("redirect_uri", callbackUrl);
+    url.searchParams.set("response_type", "code id_token");
+    url.searchParams.set("response_mode", "query");
+    url.searchParams.set("scope", "name email");
+    url.searchParams.set("state", state);
+    return res.redirect(url.toString());
   }
 
   /** Exchange a Firebase ID token for a backend JWT and user. Body: { idToken: string }. */

@@ -66,20 +66,66 @@ export class AuthService {
     return `${base}/auth/${provider}/callback`;
   }
 
-  getFrontendCallbackUrl(token: string): string {
+  private appendHashParams(baseUrl: string, params: Record<string, string>): string {
+    const hashParams = new URLSearchParams(params);
+    const hash = hashParams.toString();
+    if (!hash) return baseUrl;
+    const joiner = baseUrl.includes("#") ? "&" : "#";
+    return `${baseUrl}${joiner}${hash}`;
+  }
+
+  private isAllowedMobileRedirectUri(redirectUri: string): boolean {
+    let parsed: URL;
+    try {
+      parsed = new URL(redirectUri);
+    } catch {
+      return false;
+    }
+    const allowedSchemesRaw =
+      process.env.MOBILE_AUTH_REDIRECT_SCHEMES ?? "ideahome";
+    const allowedSchemes = allowedSchemesRaw
+      .split(",")
+      .map((value) => value.trim().toLowerCase())
+      .filter(Boolean);
+    return allowedSchemes.includes(parsed.protocol.replace(":", "").toLowerCase());
+  }
+
+  normalizeMobileRedirectUri(redirectUri?: string): string | null {
+    const fallback = process.env.MOBILE_AUTH_REDIRECT_URI ?? "ideahome://auth";
+    const candidate = (redirectUri ?? fallback).trim();
+    if (!candidate) return null;
+    if (!this.isAllowedMobileRedirectUri(candidate)) return null;
+    return candidate;
+  }
+
+  getFrontendCallbackUrl(token: string, mobileRedirectUri?: string | null): string {
+    if (mobileRedirectUri) {
+      return this.appendHashParams(mobileRedirectUri, { token });
+    }
     const base =
       process.env.FRONTEND_URL ??
       process.env.NEXT_PUBLIC_APP_URL ??
       "http://localhost:3000";
     const baseUrl = `${base.replace(/\/$/, "")}/login/callback`;
-    return token ? `${baseUrl}#token=${encodeURIComponent(token)}` : baseUrl;
+    return token ? this.appendHashParams(baseUrl, { token }) : baseUrl;
   }
 
-  createState(provider: "google" | "github" | "apple"): string {
+  getErrorRedirectUrl(error: string, mobileRedirectUri?: string | null): string {
+    if (mobileRedirectUri) {
+      return this.appendHashParams(mobileRedirectUri, { error });
+    }
+    return this.appendHashParams(this.getFrontendCallbackUrl(""), { error });
+  }
+
+  createState(
+    provider: "google" | "github" | "apple",
+    mobileRedirectUri?: string | null
+  ): string {
     const payload = {
       p: provider,
       iat: Date.now(),
       n: crypto.randomBytes(8).toString("hex"),
+      ...(mobileRedirectUri ? { mr: mobileRedirectUri } : {}),
     };
     const payloadStr = JSON.stringify(payload);
     const b64 = Buffer.from(payloadStr, "utf8").toString("base64url");
@@ -90,7 +136,9 @@ export class AuthService {
     return `${b64}.${sig}`;
   }
 
-  consumeState(state: string): "google" | "github" | "apple" | null {
+  consumeState(
+    state: string
+  ): { provider: "google" | "github" | "apple"; mobileRedirectUri: string | null } | null {
     if (!state || typeof state !== "string") return null;
     const dot = state.lastIndexOf(".");
     if (dot === -1) return null;
@@ -114,7 +162,7 @@ export class AuthService {
     ) {
       return null;
     }
-    let payload: { p?: string; iat?: number };
+    let payload: { p?: string; iat?: number; mr?: string };
     try {
       payload = JSON.parse(payloadStr);
     } catch {
@@ -132,7 +180,11 @@ export class AuthService {
       Date.now() - payload.iat > STATE_TTL_MS
     )
       return null;
-    return payload.p;
+    const mobileRedirectUri =
+      typeof payload.mr === "string" && this.isAllowedMobileRedirectUri(payload.mr)
+        ? payload.mr
+        : null;
+    return { provider: payload.p, mobileRedirectUri };
   }
 
   /** Ensures the user has a personal organization (for user-scoped projects). Returns the user with organizationId set. */
