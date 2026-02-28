@@ -350,12 +350,12 @@ export default function CodePage() {
   return (
     <>
       <Head>
-        <title>Code · IdeaHome</title>
+        <title>Code · Idea Home</title>
       </Head>
       <div className="code-page">
         <header className="code-page-header">
           <Link href="/" className="code-page-back">
-            ← Back to IdeaHome
+            ← Back to Idea Home
           </Link>
           <h1 className="code-page-title">Code</h1>
           <p className="code-page-subtitle">

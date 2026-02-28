@@ -20,6 +20,7 @@ import {
   IconGlobe,
   IconGoals,
   IconHealth,
+  IconHomeBulby,
   IconIdeas,
   IconPages,
   IconTimeline,
@@ -270,12 +271,18 @@ export function DrawerCollapsedNav({
     <div className="drawer-collapsed-inner">
       <button
         type="button"
-        className="drawer-toggle"
+        className="drawer-toggle drawer-logo project-nav-drawer-toggle"
         onClick={onExpand}
         aria-label="Expand sidebar"
         title="Expand sidebar"
       >
-        ▶
+        <span
+          className="drawer-logo-mark"
+          role="img"
+          aria-hidden="true"
+        >
+          <IconHomeBulby />
+        </span>
       </button>
       <nav className="drawer-collapsed-nav" aria-label="App navigation">
         {drawerTabs.map((tab) => (

@@ -34,12 +34,12 @@ export default function ApiTestsPage() {
   return (
     <>
       <Head>
-        <title>API Tests · IdeaHome</title>
+        <title>API Tests · Idea Home</title>
       </Head>
       <div className="api-tests-page">
         <header className="api-tests-page-header">
           <Link href="/" className="api-tests-page-back">
-            ← Back to IdeaHome
+            ← Back to Idea Home
           </Link>
           <h1 className="api-tests-page-title">API Tests</h1>
         </header>

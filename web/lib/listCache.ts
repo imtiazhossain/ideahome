@@ -38,3 +38,19 @@ export function setList<T>(
 ): void {
   cache.set(key(listType, projectId), { data: [...data] });
 }
+
+export const LIST_INVALIDATE_EVENT = "ideahome:list-invalidate";
+
+export function invalidateList(
+  listType: ListCacheKey,
+  projectId: string
+): void {
+  cache.delete(key(listType, projectId));
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(
+      new CustomEvent(LIST_INVALIDATE_EVENT, {
+        detail: { listType, projectId },
+      })
+    );
+  }
+}

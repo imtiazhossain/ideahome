@@ -11,6 +11,7 @@
     "test": "jest"
   },
   "dependencies": {
+    "@ideahome/shared-assistant": "file:../packages/shared-assistant",
     "@ideahome/shared-config": "file:../packages/shared-config",
     "@react-native-async-storage/async-storage": "^2.2.0",
     "@react-native-documents/picker": "^12.0.1",

@@ -131,6 +131,8 @@ importers:
         specifier: 0.71.0
         version: 0.71.0(@babel/core@7.29.0)(@babel/preset-env@7.29.0(@babel/core@7.29.0))(react@18.2.0)
 
+  packages/shared-assistant: {}
+
   packages/shared-config: {}
 
   web:
@@ -144,6 +146,9 @@ importers:
       '@dnd-kit/utilities':
         specifier: ^3.2.2
         version: 3.2.2(react@18.2.0)
+      '@ideahome/shared-assistant':
+        specifier: workspace:*
+        version: link:../packages/shared-assistant
       '@ideahome/shared-config':
         specifier: workspace:*
         version: link:../packages/shared-config

@@ -1,4 +1,4 @@
-# IdeaHome Architecture
+# Idea Home Architecture
 
 ## Monorepo Layout
 - `web`: Next.js web client.

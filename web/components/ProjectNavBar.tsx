@@ -24,10 +24,9 @@ import {
   IconChevronRight,
   IconChevronUp,
   IconFilter,
-  IconHome,
+  IconHomeBulby,
   IconLogin,
   IconLogout,
-  IconMenu,
   IconProfile,
   IconReorder,
   IconSearch,
@@ -502,21 +501,21 @@ export function ProjectNavBar({
       <div className="project-nav-top">
         <div className="project-nav-identity">
           <div className="project-nav-title-row">
-            {onOpenDrawer && (
-              <button
-                type="button"
-                className="project-nav-menu-btn"
-                onClick={onOpenDrawer}
-                aria-label="Open menu"
-                title="Open menu"
+            <button
+              type="button"
+              className="drawer-toggle drawer-logo project-nav-drawer-toggle"
+              onClick={onOpenDrawer}
+              aria-label="Expand sidebar"
+              title="Expand sidebar"
+            >
+              <span
+                className="drawer-logo-mark"
+                role="img"
+                aria-hidden="true"
               >
-                <IconMenu />
-                <span className="project-nav-menu-btn-label">Menu</span>
-              </button>
-            )}
-            <span className="project-nav-project-icon" aria-hidden>
-              <IconHome />
-            </span>
+                <IconHomeBulby />
+              </span>
+            </button>
             <h1 className="project-nav-project-name">
               {projectName || "Project"}
             </h1>

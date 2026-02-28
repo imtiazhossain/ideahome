@@ -1,6 +1,6 @@
-# IdeaHome (Monorepo)
+# Idea Home (Monorepo)
 
-Monorepo scaffold for the IdeaHome SaaS app (web, API, mobile).
+Monorepo scaffold for the Idea Home SaaS app (web, API, mobile).
 
 Quick dev:
 

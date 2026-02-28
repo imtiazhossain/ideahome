@@ -16,7 +16,18 @@ export function IconHomeBulby() {
       <path d="M3 10l9-7 9 7v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
       <path d="M10.1 16h3.8" />
       <path d="M10.8 18.1h2.4" />
-      <path d="M14.4 13.5a2.9 2.9 0 1 0-4.8 0c.5.5.8 1 .9 1.6h2.9c.1-.6.4-1.1 1-1.6z" />
+      <g
+        transform="translate(12, 15) scale(0.5) translate(-12, -15)"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <path d="M9 18h6" />
+        <path d="M10 22h4" />
+        <path d="M15.09 14c.18-.98.65-1.74 1.41-2.5A4.65 4.65 0 0 0 18 8 6 6 0 0 0 6 8c0 1 .23 2.23 1.5 3.5A4.61 4.61 0 0 1 8.91 14" />
+      </g>
     </svg>
   );
 }

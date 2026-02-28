@@ -1,7 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import { isOptimisticId } from "./utils";
 import { prefetchProjectLists } from "./prefetchProjectLists";
-import { getList, setList, type ListCacheKey } from "./listCache";
+import {
+  getList,
+  setList,
+  LIST_INVALIDATE_EVENT,
+  type ListCacheKey,
+} from "./listCache";
 
 export interface LegacyMigration<T> {
   load: () => { name: string; done: boolean }[];
@@ -120,6 +125,27 @@ export function useCachedProjectList<T extends { id: string }>({
       cancelled = true;
     };
   }, [listType, selectedProjectId, authenticated, fetchList]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !selectedProjectId) return;
+    const onInvalidate = (e: Event) => {
+      const ev = e as CustomEvent<{ listType: ListCacheKey; projectId: string }>;
+      if (
+        ev.detail?.listType === listType &&
+        ev.detail?.projectId === selectedProjectId
+      ) {
+        setLoading(true);
+        fetchList(selectedProjectId)
+          .then((data) => {
+            setItems(data);
+            setList(listType, selectedProjectId, data);
+          })
+          .finally(() => setLoading(false));
+      }
+    };
+    window.addEventListener(LIST_INVALIDATE_EVENT, onInvalidate);
+    return () => window.removeEventListener(LIST_INVALIDATE_EVENT, onInvalidate);
+  }, [listType, selectedProjectId, fetchList]);
 
   useEffect(() => {
     if (!selectedProjectId || items.some((item) => isOptimisticId(item.id)))

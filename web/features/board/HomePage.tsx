@@ -1738,7 +1738,7 @@ export default function Home() {
 
   return (
     <AppLayout
-      title="IdeaHome"
+      title="Idea Home"
       activeTab="board"
       projectName={projectDisplayName}
       projectId={selectedProjectId || undefined}

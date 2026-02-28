@@ -103,7 +103,7 @@ export const CHECKABLE_LIST_PAGES: Record<
 > = {
   features: {
     listType: "features",
-    title: "Features · IdeaHome",
+    title: "Features · Idea Home",
     activeTab: "list",
     pageTitle: "Features",
     itemLabel: "feature",
@@ -125,7 +125,7 @@ export const CHECKABLE_LIST_PAGES: Record<
   },
   todo: {
     listType: "todos",
-    title: "To-Do · IdeaHome",
+    title: "To-Do · Idea Home",
     activeTab: "todo",
     pageTitle: "To-Do",
     itemLabel: "to-do",
@@ -148,7 +148,7 @@ export const CHECKABLE_LIST_PAGES: Record<
   },
   bugs: {
     listType: "bugs",
-    title: "Bugs · IdeaHome",
+    title: "Bugs · Idea Home",
     activeTab: "forms",
     pageTitle: "Bugs",
     itemLabel: "bug",
@@ -170,7 +170,7 @@ export const CHECKABLE_LIST_PAGES: Record<
   },
   ideas: {
     listType: "ideas",
-    title: "Ideas · IdeaHome",
+    title: "Ideas · Idea Home",
     activeTab: "ideas",
     pageTitle: "Ideas",
     itemLabel: "idea",
@@ -192,7 +192,7 @@ export const CHECKABLE_LIST_PAGES: Record<
   },
   enhancements: {
     listType: "enhancements",
-    title: "Enhancements · IdeaHome",
+    title: "Enhancements · Idea Home",
     activeTab: "enhancements",
     pageTitle: "Enhancements",
     itemLabel: "enhancement",

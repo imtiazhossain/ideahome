@@ -22,6 +22,7 @@ import {
   getCustomListTabId,
   getCustomLists,
 } from "../lib/customLists";
+import { BulbyChatbox } from "./BulbyChatbox";
 import { IconTrash } from "./IconTrash";
 import { IconFilter, IconMic, IconSettings } from "./icons";
 import { IconHomeBulby } from "./icons";
@@ -584,7 +585,7 @@ export function AppLayout({
                 <div className="drawer-brand">
                   <button
                     type="button"
-                    className="drawer-logo drawer-logo-btn"
+                    className="drawer-toggle drawer-logo project-nav-drawer-toggle"
                     onClick={() => setDrawerOpen(false)}
                     aria-label="Close sidebar"
                     title="Close sidebar"
@@ -597,17 +598,8 @@ export function AppLayout({
                       <IconHomeBulby />
                     </span>
                   </button>
-                  <div className="drawer-brand-title">IdeaHome</div>
+                  <div className="drawer-brand-title">Idea Home</div>
                 </div>
-                <button
-                  type="button"
-                  className="drawer-toggle"
-                  onClick={() => setDrawerOpen((o) => !o)}
-                  aria-label="Collapse sidebar"
-                  title="Collapse sidebar"
-                >
-                  ◀
-                </button>
               </div>
               <div className="drawer-content">
                 <nav className="drawer-nav">
@@ -1117,6 +1109,13 @@ export function AppLayout({
           {children}
         </main>
       </div>
+      <BulbyChatbox
+        projectId={
+          selectedProjectId ||
+          orderedProjects[0]?.id ||
+          ""
+        }
+      />
     </>
   );
 }

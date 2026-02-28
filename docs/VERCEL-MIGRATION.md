@@ -1,6 +1,6 @@
 # Vercel Migration Guide (Option C – Full Vercel)
 
-This guide covers deploying IdeaHome entirely on Vercel with the backend running as serverless functions.
+This guide covers deploying Idea Home entirely on Vercel with the backend running as serverless functions.
 
 ## Prerequisites
 

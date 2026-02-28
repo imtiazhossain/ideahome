@@ -7,7 +7,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
 	<key>CFBundleDisplayName</key>
-	<string>IdeaHomeApp</string>
+	<string>Idea Home</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -47,11 +47,11 @@
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string></string>
 	<key>NSCameraUsageDescription</key>
-	<string>IdeaHome needs camera access to capture screenshots and record videos for issues.</string>
+	<string>Idea Home needs camera access to capture screenshots and record videos for issues.</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>IdeaHome needs microphone access when recording issue videos with audio.</string>
+	<string>Idea Home needs microphone access when recording issue videos with audio.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>IdeaHome needs photo library access to attach screenshots and videos to issues.</string>
+	<string>Idea Home needs photo library access to attach screenshots and videos to issues.</string>
 	<key>RCTNewArchEnabled</key>
 	<true/>
 	<key>UILaunchStoryboardName</key>

@@ -313,7 +313,7 @@ export default function ExpensesPage() {
 
   return (
     <AppLayout
-      title="Expenses · IdeaHome"
+      title="Expenses · Idea Home"
       activeTab="expenses"
       projectName={projectDisplayName}
       projectId={selectedProjectId || undefined}

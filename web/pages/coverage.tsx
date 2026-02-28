@@ -40,12 +40,12 @@ export default function CoveragePage() {
   return (
     <>
       <Head>
-        <title>Code Health · IdeaHome</title>
+        <title>Code Health · Idea Home</title>
       </Head>
       <div className="coverage-page">
         <header className="coverage-page-header">
           <Link href="/" className="coverage-page-back">
-            ← Back to IdeaHome
+            ← Back to Idea Home
           </Link>
           <h1 className="coverage-page-title">Code Health</h1>
           <div className="coverage-page-actions">

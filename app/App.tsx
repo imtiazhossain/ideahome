@@ -1,5 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState, memo } from "react";
 import {
   errorCodes as documentPickerErrorCodes,
   isErrorWithCode as isDocumentPickerErrorWithCode,
@@ -104,6 +104,7 @@ import { AppButton } from "./src/components/ui/AppButton";
 import { AppCard } from "./src/components/ui/AppCard";
 import { TabSwitch } from "./src/components/ui/TabSwitch";
 import { colors, radii, spacing } from "./src/theme/tokens";
+import { buildIdeaChatContext } from "@ideahome/shared-assistant";
 import {
   AUTH_PARAM_ERROR,
   AUTH_PARAM_REDIRECT_URI,
@@ -306,6 +307,475 @@ function isAppTab(value: string): value is AppTab {
     "settings",
   ].includes(value);
 }
+
+type IssueBoardRowProps = {
+  issue: Issue;
+  isSelected: boolean;
+  isQuickEdit: boolean;
+  quickEditTitle: string;
+  quickEditQualityScore: string;
+  quickEditAssigneeId: string;
+  users: User[];
+  savingQuickEdit: boolean;
+  onQuickEditTitleChange: (text: string) => void;
+  onQuickEditQualityScoreChange: (text: string) => void;
+  onQuickEditAssigneeChange: (userId: string) => void;
+  onSelectIssue: () => void;
+  onStartQuickEdit: () => void;
+  onCancelQuickEdit: () => void;
+  onSaveQuickEdit: () => void;
+  onMoveBackward: () => void;
+  onMoveForward: () => void;
+  styles: Record<string, unknown>;
+};
+
+const IssueBoardRow = memo(function IssueBoardRow({
+  issue,
+  isSelected,
+  isQuickEdit,
+  quickEditTitle,
+  quickEditQualityScore,
+  quickEditAssigneeId,
+  users,
+  savingQuickEdit,
+  onQuickEditTitleChange,
+  onQuickEditQualityScoreChange,
+  onQuickEditAssigneeChange,
+  onSelectIssue,
+  onStartQuickEdit,
+  onCancelQuickEdit,
+  onSaveQuickEdit,
+  onMoveBackward,
+  onMoveForward,
+  styles,
+}: IssueBoardRowProps) {
+  const s = styles as Record<string, object>;
+  return (
+    <View style={[s.issueItem, isSelected ? s.listItemSelected : null]}>
+      <View style={s.issueItemMain}>
+        {isQuickEdit ? (
+          <View style={s.stack}>
+            <TextInput
+              style={s.input}
+              value={quickEditTitle}
+              onChangeText={onQuickEditTitleChange}
+              placeholder="Issue title"
+              placeholderTextColor="#94a3b8"
+            />
+            <TextInput
+              style={s.input}
+              value={quickEditQualityScore}
+              onChangeText={onQuickEditQualityScoreChange}
+              keyboardType="decimal-pad"
+              placeholder="Quality score"
+              placeholderTextColor="#94a3b8"
+            />
+            <View style={s.chipWrap}>
+              <Pressable
+                style={[s.chip, !quickEditAssigneeId ? s.chipActive : null]}
+                onPress={() => onQuickEditAssigneeChange("")}
+              >
+                <Text style={[s.chipText, !quickEditAssigneeId ? s.chipTextActive : null]}>
+                  Unassigned
+                </Text>
+              </Pressable>
+              {users.map((user) => (
+                <Pressable
+                  key={`quick-edit-${issue.id}-${user.id}`}
+                  style={[s.chip, quickEditAssigneeId === user.id ? s.chipActive : null]}
+                  onPress={() => onQuickEditAssigneeChange(user.id)}
+                >
+                  <Text
+                    style={[
+                      s.chipText,
+                      quickEditAssigneeId === user.id ? s.chipTextActive : null,
+                    ]}
+                  >
+                    {user.name || user.email}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          </View>
+        ) : (
+          <>
+            <Pressable onPress={onSelectIssue}>
+              <Text style={s.listItemTitle}>{issue.title}</Text>
+            </Pressable>
+            <Text style={s.listItemMeta}>
+              Assignee: {issue.assignee?.name ?? issue.assignee?.email ?? "Unassigned"}
+            </Text>
+            <Text style={s.listItemMeta}>Quality: {issue.qualityScore ?? "n/a"}</Text>
+            <Text
+              style={[
+                s.badge,
+                {
+                  color:
+                    colors.status[issue.status as keyof typeof colors.status] ?? colors.textMuted,
+                },
+              ]}
+            >
+              {statusLabel(issue.status)}
+            </Text>
+          </>
+        )}
+      </View>
+      <View style={s.inlineRowWrap}>
+        {isQuickEdit ? (
+          <>
+            <AppButton
+              label={savingQuickEdit ? "Saving..." : "Save"}
+              disabled={savingQuickEdit || !quickEditTitle.trim()}
+              onPress={onSaveQuickEdit}
+            />
+            <AppButton
+              label="Cancel"
+              variant="secondary"
+              disabled={savingQuickEdit}
+              onPress={onCancelQuickEdit}
+            />
+          </>
+        ) : (
+          <>
+            <AppButton label="Quick Edit" variant="secondary" onPress={onStartQuickEdit} />
+            <AppButton
+              label="Back"
+              variant="secondary"
+              disabled={issue.status === ISSUE_STATUSES[0]}
+              onPress={onMoveBackward}
+            />
+            <AppButton
+              label="Forward"
+              variant="secondary"
+              disabled={issue.status === ISSUE_STATUSES[ISSUE_STATUSES.length - 1]}
+              onPress={onMoveForward}
+            />
+          </>
+        )}
+      </View>
+    </View>
+  );
+});
+
+type IssueBoardColumnProps = {
+  status: string;
+  issues: Issue[];
+  collapsed: boolean;
+  onToggleCollapse: () => void;
+  selectedIssueId: string;
+  quickEditIssueId: string;
+  quickEditTitle: string;
+  quickEditQualityScore: string;
+  quickEditAssigneeId: string;
+  users: User[];
+  savingQuickEdit: boolean;
+  onQuickEditTitleChange: (text: string) => void;
+  onQuickEditQualityScoreChange: (text: string) => void;
+  onQuickEditAssigneeChange: (userId: string) => void;
+  onSelectIssue: (issueId: string) => void;
+  onStartQuickEdit: (issue: Issue) => void;
+  onCancelQuickEdit: () => void;
+  onSaveQuickEdit: (issueId: string) => void;
+  onMoveIssue: (issue: Issue, direction: "backward" | "forward") => void;
+  styles: Record<string, unknown>;
+};
+
+const ISSUE_BOARD_COLUMN_HEIGHT = 420;
+
+const IssueBoardColumn = memo(function IssueBoardColumn({
+  status,
+  issues,
+  collapsed,
+  onToggleCollapse,
+  selectedIssueId,
+  quickEditIssueId,
+  quickEditTitle,
+  quickEditQualityScore,
+  quickEditAssigneeId,
+  users,
+  savingQuickEdit,
+  onQuickEditTitleChange,
+  onQuickEditQualityScoreChange,
+  onQuickEditAssigneeChange,
+  onSelectIssue,
+  onStartQuickEdit,
+  onCancelQuickEdit,
+  onSaveQuickEdit,
+  onMoveIssue,
+  styles,
+}: IssueBoardColumnProps) {
+  const s = styles as Record<string, object>;
+  const renderIssueRow = useCallback(
+    ({ item: issue }: { item: Issue }) => (
+      <IssueBoardRow
+        issue={issue}
+        isSelected={issue.id === selectedIssueId}
+        isQuickEdit={quickEditIssueId === issue.id}
+        quickEditTitle={quickEditTitle}
+        quickEditQualityScore={quickEditQualityScore}
+        quickEditAssigneeId={quickEditAssigneeId}
+        users={users}
+        savingQuickEdit={savingQuickEdit}
+        onQuickEditTitleChange={onQuickEditTitleChange}
+        onQuickEditQualityScoreChange={onQuickEditQualityScoreChange}
+        onQuickEditAssigneeChange={onQuickEditAssigneeChange}
+        onSelectIssue={() => onSelectIssue(issue.id)}
+        onStartQuickEdit={() => onStartQuickEdit(issue)}
+        onCancelQuickEdit={onCancelQuickEdit}
+        onSaveQuickEdit={() => onSaveQuickEdit(issue.id)}
+        onMoveBackward={() => onMoveIssue(issue, "backward")}
+        onMoveForward={() => onMoveIssue(issue, "forward")}
+        styles={styles}
+      />
+    ),
+    [
+      selectedIssueId,
+      quickEditIssueId,
+      quickEditTitle,
+      quickEditQualityScore,
+      quickEditAssigneeId,
+      users,
+      savingQuickEdit,
+      onQuickEditTitleChange,
+      onQuickEditQualityScoreChange,
+      onQuickEditAssigneeChange,
+      onSelectIssue,
+      onStartQuickEdit,
+      onCancelQuickEdit,
+      onSaveQuickEdit,
+      onMoveIssue,
+      styles,
+    ]
+  );
+  const keyExtractor = useCallback((item: Issue) => item.id, []);
+  if (collapsed) {
+    return (
+      <View style={s.issueGroup}>
+        <View style={s.issueGroupHeader}>
+          <Text style={s.issueGroupTitle}>
+            {statusLabel(status)} ({issues.length})
+          </Text>
+          <AppButton
+            label="Expand"
+            variant="secondary"
+            onPress={onToggleCollapse}
+          />
+        </View>
+        {issues.length > 0 ? (
+          <Text style={s.subtle}>Lane collapsed</Text>
+        ) : null}
+      </View>
+    );
+  }
+  return (
+    <View style={s.issueGroup}>
+      <View style={s.issueGroupHeader}>
+        <Text style={s.issueGroupTitle}>
+          {statusLabel(status)} ({issues.length})
+        </Text>
+        <AppButton label="Collapse" variant="secondary" onPress={onToggleCollapse} />
+      </View>
+      {issues.length === 0 ? (
+        <Text style={s.subtle}>No issues</Text>
+      ) : (
+        <FlatList
+          data={issues}
+          keyExtractor={keyExtractor}
+          renderItem={renderIssueRow}
+          style={{ maxHeight: ISSUE_BOARD_COLUMN_HEIGHT }}
+          contentContainerStyle={s.listContainer}
+          ListHeaderComponent={null}
+        />
+      )}
+    </View>
+  );
+});
+
+type HomeTabProps = {
+  projectCount: number;
+  selectedProjectName: string;
+  issuesCount: number;
+  expensesTotal: number;
+  featuresCount: number;
+  todosCount: number;
+  ideasCount: number;
+  bugsCount: number;
+  enhancementsCount: number;
+  styles: Record<string, unknown>;
+};
+
+const HomeTab = memo(function HomeTab({
+  projectCount,
+  selectedProjectName,
+  issuesCount,
+  expensesTotal,
+  featuresCount,
+  todosCount,
+  ideasCount,
+  bugsCount,
+  enhancementsCount,
+  styles,
+}: HomeTabProps) {
+  const s = styles as Record<string, object>;
+  return (
+    <View style={s.stack}>
+      <AppCard title="Projects">
+        <Text style={s.bigValue}>{projectCount}</Text>
+      </AppCard>
+      <AppCard title="Current Project">
+        <Text style={s.valueText}>{selectedProjectName}</Text>
+      </AppCard>
+      <AppCard title="Summary">
+        <Text style={s.body}>Issues: {issuesCount}</Text>
+        <Text style={s.body}>Expenses: ${expensesTotal.toFixed(2)}</Text>
+        <Text style={s.body}>Features: {featuresCount}</Text>
+        <Text style={s.body}>Todos: {todosCount}</Text>
+        <Text style={s.body}>Ideas: {ideasCount}</Text>
+        <Text style={s.body}>Bugs: {bugsCount}</Text>
+        <Text style={s.body}>Enhancements: {enhancementsCount}</Text>
+      </AppCard>
+    </View>
+  );
+});
+
+type ProjectsTabProps = {
+  projects: Project[];
+  selectedProjectId: string;
+  selectedProject: Project | null;
+  createProjectName: string;
+  setCreateProjectName: (v: string) => void;
+  creatingProject: boolean;
+  projectEditName: string;
+  setProjectEditName: (v: string) => void;
+  savingProjectEdit: boolean;
+  deletingProject: boolean;
+  onSelectProject: (id: string) => void;
+  onCreateProject: () => Promise<void>;
+  onUpdateProject: () => Promise<void>;
+  onDeleteProject: () => Promise<void>;
+  styles: Record<string, unknown>;
+};
+
+const projectsListKeyExtractor = (item: Project) => item.id;
+
+const ProjectsTab = memo(function ProjectsTab({
+  projects,
+  selectedProjectId,
+  selectedProject,
+  createProjectName,
+  setCreateProjectName,
+  creatingProject,
+  projectEditName,
+  setProjectEditName,
+  savingProjectEdit,
+  deletingProject,
+  onSelectProject,
+  onCreateProject,
+  onUpdateProject,
+  onDeleteProject,
+  styles,
+}: ProjectsTabProps) {
+  const s = styles as Record<string, object>;
+  const renderProjectItem = useCallback(
+    ({ item }: { item: Project }) => (
+      <Pressable
+        style={[s.listItem, item.id === selectedProjectId ? s.listItemSelected : null]}
+        onPress={() => onSelectProject(item.id)}
+      >
+        <Text style={s.listItemTitle}>{item.name}</Text>
+        <Text style={s.listItemMeta}>{item.id}</Text>
+      </Pressable>
+    ),
+    [selectedProjectId, onSelectProject, styles]
+  );
+  return (
+    <View style={s.stackFill}>
+      <AppCard title="Create Project">
+        <View style={s.inlineRow}>
+          <TextInput
+            style={s.input}
+            value={createProjectName}
+            onChangeText={setCreateProjectName}
+            placeholder="Project name"
+            placeholderTextColor="#94a3b8"
+          />
+          <AppButton
+            label={creatingProject ? "Adding..." : "Add"}
+            disabled={creatingProject || !createProjectName.trim()}
+            onPress={() => onCreateProject().catch(() => {})}
+          />
+        </View>
+      </AppCard>
+      <AppCard title="Project Settings">
+        {selectedProject ? (
+          <View style={s.stack}>
+            <TextInput
+              style={s.input}
+              value={projectEditName}
+              onChangeText={setProjectEditName}
+              placeholder="Project name"
+              placeholderTextColor="#94a3b8"
+            />
+            <View style={s.inlineRow}>
+              <AppButton
+                label={savingProjectEdit ? "Saving..." : "Save Name"}
+                disabled={
+                  savingProjectEdit ||
+                  !projectEditName.trim() ||
+                  projectEditName.trim() === selectedProject.name
+                }
+                onPress={() => onUpdateProject().catch(() => {})}
+              />
+              <AppButton
+                label={deletingProject ? "Deleting..." : "Delete Project"}
+                variant="secondary"
+                disabled={deletingProject}
+                onPress={() => onDeleteProject().catch(() => {})}
+              />
+            </View>
+          </View>
+        ) : (
+          <Text style={s.subtle}>Select a project to edit or delete it.</Text>
+        )}
+      </AppCard>
+      <AppCard title="Projects" style={s.fillCard}>
+        <FlatList
+          data={projects}
+          keyExtractor={projectsListKeyExtractor}
+          contentContainerStyle={s.listContainer}
+          renderItem={renderProjectItem}
+          ListEmptyComponent={<Text style={s.subtle}>No projects yet.</Text>}
+        />
+      </AppCard>
+    </View>
+  );
+});
+
+type UserChipProps = {
+  userId: string;
+  label: string;
+  isSelected: boolean;
+  onSelect: (userId: string) => void;
+  styles: Record<string, unknown>;
+};
+
+const UserChip = memo(function UserChip({
+  userId,
+  label,
+  isSelected,
+  onSelect,
+  styles,
+}: UserChipProps) {
+  const s = styles as Record<string, object>;
+  return (
+    <Pressable
+      style={[s.chip, isSelected ? s.chipActive : null]}
+      onPress={() => onSelect(userId)}
+    >
+      <Text style={[s.chipText, isSelected ? s.chipTextActive : null]}>{label}</Text>
+    </Pressable>
+  );
+});
 
 export default function App() {
   const [token, setToken] = useState("");
@@ -589,6 +1059,16 @@ export default function App() {
     });
     return map;
   }, [filteredIssues]);
+
+  const issueBoardStatuses = useMemo(
+    () =>
+      ISSUE_STATUSES.filter(
+        (status) => issueBoardFocus === "all" || issueBoardFocus === status
+      ),
+    [issueBoardFocus]
+  );
+
+  const issueBoardKeyExtractor = useCallback((status: string) => status, []);
 
   const loadProjects = useCallback(async () => {
     if (!token) return;
@@ -1117,7 +1597,7 @@ export default function App() {
         if (options?.showContinueAlert ?? true) {
           Alert.alert(
             "Continue in Safari",
-            "Complete Google sign-in in Safari. If the app does not reopen automatically, tap the Open IdeaHome App button in Safari."
+            "Complete Google sign-in in Safari. If the app does not reopen automatically, tap the Open Idea Home App button in Safari."
           );
         }
       } catch (error) {
@@ -1415,6 +1895,57 @@ export default function App() {
       done: false,
     });
   }, []);
+
+  const renderIssueBoardColumn = useCallback(
+    ({ item: status }: { item: string }) => (
+      <IssueBoardColumn
+        status={status}
+        issues={issuesByStatus[status] ?? []}
+        collapsed={!!collapsedIssueStatuses[status]}
+        onToggleCollapse={() =>
+          setCollapsedIssueStatuses((current) => ({
+            ...current,
+            [status]: !current[status],
+          }))
+        }
+        selectedIssueId={selectedIssueId}
+        quickEditIssueId={quickEditIssueId}
+        quickEditTitle={quickEditTitle}
+        quickEditQualityScore={quickEditQualityScore}
+        quickEditAssigneeId={quickEditAssigneeId}
+        users={users}
+        savingQuickEdit={savingQuickEdit}
+        onQuickEditTitleChange={setQuickEditTitle}
+        onQuickEditQualityScoreChange={setQuickEditQualityScore}
+        onQuickEditAssigneeChange={setQuickEditAssigneeId}
+        onSelectIssue={setSelectedIssueId}
+        onStartQuickEdit={handleStartQuickEditIssue}
+        onCancelQuickEdit={handleCancelQuickEditIssue}
+        onSaveQuickEdit={(issueId) =>
+          handleSaveQuickEditIssue(issueId).catch(() => {})
+        }
+        onMoveIssue={(issue, direction) =>
+          handleMoveIssue(issue, direction).catch(() => {})
+        }
+        styles={styles}
+      />
+    ),
+    [
+      issuesByStatus,
+      collapsedIssueStatuses,
+      selectedIssueId,
+      quickEditIssueId,
+      quickEditTitle,
+      quickEditQualityScore,
+      quickEditAssigneeId,
+      users,
+      savingQuickEdit,
+      handleStartQuickEditIssue,
+      handleCancelQuickEditIssue,
+      handleSaveQuickEditIssue,
+      handleMoveIssue,
+    ]
+  );
 
   const handleCreateComment = useCallback(async () => {
     if (!token || !selectedIssue) return;
@@ -2225,23 +2756,6 @@ export default function App() {
     []
   );
 
-  const buildIdeaAssistantContext = useCallback(
-    (messages: AssistantChatMessage[], nextPrompt: string) => {
-      const recent = messages.slice(-8);
-      const transcript = recent
-        .map((message) => `${message.role === "user" ? "User" : "Assistant"}: ${message.text}`)
-        .join("\n");
-      return [
-        "Continue this conversation and answer the latest user request.",
-        transcript ? `Conversation:\n${transcript}` : null,
-        `User: ${nextPrompt}`,
-      ]
-        .filter(Boolean)
-        .join("\n\n");
-    },
-    []
-  );
-
   const handleIdeaAssistantSend = useCallback(
     async (idea: ChecklistItem) => {
       if (!token) return;
@@ -2249,7 +2763,7 @@ export default function App() {
       if (!draft) return;
       if (ideaAssistantLoadingById[idea.id]) return;
       const prior = ideaAssistantChatById[idea.id] ?? [];
-      const context = buildIdeaAssistantContext(prior, draft);
+      const context = buildIdeaChatContext(prior, draft);
       const userMessage: AssistantChatMessage = {
         id: createAssistantMessageId(),
         role: "user",
@@ -2292,7 +2806,6 @@ export default function App() {
       }
     },
     [
-      buildIdeaAssistantContext,
       createAssistantMessageId,
       ideaAssistantChatById,
       ideaAssistantDraftById,
@@ -2684,7 +3197,7 @@ export default function App() {
       <SafeAreaView style={styles.screen}>
         <StatusBar barStyle="dark-content" />
         <View style={styles.authContainer}>
-          <Text style={styles.title}>IdeaHome</Text>
+          <Text style={styles.title}>Idea Home</Text>
           <Text style={styles.body}>Sign in with Google using secure native authentication.</Text>
           <AppButton
             label={authInProgress ? "Signing in..." : "Continue with Google"}
@@ -2716,7 +3229,7 @@ export default function App() {
       <StatusBar barStyle="dark-content" />
 
       <View style={styles.topBar}>
-        <Text style={styles.brand}>IdeaHome</Text>
+        <Text style={styles.brand}>Idea Home</Text>
         <AppButton
           label={
             signOutInProgress
@@ -2779,108 +3292,38 @@ export default function App() {
         />
 
         {activeTab === "home" ? (
-          <View style={styles.stack}>
-            <AppCard title="Projects">
-              <Text style={styles.bigValue}>{projects.length}</Text>
-            </AppCard>
-            <AppCard title="Current Project">
-              <Text style={styles.valueText}>{selectedProject?.name ?? "No project selected"}</Text>
-            </AppCard>
-            <AppCard title="Summary">
-              <Text style={styles.body}>Issues: {issues.length}</Text>
-              <Text style={styles.body}>Expenses: ${expensesTotal.toFixed(2)}</Text>
-              <Text style={styles.body}>Features: {features.length}</Text>
-              <Text style={styles.body}>Todos: {todos.length}</Text>
-              <Text style={styles.body}>Ideas: {ideas.length}</Text>
-              <Text style={styles.body}>Bugs: {bugs.length}</Text>
-              <Text style={styles.body}>Enhancements: {enhancements.length}</Text>
-            </AppCard>
-          </View>
+          <HomeTab
+            projectCount={projects.length}
+            selectedProjectName={selectedProject?.name ?? "No project selected"}
+            issuesCount={issues.length}
+            expensesTotal={expensesTotal}
+            featuresCount={features.length}
+            todosCount={todos.length}
+            ideasCount={ideas.length}
+            bugsCount={bugs.length}
+            enhancementsCount={enhancements.length}
+            styles={styles}
+          />
         ) : null}
 
         {activeTab === "projects" ? (
-          <View style={styles.stackFill}>
-            <AppCard title="Create Project">
-              <View style={styles.inlineRow}>
-                <TextInput
-                  style={styles.input}
-                  value={createProjectName}
-                  onChangeText={setCreateProjectName}
-                  placeholder="Project name"
-                  placeholderTextColor="#94a3b8"
-                />
-                <AppButton
-                  label={creatingProject ? "Adding..." : "Add"}
-                  disabled={creatingProject || !createProjectName.trim()}
-                  onPress={() => {
-                    handleCreateProject().catch(() => {
-                      // handled
-                    });
-                  }}
-                />
-              </View>
-            </AppCard>
-            <AppCard title="Project Settings">
-              {selectedProject ? (
-                <View style={styles.stack}>
-                  <TextInput
-                    style={styles.input}
-                    value={projectEditName}
-                    onChangeText={setProjectEditName}
-                    placeholder="Project name"
-                    placeholderTextColor="#94a3b8"
-                  />
-                  <View style={styles.inlineRow}>
-                    <AppButton
-                      label={savingProjectEdit ? "Saving..." : "Save Name"}
-                      disabled={
-                        savingProjectEdit ||
-                        !projectEditName.trim() ||
-                        projectEditName.trim() === selectedProject.name
-                      }
-                      onPress={() => {
-                        handleUpdateProject().catch(() => {
-                          // handled
-                        });
-                      }}
-                    />
-                    <AppButton
-                      label={deletingProject ? "Deleting..." : "Delete Project"}
-                      variant="secondary"
-                      disabled={deletingProject}
-                      onPress={() => {
-                        handleDeleteProject().catch(() => {
-                          // handled
-                        });
-                      }}
-                    />
-                  </View>
-                </View>
-              ) : (
-                <Text style={styles.subtle}>Select a project to edit or delete it.</Text>
-              )}
-            </AppCard>
-            <AppCard title="Projects" style={styles.fillCard}>
-              <FlatList
-                data={projects}
-                keyExtractor={(item) => item.id}
-                contentContainerStyle={styles.listContainer}
-                renderItem={({ item }) => (
-                  <Pressable
-                    style={[
-                      styles.listItem,
-                      item.id === selectedProjectId ? styles.listItemSelected : null,
-                    ]}
-                    onPress={() => setSelectedProjectId(item.id)}
-                  >
-                    <Text style={styles.listItemTitle}>{item.name}</Text>
-                    <Text style={styles.listItemMeta}>{item.id}</Text>
-                  </Pressable>
-                )}
-                ListEmptyComponent={<Text style={styles.subtle}>No projects yet.</Text>}
-              />
-            </AppCard>
-          </View>
+          <ProjectsTab
+            projects={projects}
+            selectedProjectId={selectedProjectId}
+            selectedProject={selectedProject}
+            createProjectName={createProjectName}
+            setCreateProjectName={setCreateProjectName}
+            creatingProject={creatingProject}
+            projectEditName={projectEditName}
+            setProjectEditName={setProjectEditName}
+            savingProjectEdit={savingProjectEdit}
+            deletingProject={deletingProject}
+            onSelectProject={setSelectedProjectId}
+            onCreateProject={handleCreateProject}
+            onUpdateProject={handleUpdateProject}
+            onDeleteProject={handleDeleteProject}
+            styles={styles}
+          />
         ) : null}
 
         {activeTab === "issues" ? (
@@ -3103,20 +3546,14 @@ export default function App() {
                   </Text>
                 </Pressable>
                 {users.map((user) => (
-                  <Pressable
+                  <UserChip
                     key={`board-filter-${user.id}`}
-                    style={[styles.chip, issueAssigneeFilter === user.id ? styles.chipActive : null]}
-                    onPress={() => setIssueAssigneeFilter(user.id)}
-                  >
-                    <Text
-                      style={[
-                        styles.chipText,
-                        issueAssigneeFilter === user.id ? styles.chipTextActive : null,
-                      ]}
-                    >
-                      {user.name || user.email}
-                    </Text>
-                  </Pressable>
+                    userId={user.id}
+                    label={user.name || user.email}
+                    isSelected={issueAssigneeFilter === user.id}
+                    onSelect={setIssueAssigneeFilter}
+                    styles={styles}
+                  />
                 ))}
               </View>
               <View style={styles.chipWrap}>
@@ -3146,183 +3583,10 @@ export default function App() {
                 ))}
               </View>
               <FlatList
-                data={ISSUE_STATUSES.filter((status) => issueBoardFocus === "all" || issueBoardFocus === status)}
-                keyExtractor={(status) => status}
+                data={issueBoardStatuses}
+                keyExtractor={issueBoardKeyExtractor}
                 contentContainerStyle={styles.listContainer}
-                renderItem={({ item: status }) => (
-                  <View style={styles.issueGroup}>
-                    <View style={styles.issueGroupHeader}>
-                      <Text style={styles.issueGroupTitle}>
-                        {statusLabel(status)} ({(issuesByStatus[status] ?? []).length})
-                      </Text>
-                      <AppButton
-                        label={collapsedIssueStatuses[status] ? "Expand" : "Collapse"}
-                        variant="secondary"
-                        onPress={() =>
-                          setCollapsedIssueStatuses((current) => ({
-                            ...current,
-                            [status]: !current[status],
-                          }))
-                        }
-                      />
-                    </View>
-                    {!collapsedIssueStatuses[status]
-                      ? (issuesByStatus[status] ?? []).map((issue) => (
-                          <View
-                            key={issue.id}
-                            style={[
-                              styles.issueItem,
-                              issue.id === selectedIssueId ? styles.listItemSelected : null,
-                            ]}
-                          >
-                            <View style={styles.issueItemMain}>
-                              {quickEditIssueId === issue.id ? (
-                                <View style={styles.stack}>
-                                  <TextInput
-                                    style={styles.input}
-                                    value={quickEditTitle}
-                                    onChangeText={setQuickEditTitle}
-                                    placeholder="Issue title"
-                                    placeholderTextColor="#94a3b8"
-                                  />
-                                  <TextInput
-                                    style={styles.input}
-                                    value={quickEditQualityScore}
-                                    onChangeText={setQuickEditQualityScore}
-                                    keyboardType="decimal-pad"
-                                    placeholder="Quality score"
-                                    placeholderTextColor="#94a3b8"
-                                  />
-                                  <View style={styles.chipWrap}>
-                                    <Pressable
-                                      style={[
-                                        styles.chip,
-                                        !quickEditAssigneeId ? styles.chipActive : null,
-                                      ]}
-                                      onPress={() => setQuickEditAssigneeId("")}
-                                    >
-                                      <Text
-                                        style={[
-                                          styles.chipText,
-                                          !quickEditAssigneeId ? styles.chipTextActive : null,
-                                        ]}
-                                      >
-                                        Unassigned
-                                      </Text>
-                                    </Pressable>
-                                    {users.map((user) => (
-                                      <Pressable
-                                        key={`quick-edit-${issue.id}-${user.id}`}
-                                        style={[
-                                          styles.chip,
-                                          quickEditAssigneeId === user.id ? styles.chipActive : null,
-                                        ]}
-                                        onPress={() => setQuickEditAssigneeId(user.id)}
-                                      >
-                                        <Text
-                                          style={[
-                                            styles.chipText,
-                                            quickEditAssigneeId === user.id
-                                              ? styles.chipTextActive
-                                              : null,
-                                          ]}
-                                        >
-                                          {user.name || user.email}
-                                        </Text>
-                                      </Pressable>
-                                    ))}
-                                  </View>
-                                </View>
-                              ) : (
-                                <>
-                                  <Pressable onPress={() => setSelectedIssueId(issue.id)}>
-                                    <Text style={styles.listItemTitle}>{issue.title}</Text>
-                                  </Pressable>
-                                  <Text style={styles.listItemMeta}>
-                                    Assignee:{" "}
-                                    {issue.assignee?.name ?? issue.assignee?.email ?? "Unassigned"}
-                                  </Text>
-                                  <Text style={styles.listItemMeta}>
-                                    Quality: {issue.qualityScore ?? "n/a"}
-                                  </Text>
-                                  <Text
-                                    style={[
-                                      styles.badge,
-                                      {
-                                        color:
-                                          colors.status[issue.status as keyof typeof colors.status] ??
-                                          colors.textMuted,
-                                      },
-                                    ]}
-                                  >
-                                    {statusLabel(issue.status)}
-                                  </Text>
-                                </>
-                              )}
-                            </View>
-                            <View style={styles.inlineRowWrap}>
-                              {quickEditIssueId === issue.id ? (
-                                <>
-                                  <AppButton
-                                    label={savingQuickEdit ? "Saving..." : "Save"}
-                                    disabled={savingQuickEdit || !quickEditTitle.trim()}
-                                    onPress={() => {
-                                      handleSaveQuickEditIssue(issue.id).catch(() => {
-                                        // handled
-                                      });
-                                    }}
-                                  />
-                                  <AppButton
-                                    label="Cancel"
-                                    variant="secondary"
-                                    disabled={savingQuickEdit}
-                                    onPress={handleCancelQuickEditIssue}
-                                  />
-                                </>
-                              ) : (
-                                <>
-                                  <AppButton
-                                    label="Quick Edit"
-                                    variant="secondary"
-                                    onPress={() => handleStartQuickEditIssue(issue)}
-                                  />
-                                  <AppButton
-                                    label="Back"
-                                    variant="secondary"
-                                    disabled={issue.status === ISSUE_STATUSES[0]}
-                                    onPress={() => {
-                                      handleMoveIssue(issue, "backward").catch(() => {
-                                        // handled
-                                      });
-                                    }}
-                                  />
-                                  <AppButton
-                                    label="Forward"
-                                    variant="secondary"
-                                    disabled={
-                                      issue.status ===
-                                      ISSUE_STATUSES[ISSUE_STATUSES.length - 1]
-                                    }
-                                    onPress={() => {
-                                      handleMoveIssue(issue, "forward").catch(() => {
-                                        // handled
-                                      });
-                                    }}
-                                  />
-                                </>
-                              )}
-                            </View>
-                          </View>
-                        ))
-                      : null}
-                    {!(issuesByStatus[status] ?? []).length ? (
-                      <Text style={styles.subtle}>No issues</Text>
-                    ) : null}
-                    {collapsedIssueStatuses[status] && (issuesByStatus[status] ?? []).length > 0 ? (
-                      <Text style={styles.subtle}>Lane collapsed</Text>
-                    ) : null}
-                  </View>
-                )}
+                renderItem={renderIssueBoardColumn}
               />
             </AppCard>
 

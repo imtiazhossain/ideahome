@@ -108,7 +108,7 @@ export default function MobileAuthCallbackPage() {
     notifyNative({ type: NATIVE_BRIDGE_AUTH_CHANGE, token });
     if (openAppWithParams({ [AUTH_PARAM_TOKEN]: token })) {
       setMessage(
-        "Returning to IdeaHome app. If it does not open automatically, use the button below."
+        "Returning to Idea Home app. If it does not open automatically, use the button below."
       );
       setStatus("done");
       return;
@@ -121,7 +121,7 @@ export default function MobileAuthCallbackPage() {
   return (
     <>
       <Head>
-        <title>Signing in — IdeaHome</title>
+        <title>Signing in — Idea Home</title>
       </Head>
       <div
         style={{
@@ -149,7 +149,7 @@ export default function MobileAuthCallbackPage() {
           {status === "loading" && <p style={{ margin: 0 }}>Signing you in…</p>}
           {status === "done" && (
             <>
-              <p style={{ margin: 0 }}>{message || "Redirecting to IdeaHome…"}</p>
+              <p style={{ margin: 0 }}>{message || "Redirecting to Idea Home…"}</p>
               {deepLinkUrl ? (
                 <button
                   type="button"
@@ -167,7 +167,7 @@ export default function MobileAuthCallbackPage() {
                     fontWeight: 600,
                   }}
                 >
-                  Open IdeaHome App
+                  Open Idea Home App
                 </button>
               ) : null}
             </>
@@ -197,7 +197,7 @@ export default function MobileAuthCallbackPage() {
                     fontWeight: 600,
                   }}
                 >
-                  Return to IdeaHome App
+                  Return to Idea Home App
                 </button>
               ) : null}
             </>

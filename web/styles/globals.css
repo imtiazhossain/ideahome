@@ -260,6 +260,33 @@ textarea {
   filter: drop-shadow(0 0 12px rgba(96, 165, 250, 0.78));
 }
 
+/* Project nav drawer toggle: same color scheme as idea-plan-generate-btn */
+.project-nav-drawer-toggle {
+  border: 1px solid rgba(96, 165, 250, 0.8);
+  border-radius: 999px;
+  background: rgba(37, 99, 235, 0.08);
+  color: #bfdbfe;
+  filter: none;
+  transition:
+    border-color 0.15s ease,
+    color 0.15s ease,
+    background 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.project-nav-drawer-toggle:hover {
+  border-color: #93c5fd;
+  background: rgba(59, 130, 246, 0.24);
+  color: #eff6ff;
+  box-shadow:
+    0 0 0 1px rgba(147, 197, 253, 0.35) inset,
+    0 0 14px rgba(59, 130, 246, 0.35);
+}
+
+.project-nav-drawer-toggle .drawer-logo-mark svg {
+  filter: drop-shadow(0 0 4px rgba(147, 197, 253, 0.4));
+}
+
 .drawer-logo-btn {
   padding: 0;
   cursor: pointer;
@@ -313,8 +340,8 @@ textarea {
   line-height: 1;
   font-weight: 500;
   letter-spacing: 0.01em;
-  color: #60a5fa;
-  text-shadow: 0 0 14px rgba(96, 165, 250, 0.24);
+  color: #3b82f6;
+  text-shadow: 0 0 14px rgba(59, 130, 246, 0.24);
 }
 
 .drawer-header .drawer-toggle {
@@ -572,15 +599,16 @@ textarea {
   margin-left: 4px;
 }
 
+/* Same color scheme as idea-plan-generate-btn */
 .drawer-nav-item-reorder {
   flex-shrink: 0;
   width: 22px;
   height: 22px;
   padding: 0;
-  border: none;
-  border-radius: 4px;
-  background: rgba(0, 0, 0, 0.06);
-  color: var(--text-muted);
+  border: 1px solid rgba(96, 165, 250, 0.8);
+  border-radius: 6px;
+  background: rgba(37, 99, 235, 0.08);
+  color: #bfdbfe;
   font-size: 10px;
   line-height: 1;
   display: inline-flex;
@@ -588,14 +616,20 @@ textarea {
   justify-content: center;
   cursor: pointer;
   transition:
+    border-color 0.15s ease,
     color 0.15s ease,
     background 0.15s ease,
+    box-shadow 0.15s ease,
     opacity 0.15s ease;
 }
 
 .drawer-nav-item-reorder:hover:not(:disabled) {
-  color: var(--text);
-  background: rgba(0, 0, 0, 0.1);
+  border-color: #93c5fd;
+  background: rgba(59, 130, 246, 0.24);
+  color: #eff6ff;
+  box-shadow:
+    0 0 0 1px rgba(147, 197, 253, 0.35) inset,
+    0 0 14px rgba(59, 130, 246, 0.35);
 }
 
 .drawer-nav-item-reorder:disabled {
@@ -634,13 +668,17 @@ textarea {
   width: 100%;
   padding: 8px 12px;
   margin-bottom: 2px;
-  border: none;
+  border: 1px solid transparent;
   border-radius: 6px;
   background: transparent;
   color: var(--text);
   font-size: 14px;
   text-align: left;
-  transition: background 0.15s ease;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease,
+    box-shadow 0.15s ease;
 }
 
 .drawer-nav-item:hover {
@@ -648,9 +686,17 @@ textarea {
 }
 
 .drawer-nav-item.is-selected {
-  background: var(--column-bg);
-  color: var(--text);
+  border-color: transparent;
+  background: transparent;
+  color: #bfdbfe;
   font-weight: 500;
+}
+
+.drawer-nav-item.is-selected:hover {
+  border-color: transparent;
+  background: var(--column-bg);
+  color: #eff6ff;
+  box-shadow: none;
 }
 
 .drawer-nav-item-action {
@@ -675,9 +721,9 @@ textarea {
   width: 40px;
   height: 40px;
   padding: 0;
-  border: 1px solid var(--border);
+  border: 1px solid transparent;
   border-radius: 10px;
-  background: var(--column-bg);
+  background: transparent;
   color: var(--text);
   font-size: 18px;
   line-height: 1;
@@ -685,6 +731,11 @@ textarea {
   align-items: center;
   justify-content: center;
   cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.drawer-bottom-settings-btn:hover {
+  background: var(--column-bg);
 }
 
 .drawer-bottom-settings-menu {
@@ -1211,8 +1262,16 @@ textarea {
   text-decoration: none;
 }
 
+.drawer-nav a.drawer-nav-item.is-selected {
+  color: #bfdbfe;
+}
+
 .drawer-nav a.drawer-nav-item:hover {
   text-decoration: none;
+}
+
+.drawer-nav a.drawer-nav-item.is-selected:hover {
+  color: #eff6ff;
 }
 
 .drawer-nav-item-text:hover {
@@ -4590,6 +4649,219 @@ a.automated-tests-chip-text:hover {
   cursor: default;
 }
 
+/* Bulby floating chatbox (bottom-right) */
+.bulby-chatbox {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 12px;
+}
+
+.bulby-chatbox-panel {
+  position: relative;
+  z-index: 1;
+  width: min(380px, calc(100vw - 40px));
+  max-height: min(420px, calc(100vh - 100px));
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35);
+}
+
+.bulby-chatbox-panel .idea-plan-card-head {
+  flex-shrink: 0;
+  justify-content: space-between;
+}
+
+.bulby-chatbox-close {
+  background: none;
+  border: none;
+  color: rgba(148, 163, 184, 0.9);
+  font-size: 20px;
+  line-height: 1;
+  padding: 0 4px;
+  cursor: pointer;
+  border-radius: 4px;
+}
+
+.bulby-chatbox-close:hover {
+  color: rgba(241, 245, 249, 0.95);
+  background: rgba(148, 163, 184, 0.2);
+}
+
+.bulby-chatbox-panel .idea-chat-thread {
+  flex: 1;
+  min-height: 160px;
+  max-height: 240px;
+}
+
+.bulby-chatbox-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(96, 165, 250, 0.6);
+  background: linear-gradient(
+    135deg,
+    rgba(37, 99, 235, 0.25),
+    rgba(30, 64, 175, 0.2)
+  );
+  color: #dbeafe;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.2);
+  transition: border-color 0.15s ease, background 0.15s ease, transform 0.15s ease;
+}
+
+.bulby-chatbox-trigger:hover {
+  border-color: #93c5fd;
+  background: linear-gradient(
+    135deg,
+    rgba(59, 130, 246, 0.35),
+    rgba(37, 99, 235, 0.28)
+  );
+}
+
+.bulby-chatbox-trigger:active {
+  transform: scale(0.98);
+}
+
+.bulby-chatbox-trigger-label {
+  line-height: 1;
+}
+
+/* Icon-only trigger: circular Bulby character, no pill (z-index so panel can sit in front of glow) */
+.bulby-chatbox-trigger--icon {
+  position: relative;
+  z-index: 0;
+  width: 88px;
+  height: 88px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: none;
+  box-shadow: none;
+  color: inherit;
+  overflow: visible;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.bulby-chatbox-trigger--icon:hover {
+  border: none;
+  background: rgba(59, 130, 246, 0.12);
+}
+
+.bulby-chatbox-trigger--icon:active {
+  background: rgba(59, 130, 246, 0.2);
+}
+
+/* Bulby cartoon character (bottom-right) */
+.bulby-character {
+  width: 80px;
+  height: 80px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: bulby-float 2.5s ease-in-out infinite;
+}
+
+/* Same lighting as first reference: cool blue glow around dark circle */
+.bulby-character-svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+  filter: drop-shadow(0 0 6px rgba(92, 128, 176, 0.6))
+    drop-shadow(0 0 14px rgba(92, 128, 176, 0.4));
+  transition: filter 0.2s ease;
+}
+
+/* Slight glow increase on hover */
+.bulby-chatbox-trigger--icon:hover .bulby-character-svg {
+  filter: drop-shadow(0 0 8px rgba(92, 128, 176, 0.8))
+    drop-shadow(0 0 18px rgba(92, 128, 176, 0.5));
+}
+
+/* Light up when clicked — stronger glow, stays on while chat is open */
+.bulby-chatbox-trigger--icon:active .bulby-character-svg,
+.bulby-chatbox-trigger--icon.bulby-chatbox-trigger--open .bulby-character-svg {
+  filter: drop-shadow(0 0 10px rgba(92, 128, 176, 0.9))
+    drop-shadow(0 0 24px rgba(92, 128, 176, 0.7))
+    drop-shadow(0 0 40px rgba(147, 197, 253, 0.5))
+    brightness(1.15);
+}
+
+/* Pulse when thinking — same as list Bulby (idea-plan-generate-btn.is-thinking) */
+.bulby-chatbox-trigger.is-thinking .bulby-character-svg {
+  animation: idea-bulb-pulse 1.2s linear infinite;
+  transform-origin: center;
+}
+
+.bulby-chatbox-trigger.is-thinking {
+  animation: idea-generate-glow-pulse 1.2s ease-in-out infinite;
+}
+
+.bulby-chatbox-trigger.is-thinking::after {
+  content: "";
+  position: absolute;
+  inset: -4px;
+  border-radius: 50%;
+  border: 1px solid rgba(147, 197, 253, 0.65);
+  animation: idea-generate-ring-pulse 1.2s ease-out infinite;
+  pointer-events: none;
+}
+
+.bulby-character-bulb {
+  transform-origin: 32px 32px;
+  animation: bulby-sway 4s ease-in-out infinite;
+}
+
+.bulby-character-eye {
+  animation: bulby-blink 4s ease-in-out infinite;
+}
+
+@keyframes bulby-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-4px);
+  }
+}
+
+@keyframes bulby-sway {
+  0%,
+  100% {
+    transform: rotate(0deg);
+  }
+  25% {
+    transform: rotate(-3deg);
+  }
+  75% {
+    transform: rotate(3deg);
+  }
+}
+
+@keyframes bulby-blink {
+  0%,
+  40%,
+  60%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.3;
+  }
+}
+
 .idea-plan-section {
   margin-top: 6px;
 }
@@ -4683,6 +4955,56 @@ a.automated-tests-chip-text:hover {
   color: #1d4ed8;
 }
 
+[data-theme="light"] .project-nav-drawer-toggle {
+  border-color: #2563eb;
+  background: rgba(37, 99, 235, 0.06);
+  color: #1d4ed8;
+}
+
+[data-theme="light"] .project-nav-drawer-toggle:hover {
+  border-color: #1d4ed8;
+  background: rgba(37, 99, 235, 0.12);
+  color: #1e3a8a;
+  box-shadow:
+    0 0 0 1px rgba(37, 99, 235, 0.2) inset,
+    0 0 12px rgba(59, 130, 246, 0.25);
+}
+
+[data-theme="light"] .drawer-nav-item-reorder {
+  border-color: #2563eb;
+  background: rgba(37, 99, 235, 0.06);
+  color: #1d4ed8;
+}
+
+[data-theme="light"] .drawer-nav-item-reorder:hover:not(:disabled) {
+  border-color: #1d4ed8;
+  background: rgba(37, 99, 235, 0.12);
+  color: #1e3a8a;
+  box-shadow:
+    0 0 0 1px rgba(37, 99, 235, 0.2) inset,
+    0 0 12px rgba(59, 130, 246, 0.25);
+}
+
+[data-theme="light"] .drawer-nav-item.is-selected {
+  border-color: transparent;
+  background: transparent;
+  color: #1d4ed8;
+}
+
+[data-theme="light"] .drawer-nav a.drawer-nav-item.is-selected {
+  color: #1d4ed8;
+}
+
+[data-theme="light"] .drawer-nav-item.is-selected:hover {
+  border-color: transparent;
+  background: var(--column-bg);
+  color: #1e3a8a;
+  box-shadow: none;
+}
+
+[data-theme="light"] .drawer-nav a.drawer-nav-item.is-selected:hover {
+  color: #1e3a8a;
+}
 
 [data-theme="light"] .idea-plan-generate-btn:hover {
   border-color: #1d4ed8;
@@ -4772,6 +5094,38 @@ a.automated-tests-chip-text:hover {
 [data-theme="light"] .idea-chat-send-btn:hover:not(:disabled) {
   background: rgba(37, 99, 235, 0.16);
   border-color: #1d4ed8;
+}
+
+/* Light mode: match floating Bulby (right) — dark circle, blue border/glow, light icon */
+[data-theme="light"] .bulby-chatbox-trigger {
+  border-color: #2563eb;
+  background: rgba(37, 99, 235, 0.12);
+  color: #1d4ed8;
+}
+
+[data-theme="light"] .bulby-chatbox-trigger:hover {
+  border-color: #1d4ed8;
+  background: rgba(37, 99, 235, 0.2);
+  color: #1e3a8a;
+}
+
+[data-theme="light"] .bulby-chatbox-trigger--icon,
+[data-theme="light"] .bulby-chatbox-trigger--icon:hover {
+  border: none;
+  background: transparent;
+  color: inherit;
+}
+
+[data-theme="light"] .bulby-chatbox-trigger--icon:hover {
+  background: rgba(37, 99, 235, 0.08);
+}
+
+[data-theme="light"] .bulby-chatbox-trigger.is-thinking {
+  animation-name: idea-generate-glow-pulse-light;
+}
+
+[data-theme="light"] .bulby-chatbox-trigger.is-thinking::after {
+  border-color: rgba(37, 99, 235, 0.55);
 }
 
 .features-list-input-wrap {

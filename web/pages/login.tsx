@@ -51,7 +51,7 @@ export default function LoginPage() {
   return (
     <>
       <Head>
-        <title>Sign in — IdeaHome</title>
+        <title>Sign in — Idea Home</title>
       </Head>
       <div
         style={{
@@ -83,7 +83,7 @@ export default function LoginPage() {
               fontWeight: 600,
             }}
           >
-            IdeaHome
+            Idea Home
           </h1>
           <p
             style={{
