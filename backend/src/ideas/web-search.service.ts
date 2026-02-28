@@ -26,6 +26,7 @@ type TavilyResponse = {
 @Injectable()
 export class WebSearchService {
   private readonly defaultTimeoutMs = 12000;
+  private readonly maxSnippetLength = 220;
 
   isConfigured(): boolean {
     return Boolean(process.env.TAVILY_API_KEY?.trim());
@@ -83,7 +84,7 @@ export class WebSearchService {
     return {
       title: title || url,
       url,
-      snippet: snippet.slice(0, 500),
+      snippet: snippet.slice(0, this.maxSnippetLength),
       publishedAt: publishedRaw || null,
     };
   }

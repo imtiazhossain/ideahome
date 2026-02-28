@@ -1,3 +1,89 @@
+import {
+  API_REQUEST_HEADER as SHARED_API_REQUEST_HEADER,
+  ASSISTANT_VOICE_CHANGE_EVENT as SHARED_ASSISTANT_VOICE_CHANGE_EVENT,
+  AUTH_CHANGE_EVENT as SHARED_AUTH_CHANGE_EVENT,
+  AUTH_TOKEN_COOKIE_KEY as SHARED_AUTH_TOKEN_COOKIE_KEY,
+  AUTH_TOKEN_KEY as SHARED_AUTH_TOKEN_KEY,
+  AUTH_TOKEN_SESSION_KEY as SHARED_AUTH_TOKEN_SESSION_KEY,
+  STATUS_OPTIONS,
+  pathCommentAttachmentById,
+  pathCommentAttachments,
+  pathExpenseById,
+  pathExpenses,
+  pathOrganizations,
+  pathOrganizationsEnsure,
+  pathIssueById,
+  pathIssueFileById,
+  pathIssueFiles,
+  pathIssueFileStream,
+  pathIssueCommentById,
+  pathIssueComments,
+  pathIssueRecordingById,
+  pathIssueRecordings,
+  pathIssueScreenshotById,
+  pathIssueScreenshots,
+  pathIssueStatus,
+  pathIssues,
+  pathIssuesBulk,
+  pathRecordingStream,
+  pathScreenshotStream,
+  pathProjectById,
+  pathProjects,
+  pathTestsRunApi,
+  pathTestsRunUi,
+  pathUsers,
+} from "@ideahome/shared-config";
+import type {
+  AddCommentAttachmentInput,
+  CommentAttachment as SharedCommentAttachment,
+  CommentAttachmentType as SharedCommentAttachmentType,
+  CreateExpenseInput,
+  CreateIssueCommentInput,
+  CreateIssueInput,
+  CreateProjectInput,
+  Expense as SharedExpense,
+  Issue as SharedIssue,
+  IssueComment as SharedIssueComment,
+  Organization as SharedOrganization,
+  IssueCommentEditHistoryEntry as SharedIssueCommentEditHistoryEntry,
+  IssueFile as SharedIssueFile,
+  IssueRecording as SharedIssueRecording,
+  IssueScreenshot as SharedIssueScreenshot,
+  Project as SharedProject,
+  RunApiTestInput,
+  RunApiTestResult as SharedRunApiTestResult,
+  RunUiTestInput,
+  RunUiTestResult as SharedRunUiTestResult,
+  UpdateExpenseInput,
+  UpdateIssueCommentInput,
+  UpdateIssueInput,
+  UpdateIssueStatusInput,
+  UpdateProjectInput,
+  User as SharedUser,
+} from "@ideahome/shared-config";
+import {
+  safeLocalStorageGet,
+  safeLocalStorageRemove,
+  safeLocalStorageSet,
+  safeSessionStorageGet,
+  safeSessionStorageRemove,
+  safeSessionStorageSet,
+} from "./storage";
+import {
+  createAssistantApi,
+  type ElevenLabsVoice,
+} from "./api/assistant";
+import {
+  createCheckableApis,
+  type Bug,
+  type Enhancement,
+  type Feature,
+  type Idea,
+  type IdeaAssistantChatResult,
+  type IdeaPlan,
+  type Todo,
+} from "./api/checkable-entities";
+
 /** Backend API base URL. Always absolute so requests never go to the current page origin. */
 const API_BASE_RAW = process.env.NEXT_PUBLIC_API_URL || "";
 const API_BASE_DEFAULT = "http://localhost:3001";
@@ -18,59 +104,11 @@ function resolveApiBase(raw: string): string {
 const API_BASE_RESOLVED = resolveApiBase(API_BASE_RAW);
 
 /** localStorage fallback key for SSO JWT (also cleaned on logout). */
-export const AUTH_TOKEN_KEY = "ideahome_token";
+export const AUTH_TOKEN_KEY = SHARED_AUTH_TOKEN_KEY;
 /** sessionStorage key for SSO JWT. */
-export const AUTH_TOKEN_SESSION_KEY = "ideahome_token_session";
+export const AUTH_TOKEN_SESSION_KEY = SHARED_AUTH_TOKEN_SESSION_KEY;
 /** cookie key for browser-managed auth (used by media tags that cannot set Authorization headers). */
-export const AUTH_TOKEN_COOKIE_KEY = "ideahome_token";
-
-function safeSessionStorageGet(key: string): string | null {
-  try {
-    return sessionStorage.getItem(key);
-  } catch {
-    return null;
-  }
-}
-
-function safeSessionStorageSet(key: string, value: string): void {
-  try {
-    sessionStorage.setItem(key, value);
-  } catch {
-    // ignore storage restrictions
-  }
-}
-
-function safeSessionStorageRemove(key: string): void {
-  try {
-    sessionStorage.removeItem(key);
-  } catch {
-    // ignore storage restrictions
-  }
-}
-
-function safeLocalStorageGet(key: string): string | null {
-  try {
-    return localStorage.getItem(key);
-  } catch {
-    return null;
-  }
-}
-
-function safeLocalStorageSet(key: string, value: string): void {
-  try {
-    localStorage.setItem(key, value);
-  } catch {
-    // ignore storage restrictions
-  }
-}
-
-function safeLocalStorageRemove(key: string): void {
-  try {
-    localStorage.removeItem(key);
-  } catch {
-    // ignore storage restrictions
-  }
-}
+export const AUTH_TOKEN_COOKIE_KEY = SHARED_AUTH_TOKEN_COOKIE_KEY;
 
 function readCookie(name: string): string | null {
   if (typeof document === "undefined") return null;
@@ -113,7 +151,7 @@ function authHeaders(): Record<string, string> {
 }
 
 /** Header sent on all API requests so Next.js rewrites only proxy these (not page navigation). */
-export const API_REQUEST_HEADER = "X-Ideahome-Api";
+export const API_REQUEST_HEADER = SHARED_API_REQUEST_HEADER;
 
 let unauthorizedBlocked = false;
 
@@ -264,8 +302,8 @@ export function getStoredToken(): string | null {
 }
 
 /** Custom event dispatched when auth token changes (login/logout). */
-export const AUTH_CHANGE_EVENT = "ideahome-auth-change";
-export const ASSISTANT_VOICE_CHANGE_EVENT = "ideahome-assistant-voice-change";
+export const AUTH_CHANGE_EVENT = SHARED_AUTH_CHANGE_EVENT;
+export const ASSISTANT_VOICE_CHANGE_EVENT = SHARED_ASSISTANT_VOICE_CHANGE_EVENT;
 
 function dispatchAuthChange(): void {
   if (typeof window === "undefined") return;
@@ -435,66 +473,18 @@ export function getApiBase(): string {
 /** Backend base URL (static). Prefer getApiBase() in browser so requests never target the current page. */
 export const API_BASE = API_BASE_RESOLVED;
 
-export type User = { id: string; email: string; name: string | null };
-export type Organization = { id: string; name: string };
-export type Project = { id: string; name: string };
-export type IssueRecording = {
-  id: string;
-  videoUrl: string;
-  mediaType?: "video" | "audio";
-  recordingType?: "screen" | "camera" | "audio";
-  name?: string | null;
-  issueId: string;
-  createdAt: string;
-};
+export type User = SharedUser;
+export type Organization = SharedOrganization;
+export type Project = SharedProject;
+export type IssueRecording = SharedIssueRecording;
+export type IssueScreenshot = SharedIssueScreenshot;
+export type IssueFile = SharedIssueFile;
+export type Issue = SharedIssue;
 
-export type IssueScreenshot = {
-  id: string;
-  imageUrl: string;
-  name?: string | null;
-  issueId: string;
-  createdAt: string;
-};
-
-export type IssueFile = {
-  id: string;
-  fileUrl: string;
-  fileName: string;
-  issueId: string;
-  createdAt: string;
-};
-
-export type Issue = {
-  id: string;
-  key: string | null;
-  title: string;
-  description: string | null;
-  acceptanceCriteria: string | null;
-  database: string | null;
-  api: string | null;
-  testCases: string | null;
-  automatedTest: string | null;
-  status: string;
-  qualityScore: number;
-  projectId: string;
-  assigneeId: string | null;
-  assignee: User | null;
-  project: Project;
-  recordings: IssueRecording[];
-  screenshots: IssueScreenshot[];
-  files: IssueFile[];
-  createdAt: string;
-};
-
-export const STATUSES = [
-  { id: "backlog", label: "Backlog" },
-  { id: "todo", label: "To Do" },
-  { id: "in_progress", label: "In Progress" },
-  { id: "done", label: "Done" },
-] as const;
+export const STATUSES = STATUS_OPTIONS;
 
 export async function fetchOrganizations(): Promise<Organization[]> {
-  return requestJson<Organization[]>("/organizations", {
+  return requestJson<Organization[]>(pathOrganizations(), {
     errorMessage: "Failed to fetch organizations",
   });
 }
@@ -502,7 +492,7 @@ export async function fetchOrganizations(): Promise<Organization[]> {
 export async function createOrganization(body: {
   name: string;
 }): Promise<Organization> {
-  return requestJson<Organization>("/organizations", {
+  return requestJson<Organization>(pathOrganizations(), {
     method: "POST",
     body,
     errorMessage: "Failed to create organization",
@@ -511,21 +501,21 @@ export async function createOrganization(body: {
 
 /** Ensure the user has an organization (creates "My Workspace" if none). Returns the org. */
 export async function ensureOrganization(): Promise<Organization> {
-  return requestJson<Organization>("/organizations/ensure", {
+  return requestJson<Organization>(pathOrganizationsEnsure(), {
     method: "POST",
     errorMessage: "Failed to ensure organization",
   });
 }
 
 export async function fetchProjects(): Promise<Project[]> {
-  return requestJson<Project[]>("/projects", {
+  return requestJson<Project[]>(pathProjects(), {
     errorMessage: "Failed to fetch projects",
   });
 }
 
 /** Create a project in the current user's workspace. Backend assigns the user's org. */
-export async function createProject(body: { name: string }): Promise<Project> {
-  return requestJson<Project>("/projects", {
+export async function createProject(body: CreateProjectInput): Promise<Project> {
+  return requestJson<Project>(pathProjects(), {
     method: "POST",
     body,
     errorMessage: "Failed to create project",
@@ -534,9 +524,9 @@ export async function createProject(body: { name: string }): Promise<Project> {
 
 export async function updateProject(
   id: string,
-  data: { name: string }
+  data: UpdateProjectInput
 ): Promise<Project> {
-  return requestJson<Project>(`/projects/${encodeURIComponent(id)}`, {
+  return requestJson<Project>(pathProjectById(id), {
     method: "PUT",
     body: data,
     errorMessage: "Failed to update project",
@@ -544,162 +534,28 @@ export async function updateProject(
 }
 
 export async function deleteProject(id: string): Promise<void> {
-  return requestVoid(`/projects/${encodeURIComponent(id)}`, {
+  return requestVoid(pathProjectById(id), {
     method: "DELETE",
     errorMessage: "Failed to delete project",
   });
 }
 
-export type Todo = {
-  id: string;
-  name: string;
-  done: boolean;
-  order: number;
-  projectId: string;
-  createdAt: string;
+export type {
+  Todo,
+  Idea,
+  IdeaPlan,
+  IdeaAssistantChatResult,
+  Bug,
+  Feature,
+  Enhancement,
 };
 
-export type Idea = {
-  id: string;
-  name: string;
-  done: boolean;
-  order: number;
-  projectId: string;
-  createdAt: string;
-  planJson?: IdeaPlan | null;
-  planGeneratedAt?: string | null;
-};
-
-export type IdeaPlan = {
-  summary: string;
-  milestones: string[];
-  tasks: string[];
-  risks: string[];
-  firstSteps: string[];
-};
-
-export type IdeaAssistantChatResult = {
-  ideaId: string;
-  createdCount: number;
-  todos: Todo[];
-  previewGifUrl?: string | null;
-  message?: string;
-};
-
-export type Bug = {
-  id: string;
-  name: string;
-  done: boolean;
-  order: number;
-  projectId: string;
-  createdAt: string;
-};
-
-export type Feature = {
-  id: string;
-  name: string;
-  done: boolean;
-  order: number;
-  projectId: string;
-  createdAt: string;
-};
-
-export type Enhancement = {
-  id: string;
-  name: string;
-  done: boolean;
-  order: number;
-  projectId: string;
-  createdAt: string;
-};
-
-type CheckableEntity = {
-  id: string;
-  name: string;
-  done: boolean;
-  order: number;
-  projectId: string;
-  createdAt: string;
-};
-
-function createCheckableEntityApi<T extends CheckableEntity>(
-  resource: "todos" | "ideas" | "bugs" | "features",
-  singularLabel: "todo" | "idea" | "bug" | "feature",
-  pluralLabel: "todos" | "ideas" | "bugs" | "features",
-  reorderIdsKey: "todoIds" | "ideaIds" | "bugIds" | "featureIds"
-) {
-  return {
-    async fetch(projectId: string): Promise<T[]> {
-      return requestJson<T[]>(
-        `/${resource}?projectId=${encodeURIComponent(projectId)}`,
-        { errorMessage: `Failed to fetch ${pluralLabel}` }
-      );
-    },
-    async search(projectId: string, search: string): Promise<T[]> {
-      if (!search.trim()) return [];
-      return requestJson<T[]>(
-        `/${resource}?projectId=${encodeURIComponent(projectId)}&search=${encodeURIComponent(search.trim())}`,
-        { errorMessage: `Failed to search ${pluralLabel}` }
-      );
-    },
-    async create(body: {
-      projectId: string;
-      name: string;
-      done?: boolean;
-    }): Promise<T> {
-      return requestJson<T>(`/${resource}`, {
-        method: "POST",
-        body,
-        errorMessage: `Failed to create ${singularLabel}`,
-      });
-    },
-    async update(
-      id: string,
-      data: { name?: string; done?: boolean; order?: number }
-    ): Promise<T> {
-      return requestJson<T>(`/${resource}/${id}`, {
-        method: "PATCH",
-        body: data,
-        errorMessage: `Failed to update ${singularLabel}`,
-      });
-    },
-    async remove(id: string): Promise<void> {
-      return requestVoid(`/${resource}/${id}`, {
-        method: "DELETE",
-        errorMessage: `Failed to delete ${singularLabel}`,
-      });
-    },
-    async reorder(projectId: string, ids: string[]): Promise<T[]> {
-      const payload: Record<string, unknown> = { projectId };
-      payload[reorderIdsKey] = ids;
-      return requestJson<T[]>(`/${resource}/reorder`, {
-        method: "POST",
-        body: payload,
-        errorMessage: `Failed to reorder ${pluralLabel}`,
-      });
-    },
-  };
-}
-
-const todoApi = createCheckableEntityApi<Todo>(
-  "todos",
-  "todo",
-  "todos",
-  "todoIds"
-);
-const ideaApi = createCheckableEntityApi<Idea>(
-  "ideas",
-  "idea",
-  "ideas",
-  "ideaIds"
-);
-const bugApi = createCheckableEntityApi<Bug>("bugs", "bug", "bugs", "bugIds");
-const featureApi = createCheckableEntityApi<Feature>(
-  "features",
-  "feature",
-  "features",
-  "featureIds"
-);
+const checkableApis = createCheckableApis({
+  requestJson,
+  requestVoid,
+  getUserScopedStorageKey,
+});
+const { todoApi, ideaApi, bugApi, featureApi } = checkableApis;
 
 export const fetchTodos = todoApi.fetch;
 /** Search todos by name within a project. */
@@ -716,119 +572,19 @@ export const createIdea = ideaApi.create;
 export const updateIdea = ideaApi.update;
 export const deleteIdea = ideaApi.remove;
 export const reorderIdeas = ideaApi.reorder;
+const assistantApi = createAssistantApi<Idea, IdeaAssistantChatResult>({
+  requestJson,
+  requestBlob,
+});
 
-export async function generateIdeaPlan(
-  ideaId: string,
-  context?: string,
-  model?: string
-): Promise<Idea> {
-  const payload: { context?: string; model?: string } = {};
-  const normalizedContext = typeof context === "string" ? context.trim() : "";
-  const normalizedModel = typeof model === "string" ? model.trim() : "";
-  if (normalizedContext) payload.context = normalizedContext;
-  if (normalizedModel) payload.model = normalizedModel;
-  return requestJson<Idea>(`/ideas/${encodeURIComponent(ideaId)}/plan`, {
-    method: "POST",
-    body: payload,
-    errorMessage: "Failed to generate idea plan",
-  });
-}
-
-export async function generateIdeaAssistantChat(
-  ideaId: string,
-  context?: string,
-  model?: string,
-  includeWeb?: boolean
-): Promise<IdeaAssistantChatResult> {
-  const payload: { context?: string; model?: string; includeWeb?: boolean } =
-    {};
-  const normalizedContext = typeof context === "string" ? context.trim() : "";
-  const normalizedModel = typeof model === "string" ? model.trim() : "";
-  if (normalizedContext) payload.context = normalizedContext;
-  if (normalizedModel) payload.model = normalizedModel;
-  if (includeWeb === true) payload.includeWeb = true;
-  return requestJson<IdeaAssistantChatResult>(
-    `/ideas/${encodeURIComponent(ideaId)}/assistant-chat`,
-    {
-      method: "POST",
-      body: payload,
-      errorMessage: "Failed to generate AI assistant response",
-    }
-  );
-}
-
-export async function generateListItemAssistantChat(
-  projectId: string,
-  itemName: string,
-  context?: string,
-  model?: string,
-  includeWeb?: boolean
-): Promise<IdeaAssistantChatResult> {
-  const payload: {
-    projectId: string;
-    itemName: string;
-    context?: string;
-    model?: string;
-    includeWeb?: boolean;
-  } = {
-    projectId: projectId.trim(),
-    itemName: itemName.trim(),
-  };
-  const normalizedContext = typeof context === "string" ? context.trim() : "";
-  const normalizedModel = typeof model === "string" ? model.trim() : "";
-  if (normalizedContext) payload.context = normalizedContext;
-  if (normalizedModel) payload.model = normalizedModel;
-  if (includeWeb === true) payload.includeWeb = true;
-  return requestJson<IdeaAssistantChatResult>("/ideas/assistant-chat", {
-    method: "POST",
-    body: payload,
-    errorMessage: "Failed to generate AI assistant response",
-  });
-}
-
-export async function fetchOpenRouterModels(): Promise<string[]> {
-  const payload = (await requestJson<unknown>("/ideas/openrouter-models", {
-    errorMessage: "Failed to fetch OpenRouter models",
-  })) as unknown;
-  if (!Array.isArray(payload)) return [];
-  return payload
-    .filter((entry): entry is string => typeof entry === "string")
-    .map((entry) => entry.trim())
-    .filter(Boolean);
-}
-
-export type ElevenLabsVoice = { id: string; name: string };
-
-export async function fetchElevenLabsVoices(): Promise<ElevenLabsVoice[]> {
-  const payload = (await requestJson<unknown>("/ideas/elevenlabs-voices", {
-    errorMessage: "Failed to fetch ElevenLabs voices",
-  })) as unknown;
-  if (!Array.isArray(payload)) return [];
-  return payload
-    .filter((entry): entry is ElevenLabsVoice =>
-      Boolean(
-        entry &&
-        typeof entry === "object" &&
-        typeof (entry as ElevenLabsVoice).id === "string" &&
-        typeof (entry as ElevenLabsVoice).name === "string"
-      )
-    )
-    .map((entry) => ({ id: entry.id.trim(), name: entry.name.trim() }))
-    .filter((entry) => Boolean(entry.id) && Boolean(entry.name));
-}
-
-export async function synthesizeIdeaChatSpeech(
-  text: string,
-  voiceId?: string
-): Promise<Blob> {
-  const payload: { text: string; voiceId?: string } = { text: text.trim() };
-  if (voiceId?.trim()) payload.voiceId = voiceId.trim();
-  return requestBlob("/ideas/tts", {
-    method: "POST",
-    body: payload,
-    errorMessage: "Failed to synthesize speech",
-  });
-}
+export const generateIdeaPlan = assistantApi.generateIdeaPlan;
+export const generateIdeaAssistantChat = assistantApi.generateIdeaAssistantChat;
+export const generateListItemAssistantChat =
+  assistantApi.generateListItemAssistantChat;
+export const fetchOpenRouterModels = assistantApi.fetchOpenRouterModels;
+export const fetchElevenLabsVoices = assistantApi.fetchElevenLabsVoices;
+export const synthesizeIdeaChatSpeech = assistantApi.synthesizeIdeaChatSpeech;
+export type { ElevenLabsVoice };
 
 export const fetchBugs = bugApi.fetch;
 /** Search bugs by name within a project. */
@@ -846,171 +602,22 @@ export const updateFeature = featureApi.update;
 export const deleteFeature = featureApi.remove;
 export const reorderFeatures = featureApi.reorder;
 
-const ENHANCEMENTS_STORAGE_PREFIX = "ideahome-enhancements-list";
-const ENHANCEMENTS_STORAGE_LEGACY_KEY = "ideahome-enhancements-list";
+export const fetchEnhancements = checkableApis.fetchEnhancements;
+export const createEnhancement = checkableApis.createEnhancement;
+export const updateEnhancement = checkableApis.updateEnhancement;
+export const deleteEnhancement = checkableApis.deleteEnhancement;
+export const reorderEnhancements = checkableApis.reorderEnhancements;
 
-function getEnhancementsStorageKey(): string {
-  return getUserScopedStorageKey(
-    ENHANCEMENTS_STORAGE_PREFIX,
-    ENHANCEMENTS_STORAGE_LEGACY_KEY
-  );
-}
-
-function loadEnhancementsStore(): Enhancement[] {
-  if (typeof window === "undefined") return [];
-  try {
-    const raw = localStorage.getItem(getEnhancementsStorageKey());
-    if (!raw) return [];
-    const parsed = JSON.parse(raw) as unknown;
-    if (!Array.isArray(parsed)) return [];
-    return parsed.filter((item): item is Enhancement =>
-      Boolean(
-        item &&
-        typeof item === "object" &&
-        typeof (item as Enhancement).id === "string" &&
-        typeof (item as Enhancement).name === "string" &&
-        typeof (item as Enhancement).done === "boolean" &&
-        typeof (item as Enhancement).order === "number" &&
-        typeof (item as Enhancement).projectId === "string" &&
-        typeof (item as Enhancement).createdAt === "string"
-      )
-    );
-  } catch {
-    return [];
-  }
-}
-
-function saveEnhancementsStore(items: Enhancement[]): void {
-  if (typeof window === "undefined") return;
-  try {
-    localStorage.setItem(getEnhancementsStorageKey(), JSON.stringify(items));
-  } catch {
-    // ignore
-  }
-}
-
-function sortEnhancementsByOrder(items: Enhancement[]): Enhancement[] {
-  return [...items].sort((a, b) => a.order - b.order);
-}
-
-function createEnhancementId(): string {
-  if (
-    typeof crypto !== "undefined" &&
-    typeof crypto.randomUUID === "function"
-  ) {
-    return crypto.randomUUID();
-  }
-  return `enh-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-}
-
-export async function fetchEnhancements(
-  projectId: string
-): Promise<Enhancement[]> {
-  const all = loadEnhancementsStore();
-  return sortEnhancementsByOrder(
-    all.filter((item) => item.projectId === projectId)
-  );
-}
-
-export async function createEnhancement(body: {
-  projectId: string;
-  name: string;
-  done?: boolean;
-}): Promise<Enhancement> {
-  const all = loadEnhancementsStore();
-  const projectItems = all.filter((item) => item.projectId === body.projectId);
-  const nextOrder =
-    projectItems.length === 0
-      ? 0
-      : Math.max(...projectItems.map((item) => item.order)) + 1;
-  const created: Enhancement = {
-    id: createEnhancementId(),
-    name: body.name,
-    done: Boolean(body.done),
-    order: nextOrder,
-    projectId: body.projectId,
-    createdAt: new Date().toISOString(),
-  };
-  saveEnhancementsStore([...all, created]);
-  return created;
-}
-
-export async function updateEnhancement(
-  id: string,
-  data: { name?: string; done?: boolean; order?: number }
-): Promise<Enhancement> {
-  const all = loadEnhancementsStore();
-  const idx = all.findIndex((item) => item.id === id);
-  if (idx === -1) throw new Error("Enhancement not found");
-  const current = all[idx];
-  const updated: Enhancement = {
-    ...current,
-    ...(typeof data.name === "string" ? { name: data.name } : {}),
-    ...(typeof data.done === "boolean" ? { done: data.done } : {}),
-    ...(typeof data.order === "number" ? { order: data.order } : {}),
-  };
-  const next = [...all];
-  next[idx] = updated;
-  saveEnhancementsStore(next);
-  return updated;
-}
-
-export async function deleteEnhancement(id: string): Promise<void> {
-  const all = loadEnhancementsStore();
-  const next = all.filter((item) => item.id !== id);
-  saveEnhancementsStore(next);
-}
-
-export async function reorderEnhancements(
-  projectId: string,
-  ids: string[]
-): Promise<Enhancement[]> {
-  const all = loadEnhancementsStore();
-  const projectItems = all.filter((item) => item.projectId === projectId);
-  const byId = new Map(projectItems.map((item) => [item.id, item]));
-  const uniqueIds = Array.from(new Set(ids)).filter((id) => byId.has(id));
-  const missing = projectItems
-    .map((item) => item.id)
-    .filter((id) => !uniqueIds.includes(id));
-  const orderedIds = [...uniqueIds, ...missing];
-  const updatedProjectItems = orderedIds.map((id, order) => ({
-    ...byId.get(id)!,
-    order,
-  }));
-  const projectIdSet = new Set(projectItems.map((item) => item.id));
-  const otherItems = all.filter((item) => !projectIdSet.has(item.id));
-  const next = [...otherItems, ...updatedProjectItems];
-  saveEnhancementsStore(next);
-  return sortEnhancementsByOrder(updatedProjectItems);
-}
-
-export type Expense = {
-  id: string;
-  amount: number;
-  description: string;
-  date: string;
-  category: string;
-  projectId: string;
-  createdAt: string;
-};
+export type Expense = SharedExpense;
 
 export async function fetchExpenses(projectId: string): Promise<Expense[]> {
-  return requestJson<Expense[]>(
-    `/expenses?projectId=${encodeURIComponent(projectId)}`,
-    {
-      errorMessage: "Failed to fetch expenses",
-    }
-  );
+  return requestJson<Expense[]>(pathExpenses(projectId), {
+    errorMessage: "Failed to fetch expenses",
+  });
 }
 
-export async function createExpense(body: {
-  projectId: string;
-  amount: number;
-  description: string;
-  date: string;
-  category?: string;
-}): Promise<Expense> {
-  return requestJson<Expense>("/expenses", {
+export async function createExpense(body: CreateExpenseInput): Promise<Expense> {
+  return requestJson<Expense>(pathExpenses(), {
     method: "POST",
     body,
     errorMessage: "Failed to create expense",
@@ -1019,14 +626,9 @@ export async function createExpense(body: {
 
 export async function updateExpense(
   id: string,
-  data: {
-    amount?: number;
-    description?: string;
-    date?: string;
-    category?: string;
-  }
+  data: UpdateExpenseInput
 ): Promise<Expense> {
-  return requestJson<Expense>(`/expenses/${encodeURIComponent(id)}`, {
+  return requestJson<Expense>(pathExpenseById(id), {
     method: "PATCH",
     body: data,
     errorMessage: "Failed to update expense",
@@ -1034,28 +636,27 @@ export async function updateExpense(
 }
 
 export async function deleteExpense(id: string): Promise<void> {
-  return requestVoid(`/expenses/${encodeURIComponent(id)}`, {
+  return requestVoid(pathExpenseById(id), {
     method: "DELETE",
     errorMessage: "Failed to delete expense",
   });
 }
 
 export async function fetchUsers(): Promise<User[]> {
-  return requestJson<User[]>("/users", {
+  return requestJson<User[]>(pathUsers(), {
     errorMessage: "Failed to fetch users",
   });
 }
 
 export async function fetchIssues(projectId?: string): Promise<Issue[]> {
-  const path = projectId
-    ? `/issues?projectId=${encodeURIComponent(projectId)}`
-    : "/issues";
-  return requestJson<Issue[]>(path, { errorMessage: "Failed to fetch issues" });
+  return requestJson<Issue[]>(pathIssues(projectId), {
+    errorMessage: "Failed to fetch issues",
+  });
 }
 
 /** Fetch a single issue by id. */
 export async function fetchIssue(id: string): Promise<Issue> {
-  const r = await apiFetch(`${getApiBase()}/issues/${encodeURIComponent(id)}`);
+  const r = await apiFetch(`${getApiBase()}${pathIssueById(id)}`);
   if (!r.ok) {
     if (r.status === 404) throw new Error("Issue not found");
     await throwFromResponse(r, "Failed to fetch issue");
@@ -1069,25 +670,13 @@ export async function fetchIssueSearch(
   search: string
 ): Promise<Issue[]> {
   if (!search.trim()) return [];
-  const path = `/issues?projectId=${encodeURIComponent(projectId)}&search=${encodeURIComponent(search.trim())}`;
-  return requestJson<Issue[]>(path, {
+  return requestJson<Issue[]>(pathIssues(projectId, search), {
     errorMessage: "Failed to search issues",
   });
 }
 
-export async function createIssue(body: {
-  title: string;
-  description?: string;
-  acceptanceCriteria?: string;
-  database?: string;
-  api?: string;
-  testCases?: string;
-  automatedTest?: string;
-  projectId: string;
-  assigneeId?: string;
-  qualityScore?: number;
-}): Promise<Issue> {
-  return requestJson<Issue>("/issues", {
+export async function createIssue(body: CreateIssueInput): Promise<Issue> {
+  return requestJson<Issue>(pathIssues(), {
     method: "POST",
     body,
     errorMessage: "Failed to create issue",
@@ -1096,9 +685,9 @@ export async function createIssue(body: {
 
 export async function updateIssue(
   id: string,
-  body: Record<string, unknown>
+  body: UpdateIssueInput
 ): Promise<Issue> {
-  const r = await apiFetch(`${getApiBase()}/issues/${encodeURIComponent(id)}`, {
+  const r = await apiFetch(`${getApiBase()}${pathIssueById(id)}`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
@@ -1123,14 +712,12 @@ export async function updateIssueStatus(
   id: string,
   status: string
 ): Promise<Issue> {
-  const r = await apiFetch(
-    `${getApiBase()}/issues/${encodeURIComponent(id)}/status`,
-    {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status }),
-    }
-  );
+  const payload: UpdateIssueStatusInput = { status };
+  const r = await apiFetch(`${getApiBase()}${pathIssueStatus(id)}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
   if (!r.ok) {
     const statusMsg =
       r.status === 404 ? "Issue not found" : `Server error (${r.status})`;
@@ -1143,7 +730,7 @@ export async function updateIssueStatus(
 }
 
 export async function deleteIssue(id: string): Promise<void> {
-  return requestVoid(`/issues/${encodeURIComponent(id)}`, {
+  return requestVoid(pathIssueById(id), {
     method: "DELETE",
     errorMessage: "Failed to delete issue",
   });
@@ -1151,51 +738,22 @@ export async function deleteIssue(id: string): Promise<void> {
 
 /** Delete all issues, optionally scoped by projectId. */
 export async function deleteAllIssues(projectId?: string): Promise<void> {
-  const path = projectId
-    ? `/issues/bulk?projectId=${encodeURIComponent(projectId)}`
-    : "/issues/bulk";
-  return requestVoid(path, {
+  return requestVoid(pathIssuesBulk(projectId), {
     method: "DELETE",
     errorMessage: "Failed to delete issues",
   });
 }
 
-export type IssueCommentEditHistoryEntry = {
-  body: string;
-  editedAt: string;
-};
-
-export type CommentAttachmentType =
-  | "screenshot"
-  | "video"
-  | "screen_recording"
-  | "camera_recording"
-  | "audio_recording";
-
-export type CommentAttachment = {
-  id: string;
-  type: CommentAttachmentType;
-  mediaUrl: string;
-  commentId: string;
-  createdAt: string;
-};
-
-export type IssueComment = {
-  id: string;
-  body: string;
-  issueId: string;
-  createdAt: string;
-  editHistory?: IssueCommentEditHistoryEntry[];
-  attachments?: CommentAttachment[];
-};
+export type IssueCommentEditHistoryEntry = SharedIssueCommentEditHistoryEntry;
+export type CommentAttachmentType = SharedCommentAttachmentType;
+export type CommentAttachment = SharedCommentAttachment;
+export type IssueComment = SharedIssueComment;
 
 export async function fetchIssueComments(
   issueId: string
 ): Promise<IssueComment[]> {
   try {
-    const r = await apiFetch(
-      `${getApiBase()}/issues/${encodeURIComponent(issueId)}/comments`
-    );
+    const r = await apiFetch(`${getApiBase()}${pathIssueComments(issueId)}`);
     if (!r.ok) {
       const detail = await readResponseMessage(r);
       throw new Error(
@@ -1217,14 +775,12 @@ export async function createIssueComment(
   issueId: string,
   body: string
 ): Promise<IssueComment> {
-  return requestJson<IssueComment>(
-    `/issues/${encodeURIComponent(issueId)}/comments`,
-    {
-      method: "POST",
-      body: { body },
-      errorMessage: "Failed to add comment",
-    }
-  );
+  const payload: CreateIssueCommentInput = { body };
+  return requestJson<IssueComment>(pathIssueComments(issueId), {
+    method: "POST",
+    body: payload,
+    errorMessage: "Failed to add comment",
+  });
 }
 
 export async function updateIssueComment(
@@ -1232,43 +788,34 @@ export async function updateIssueComment(
   commentId: string,
   body: string
 ): Promise<IssueComment> {
-  return requestJson<IssueComment>(
-    `/issues/${encodeURIComponent(issueId)}/comments/${encodeURIComponent(commentId)}`,
-    {
-      method: "PATCH",
-      body: { body },
-      errorMessage: "Failed to update comment",
-    }
-  );
+  const payload: UpdateIssueCommentInput = { body };
+  return requestJson<IssueComment>(pathIssueCommentById(issueId, commentId), {
+    method: "PATCH",
+    body: payload,
+    errorMessage: "Failed to update comment",
+  });
 }
 
 export async function deleteIssueComment(
   issueId: string,
   commentId: string
 ): Promise<void> {
-  return requestVoid(
-    `/issues/${encodeURIComponent(issueId)}/comments/${encodeURIComponent(commentId)}`,
-    { method: "DELETE", errorMessage: "Failed to delete comment" }
-  );
+  return requestVoid(pathIssueCommentById(issueId, commentId), {
+    method: "DELETE",
+    errorMessage: "Failed to delete comment",
+  });
 }
 
 export async function addCommentAttachment(
   issueId: string,
   commentId: string,
-  body: {
-    type: CommentAttachmentType;
-    imageBase64?: string;
-    videoBase64?: string;
-  }
+  body: AddCommentAttachmentInput
 ): Promise<IssueComment> {
-  return requestJson<IssueComment>(
-    `/issues/${encodeURIComponent(issueId)}/comments/${encodeURIComponent(commentId)}/attachments`,
-    {
-      method: "POST",
-      body,
-      errorMessage: "Failed to add attachment to comment",
-    }
-  );
+  return requestJson<IssueComment>(pathCommentAttachments(issueId, commentId), {
+    method: "POST",
+    body,
+    errorMessage: "Failed to add attachment to comment",
+  });
 }
 
 export async function deleteCommentAttachment(
@@ -1277,47 +824,33 @@ export async function deleteCommentAttachment(
   attachmentId: string
 ): Promise<IssueComment> {
   return requestJson<IssueComment>(
-    `/issues/${encodeURIComponent(issueId)}/comments/${encodeURIComponent(commentId)}/attachments/${encodeURIComponent(attachmentId)}`,
+    pathCommentAttachmentById(issueId, commentId, attachmentId),
     { method: "DELETE", errorMessage: "Failed to remove attachment" }
   );
 }
 
 export type RunUiTestStep = { title: string; duration?: number };
 
-export type RunUiTestResult = {
-  success: boolean;
-  exitCode: number | null;
-  output: string;
-  errorOutput: string;
-  /** Steps from test.step() (from Playwright JSON report when available). */
-  steps?: RunUiTestStep[];
-  /** Frames sent by backend during run-ui-stream (for debugging). */
-  screenshotCount?: number;
-  /** Base64 WebM video of the test run. */
-  videoBase64?: string;
-};
+export type RunUiTestResult = SharedRunUiTestResult;
 
 export async function runUiTest(grep: string): Promise<RunUiTestResult> {
-  return requestJson<RunUiTestResult>("/tests/run-ui", {
+  const body: RunUiTestInput = { grep };
+  return requestJson<RunUiTestResult>(pathTestsRunUi(), {
     method: "POST",
-    body: { grep },
+    body,
     errorMessage: "Failed to run test",
   });
 }
 
-export type RunApiTestResult = {
-  success: boolean;
-  exitCode: number | null;
-  output: string;
-  errorOutput: string;
-};
+export type RunApiTestResult = SharedRunApiTestResult;
 
 export async function runApiTest(
   testNamePattern: string
 ): Promise<RunApiTestResult> {
-  return requestJson<RunApiTestResult>("/tests/run-api", {
+  const body: RunApiTestInput = { testNamePattern };
+  return requestJson<RunApiTestResult>(pathTestsRunApi(), {
     method: "POST",
-    body: { testNamePattern },
+    body,
     errorMessage: "Failed to run API test",
   });
 }
@@ -1329,14 +862,11 @@ export async function uploadIssueRecording(
   recordingType: "screen" | "camera" | "audio" = "screen",
   fileName?: string
 ): Promise<Issue> {
-  return requestJson<Issue>(
-    `/issues/${encodeURIComponent(issueId)}/recordings`,
-    {
-      method: "POST",
-      body: { videoBase64, mediaType, recordingType, fileName },
-      errorMessage: "Failed to upload recording",
-    }
-  );
+  return requestJson<Issue>(pathIssueRecordings(issueId), {
+    method: "POST",
+    body: { videoBase64, mediaType, recordingType, fileName },
+    errorMessage: "Failed to upload recording",
+  });
 }
 
 export async function updateIssueRecording(
@@ -1348,30 +878,27 @@ export async function updateIssueRecording(
     name?: string | null;
   }
 ): Promise<Issue> {
-  return requestJson<Issue>(
-    `/issues/${encodeURIComponent(issueId)}/recordings/${encodeURIComponent(recordingId)}`,
-    {
-      method: "PATCH",
-      body: data,
-      errorMessage: "Failed to update recording",
-    }
-  );
+  return requestJson<Issue>(pathIssueRecordingById(issueId, recordingId), {
+    method: "PATCH",
+    body: data,
+    errorMessage: "Failed to update recording",
+  });
 }
 
 export async function deleteIssueRecording(
   issueId: string,
   recordingId: string
 ): Promise<Issue> {
-  return requestJson<Issue>(
-    `/issues/${encodeURIComponent(issueId)}/recordings/${encodeURIComponent(recordingId)}`,
-    { method: "DELETE", errorMessage: "Failed to delete recording" }
-  );
+  return requestJson<Issue>(pathIssueRecordingById(issueId, recordingId), {
+    method: "DELETE",
+    errorMessage: "Failed to delete recording",
+  });
 }
 
 /** Full URL to stream a recording file from the backend (uses stream endpoint with correct Content-Type). */
 export function getRecordingUrl(videoUrl: string): string {
   const filename = videoUrl.replace(/^.*\//, "").split("?")[0] ?? "";
-  return `${getApiBase()}/issues/recordings/stream/${encodeURIComponent(filename)}`;
+  return `${getApiBase()}${pathRecordingStream(filename)}`;
 }
 
 export async function uploadIssueScreenshot(
@@ -1379,14 +906,11 @@ export async function uploadIssueScreenshot(
   imageBase64: string,
   fileName?: string
 ): Promise<Issue> {
-  return requestJson<Issue>(
-    `/issues/${encodeURIComponent(issueId)}/screenshots`,
-    {
-      method: "POST",
-      body: { imageBase64, fileName: fileName ?? undefined },
-      errorMessage: "Failed to upload screenshot",
-    }
-  );
+  return requestJson<Issue>(pathIssueScreenshots(issueId), {
+    method: "POST",
+    body: { imageBase64, fileName: fileName ?? undefined },
+    errorMessage: "Failed to upload screenshot",
+  });
 }
 
 export async function updateIssueScreenshot(
@@ -1394,30 +918,27 @@ export async function updateIssueScreenshot(
   screenshotId: string,
   data: { name?: string | null }
 ): Promise<Issue> {
-  return requestJson<Issue>(
-    `/issues/${encodeURIComponent(issueId)}/screenshots/${encodeURIComponent(screenshotId)}`,
-    {
-      method: "PATCH",
-      body: data,
-      errorMessage: "Failed to update screenshot",
-    }
-  );
+  return requestJson<Issue>(pathIssueScreenshotById(issueId, screenshotId), {
+    method: "PATCH",
+    body: data,
+    errorMessage: "Failed to update screenshot",
+  });
 }
 
 export async function deleteIssueScreenshot(
   issueId: string,
   screenshotId: string
 ): Promise<Issue> {
-  return requestJson<Issue>(
-    `/issues/${encodeURIComponent(issueId)}/screenshots/${encodeURIComponent(screenshotId)}`,
-    { method: "DELETE", errorMessage: "Failed to delete screenshot" }
-  );
+  return requestJson<Issue>(pathIssueScreenshotById(issueId, screenshotId), {
+    method: "DELETE",
+    errorMessage: "Failed to delete screenshot",
+  });
 }
 
 /** Full URL to load a screenshot image from the backend through authenticated stream endpoint. */
 export function getScreenshotUrl(imageUrl: string): string {
   const filename = imageUrl.replace(/^.*\//, "").split("?")[0] ?? "";
-  return `${getApiBase()}/issues/screenshots/stream/${encodeURIComponent(filename)}`;
+  return `${getApiBase()}${pathScreenshotStream(filename)}`;
 }
 
 export async function uploadIssueFile(
@@ -1425,7 +946,7 @@ export async function uploadIssueFile(
   fileBase64: string,
   fileName: string
 ): Promise<Issue> {
-  return requestJson<Issue>(`/issues/${encodeURIComponent(issueId)}/files`, {
+  return requestJson<Issue>(pathIssueFiles(issueId), {
     method: "POST",
     body: { fileBase64, fileName },
     errorMessage: "Failed to upload file",
@@ -1437,30 +958,24 @@ export async function updateIssueFile(
   fileId: string,
   data: { fileName?: string }
 ): Promise<Issue> {
-  return requestJson<Issue>(
-    `/issues/${encodeURIComponent(issueId)}/files/${encodeURIComponent(fileId)}`,
-    {
-      method: "PATCH",
-      body: data,
-      errorMessage: "Failed to update file",
-    }
-  );
+  return requestJson<Issue>(pathIssueFileById(issueId, fileId), {
+    method: "PATCH",
+    body: data,
+    errorMessage: "Failed to update file",
+  });
 }
 
 export async function deleteIssueFile(
   issueId: string,
   fileId: string
 ): Promise<Issue> {
-  return requestJson<Issue>(
-    `/issues/${encodeURIComponent(issueId)}/files/${encodeURIComponent(fileId)}`,
-    {
-      method: "DELETE",
-      errorMessage: "Failed to delete file",
-    }
-  );
+  return requestJson<Issue>(pathIssueFileById(issueId, fileId), {
+    method: "DELETE",
+    errorMessage: "Failed to delete file",
+  });
 }
 
 /** Full URL to download an issue file (stream endpoint sets Content-Disposition). */
 export function getIssueFileUrl(issueId: string, fileId: string): string {
-  return `${getApiBase()}/issues/${encodeURIComponent(issueId)}/files/${encodeURIComponent(fileId)}/stream`;
+  return `${getApiBase()}${pathIssueFileStream(issueId, fileId)}`;
 }

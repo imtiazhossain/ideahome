@@ -35,9 +35,11 @@ export function useCachedProjectList<T extends { id: string }>({
   T[],
   React.Dispatch<React.SetStateAction<T[]>>,
   boolean,
+  string | null,
 ] {
   const [items, setItems] = useState<T[]>([]);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const migratedRef = useRef(false);
 
   const legacyMigrationRef = useRef(legacyMigration);
@@ -46,6 +48,8 @@ export function useCachedProjectList<T extends { id: string }>({
   useEffect(() => {
     if (!authenticated || !selectedProjectId) {
       setItems([]);
+      setLoading(false);
+      setError(null);
       return;
     }
     const cached = getList<T>(listType, selectedProjectId);
@@ -58,6 +62,7 @@ export function useCachedProjectList<T extends { id: string }>({
     prefetchProjectLists(selectedProjectId, listType);
     let cancelled = false;
     const migration = legacyMigrationRef.current;
+    setError(null);
     fetchList(selectedProjectId)
       .then((data) => {
         if (cancelled) return;
@@ -89,8 +94,24 @@ export function useCachedProjectList<T extends { id: string }>({
             .catch(() => {});
         }
       })
-      .catch(() => {
-        if (!cancelled) setItems([]);
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        setItems([]);
+        const message =
+          err instanceof Error && err.message
+            ? err.message
+            : "Failed to load data";
+        if (
+          /failed to fetch|networkerror|load failed|connection refused|err_connection_refused/i.test(
+            message
+          )
+        ) {
+          setError(
+            "API is offline. Start backend with: pnpm dev:backend (port 3001)."
+          );
+          return;
+        }
+        setError(message);
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -106,5 +127,5 @@ export function useCachedProjectList<T extends { id: string }>({
     setList(listType, selectedProjectId, items);
   }, [listType, selectedProjectId, items]);
 
-  return [items, setItems, loading];
+  return [items, setItems, loading, error];
 }

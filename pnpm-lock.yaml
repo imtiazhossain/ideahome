@@ -45,6 +45,9 @@ importers:
 
   backend:
     dependencies:
+      '@ideahome/shared-config':
+        specifier: workspace:*
+        version: link:../packages/shared-config
       '@nestjs/common':
         specifier: ^9.0.0
         version: 9.4.3(reflect-metadata@0.1.14)(rxjs@7.8.2)
@@ -128,6 +131,8 @@ importers:
         specifier: 0.71.0
         version: 0.71.0(@babel/core@7.29.0)(@babel/preset-env@7.29.0(@babel/core@7.29.0))(react@18.2.0)
 
+  packages/shared-config: {}
+
   web:
     dependencies:
       '@dnd-kit/core':
@@ -139,6 +144,9 @@ importers:
       '@dnd-kit/utilities':
         specifier: ^3.2.2
         version: 3.2.2(react@18.2.0)
+      '@ideahome/shared-config':
+        specifier: workspace:*
+        version: link:../packages/shared-config
       backend:
         specifier: workspace:*
         version: link:../backend

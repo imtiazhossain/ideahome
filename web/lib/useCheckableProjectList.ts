@@ -68,7 +68,7 @@ export function useCheckableProjectList<T extends CheckableProjectItem>({
   const projectId = selectedProjectId ?? "";
   const toggleRequestVersionRef = useRef<Record<string, number>>({});
   const normalizationAttemptKeyRef = useRef<string>("");
-  const [items, setItems, loading] = useCachedProjectList<T>({
+  const [items, setItems, loading, loadError] = useCachedProjectList<T>({
     listType,
     selectedProjectId: projectId,
     authenticated,
@@ -434,6 +434,7 @@ export function useCheckableProjectList<T extends CheckableProjectItem>({
   return {
     items,
     loading,
+    error: loadError,
     newItem,
     setNewItem,
     editingIndex,

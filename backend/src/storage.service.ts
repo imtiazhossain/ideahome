@@ -1,4 +1,6 @@
 import { BadRequestException, Injectable } from "@nestjs/common";
+import { tmpdir } from "os";
+import { join } from "path";
 
 export interface StorageResult {
   url: string;
@@ -12,6 +14,8 @@ export interface StorageResult {
 export class StorageService {
   private static readonly LOCAL_UPLOAD_PATH_RE =
     /^uploads\/(recordings|screenshots|files)\/[a-zA-Z0-9_.-]+$/;
+  private static readonly LOCAL_UPLOAD_PATH_PARTS_RE =
+    /^uploads\/(recordings|screenshots|files)\/([a-zA-Z0-9_.-]+)$/;
   private static readonly SAFE_FILENAME_RE = /^[a-zA-Z0-9_.-]+$/;
 
   private useBlob(): boolean {
@@ -54,6 +58,15 @@ export class StorageService {
     return /^https?:\/\//i.test(urlOrPath);
   }
 
+  /** Absolute filesystem path for a local upload file name. */
+  resolveLocalUploadPath(
+    folder: "recordings" | "screenshots" | "files",
+    filename: string
+  ): string {
+    this.validateFilename(filename);
+    return join(this.localUploadsRoot(), folder, filename);
+  }
+
   private async uploadToBlob(
     folder: string,
     filename: string,
@@ -90,8 +103,7 @@ export class StorageService {
     buffer: Buffer
   ): Promise<StorageResult> {
     const { mkdir, writeFile } = await import("fs/promises");
-    const { join } = await import("path");
-    const dir = join(process.cwd(), "uploads", folder);
+    const dir = join(this.localUploadsRoot(), folder);
     await mkdir(dir, { recursive: true });
     const filePath = join(dir, filename);
     await writeFile(filePath, buffer);
@@ -99,12 +111,9 @@ export class StorageService {
   }
 
   private async deleteFromFilesystem(urlOrPath: string): Promise<void> {
-    if (!StorageService.LOCAL_UPLOAD_PATH_RE.test(urlOrPath)) {
-      return;
-    }
     const { unlink } = await import("fs/promises");
-    const { join } = await import("path");
-    const filePath = join(process.cwd(), urlOrPath);
+    if (!StorageService.LOCAL_UPLOAD_PATH_RE.test(urlOrPath)) return;
+    const filePath = this.localPathFromRelativeUrl(urlOrPath);
     try {
       await unlink(filePath);
     } catch {
@@ -130,13 +139,27 @@ export class StorageService {
   private async downloadFromFilesystem(
     urlOrPath: string
   ): Promise<{ buffer: Buffer; contentType: string | null }> {
-    if (!StorageService.LOCAL_UPLOAD_PATH_RE.test(urlOrPath)) {
-      throw new BadRequestException("Unsafe file path");
-    }
     const { readFile } = await import("fs/promises");
-    const { join } = await import("path");
-    const filePath = join(process.cwd(), urlOrPath);
+    const filePath = this.localPathFromRelativeUrl(urlOrPath);
     const buffer = await readFile(filePath);
     return { buffer, contentType: null };
+  }
+
+  private localUploadsRoot(): string {
+    const configured = process.env.LOCAL_UPLOADS_DIR?.trim();
+    if (configured) return configured;
+    return join(tmpdir(), "ideahome", "uploads");
+  }
+
+  private localPathFromRelativeUrl(urlOrPath: string): string {
+    const match = urlOrPath.match(StorageService.LOCAL_UPLOAD_PATH_PARTS_RE);
+    if (!match) {
+      throw new BadRequestException("Unsafe file path");
+    }
+    const [, folder, filename] = match;
+    return this.resolveLocalUploadPath(
+      folder as "recordings" | "screenshots" | "files",
+      filename
+    );
   }
 }

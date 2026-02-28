@@ -2,12 +2,26 @@ import React, { useEffect, useState } from "react";
 import Head from "next/head";
 import { useRouter } from "next/router";
 import { clearStoredToken, setStoredToken } from "../../../lib/api";
+import {
+  AUTH_PARAM_ERROR,
+  AUTH_PARAM_REDIRECT_URI,
+  AUTH_PARAM_TOKEN,
+  MOBILE_DEEP_LINK_REDIRECT_URI,
+  NATIVE_BRIDGE_AUTH_CHANGE,
+  NATIVE_BRIDGE_AUTH_ERROR,
+  readUrlParam,
+  sanitizeAuthToken,
+} from "@ideahome/shared-config";
+import type {
+  NativeBridgeAuthChangePayload,
+  NativeBridgeAuthErrorPayload,
+} from "@ideahome/shared-config";
 
 type CallbackStatus = "loading" | "done" | "error";
 
 type NativeBridgePayload =
-  | { type: "auth-change"; token: string }
-  | { type: "auth-error"; error: string };
+  | NativeBridgeAuthChangePayload
+  | NativeBridgeAuthErrorPayload;
 
 declare global {
   interface Window {
@@ -15,42 +29,6 @@ declare global {
       postMessage: (message: string) => void;
     };
   }
-}
-
-function readValue(url: string, key: string): string {
-  if (!url) return "";
-  const safeUrl = url.trim();
-  if (!safeUrl) return "";
-
-  try {
-    const parsed = new URL(safeUrl);
-    const queryValue = parsed.searchParams.get(key)?.trim() ?? "";
-    if (queryValue) return queryValue;
-    const hash = parsed.hash.startsWith("#") ? parsed.hash.slice(1) : parsed.hash;
-    const hashParams = new URLSearchParams(hash);
-    return hashParams.get(key)?.trim() ?? "";
-  } catch {
-    const withoutHash = safeUrl.includes("#")
-      ? safeUrl.slice(0, safeUrl.indexOf("#"))
-      : safeUrl;
-    const query = withoutHash.includes("?")
-      ? withoutHash.slice(withoutHash.indexOf("?") + 1)
-      : "";
-    const queryParams = new URLSearchParams(query);
-    const queryValue = queryParams.get(key)?.trim() ?? "";
-    if (queryValue) return queryValue;
-    const hash = safeUrl.includes("#")
-      ? safeUrl.slice(safeUrl.indexOf("#") + 1)
-      : "";
-    const hashParams = new URLSearchParams(hash);
-    return hashParams.get(key)?.trim() ?? "";
-  }
-}
-
-function sanitizeToken(rawValue: string): string {
-  const trimmed = rawValue.trim();
-  if (!trimmed) return "";
-  return trimmed.replace(/#+$/g, "");
 }
 
 function notifyNative(payload: NativeBridgePayload): void {
@@ -67,7 +45,8 @@ function normalizeAppRedirectUri(rawValue: string): string {
   if (!candidate) return "";
   try {
     const parsed = new URL(candidate);
-    if (parsed.protocol !== "ideahome:") return "";
+    const expectedProtocol = new URL(MOBILE_DEEP_LINK_REDIRECT_URI).protocol;
+    if (parsed.protocol !== expectedProtocol) return "";
     return parsed.toString();
   } catch {
     return "";
@@ -92,10 +71,10 @@ export default function MobileAuthCallbackPage() {
   useEffect(() => {
     if (!router.isReady || typeof window === "undefined") return;
 
-    const token = sanitizeToken(readValue(window.location.href, "token"));
-    const error = readValue(window.location.href, "error");
+    const token = sanitizeAuthToken(readUrlParam(window.location.href, AUTH_PARAM_TOKEN));
+    const error = readUrlParam(window.location.href, AUTH_PARAM_ERROR);
     const redirectUri = normalizeAppRedirectUri(
-      readValue(window.location.href, "redirect_uri")
+      readUrlParam(window.location.href, AUTH_PARAM_REDIRECT_URI)
     );
 
     const openAppWithParams = (params: Record<string, string>): boolean => {
@@ -108,26 +87,26 @@ export default function MobileAuthCallbackPage() {
 
     if (error) {
       clearStoredToken();
-      notifyNative({ type: "auth-error", error });
-      notifyNative({ type: "auth-change", token: "" });
+      notifyNative({ type: NATIVE_BRIDGE_AUTH_ERROR, error });
+      notifyNative({ type: NATIVE_BRIDGE_AUTH_CHANGE, token: "" });
       setMessage(error);
       setStatus("error");
-      openAppWithParams({ error });
+      openAppWithParams({ [AUTH_PARAM_ERROR]: error });
       return;
     }
 
     if (!token) {
       const fallback = "Missing token from mobile auth callback";
-      notifyNative({ type: "auth-error", error: fallback });
+      notifyNative({ type: NATIVE_BRIDGE_AUTH_ERROR, error: fallback });
       setMessage(fallback);
       setStatus("error");
-      openAppWithParams({ error: fallback });
+      openAppWithParams({ [AUTH_PARAM_ERROR]: fallback });
       return;
     }
 
     setStoredToken(token);
-    notifyNative({ type: "auth-change", token });
-    if (openAppWithParams({ token })) {
+    notifyNative({ type: NATIVE_BRIDGE_AUTH_CHANGE, token });
+    if (openAppWithParams({ [AUTH_PARAM_TOKEN]: token })) {
       setMessage(
         "Returning to IdeaHome app. If it does not open automatically, use the button below."
       );

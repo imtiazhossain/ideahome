@@ -30,6 +30,7 @@ describe("StorageService", () => {
   beforeEach(async () => {
     jest.clearAllMocks();
     process.cwd = () => "/app";
+    process.env.LOCAL_UPLOADS_DIR = "/app/uploads";
     mockJoin.mockImplementation((...parts: string[]) => parts.join("/"));
 
     const module: TestingModule = await Test.createTestingModule({
@@ -42,6 +43,7 @@ describe("StorageService", () => {
   afterEach(() => {
     process.cwd = origCwd;
     delete process.env.BLOB_READ_WRITE_TOKEN;
+    delete process.env.LOCAL_UPLOADS_DIR;
   });
 
   describe("when BLOB_READ_WRITE_TOKEN is not set (filesystem)", () => {

@@ -169,7 +169,8 @@ export class IdeasController {
     if (typeof context !== "string") return undefined;
     const trimmed = context.trim();
     if (!trimmed) return undefined;
-    return trimmed.slice(0, this.maxContextLength);
+    // Preserve the newest turns because the client appends the latest prompt at the end.
+    return trimmed.slice(-this.maxContextLength);
   }
 
   private normalizeModel(model?: string): string | undefined {

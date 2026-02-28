@@ -36,10 +36,6 @@ export function ensureInternalApiAccess(
   req: NextApiRequest,
   options: InternalApiAccessOptions
 ): InternalApiAccessResult {
-  if (process.env.NODE_ENV !== "development") {
-    return { allowed: false, status: 403, error: options.devOnlyError };
-  }
-
   const tokenHeaderName = options.tokenHeaderName ?? "x-run-coverage-token";
   const requiredTokenEnvName =
     options.requiredTokenEnvName ?? "RUN_COVERAGE_TOKEN";
@@ -55,6 +51,15 @@ export function ensureInternalApiAccess(
       ? providedTokenRaw.trim()
       : providedTokenRaw;
   const requiredToken = process.env[requiredTokenEnvName];
+  const ip = getClientIp(req);
+  const isLocalRequest = isLocalIp(ip);
+
+  // Localhost access is allowed even when NODE_ENV is "production"
+  // (e.g. local `next start`), but non-local requests in non-dev mode
+  // must provide the configured internal token.
+  if (process.env.NODE_ENV !== "development" && !requiredToken && !isLocalRequest) {
+    return { allowed: false, status: 403, error: options.devOnlyError };
+  }
 
   if (requiredToken) {
     const normalizedRequiredToken = requiredToken.trim();
@@ -67,8 +72,7 @@ export function ensureInternalApiAccess(
     return { allowed: true };
   }
 
-  const ip = getClientIp(req);
-  if (!isLocalIp(ip)) {
+  if (!isLocalRequest) {
     return { allowed: false, status: 403, error: options.localhostError };
   }
   return { allowed: true };

@@ -1,0 +1,7 @@
+{
+  "/_app": "pages/_app.js",
+  "/_error": "pages/_error.js",
+  "/_document": "pages/_document.js",
+  "/code": "pages/code.js",
+  "/api/run-token-audit": "pages/api/run-token-audit.js"
+}

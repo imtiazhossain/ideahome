@@ -3,12 +3,17 @@ import { useRouter } from "next/router";
 import Head from "next/head";
 import Link from "next/link";
 import {
+  AUTH_PARAM_ERROR,
+  AUTH_PARAM_TOKEN,
+  JUST_LOGGED_IN_SESSION_KEY,
+  readUrlParam,
+  sanitizeAuthToken,
+} from "@ideahome/shared-config";
+import {
   setStoredToken,
   clearStoredToken,
   getUserScopedStorageKey,
 } from "../../lib/api";
-
-const JUST_LOGGED_IN_SESSION_KEY = "ideahome-just-logged-in";
 
 function safeDecodeURIComponent(value: string): string {
   try {
@@ -25,24 +30,22 @@ export default function LoginCallbackPage() {
 
   useEffect(() => {
     if (!router.isReady) return;
-    const hash = typeof window !== "undefined" ? window.location.hash : "";
-    const hashParams = new URLSearchParams(
-      hash.startsWith("#") ? hash.slice(1) : hash
-    );
-    const tokenFromHash = hashParams.get("token")?.trim() ?? "";
-    const errorFromHash = hashParams.get("error")?.trim() ?? "";
+    const href = typeof window !== "undefined" ? window.location.href : "";
+    const tokenFromUrl = sanitizeAuthToken(readUrlParam(href, AUTH_PARAM_TOKEN));
+    const errorFromUrl = readUrlParam(href, AUTH_PARAM_ERROR);
     const { token, error } = router.query;
-    const tokenFromQuery = typeof token === "string" ? token.trim() : "";
+    const tokenFromQuery =
+      typeof token === "string" ? sanitizeAuthToken(token) : "";
     const errorFromQuery =
       typeof error === "string" ? safeDecodeURIComponent(error).trim() : "";
-    const resolvedError = errorFromHash || errorFromQuery || null;
+    const resolvedError = errorFromUrl || errorFromQuery || null;
     if (resolvedError) {
       clearStoredToken();
       setErrorMessage(resolvedError);
       setStatus("error");
       return;
     }
-    const resolvedToken = tokenFromHash || tokenFromQuery;
+    const resolvedToken = tokenFromUrl || tokenFromQuery;
     if (resolvedToken) {
       setStoredToken(resolvedToken);
       try {

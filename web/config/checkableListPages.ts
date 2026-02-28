@@ -36,7 +36,7 @@ import {
   type Feature,
   type Idea,
   type Todo,
-} from "../lib/api";
+} from "../lib/api/checklists";
 
 const featuresLegacy = createLegacyListStorage(
   "ideahome-features-list",

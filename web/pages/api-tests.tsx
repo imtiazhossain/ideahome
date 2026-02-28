@@ -2,50 +2,9 @@ import React, { useState } from "react";
 import Head from "next/head";
 import Link from "next/link";
 import { getApiBase, runApiTest, type RunApiTestResult } from "../lib/api";
+import { API_TESTS } from "@ideahome/shared-config/api-tests";
 
-/**
- * List of backend e2e API tests for the Tests section and this page.
- * Update when adding or renaming tests in backend/test/*.e2e-spec.ts (test names must match exactly).
- */
-export const API_TESTS: { suite: string; tests: string[] }[] = [
-  { suite: "AppController (e2e)", tests: ["GET / returns health status"] },
-  { suite: "UsersController (e2e)", tests: ["GET /users returns list"] },
-  {
-    suite: "OrganizationsController (e2e)",
-    tests: [
-      "GET /organizations returns list",
-      "POST /organizations creates an organization",
-    ],
-  },
-  {
-    suite: "ProjectsController (e2e)",
-    tests: [
-      "GET /projects returns list",
-      "GET /projects?orgId= returns list filtered by org",
-      "POST /projects creates a project",
-      "GET /projects/:id returns a project",
-      "PUT /projects/:id updates",
-      "DELETE /projects/:id deletes project and its issues",
-      "GET /projects/:id after delete returns 404",
-    ],
-  },
-  {
-    suite: "IssuesController (e2e)",
-    tests: [
-      "GET /issues returns list",
-      "GET /issues?projectId= returns list filtered by project",
-      "POST /issues creates an issue",
-      "GET /issues/:id returns an issue",
-      "PUT /issues/:id updates (no auth required)",
-      "PUT /issues/:id persists automatedTest as JSON array",
-      "POST /issues creates an issue with automatedTest",
-      "PUT /issues/:id with token also updates",
-      "PATCH /issues/:id/status persists status (for lane moves)",
-      "DELETE /issues/:id deletes (no auth required)",
-      "GET /issues/:id after delete returns 404",
-    ],
-  },
-];
+export { API_TESTS };
 
 export default function ApiTestsPage() {
   const [runningTest, setRunningTest] = useState<string | null>(null);

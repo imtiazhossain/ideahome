@@ -5,7 +5,8 @@
   "workspaces": [
     "backend",
     "web",
-    "mobile"
+    "mobile",
+    "packages/*"
   ],
   "dependencies": {
     "@nestjs/common": "^9.0.0",

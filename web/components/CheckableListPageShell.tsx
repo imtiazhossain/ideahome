@@ -7,6 +7,7 @@ import { IconUndo } from "./IconUndo";
 import { IconTrash } from "./IconTrash";
 import { IconCopy } from "./icons";
 import { SectionLoadingSpinner } from "./SectionLoadingSpinner";
+import { ErrorBanner } from "./ErrorBanner";
 
 export interface CheckableListPageShellProps {
   appLayoutProps: Omit<React.ComponentProps<typeof AppLayout>, "children">;
@@ -32,6 +33,7 @@ export interface CheckableListPageShellProps {
     selectedProjectId: string;
     message: string;
   };
+  errorMessage?: string | null;
   toastMessage?: string | null;
 }
 
@@ -51,6 +53,7 @@ export function CheckableListPageShell({
   checkableListProps,
   addGuard,
   listGuard,
+  errorMessage = null,
   toastMessage = null,
 }: CheckableListPageShellProps) {
   const isPageLoading =
@@ -64,6 +67,7 @@ export function CheckableListPageShell({
   return (
     <AppLayout {...appLayoutProps}>
       <div className="tests-page-content">
+        {errorMessage ? <ErrorBanner message={errorMessage} /> : null}
         {isPageLoading ? (
           <div className="tests-page-single-loading">
             <SectionLoadingSpinner />

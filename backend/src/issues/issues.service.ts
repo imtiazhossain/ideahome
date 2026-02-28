@@ -6,11 +6,11 @@ import {
 } from "@nestjs/common";
 import { Prisma } from "@prisma/client";
 import { PrismaClientKnownRequestError } from "@prisma/client/runtime/library";
+import { projectNameToAcronym } from "@ideahome/shared-config";
 import { getOrgIdForUser, verifyProjectInOrg } from "../common/org-scope";
 import { PrismaService } from "../prisma.service";
 import { StorageService } from "../storage.service";
 import { existsSync } from "fs";
-import { join } from "path";
 import { createReadStream } from "fs";
 import { Response } from "express";
 
@@ -24,17 +24,6 @@ const ISSUE_INCLUDE = {
 const ISSUE_STATUSES = new Set(["backlog", "todo", "in_progress", "done"]);
 const ISSUE_MEDIA_TYPES = new Set(["video", "audio"]);
 const ISSUE_RECORDING_TYPES = new Set(["screen", "camera", "audio"]);
-
-/** Project name to acronym, e.g. "Idea Home Launch" -> "IHL". */
-function projectNameToAcronym(name: string): string {
-  const trimmed = (name ?? "").trim();
-  if (!trimmed) return "PRJ";
-  const words = trimmed.split(/\s+/).filter(Boolean);
-  if (words.length >= 2) {
-    return words.map((w) => (w[0] ?? "").toUpperCase()).join("");
-  }
-  return trimmed.slice(0, 3).toUpperCase() || "PRJ";
-}
 
 @Injectable()
 export class IssuesService {
@@ -520,8 +509,7 @@ export class IssuesService {
     if (!/^[a-zA-Z0-9_.-]+\.(webm|mp4|mov|mp3|m4a|ogg|wav)$/i.test(filename)) {
       throw new NotFoundException("Invalid recording filename");
     }
-    const uploadsDir = join(process.cwd(), "uploads", "recordings");
-    const filePath = join(uploadsDir, filename);
+    const filePath = this.storage.resolveLocalUploadPath("recordings", filename);
     if (!existsSync(filePath)) {
       throw new NotFoundException("Recording not found");
     }
@@ -570,7 +558,12 @@ export class IssuesService {
     if (!IssuesService.LOCAL_SCREENSHOT_URL_RE.test(screenshot.imageUrl)) {
       throw new NotFoundException("Screenshot not found");
     }
-    const filePath = join(process.cwd(), screenshot.imageUrl);
+    const screenshotFilename = screenshot.imageUrl.split("/").pop();
+    if (!screenshotFilename) throw new NotFoundException("Screenshot not found");
+    const filePath = this.storage.resolveLocalUploadPath(
+      "screenshots",
+      screenshotFilename
+    );
     if (!existsSync(filePath))
       throw new NotFoundException("Screenshot not found");
     res.setHeader("Content-Type", "image/png");
@@ -888,7 +881,9 @@ export class IssuesService {
     if (!IssuesService.LOCAL_FILE_URL_RE.test(file.fileUrl)) {
       throw new NotFoundException("File not found");
     }
-    const filePath = join(process.cwd(), file.fileUrl);
+    const localFileName = file.fileUrl.split("/").pop();
+    if (!localFileName) throw new NotFoundException("File not found");
+    const filePath = this.storage.resolveLocalUploadPath("files", localFileName);
     if (!existsSync(filePath)) throw new NotFoundException("File not found");
     res.setHeader(
       "Content-Type",

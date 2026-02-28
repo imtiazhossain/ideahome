@@ -14,6 +14,10 @@ import {
   synthesizeIdeaChatSpeech,
 } from "../lib/api";
 import {
+  buildIdeaChatContext,
+  shouldUseWebSearch,
+} from "../lib/assistant-context";
+import {
   CHECKABLE_LIST_PAGES,
   type CheckableListPageKey,
 } from "../config/checkableListPages";
@@ -240,29 +244,6 @@ export function CheckableListPage({
     []
   );
 
-  const buildIdeaChatContext = useCallback(
-    (
-      messages: { role: "user" | "assistant"; text: string }[],
-      nextPrompt: string
-    ) => {
-      const recent = messages.slice(-8);
-      const transcript = recent
-        .map(
-          (message) =>
-            `${message.role === "user" ? "User" : "Assistant"}: ${message.text}`
-        )
-        .join("\n");
-      return [
-        "Continue this conversation and answer the latest user request.",
-        transcript ? `Conversation:\n${transcript}` : null,
-        `User: ${nextPrompt}`,
-      ]
-        .filter(Boolean)
-        .join("\n\n");
-    },
-    []
-  );
-
   const appendChatAssistantMessage = useCallback(
     (ideaId: string, text: string) => {
       const trimmed = text.trim();
@@ -294,14 +275,6 @@ export function CheckableListPage({
   const resolveIdeaModel = useCallback(() => {
     const model = getStoredOpenRouterModel();
     return model ?? undefined;
-  }, []);
-
-  const shouldUseWebSearch = useCallback((text: string) => {
-    const normalized = text.trim().toLowerCase();
-    if (!normalized) return false;
-    return /(?:latest|today|current|news|recent|right now|this week|this month|weather|forecast|temperature|rain|snow|humidity|wind)/i.test(
-      normalized
-    );
   }, []);
 
   const handleAssistantChatRequest = useCallback(
@@ -434,11 +407,9 @@ export function CheckableListPage({
     [
       assistantChatById,
       assistantLoadingById,
-      buildIdeaChatContext,
       createChatMessageId,
       focusIdeaInput,
       handleAssistantChatRequest,
-      shouldUseWebSearch,
     ]
   );
 
@@ -1045,6 +1016,7 @@ export function CheckableListPage({
         selectedProjectId: layout.selectedProjectId ?? "",
         message: def.listGuardMessage,
       }}
+      errorMessage={list.error}
     />
   );
 }

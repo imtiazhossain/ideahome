@@ -1,6 +1,12 @@
 import React from "react";
 import Head from "next/head";
 import { API_REQUEST_HEADER, getApiBase } from "../lib/api";
+import {
+  pathAuthApple,
+  pathAuthGithub,
+  pathAuthGoogle,
+  pathAuthProviders,
+} from "@ideahome/shared-config";
 
 type OAuthProviders = {
   google: boolean;
@@ -19,7 +25,7 @@ export default function LoginPage() {
     let cancelled = false;
     const run = async () => {
       try {
-        const response = await fetch(`${getApiBase()}/auth/providers`, {
+        const response = await fetch(`${getApiBase()}${pathAuthProviders()}`, {
           headers: { [API_REQUEST_HEADER]: "1" },
         });
         if (!response.ok) return;
@@ -91,7 +97,7 @@ export default function LoginPage() {
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
             {providers.google && (
               <a
-                href="/auth/google"
+                href={pathAuthGoogle()}
                 style={{
                   display: "flex",
                   alignItems: "center",
@@ -131,7 +137,7 @@ export default function LoginPage() {
             )}
             {providers.apple && (
               <a
-                href="/auth/apple"
+                href={pathAuthApple()}
                 style={{
                   display: "flex",
                   alignItems: "center",
@@ -160,7 +166,7 @@ export default function LoginPage() {
             )}
             {providers.github && (
               <a
-                href="/auth/github"
+                href={pathAuthGithub()}
                 style={{
                   display: "flex",
                   alignItems: "center",

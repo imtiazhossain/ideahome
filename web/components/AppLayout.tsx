@@ -5,15 +5,18 @@ import { useRouter } from "next/router";
 import {
   AUTH_CHANGE_EVENT,
   ASSISTANT_VOICE_CHANGE_EVENT,
-  fetchElevenLabsVoices,
-  fetchOpenRouterModels,
   getStoredAssistantVoiceUri,
   getStoredOpenRouterModel,
   getUserEmailFromToken,
   getUserScopedStorageKey,
   setStoredAssistantVoiceUri,
   setStoredOpenRouterModel,
-} from "../lib/api";
+} from "../lib/api/auth";
+import { fetchElevenLabsVoices, fetchOpenRouterModels } from "../lib/api";
+import {
+  safeLocalStorageGetJson,
+  safeLocalStorageSetJson,
+} from "../lib/storage";
 import {
   addCustomList,
   getCustomListTabId,
@@ -47,7 +50,7 @@ const SECTION_LINKS: {
   { tabId: "goals", label: "Goals" },
   { tabId: "development", label: "Code Health", href: "/coverage" },
   { tabId: "expenses", label: "Expenses", href: "/expenses" },
-  { tabId: "code", label: "Code" },
+  { tabId: "code", label: "Code", href: "/code" },
   { tabId: "pages", label: "Pages" },
 ];
 
@@ -103,24 +106,17 @@ function mergeProjectOrder(
 
 function loadProjectOrderIds(): string[] {
   if (typeof window === "undefined") return [];
-  try {
-    const raw = localStorage.getItem(getProjectOrderStorageKey());
-    if (!raw) return [];
-    const parsed = JSON.parse(raw) as unknown;
-    if (!Array.isArray(parsed)) return [];
-    return parsed.filter((id): id is string => typeof id === "string");
-  } catch {
-    return [];
-  }
+  const parsed = safeLocalStorageGetJson<unknown[]>(
+    getProjectOrderStorageKey(),
+    (value): value is unknown[] => Array.isArray(value)
+  );
+  if (!parsed) return [];
+  return parsed.filter((id): id is string => typeof id === "string");
 }
 
 function saveProjectOrderIds(ids: string[]) {
   if (typeof window === "undefined") return;
-  try {
-    localStorage.setItem(getProjectOrderStorageKey(), JSON.stringify(ids));
-  } catch {
-    // ignore
-  }
+  safeLocalStorageSetJson(getProjectOrderStorageKey(), ids);
 }
 
 export interface AppLayoutProps {

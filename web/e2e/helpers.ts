@@ -1,4 +1,5 @@
 import { expect, type Page } from "@playwright/test";
+import { pathProjectById, pathProjects } from "@ideahome/shared-config";
 
 /**
  * E2E helpers. Use from Node (Playwright), not browser.
@@ -10,14 +11,14 @@ export type Project = { id: string; name: string };
 
 /** Fetch all projects from the backend. */
 export async function fetchProjects(): Promise<Project[]> {
-  const r = await fetch(`${API_BASE}/projects`);
+  const r = await fetch(`${API_BASE}${pathProjects()}`);
   if (!r.ok) return [];
   return r.json();
 }
 
 /** Delete a project by id. No-op if request fails (e.g. backend not running). */
 export async function deleteProjectById(id: string): Promise<void> {
-  const r = await fetch(`${API_BASE}/projects/${id}`, { method: "DELETE" });
+  const r = await fetch(`${API_BASE}${pathProjectById(id)}`, { method: "DELETE" });
   if (!r.ok) {
     console.warn(`e2e cleanup: failed to delete project ${id}: ${r.status}`);
   }

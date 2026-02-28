@@ -57,6 +57,7 @@ export class IdeaPlanService {
   private readonly defaultOpenRouterModel = "openai/gpt-4o-mini";
   private readonly maxModelLength = 120;
   private readonly maxWebSources = 5;
+  private readonly maxWebContextSources = 3;
   private readonly defaultElevenLabsVoiceId = "21m00Tcm4TlvDq8ikWAM";
   private readonly maxTtsTextLength = 1200;
 
@@ -748,7 +749,10 @@ export class IdeaPlanService {
 
     let results: WebSearchResult[];
     try {
-      results = await this.webSearchService.search(query, this.maxWebSources);
+      results = await this.webSearchService.search(
+        query,
+        this.maxWebContextSources
+      );
     } catch {
       return null;
     }

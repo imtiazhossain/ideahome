@@ -253,6 +253,13 @@ function SortableItem({
   const isSwipeActive = canSwipe && (isSwiping || swipeOffset < 0);
   const actionSlot =
     !isEditing && !isSwipeActive ? renderItemActions?.(item, index) : null;
+  const rowActions =
+    actionSlot || trailingControl ? (
+      <div className="features-list-row-actions">
+        {actionSlot}
+        {trailingControl}
+      </div>
+    ) : null;
   const detailsSlot = !isEditing ? renderItemDetails?.(item, index) : null;
   const selectAllEditingText = (
     e: React.SyntheticEvent<HTMLInputElement> | React.MouseEvent<HTMLInputElement>
@@ -382,15 +389,14 @@ function SortableItem({
             >
               {item.name}
             </span>
-            {actionSlot}
             {item.done && (
               <span className="features-list-done-badge" aria-label="Done">
                 Done
               </span>
             )}
+            {rowActions}
           </>
         )}
-        {trailingControl}
       </div>
       {detailsSlot && (
         <div className="features-list-item-details">{detailsSlot}</div>
