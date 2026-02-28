@@ -51,8 +51,8 @@ backend/firebase-service-account.json
 *.sqlite-journal
 
 # Mobile (Expo / React Native)
-android
-ios
+/android
+/ios
 .expo
 .expo-shared
 *.jks
