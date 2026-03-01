@@ -6,12 +6,32 @@ import { BulbyCharacter } from "./BulbyCharacter";
 
 const BULBY_POSITION_KEY = "bulby-chatbox-position";
 
+/** localStorage key for hiding the Bulby trigger. "1" = hidden. */
+export const BULBY_TRIGGER_HIDDEN_KEY = "bulby-chatbox-trigger-hidden";
+/** Custom event to sync hide state (e.g. from drawer settings). detail: { hidden: boolean } */
+export const BULBY_TRIGGER_VISIBILITY_EVENT = "ideahome-bulby-trigger-visibility";
+
+function getTriggerHidden(): boolean {
+  if (typeof window === "undefined") return false;
+  return localStorage.getItem(BULBY_TRIGGER_HIDDEN_KEY) === "1";
+}
+
+function persistTriggerHidden(hidden: boolean) {
+  if (typeof window === "undefined") return;
+  if (hidden) localStorage.setItem(BULBY_TRIGGER_HIDDEN_KEY, "1");
+  else localStorage.removeItem(BULBY_TRIGGER_HIDDEN_KEY);
+}
+
 /** When we have an explicit position, panel is absolutely positioned above the trigger so the container never grows (avoids open glitch). */
 const BULBY_CHATBOX_GAP = 12;
 /** Keep the chatbox panel within the viewport when Bulby is near an edge. */
 const VIEWPORT_MARGIN = 24;
 /** Min pointer movement (px) before treating as drag; avoids suppressing tap-to-open on mobile. */
 const DRAG_THRESHOLD_PX = 10;
+/** How far off-viewport (px) before drag counts as "hidden". */
+const HIDE_OFF_SCREEN_THRESHOLD = 20;
+/** Trigger size for off-screen check (px). */
+const TRIGGER_SIZE = 88;
 
 type DragPosition = { x: number; y: number };
 
@@ -117,7 +137,32 @@ export function BulbyChatbox({ projectId }: BulbyChatboxProps) {
   const [position, setPosition] = useState<DragPosition | null>(loadStoredPosition);
   const [panelOffset, setPanelOffset] = useState({ x: 0, y: 0 });
   const [panelOpensBelow, setPanelOpensBelow] = useState(false);
+  const [triggerHidden, setTriggerHiddenState] = useState(getTriggerHidden);
   const dragRef = useRef<{ startX: number; startY: number; offsetX: number; offsetY: number; moved: boolean } | null>(null);
+  /** Last position when trigger was in viewport; used to restore when unhiding. */
+  const lastInViewportPositionRef = useRef<DragPosition | null>(null);
+
+  const setTriggerHidden = useCallback((hidden: boolean) => {
+    setTriggerHiddenState(hidden);
+    persistTriggerHidden(hidden);
+    if (!hidden) {
+      const restore = lastInViewportPositionRef.current ?? null;
+      setPosition(restore);
+      if (restore) storePosition(restore);
+    }
+    window.dispatchEvent(
+      new CustomEvent(BULBY_TRIGGER_VISIBILITY_EVENT, { detail: { hidden } })
+    );
+  }, []);
+
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const ev = e as CustomEvent<{ hidden: boolean }>;
+      if (ev.detail?.hidden !== undefined) setTriggerHiddenState(ev.detail.hidden);
+    };
+    window.addEventListener(BULBY_TRIGGER_VISIBILITY_EVENT, handler);
+    return () => window.removeEventListener(BULBY_TRIGGER_VISIBILITY_EVENT, handler);
+  }, []);
   const justDraggedRef = useRef(false);
   /** Set when we toggle open on touchend so the subsequent synthetic click doesn't toggle again. */
   const tapHandledInTouchendRef = useRef(false);
@@ -136,6 +181,22 @@ export function BulbyChatbox({ projectId }: BulbyChatboxProps) {
   useEffect(() => {
     setPosition(loadStoredPosition());
   }, []);
+
+  const isOffScreen = useCallback((pos: DragPosition) => {
+    const w = typeof window !== "undefined" ? window.innerWidth : 0;
+    const h = typeof window !== "undefined" ? window.innerHeight : 0;
+    return (
+      pos.x + TRIGGER_SIZE < HIDE_OFF_SCREEN_THRESHOLD ||
+      pos.x > w - HIDE_OFF_SCREEN_THRESHOLD ||
+      pos.y + TRIGGER_SIZE < HIDE_OFF_SCREEN_THRESHOLD ||
+      pos.y > h - HIDE_OFF_SCREEN_THRESHOLD
+    );
+  }, []);
+
+  useEffect(() => {
+    const pos = position ?? loadStoredPosition();
+    if (pos && !isOffScreen(pos)) lastInViewportPositionRef.current = pos;
+  }, [position, isOffScreen]);
 
   const lastPositionRef = useRef<DragPosition | null>(null);
 
@@ -185,10 +246,10 @@ export function BulbyChatbox({ projectId }: BulbyChatboxProps) {
     if (!state.moved) return;
     if ("touches" in e) e.preventDefault();
     const box = chatboxRef.current?.getBoundingClientRect();
-    const w = box?.width ?? 88;
-    const h = box?.height ?? 120;
-    const x = Math.max(0, Math.min(window.innerWidth - w, clientX - state.offsetX));
-    const y = Math.max(0, Math.min(window.innerHeight - h, clientY - state.offsetY));
+    const w = box?.width ?? TRIGGER_SIZE;
+    const h = box?.height ?? TRIGGER_SIZE;
+    const x = clientX - state.offsetX;
+    const y = clientY - state.offsetY;
     const next = { x, y };
     lastPositionRef.current = next;
     setPosition(next);
@@ -198,10 +259,18 @@ export function BulbyChatbox({ projectId }: BulbyChatboxProps) {
     const state = dragRef.current;
     dragRef.current = null;
     const toStore = lastPositionRef.current ?? position;
-    if (state?.moved && toStore) {
+    if (!state?.moved || !toStore) return;
+    if (isOffScreen(toStore)) {
+      setTriggerHiddenState(true);
+      persistTriggerHidden(true);
+      window.dispatchEvent(
+        new CustomEvent(BULBY_TRIGGER_VISIBILITY_EVENT, { detail: { hidden: true } })
+      );
+    } else {
+      lastInViewportPositionRef.current = toStore;
       storePosition(toStore);
     }
-  }, [position]);
+  }, [position, isOffScreen]);
 
   const handleDragStart = useCallback(
     (e: React.MouseEvent | React.TouchEvent) => {
@@ -366,9 +435,11 @@ export function BulbyChatbox({ projectId }: BulbyChatboxProps) {
       ref={chatboxRef}
       className="bulby-chatbox"
       style={
-        position != null
-          ? { left: position.x, top: position.y, right: "auto", bottom: "auto" }
-          : undefined
+        triggerHidden
+          ? { right: 0, bottom: 24, left: "auto", top: "auto" }
+          : position != null
+            ? { left: position.x, top: position.y, right: "auto", bottom: "auto" }
+            : undefined
       }
     >
       {open && (
@@ -454,17 +525,29 @@ export function BulbyChatbox({ projectId }: BulbyChatboxProps) {
           </div>
         </div>
       )}
-      <button
-        type="button"
-        className={`bulby-chatbox-trigger bulby-chatbox-trigger--icon${open ? " bulby-chatbox-trigger--open" : ""}${loading ? " is-thinking" : ""}`}
-        onClick={handleTriggerClick}
-        onMouseDown={handlePointerDown}
-        onTouchStart={handlePointerDown}
-        aria-label={open ? "Minimize Bulby chat" : "Open Bulby chat"}
-        title={open ? "Minimize chat" : "Ask Bulby — drag to move"}
-      >
-        <BulbyCharacter />
-      </button>
+      {triggerHidden ? (
+        <button
+          type="button"
+          className="bulby-chatbox-trigger-unhide"
+          onClick={() => setTriggerHidden(false)}
+          aria-label="Show Bulby chat"
+          title="Show Bulby chat"
+        >
+          <BulbyCharacter />
+        </button>
+      ) : (
+        <button
+          type="button"
+          className={`bulby-chatbox-trigger bulby-chatbox-trigger--icon${open ? " bulby-chatbox-trigger--open" : ""}${loading ? " is-thinking" : ""}`}
+          onClick={handleTriggerClick}
+          onMouseDown={handlePointerDown}
+          onTouchStart={handlePointerDown}
+          aria-label={open ? "Minimize Bulby chat" : "Open Bulby chat"}
+          title={open ? "Minimize chat" : "Ask Bulby — drag off screen to hide"}
+        >
+          <BulbyCharacter />
+        </button>
+      )}
     </div>
   );
 

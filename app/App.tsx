@@ -161,7 +161,10 @@ import { ExpensesTab } from "./src/screens/ExpensesTab";
 import { SettingsTab } from "./src/screens/SettingsTab";
 import { TestsTab } from "./src/screens/TestsTab";
 import { IssuesTab } from "./src/screens/IssuesTab";
-import { ChecklistSection } from "./src/components/ChecklistSection";
+import {
+  ChecklistSection,
+  type ChecklistSectionProps,
+} from "./src/components/ChecklistSection";
 import { IssueBoardColumn } from "./src/components/IssueBoardColumn";
 import { ProjectPicker } from "./src/components/ProjectPicker";
 import { TestResultPanel } from "./src/components/TestResultPanel";
@@ -2570,6 +2573,153 @@ export default function App() {
     ]
   );
 
+  const CHECKLIST_TABS: ChecklistKind[] = [
+    "features",
+    "todos",
+    "ideas",
+    "bugs",
+    "enhancements",
+  ];
+  const isChecklistTab = (tab: AppTab): tab is ChecklistKind =>
+    CHECKLIST_TABS.includes(tab as ChecklistKind);
+
+  const checklistSectionPropsByKind = useMemo((): Record<
+    ChecklistKind,
+    ChecklistSectionProps
+  > => {
+    const base = (kind: ChecklistKind) => ({
+      selectedProjectId,
+      editingId: editingChecklist?.kind === kind ? editingChecklist.id : "",
+      editingName: editingChecklist?.kind === kind ? editingChecklist.name : "",
+      setEditingName: (value: string) =>
+        setEditingChecklist((current) =>
+          current?.kind === kind ? { ...current, name: value } : current
+        ),
+      onCreate: () => handleChecklistCreate(kind),
+      onToggle: (item: ChecklistItem) => handleChecklistToggle(kind, item),
+      onDelete: (item: ChecklistItem) => handleChecklistDelete(kind, item),
+      onClearDone: () => {
+        handleChecklistClearDone(kind).catch(() => {});
+      },
+      onReorder: (item: ChecklistItem, direction: "up" | "down") =>
+        handleChecklistReorder(kind, item, direction),
+      onStartEdit: (item: ChecklistItem) => startChecklistEdit(kind, item),
+      onSaveEdit: () => saveChecklistEdit(kind),
+      onCancelEdit: cancelChecklistEdit,
+    });
+    return {
+      features: {
+        title: "Features",
+        itemName: featureName,
+        setItemName: setFeatureName,
+        creating: creatingFeature,
+        loading: featuresLoading,
+        error: featuresError,
+        items: features,
+        ...base("features"),
+      },
+      todos: {
+        title: "Todos",
+        itemName: todoName,
+        setItemName: setTodoName,
+        creating: creatingTodo,
+        loading: todosLoading,
+        error: todosError,
+        items: todos,
+        ...base("todos"),
+      },
+      ideas: {
+        title: "Ideas",
+        itemName: ideaName,
+        setItemName: setIdeaName,
+        creating: creatingIdea,
+        loading: ideasLoading,
+        error: ideasError,
+        items: ideas,
+        ...base("ideas"),
+        assistant: {
+          title: "Idea Assistant",
+          chatsById: ideaAssistantChatById,
+          draftsById: ideaAssistantDraftById,
+          loadingById: ideaAssistantLoadingById,
+          expandedById: ideaAssistantExpandedById,
+          onToggle: (itemId: string) =>
+            setIdeaAssistantExpandedById((current) => ({
+              ...current,
+              [itemId]: !current[itemId],
+            })),
+          onDraftChange: (itemId: string, value: string) =>
+            setIdeaAssistantDraftById((current) => ({ ...current, [itemId]: value })),
+          onSend: (item: ChecklistItem) => {
+            handleIdeaAssistantSend(item).catch(() => {});
+          },
+        },
+      },
+      bugs: {
+        title: "Bugs",
+        itemName: bugName,
+        setItemName: setBugName,
+        creating: creatingBug,
+        loading: bugsLoading,
+        error: bugsError,
+        items: bugs,
+        ...base("bugs"),
+      },
+      enhancements: {
+        title: "Enhancements",
+        itemName: enhancementName,
+        setItemName: setEnhancementName,
+        creating: creatingEnhancement,
+        loading: enhancementsLoading,
+        error: enhancementsError,
+        items: enhancements,
+        ...base("enhancements"),
+      },
+    };
+  }, [
+    bugName,
+    bugs,
+    bugsLoading,
+    bugsError,
+    cancelChecklistEdit,
+    creatingBug,
+    creatingEnhancement,
+    creatingFeature,
+    creatingIdea,
+    creatingTodo,
+    editingChecklist,
+    enhancementName,
+    enhancements,
+    enhancementsLoading,
+    enhancementsError,
+    featureName,
+    features,
+    featuresLoading,
+    featuresError,
+    handleChecklistClearDone,
+    handleChecklistCreate,
+    handleChecklistDelete,
+    handleChecklistReorder,
+    handleChecklistToggle,
+    handleIdeaAssistantSend,
+    ideaAssistantChatById,
+    ideaAssistantDraftById,
+    ideaAssistantExpandedById,
+    ideaAssistantLoadingById,
+    ideaName,
+    ideas,
+    ideasLoading,
+    ideasError,
+    selectedProjectId,
+    saveChecklistEdit,
+    setEditingChecklist,
+    startChecklistEdit,
+    todoName,
+    todos,
+    todosLoading,
+    todosError,
+  ]);
+
   if (initializing) {
     return (
       <SafeAreaView style={appStyles.screen}>
@@ -2883,187 +3033,8 @@ export default function App() {
           />
         ) : null}
 
-        {activeTab === "features" ? (
-          <ChecklistSection
-            title="Features"
-            itemName={featureName}
-            setItemName={setFeatureName}
-            creating={creatingFeature}
-            loading={featuresLoading}
-            error={featuresError}
-            items={features}
-            selectedProjectId={selectedProjectId}
-            editingId={editingChecklist?.kind === "features" ? editingChecklist.id : ""}
-            editingName={editingChecklist?.kind === "features" ? editingChecklist.name : ""}
-            setEditingName={(value) =>
-              setEditingChecklist((current) =>
-                current?.kind === "features" ? { ...current, name: value } : current
-              )
-            }
-            onCreate={() => handleChecklistCreate("features")}
-            onToggle={(item) => handleChecklistToggle("features", item)}
-            onDelete={(item) => handleChecklistDelete("features", item)}
-            onClearDone={() => {
-              handleChecklistClearDone("features").catch(() => {
-                // handled
-              });
-            }}
-            onReorder={(item, direction) => handleChecklistReorder("features", item, direction)}
-            onStartEdit={(item) => startChecklistEdit("features", item)}
-            onSaveEdit={() => saveChecklistEdit("features")}
-            onCancelEdit={cancelChecklistEdit}
-          />
-        ) : null}
-
-        {activeTab === "todos" ? (
-          <ChecklistSection
-            title="Todos"
-            itemName={todoName}
-            setItemName={setTodoName}
-            creating={creatingTodo}
-            loading={todosLoading}
-            error={todosError}
-            items={todos}
-            selectedProjectId={selectedProjectId}
-            editingId={editingChecklist?.kind === "todos" ? editingChecklist.id : ""}
-            editingName={editingChecklist?.kind === "todos" ? editingChecklist.name : ""}
-            setEditingName={(value) =>
-              setEditingChecklist((current) =>
-                current?.kind === "todos" ? { ...current, name: value } : current
-              )
-            }
-            onCreate={() => handleChecklistCreate("todos")}
-            onToggle={(item) => handleChecklistToggle("todos", item)}
-            onDelete={(item) => handleChecklistDelete("todos", item)}
-            onClearDone={() => {
-              handleChecklistClearDone("todos").catch(() => {
-                // handled
-              });
-            }}
-            onReorder={(item, direction) => handleChecklistReorder("todos", item, direction)}
-            onStartEdit={(item) => startChecklistEdit("todos", item)}
-            onSaveEdit={() => saveChecklistEdit("todos")}
-            onCancelEdit={cancelChecklistEdit}
-          />
-        ) : null}
-
-        {activeTab === "ideas" ? (
-          <ChecklistSection
-            title="Ideas"
-            itemName={ideaName}
-            setItemName={setIdeaName}
-            creating={creatingIdea}
-            loading={ideasLoading}
-            error={ideasError}
-            items={ideas}
-            selectedProjectId={selectedProjectId}
-            editingId={editingChecklist?.kind === "ideas" ? editingChecklist.id : ""}
-            editingName={editingChecklist?.kind === "ideas" ? editingChecklist.name : ""}
-            setEditingName={(value) =>
-              setEditingChecklist((current) =>
-                current?.kind === "ideas" ? { ...current, name: value } : current
-              )
-            }
-            onCreate={() => handleChecklistCreate("ideas")}
-            onToggle={(item) => handleChecklistToggle("ideas", item)}
-            onDelete={(item) => handleChecklistDelete("ideas", item)}
-            onClearDone={() => {
-              handleChecklistClearDone("ideas").catch(() => {
-                // handled
-              });
-            }}
-            onReorder={(item, direction) => handleChecklistReorder("ideas", item, direction)}
-            onStartEdit={(item) => startChecklistEdit("ideas", item)}
-            onSaveEdit={() => saveChecklistEdit("ideas")}
-            onCancelEdit={cancelChecklistEdit}
-            assistant={{
-              title: "Idea Assistant",
-              chatsById: ideaAssistantChatById,
-              draftsById: ideaAssistantDraftById,
-              loadingById: ideaAssistantLoadingById,
-              expandedById: ideaAssistantExpandedById,
-              onToggle: (itemId) => {
-                setIdeaAssistantExpandedById((current) => ({
-                  ...current,
-                  [itemId]: !current[itemId],
-                }));
-              },
-              onDraftChange: (itemId, value) => {
-                setIdeaAssistantDraftById((current) => ({ ...current, [itemId]: value }));
-              },
-              onSend: (item) => {
-                handleIdeaAssistantSend(item).catch(() => {
-                  // handled
-                });
-              },
-            }}
-          />
-        ) : null}
-
-        {activeTab === "bugs" ? (
-          <ChecklistSection
-            title="Bugs"
-            itemName={bugName}
-            setItemName={setBugName}
-            creating={creatingBug}
-            loading={bugsLoading}
-            error={bugsError}
-            items={bugs}
-            selectedProjectId={selectedProjectId}
-            editingId={editingChecklist?.kind === "bugs" ? editingChecklist.id : ""}
-            editingName={editingChecklist?.kind === "bugs" ? editingChecklist.name : ""}
-            setEditingName={(value) =>
-              setEditingChecklist((current) =>
-                current?.kind === "bugs" ? { ...current, name: value } : current
-              )
-            }
-            onCreate={() => handleChecklistCreate("bugs")}
-            onToggle={(item) => handleChecklistToggle("bugs", item)}
-            onDelete={(item) => handleChecklistDelete("bugs", item)}
-            onClearDone={() => {
-              handleChecklistClearDone("bugs").catch(() => {
-                // handled
-              });
-            }}
-            onReorder={(item, direction) => handleChecklistReorder("bugs", item, direction)}
-            onStartEdit={(item) => startChecklistEdit("bugs", item)}
-            onSaveEdit={() => saveChecklistEdit("bugs")}
-            onCancelEdit={cancelChecklistEdit}
-          />
-        ) : null}
-
-        {activeTab === "enhancements" ? (
-          <ChecklistSection
-            title="Enhancements"
-            itemName={enhancementName}
-            setItemName={setEnhancementName}
-            creating={creatingEnhancement}
-            loading={enhancementsLoading}
-            error={enhancementsError}
-            items={enhancements}
-            selectedProjectId={selectedProjectId}
-            editingId={editingChecklist?.kind === "enhancements" ? editingChecklist.id : ""}
-            editingName={editingChecklist?.kind === "enhancements" ? editingChecklist.name : ""}
-            setEditingName={(value) =>
-              setEditingChecklist((current) =>
-                current?.kind === "enhancements" ? { ...current, name: value } : current
-              )
-            }
-            onCreate={() => handleChecklistCreate("enhancements")}
-            onToggle={(item) => handleChecklistToggle("enhancements", item)}
-            onDelete={(item) => handleChecklistDelete("enhancements", item)}
-            onClearDone={() => {
-              handleChecklistClearDone("enhancements").catch(() => {
-                // handled
-              });
-            }}
-            onReorder={(item, direction) =>
-              handleChecklistReorder("enhancements", item, direction)
-            }
-            onStartEdit={(item) => startChecklistEdit("enhancements", item)}
-            onSaveEdit={() => saveChecklistEdit("enhancements")}
-            onCancelEdit={cancelChecklistEdit}
-          />
+        {isChecklistTab(activeTab) ? (
+          <ChecklistSection {...checklistSectionPropsByKind[activeTab]} />
         ) : null}
 
         {activeTab === "tests" ? (

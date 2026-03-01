@@ -47,6 +47,9 @@ import {
   type CommentBlockScreenshot,
   type CommentBlockFile,
 } from "./comment-blocks";
+import { IssueDetailModalHeader } from "./IssueDetailModalHeader";
+import { IssueDetailModalActions } from "./IssueDetailModalActions";
+
 export type IssueDetailModalProps = {
   selectedIssue: Issue;
   setSelectedIssue: React.Dispatch<React.SetStateAction<Issue | null>>;
@@ -310,47 +313,12 @@ export function IssueDetailModal(props: IssueDetailModalProps) {
             : undefined
         }
       >
-        <div className="modal-header">
-          <h2>{issueKeyFn(selectedIssue)}</h2>
-          <div className="modal-header-actions">
-            <button
-              type="button"
-              className="modal-close"
-              onClick={onClose}
-              aria-label="Close"
-            >
-              ×
-            </button>
-          </div>
-        </div>
-        <div
-          className="quality-score-bar-wrap"
-          style={{ marginBottom: 12 }}
-        >
-          <div className="quality-score-bar-label">
-            <span>Quality Score</span>
-            <span>
-              {Math.round((computeQualityScoreFn(selectedIssue) / 6) * 100)} /
-              100
-            </span>
-          </div>
-          <div
-            className="quality-score-bar"
-            role="progressbar"
-            aria-valuenow={Math.round(
-              (computeQualityScoreFn(selectedIssue) / 6) * 100
-            )}
-            aria-valuemin={0}
-            aria-valuemax={100}
-          >
-            <div
-              className="quality-score-bar-fill"
-              style={{
-                width: `${(computeQualityScoreFn(selectedIssue) / 6) * 100}%`,
-              }}
-            />
-          </div>
-        </div>
+        <IssueDetailModalHeader
+          selectedIssue={selectedIssue}
+          issueKeyFn={issueKeyFn}
+          computeQualityScoreFn={computeQualityScoreFn}
+          onClose={onClose}
+        />
         <div className="modal-body modal-body--scrollable">
           <div className="form-group">
             <label>Project</label>
@@ -2675,27 +2643,14 @@ export function IssueDetailModal(props: IssueDetailModalProps) {
               </div>
             )}
         </div>
-        <div className="modal-actions">
-          {hasIssueDetailChangesFn(selectedIssue, issueDetailOriginal) && (
-            <button
-              type="button"
-              className="btn btn-primary"
-              onClick={handleSaveIssue}
-              disabled={issueSaving}
-            >
-              {issueSaving ? "Saving…" : "Save"}
-            </button>
-          )}
-          <button
-            type="button"
-            className="btn btn-icon"
-            onClick={() => setIssueToDelete(selectedIssue)}
-            aria-label={`Delete ${selectedIssue.title || "issue"}`}
-            title="Delete issue"
-          >
-            <IconTrash />
-          </button>
-        </div>
+        <IssueDetailModalActions
+          selectedIssue={selectedIssue}
+          issueDetailOriginal={issueDetailOriginal}
+          hasIssueDetailChangesFn={hasIssueDetailChangesFn}
+          handleSaveIssue={handleSaveIssue}
+          issueSaving={issueSaving}
+          setIssueToDelete={setIssueToDelete}
+        />
       </div>
     </div>
   );

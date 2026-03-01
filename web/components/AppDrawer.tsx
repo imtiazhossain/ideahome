@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import {
   setStoredAssistantVoiceUri,
@@ -7,6 +7,10 @@ import {
 import { IconTrash } from "./IconTrash";
 import { IconFilter, IconMic, IconSettings } from "./icons";
 import { IconHomeBulby } from "./icons";
+import {
+  BULBY_TRIGGER_HIDDEN_KEY,
+  BULBY_TRIGGER_VISIBILITY_EVENT,
+} from "./BulbyChatbox";
 import { DrawerCollapsedNav } from "./ProjectNavBar";
 import type { ProjectNavTabId } from "./ProjectNavBar";
 
@@ -154,6 +158,31 @@ export function AppDrawer({
   tabOrderLength,
   deleteSectionTab,
 }: AppDrawerProps) {
+  const [bulbyTriggerHidden, setBulbyTriggerHidden] = useState(() =>
+    typeof window !== "undefined"
+      ? window.localStorage.getItem(BULBY_TRIGGER_HIDDEN_KEY) === "1"
+      : false
+  );
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const ev = e as CustomEvent<{ hidden: boolean }>;
+      if (ev.detail?.hidden !== undefined) setBulbyTriggerHidden(ev.detail.hidden);
+    };
+    window.addEventListener(BULBY_TRIGGER_VISIBILITY_EVENT, handler);
+    return () =>
+      window.removeEventListener(BULBY_TRIGGER_VISIBILITY_EVENT, handler);
+  }, []);
+
+  const toggleBulbyTrigger = () => {
+    const next = !bulbyTriggerHidden;
+    setBulbyTriggerHidden(next);
+    if (next) window.localStorage.setItem(BULBY_TRIGGER_HIDDEN_KEY, "1");
+    else window.localStorage.removeItem(BULBY_TRIGGER_HIDDEN_KEY);
+    window.dispatchEvent(
+      new CustomEvent(BULBY_TRIGGER_VISIBILITY_EVENT, { detail: { hidden: next } })
+    );
+  };
+
   return (
     <aside
       className={`drawer ${drawerOpen ? "drawer-open" : "drawer-closed"}`}
@@ -596,6 +625,26 @@ export function AppDrawer({
                       title="Delete sections"
                     >
                       <IconTrash />
+                    </button>
+                    <button
+                      type="button"
+                      className="drawer-bottom-settings-menu-item"
+                      role="menuitem"
+                      onClick={() => {
+                        toggleBulbyTrigger();
+                      }}
+                      aria-label={
+                        bulbyTriggerHidden
+                          ? "Show Bulby chat"
+                          : "Hide Bulby chat"
+                      }
+                      title={
+                        bulbyTriggerHidden
+                          ? "Show Bulby chat"
+                          : "Hide Bulby chat"
+                      }
+                    >
+                      {bulbyTriggerHidden ? "Show Bulby" : "Hide Bulby"}
                     </button>
                     <button
                       type="button"
