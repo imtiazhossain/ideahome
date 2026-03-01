@@ -371,6 +371,7 @@ export default function ExpensesPage() {
         </section>
 
         <section className="tests-page-section">
+          <h2 className="tests-page-section-title">Add expense</h2>
           <ProjectSectionGuard
             projectsLoaded={projectsLoaded}
             selectedProjectId={selectedProjectId}

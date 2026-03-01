@@ -343,8 +343,7 @@ textarea {
   line-height: 1;
   font-weight: 500;
   letter-spacing: 0.01em;
-  color: #3b82f6;
-  text-shadow: 0 0 14px rgba(59, 130, 246, 0.24);
+  color: var(--text);
 }
 
 .drawer-header .drawer-toggle {
@@ -1593,8 +1592,10 @@ textarea {
 
 .project-nav-project-name {
   margin: 0;
-  font-size: 18px;
-  font-weight: 700;
+  font-size: 19px;
+  line-height: 1;
+  font-weight: 500;
+  letter-spacing: 0.01em;
   color: var(--text);
 }
 
@@ -2723,6 +2724,7 @@ textarea {
   overflow-x: auto;
   scrollbar-width: none;
   -ms-overflow-style: none;
+  max-width: 100%;
 }
 .board-container::-webkit-scrollbar {
   display: none;
@@ -2730,18 +2732,18 @@ textarea {
 
 .board-columns {
   display: flex;
-  gap: 16px;
+  gap: 20px;
   min-height: 70vh;
   align-items: flex-start;
 }
 
 .column {
   flex: 0 0 280px;
-  background: var(--column-bg);
+  background: var(--bg-card);
+  border: 1px solid var(--border);
   border-radius: var(--card-radius);
-  padding: 16px;
+  padding: 18px;
   min-height: 120px;
-  border: 2px solid transparent;
   box-shadow: var(--card-shadow);
 }
 
@@ -2755,16 +2757,18 @@ textarea {
 
 .column-title {
   font-weight: 600;
-  font-size: 14px;
+  font-size: 16px;
   color: var(--text);
 }
 
 .column-count {
-  background: rgba(0, 0, 0, 0.08);
-  padding: 2px 8px;
-  border-radius: 10px;
   font-size: 12px;
+  font-weight: 600;
   color: var(--text-muted);
+  background: var(--column-bg);
+  border: 1px solid var(--border);
+  padding: 3px 10px;
+  border-radius: 999px;
 }
 
 .column.column-backlog .column-title {
@@ -2781,14 +2785,14 @@ textarea {
 }
 
 .column-drop-target {
-  border: 2px dashed var(--text-muted);
-  background: rgba(107, 114, 128, 0.06);
+  border: 2px dashed var(--border-input);
+  background: var(--column-bg);
 }
 
 .issue-card {
   position: relative;
   background: var(--bg-card);
-  border-radius: 10px;
+  border-radius: var(--card-radius);
   padding: 14px;
   margin-bottom: 10px;
   box-shadow: var(--card-shadow);
@@ -3820,12 +3824,10 @@ a.automated-tests-chip-text:hover {
 .tests-page-section {
   margin-bottom: 32px;
   padding: 18px;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.02), rgba(255, 255, 255, 0))
-      var(--bg-card);
+  background: var(--bg-card);
   border: 1px solid var(--border);
-  border-radius: 18px;
-  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.16);
+  border-radius: var(--card-radius);
+  box-shadow: var(--card-shadow);
   position: relative;
 }
 
@@ -3841,8 +3843,9 @@ a.automated-tests-chip-text:hover {
 .tests-page-section-count {
   font-size: 12px;
   font-weight: 600;
-  color: var(--text);
-  background: rgba(0, 0, 0, 0.22);
+  color: var(--text-muted);
+  background: var(--column-bg);
+  border: 1px solid var(--border);
   padding: 3px 10px;
   border-radius: 999px;
 }
@@ -5398,6 +5401,38 @@ a.automated-tests-chip-text:hover {
   box-shadow: none;
 }
 
+[data-theme="light"] .expenses-add-btn {
+  border-color: #2563eb;
+  background: rgba(37, 99, 235, 0.06);
+  color: #1d4ed8;
+}
+[data-theme="light"] .expenses-add-btn:hover:not(:disabled) {
+  border-color: #1d4ed8;
+  background: rgba(37, 99, 235, 0.12);
+  color: #1e3a8a;
+  box-shadow:
+    0 0 0 1px rgba(37, 99, 235, 0.2) inset,
+    0 0 12px rgba(59, 130, 246, 0.25);
+}
+[data-theme="light"] .expenses-add-btn:disabled:hover {
+  border-color: #2563eb;
+  background: rgba(37, 99, 235, 0.06);
+  color: #1d4ed8;
+  box-shadow: none;
+}
+
+[data-theme="light"] .expenses-form {
+  border-color: #2563eb;
+  background: rgba(37, 99, 235, 0.06);
+}
+[data-theme="light"] .expenses-form:focus-within {
+  border-color: #1d4ed8;
+  background: rgba(37, 99, 235, 0.12);
+  box-shadow:
+    0 0 0 1px rgba(37, 99, 235, 0.2) inset,
+    0 0 12px rgba(59, 130, 246, 0.25);
+}
+
 [data-theme="light"] .features-list-done-toggle {
   border-color: #2563eb;
   background: rgba(37, 99, 235, 0.06);
@@ -6266,7 +6301,7 @@ a.automated-tests-chip-text:hover {
 }
 
 .expenses-page-content {
-  max-width: 920px;
+  max-width: 900px;
 }
 
 .expenses-total {
@@ -6284,19 +6319,43 @@ a.automated-tests-chip-text:hover {
   margin-bottom: 4px;
 }
 
+/* Same design scheme as features-add-form (list pages) */
 .expenses-form {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 12px 16px;
   align-items: flex-end;
   margin-top: 8px;
+  padding: 12px;
+  border: 1px solid rgba(96, 165, 250, 0.8);
+  border-radius: 12px;
+  background: rgba(37, 99, 235, 0.08);
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.expenses-form:focus-within {
+  border-color: #93c5fd;
+  background: rgba(59, 130, 246, 0.12);
+  box-shadow:
+    0 0 0 1px rgba(147, 197, 253, 0.35) inset,
+    0 0 14px rgba(59, 130, 246, 0.2);
 }
 
 .expenses-field {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
   min-width: 0;
+}
+
+.expenses-field label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  line-height: 1.2;
 }
 
 .expenses-field-amount .expenses-input {
@@ -6342,18 +6401,19 @@ a.automated-tests-chip-text:hover {
   display: flex;
   align-items: center;
   justify-content: center;
+  min-height: 38px;
   padding: 8px 12px;
   border: 1px solid var(--border-input);
-  border-radius: 8px;
-  background: var(--bg-page);
+  border-radius: var(--card-radius);
+  background: var(--input-bg);
   color: var(--text);
   box-sizing: border-box;
   pointer-events: none;
 }
 
 .expenses-date-native:focus + .expenses-date-display {
-  border-color: #2563eb;
-  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(96, 165, 250, 0.2);
 }
 
 .expenses-field-category .expenses-input {
@@ -6364,10 +6424,11 @@ a.automated-tests-chip-text:hover {
   width: 100%;
   max-width: 100%;
   min-width: 0;
+  min-height: 38px;
   padding: 8px 12px;
   border: 1px solid var(--border-input);
-  border-radius: 8px;
-  background: var(--bg-page);
+  border-radius: var(--card-radius);
+  background: var(--input-bg);
   color: var(--text);
   font-size: 14px;
   box-sizing: border-box;
@@ -6375,33 +6436,45 @@ a.automated-tests-chip-text:hover {
 
 .expenses-input:focus {
   outline: none;
-  border-color: #2563eb;
-  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(96, 165, 250, 0.2);
 }
 
 .expenses-add-btn {
+  flex-shrink: 0;
   align-self: flex-end;
-  background: #111827;
-  color: #f9fafb;
-  border: 1px solid #1f2937;
+  min-height: 38px;
+  height: 38px;
+  border: 1px solid rgba(96, 165, 250, 0.8);
+  border-radius: 8px;
+  background: rgba(37, 99, 235, 0.08);
+  color: #bfdbfe;
+  transition:
+    border-color 0.15s ease,
+    color 0.15s ease,
+    background 0.15s ease,
+    box-shadow 0.15s ease;
 }
 
 .expenses-add-btn:hover:not(:disabled) {
-  background: #030712;
-  color: #ffffff;
+  border-color: #93c5fd;
+  background: rgba(59, 130, 246, 0.24);
+  color: #eff6ff;
+  box-shadow:
+    0 0 0 1px rgba(147, 197, 253, 0.35) inset,
+    0 0 14px rgba(59, 130, 246, 0.35);
 }
 
 .expenses-add-btn:disabled {
-  background: #4b5563;
-  color: #9ca3af;
-  border-color: #6b7280;
-  opacity: 1;
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .expenses-add-btn:disabled:hover {
-  background: #4b5563;
-  color: #9ca3af;
-  border-color: #6b7280;
+  border-color: rgba(96, 165, 250, 0.8);
+  background: rgba(37, 99, 235, 0.08);
+  color: #bfdbfe;
+  box-shadow: none;
 }
 
 .expenses-list {
@@ -6410,14 +6483,23 @@ a.automated-tests-chip-text:hover {
   margin: 8px 0 0;
 }
 
+/* Same design scheme as features-list-item (list pages) */
 .expenses-item {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
   flex-wrap: wrap;
-  padding: 12px 0;
-  border-bottom: 1px solid var(--border);
+  padding: 12px;
+  margin-bottom: 8px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: transparent;
+  transition: border-color 0.15s ease;
+}
+
+.expenses-item:last-child {
+  margin-bottom: 0;
 }
 
 .expenses-item-main {
@@ -6467,8 +6549,8 @@ a.automated-tests-chip-text:hover {
   padding: 4px 8px;
   min-width: 100px;
   border: 1px solid var(--border-input);
-  border-radius: 8px;
-  background: var(--bg-page);
+  border-radius: var(--card-radius);
+  background: var(--input-bg);
   color: var(--text);
 }
 
@@ -6560,6 +6642,7 @@ a.automated-tests-chip-text:hover {
 
   .expenses-form {
     gap: 10px;
+    padding: 10px;
   }
 
   .expenses-field {
