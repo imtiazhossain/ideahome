@@ -125,7 +125,7 @@ textarea {
 .drawer {
   flex-shrink: 0;
   position: relative;
-  z-index: 20;
+  z-index: 1001;
   background: var(--bg-sidebar);
   border-right: 1px solid var(--border);
   display: flex;
@@ -6661,7 +6661,7 @@ a.automated-tests-chip-text:hover {
     top: 0;
     bottom: 0;
     width: min(270px, 76vw);
-    z-index: 50;
+    z-index: 1001;
     transition: transform 0.2s ease;
     will-change: transform;
   }
