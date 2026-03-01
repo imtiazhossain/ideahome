@@ -51,7 +51,7 @@ export type IssueDetailModalProps = {
   selectedIssue: Issue;
   setSelectedIssue: React.Dispatch<React.SetStateAction<Issue | null>>;
   onClose: () => void;
-  issueDetailModalScrollRef: RefObject<HTMLDivElement | null>;
+  issueDetailModalScrollRef: RefObject<HTMLDivElement>;
   dragOverCount: number;
   handleDragOver: (e: React.DragEvent) => void;
   handleDragEnter: (e: React.DragEvent) => void;
@@ -70,10 +70,10 @@ export type IssueDetailModalProps = {
   setIssueToDelete: (issue: Issue | null) => void;
   users: User[];
   parseTestCasesFn: (s: string | null | undefined) => string[];
-  serializeTestCasesFn: (lines: string[]) => string;
+  serializeTestCasesFn: (lines: string[]) => string | null;
   parseAutomatedTestsFn: (s: string | null | undefined) => string[];
-  serializeAutomatedTestsFn: (tests: string[]) => string;
-  automatedTestDropdownRef: RefObject<HTMLDivElement | null>;
+  serializeAutomatedTestsFn: (tests: string[]) => string | null;
+  automatedTestDropdownRef: RefObject<HTMLDivElement>;
   automatedTestDropdownOpen: boolean;
   setAutomatedTestDropdownOpen: React.Dispatch<React.SetStateAction<boolean>>;
   automatedTestRunResults: Record<string, RunUiTestResult | "running">;
@@ -81,12 +81,12 @@ export type IssueDetailModalProps = {
     React.SetStateAction<Record<string, RunUiTestResult | "running">>
   >;
   runUiTestFn: (testName: string) => Promise<RunUiTestResult>;
-  fileInputRef: RefObject<HTMLInputElement | null>;
+  fileInputRef: RefObject<HTMLInputElement>;
   uploadButtonBusy: boolean;
   recordingUploading: boolean;
   screenshotUploading: boolean;
   fileUploading: boolean;
-  screenshotsSectionRef: RefObject<HTMLDivElement | null>;
+  screenshotsSectionRef: RefObject<HTMLDivElement>;
   screenshotNameFromComments: Map<string, string>;
   editingScreenshotId: string | null;
   editingScreenshotName: string;
@@ -96,12 +96,12 @@ export type IssueDetailModalProps = {
   handleDeleteScreenshot: (id: string) => void;
   handleTakeScreenshot: () => void;
   handleScreenshotUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
-  screenshotFileInputRef: RefObject<HTMLInputElement | null>;
+  screenshotFileInputRef: RefObject<HTMLInputElement>;
   canScreenRecord: boolean;
   screenshotTaking: boolean;
   screenshotError: string | null;
   setScreenshotError: (v: string | null) => void;
-  recordingsSectionRef: RefObject<HTMLDivElement | null>;
+  recordingsSectionRef: RefObject<HTMLDivElement>;
   editingRecordingId: string | null;
   editingRecordingName: string;
   setEditingRecordingId: (v: string | null) => void;
@@ -110,7 +110,7 @@ export type IssueDetailModalProps = {
   handleDeleteRecording: (id: string) => void;
   playingRecordingId: string | null;
   setPlayingRecordingId: (v: string | null) => void;
-  recordingPlayerWrapRef: RefObject<HTMLDivElement | null>;
+  recordingPlayerWrapRef: RefObject<HTMLDivElement>;
   recordingPlaybackError: string | null;
   setRecordingPlaybackError: (v: string | null) => void;
   recordingFor: "issue" | "comment-pending" | string | null;
@@ -118,15 +118,15 @@ export type IssueDetailModalProps = {
   stopRecording: () => void;
   startRecording: (opts?: { forCommentPending?: boolean; forCommentId?: string }) => void;
   startAudioRecording: (opts?: { forCommentPending?: boolean; forCommentId?: string }) => void;
-  startCameraRecording: (opts?: { forCommentId?: string }) => void;
+  startCameraRecording: (opts?: { forCommentPending?: boolean; forCommentId?: string }) => void;
   canCameraRecord: boolean;
   canAudioRecord: boolean;
   handleUnifiedFileUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
-  filesSectionRef: RefObject<HTMLDivElement | null>;
+  filesSectionRef: RefObject<HTMLDivElement>;
   handleDeleteFile: (id: string) => void;
   fileError: string | null;
   setFileError: (v: string | null) => void;
-  commentsSectionRef: RefObject<HTMLDivElement | null>;
+  commentsSectionRef: RefObject<HTMLDivElement>;
   issueComments: IssueComment[];
   issueCommentsLoading: boolean;
   issueCommentsError: string | null;
@@ -136,13 +136,13 @@ export type IssueDetailModalProps = {
   commentBlocks: CommentBlock[];
   setCommentBlocks: React.Dispatch<React.SetStateAction<CommentBlock[]>>;
   activeCommentBlockRef: React.MutableRefObject<number>;
-  issueCommentTextareaRef: RefObject<HTMLTextAreaElement | null>;
+  issueCommentTextareaRef: RefObject<HTMLTextAreaElement>;
   setCommentBoxError: (v: boolean) => void;
   viewingBlockIndex: number | null;
   setViewingBlockIndex: (v: number | null) => void;
   removeCommentBlock: (blockIdx: number) => void;
-  commentVideoFileInputRef: RefObject<HTMLInputElement | null>;
-  commentScreenshotFileInputRef: RefObject<HTMLInputElement | null>;
+  commentVideoFileInputRef: RefObject<HTMLInputElement>;
+  commentScreenshotFileInputRef: RefObject<HTMLInputElement>;
   handleCommentVideoFile: (e: React.ChangeEvent<HTMLInputElement>) => void;
   handleCommentScreenshotFile: (e: React.ChangeEvent<HTMLInputElement>) => void;
   handleTakeScreenshotAndAddToComment: () => void;
@@ -438,7 +438,7 @@ export function IssueDetailModal(props: IssueDetailModalProps) {
               const updateCases = (nextLines: string[]) => {
                 setSelectedIssue({
                   ...selectedIssue,
-                  testCases: serializeTestCasesFn(nextLines),
+                  testCases: serializeTestCasesFn(nextLines) ?? "",
                 });
               };
               return (
@@ -528,14 +528,14 @@ export function IssueDetailModal(props: IssueDetailModalProps) {
                   : [...selectedTests, testName];
                 setSelectedIssue({
                   ...selectedIssue,
-                  automatedTest: serializeAutomatedTestsFn(next),
+                  automatedTest: serializeAutomatedTestsFn(next) ?? "",
                 });
               };
               const removeTest = (testName: string) => {
                 const next = selectedTests.filter((t) => t !== testName);
                 setSelectedIssue({
                   ...selectedIssue,
-                  automatedTest: serializeAutomatedTestsFn(next),
+                  automatedTest: serializeAutomatedTestsFn(next) ?? "",
                 });
               };
               const runTest = async (testName: string) => {
