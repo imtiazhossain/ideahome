@@ -89,22 +89,7 @@ export function CheckableListPageShell({
               )}
             </section>
 
-            <section
-              className={`tests-page-section${onCopyList ? " tests-page-section--with-top-right" : ""}`}
-            >
-              {onCopyList ? (
-                <div className="tests-page-section-top-right">
-                  <button
-                    type="button"
-                    className="tests-page-section-copy-icon"
-                    onClick={onCopyList}
-                    aria-label={copyListAriaLabel}
-                    title={copyListTitle}
-                  >
-                    <IconCopy />
-                  </button>
-                </div>
-              ) : null}
+            <section className="tests-page-section">
               {listGuard ? (
                 <ProjectSectionGuard
                   projectsLoaded={listGuard.projectsLoaded}
@@ -117,30 +102,45 @@ export function CheckableListPageShell({
               ) : (
                 listContent
               )}
-              {(canUndo || canBulkDelete) && (
+              {(onCopyList || canUndo || canBulkDelete) && (
                 <div className="tests-page-section-footer">
-                  {canUndo ? (
-                    <button
-                      type="button"
-                      className="tests-page-section-undo"
-                      onClick={onUndo}
-                      aria-label="Undo last change"
-                      title="Undo"
-                    >
-                      <IconUndo />
-                    </button>
-                  ) : null}
-                  {canBulkDelete && onBulkDelete ? (
-                    <button
-                      type="button"
-                      className="tests-page-section-bulk-delete"
-                      onClick={onBulkDelete}
-                      aria-label="Delete all completed items"
-                      title="Delete all completed items"
-                    >
-                      <IconTrash />
-                    </button>
-                  ) : null}
+                  <div className="tests-page-section-footer-left">
+                    {onCopyList ? (
+                      <button
+                        type="button"
+                        className="tests-page-section-copy-icon"
+                        onClick={onCopyList}
+                        aria-label={copyListAriaLabel}
+                        title={copyListTitle}
+                      >
+                        <IconCopy />
+                      </button>
+                    ) : null}
+                  </div>
+                  <div className="tests-page-section-footer-right">
+                    {canUndo ? (
+                      <button
+                        type="button"
+                        className="tests-page-section-undo"
+                        onClick={onUndo}
+                        aria-label="Undo last change"
+                        title="Undo"
+                      >
+                        <IconUndo />
+                      </button>
+                    ) : null}
+                    {canBulkDelete && onBulkDelete ? (
+                      <button
+                        type="button"
+                        className="tests-page-section-bulk-delete"
+                        onClick={onBulkDelete}
+                        aria-label="Delete all completed items"
+                        title="Delete all completed items"
+                      >
+                        <IconTrash />
+                      </button>
+                    ) : null}
+                  </div>
                 </div>
               )}
             </section>

@@ -3829,13 +3829,13 @@ a.automated-tests-chip-text:hover {
 /* Same color scheme as idea-plan-generate-btn */
 .features-add-form {
   display: flex;
-  gap: 10px;
+  gap: 8px;
   flex-wrap: wrap;
   align-items: center;
   margin-top: 2px;
-  padding: 10px;
+  padding: 6px;
   border: 1px solid rgba(96, 165, 250, 0.8);
-  border-radius: 14px;
+  border-radius: 12px;
   background: rgba(37, 99, 235, 0.08);
   transition:
     border-color 0.15s ease,
@@ -3853,8 +3853,8 @@ a.automated-tests-chip-text:hover {
 .features-add-input {
   flex: 1;
   min-width: 200px;
-  padding: 10px 12px !important;
-  border-radius: 12px;
+  padding: 6px 12px !important;
+  border-radius: 10px;
   border: none !important;
   box-shadow: none !important;
   background: transparent !important;
@@ -3867,9 +3867,9 @@ a.automated-tests-chip-text:hover {
 }
 
 .features-add-form .project-nav-add {
-  width: 44px;
-  height: 44px;
-  border-radius: 12px;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
   border: 1px solid rgba(96, 165, 250, 0.8);
   background: rgba(37, 99, 235, 0.08);
   color: #bfdbfe;
@@ -3900,17 +3900,6 @@ a.automated-tests-chip-text:hover {
   align-items: center;
   gap: 4px;
   margin-left: auto;
-}
-
-.tests-page-section-top-right {
-  position: absolute;
-  top: 12px;
-  right: 12px;
-  z-index: 2;
-}
-
-.tests-page-section--with-top-right {
-  padding-top: 58px;
 }
 
 .tests-page-section-copy-icon {
@@ -3946,7 +3935,19 @@ a.automated-tests-chip-text:hover {
   margin-top: 10px;
   display: flex;
   gap: 8px;
-  justify-content: flex-end;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.tests-page-section-footer-left {
+  display: flex;
+  align-items: center;
+}
+
+.tests-page-section-footer-right {
+  display: flex;
+  gap: 8px;
+  align-items: center;
 }
 
 .tests-page-section-refresh {
@@ -3979,7 +3980,6 @@ a.automated-tests-chip-text:hover {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  margin-left: auto;
   width: 36px;
   height: 36px;
   padding: 0;
@@ -6454,8 +6454,8 @@ a.automated-tests-chip-text:hover {
   }
 
   .features-add-form {
-    padding: 8px;
-    border-radius: 12px;
+    padding: 6px;
+    border-radius: 10px;
   }
 
   .features-add-input {
@@ -6463,9 +6463,9 @@ a.automated-tests-chip-text:hover {
   }
 
   .features-add-form .project-nav-add {
-    width: 40px;
-    height: 40px;
-    border-radius: 10px;
+    width: 34px;
+    height: 34px;
+    border-radius: 8px;
   }
 
   .board-toolbar {
@@ -6888,17 +6888,6 @@ a.automated-tests-chip-text:hover {
 
   .tests-page-section {
     padding: 16px;
-  }
-
-  .tests-page-section--with-top-right {
-    padding-top: 16px;
-  }
-
-  .tests-page-section-top-right {
-    position: static;
-    display: flex;
-    justify-content: flex-end;
-    margin-bottom: 8px;
   }
 
   .features-list-item {
