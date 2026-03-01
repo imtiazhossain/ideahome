@@ -47,9 +47,6 @@ import {
   type CommentBlockScreenshot,
   type CommentBlockFile,
 } from "./comment-blocks";
-import { hasIssueDetailChanges } from "./issue-detail-utils";
-import { issueKey } from "./issue-key";
-
 export type IssueDetailModalProps = {
   selectedIssue: Issue;
   setSelectedIssue: React.Dispatch<React.SetStateAction<Issue | null>>;
