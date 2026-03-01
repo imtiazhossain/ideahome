@@ -119,6 +119,8 @@ export function BulbyChatbox({ projectId }: BulbyChatboxProps) {
   const [panelOpensBelow, setPanelOpensBelow] = useState(false);
   const dragRef = useRef<{ startX: number; startY: number; offsetX: number; offsetY: number; moved: boolean } | null>(null);
   const justDraggedRef = useRef(false);
+  /** Set when we toggle open on touchend so the subsequent synthetic click doesn't toggle again. */
+  const tapHandledInTouchendRef = useRef(false);
 
   useEffect(() => {
     const el = threadRef.current;
@@ -208,17 +210,33 @@ export function BulbyChatbox({ projectId }: BulbyChatboxProps) {
       };
       const onMove = (ev: MouseEvent | TouchEvent) => handleDragMove(ev);
       const endOpts = { capture: true };
-      const onEnd = () => {
+
+      const removeListeners = () => {
         window.removeEventListener("mousemove", onMove);
-        window.removeEventListener("mouseup", onEnd);
+        window.removeEventListener("mouseup", onMouseEnd);
         window.removeEventListener("touchmove", onMove, endOpts);
-        window.removeEventListener("touchend", onEnd, endOpts);
+        window.removeEventListener("touchend", onTouchEnd, endOpts);
+      };
+
+      const onMouseEnd = () => {
+        removeListeners();
         handleDragEnd();
       };
+
+      const onTouchEnd = () => {
+        const state = dragRef.current;
+        removeListeners();
+        handleDragEnd();
+        if (state && !state.moved) {
+          setOpen((o) => !o);
+          tapHandledInTouchendRef.current = true;
+        }
+      };
+
       window.addEventListener("mousemove", onMove);
-      window.addEventListener("mouseup", onEnd);
+      window.addEventListener("mouseup", onMouseEnd);
       window.addEventListener("touchmove", onMove, { capture: true, passive: false });
-      window.addEventListener("touchend", onEnd, endOpts);
+      window.addEventListener("touchend", onTouchEnd, endOpts);
     },
     [position, handleDragMove, handleDragEnd]
   );
@@ -226,6 +244,10 @@ export function BulbyChatbox({ projectId }: BulbyChatboxProps) {
   const handleTriggerClick = useCallback(() => {
     if (justDraggedRef.current) {
       justDraggedRef.current = false;
+      return;
+    }
+    if (tapHandledInTouchendRef.current) {
+      tapHandledInTouchendRef.current = false;
       return;
     }
     setOpen((o) => !o);
