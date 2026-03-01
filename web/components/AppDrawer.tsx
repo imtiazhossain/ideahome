@@ -5,8 +5,14 @@ import {
   setStoredOpenRouterModel,
 } from "../lib/api/auth";
 import { IconTrash } from "./IconTrash";
-import { IconFilter, IconMic, IconSettings } from "./icons";
-import { IconHomeBulby } from "./icons";
+import {
+  IconBulbyHide,
+  IconBulbyShow,
+  IconFilter,
+  IconHomeBulby,
+  IconMic,
+  IconSettings,
+} from "./icons";
 import {
   BULBY_TRIGGER_HIDDEN_KEY,
   BULBY_TRIGGER_VISIBILITY_EVENT,
@@ -644,7 +650,11 @@ export function AppDrawer({
                           : "Hide Bulby chat"
                       }
                     >
-                      {bulbyTriggerHidden ? "Show Bulby" : "Hide Bulby"}
+                      {bulbyTriggerHidden ? (
+                        <IconBulbyShow />
+                      ) : (
+                        <IconBulbyHide />
+                      )}
                     </button>
                     <button
                       type="button"

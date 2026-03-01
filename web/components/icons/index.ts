@@ -1,5 +1,7 @@
 export { IconBeaker } from "./IconBeaker";
 export { IconBoard } from "./IconBoard";
+export { IconBulbyHide } from "./IconBulbyHide";
+export { IconBulbyShow } from "./IconBulbyShow";
 export { IconBug } from "./IconBug";
 export { IconCalendar } from "./IconCalendar";
 export { IconChevronDown } from "./IconChevronDown";
