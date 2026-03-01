@@ -546,7 +546,7 @@ export function ProjectNavBar({
                 type="search"
                 id="project-nav-search-input"
                 className="project-nav-search"
-                placeholder={projectId ? "Search project" : searchPlaceholder}
+                placeholder={projectId ? "A little light to find things in the dark..." : searchPlaceholder}
                 value={projectId ? projectSearchQuery : searchValue}
                 onChange={(e) => {
                   if (projectId) {

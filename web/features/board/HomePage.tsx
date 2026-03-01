@@ -129,6 +129,7 @@ import { createMediaUploadHandlers } from "./media-upload-handlers";
 import { createCommentCrudHandlers } from "./comment-crud-handlers";
 import { lockScrollToAnchor } from "./scroll-lock";
 import { issueKey } from "./issue-key";
+import { IssueDetailModal } from "./IssueDetailModal";
 import { BoardColumn, IssueCard } from "./BoardDnd";
 import { useTheme } from "../../pages/_app";
 
@@ -1900,9 +1901,10 @@ export default function Home() {
       />
 
       {selectedIssue && (
-        <div
-          className="modal-overlay"
-          onClick={() => {
+        <IssueDetailModal
+          selectedIssue={selectedIssue}
+          setSelectedIssue={setSelectedIssue}
+          onClose={() => {
             if (isRecording) return;
             setSelectedIssue(null);
             setIssueDetailOriginal(null);
@@ -1918,9 +1920,124 @@ export default function Home() {
             setScreenshotError(null);
             setFileError(null);
           }}
-        >
-          <div
-            ref={issueDetailModalScrollRef}
+          issueDetailModalScrollRef={issueDetailModalScrollRef}
+          dragOverCount={dragOverCount}
+          handleDragOver={handleDragOver}
+          handleDragEnter={handleDragEnter}
+          handleDragLeave={handleDragLeave}
+          handleDrop={handleDrop}
+          issueKeyFn={issueKey}
+          computeQualityScoreFn={computeQualityScore}
+          issueDetailOriginal={issueDetailOriginal}
+          issueSaving={issueSaving}
+          issueSaveError={issueSaveError}
+          issueSaveSuccess={issueSaveSuccess}
+          setIssueSaveError={setIssueSaveError}
+          setIssueSaveSuccess={setIssueSaveSuccess}
+          hasIssueDetailChangesFn={hasIssueDetailChanges}
+          handleSaveIssue={handleSaveIssue}
+          setIssueToDelete={setIssueToDelete}
+          users={users}
+          parseTestCasesFn={parseTestCases}
+          serializeTestCasesFn={serializeTestCases}
+          parseAutomatedTestsFn={parseAutomatedTests}
+          serializeAutomatedTestsFn={serializeAutomatedTests}
+          automatedTestDropdownRef={automatedTestDropdownRef}
+          automatedTestDropdownOpen={automatedTestDropdownOpen}
+          setAutomatedTestDropdownOpen={setAutomatedTestDropdownOpen}
+          automatedTestRunResults={automatedTestRunResults}
+          setAutomatedTestRunResults={setAutomatedTestRunResults}
+          runUiTestFn={runUiTest}
+          fileInputRef={fileInputRef}
+          uploadButtonBusy={uploadButtonBusy}
+          recordingUploading={recordingUploading}
+          screenshotUploading={screenshotUploading}
+          fileUploading={fileUploading}
+          screenshotsSectionRef={screenshotsSectionRef}
+          screenshotNameFromComments={screenshotNameFromComments}
+          editingScreenshotId={editingScreenshotId}
+          editingScreenshotName={editingScreenshotName}
+          setEditingScreenshotId={setEditingScreenshotId}
+          setEditingScreenshotName={setEditingScreenshotName}
+          handleSaveScreenshotName={handleSaveScreenshotName}
+          handleDeleteScreenshot={handleDeleteScreenshot}
+          handleTakeScreenshot={handleTakeScreenshot}
+          handleScreenshotUpload={handleScreenshotUpload}
+          screenshotFileInputRef={screenshotFileInputRef}
+          canScreenRecord={canScreenRecord}
+          screenshotTaking={screenshotTaking}
+          screenshotError={screenshotError}
+          setScreenshotError={setScreenshotError}
+          recordingsSectionRef={recordingsSectionRef}
+          editingRecordingId={editingRecordingId}
+          editingRecordingName={editingRecordingName}
+          setEditingRecordingId={setEditingRecordingId}
+          setEditingRecordingName={setEditingRecordingName}
+          handleSaveRecordingName={handleSaveRecordingName}
+          handleDeleteRecording={handleDeleteRecording}
+          playingRecordingId={playingRecordingId}
+          setPlayingRecordingId={setPlayingRecordingId}
+          recordingPlayerWrapRef={recordingPlayerWrapRef}
+          recordingPlaybackError={recordingPlaybackError}
+          setRecordingPlaybackError={setRecordingPlaybackError}
+          recordingFor={recordingFor}
+          recordingMode={recordingMode}
+          stopRecording={stopRecording}
+          startRecording={startRecording}
+          startAudioRecording={startAudioRecording}
+          startCameraRecording={startCameraRecording}
+          canCameraRecord={canCameraRecord}
+          canAudioRecord={canAudioRecord}
+          handleUnifiedFileUpload={handleUnifiedFileUpload}
+          filesSectionRef={filesSectionRef}
+          handleDeleteFile={handleDeleteFile}
+          fileError={fileError}
+          setFileError={setFileError}
+          commentsSectionRef={commentsSectionRef}
+          issueComments={issueComments}
+          issueCommentsLoading={issueCommentsLoading}
+          issueCommentsError={issueCommentsError}
+          setIssueCommentsError={setIssueCommentsError}
+          editingCommentId={editingCommentId}
+          commentBoxError={commentBoxError}
+          commentBlocks={commentBlocks}
+          setCommentBlocks={setCommentBlocks}
+          activeCommentBlockRef={activeCommentBlockRef}
+          issueCommentTextareaRef={issueCommentTextareaRef}
+          setCommentBoxError={setCommentBoxError}
+          viewingBlockIndex={viewingBlockIndex}
+          setViewingBlockIndex={setViewingBlockIndex}
+          removeCommentBlock={removeCommentBlock}
+          commentVideoFileInputRef={commentVideoFileInputRef}
+          commentScreenshotFileInputRef={commentScreenshotFileInputRef}
+          handleCommentVideoFile={handleCommentVideoFile}
+          handleCommentScreenshotFile={handleCommentScreenshotFile}
+          handleTakeScreenshotAndAddToComment={handleTakeScreenshotAndAddToComment}
+          issueCommentSubmitting={issueCommentSubmitting}
+          commentAttachmentUploading={commentAttachmentUploading}
+          handleAddComment={handleAddComment}
+          editingCommentDraft={editingCommentDraft}
+          editingCommentBlocks={editingCommentBlocks}
+          setEditingCommentBlocks={setEditingCommentBlocks}
+          removeEditingCommentBlock={removeEditingCommentBlock}
+          handleSaveComment={handleSaveComment}
+          handleCancelEditComment={handleCancelEditComment}
+          updatingCommentId={updatingCommentId}
+          addingAttachmentToCommentId={addingAttachmentToCommentId}
+          setAddingAttachmentToCommentId={setAddingAttachmentToCommentId}
+          commentHistoryOpenId={commentHistoryOpenId}
+          setCommentHistoryOpenId={setCommentHistoryOpenId}
+          handleStartEditComment={handleStartEditComment}
+          handleDeleteComment={handleDeleteComment}
+          deletingCommentId={deletingCommentId}
+          isRecording={isRecording}
+          recordingError={recordingError}
+          setRecordingError={setRecordingError}
+        />
+      )}
+    </AppLayout>
+  );
+}
             className={`modal modal--fit-screen modal--issue-detail${dragOverCount > 0 ? " is-drag-over" : ""}`}
             onClick={(e) => e.stopPropagation()}
             onDragOver={handleDragOver}
