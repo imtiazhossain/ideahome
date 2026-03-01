@@ -1,6 +1,5 @@
 import React from "react";
 import Head from "next/head";
-import Link from "next/link";
 import { useRouter } from "next/router";
 import {
   AUTH_CHANGE_EVENT,
@@ -22,15 +21,9 @@ import {
   getCustomListTabId,
   getCustomLists,
 } from "../lib/customLists";
+import { AppDrawer } from "./AppDrawer";
 import { BulbyChatbox } from "./BulbyChatbox";
-import { IconTrash } from "./IconTrash";
-import { IconFilter, IconMic, IconSettings } from "./icons";
-import { IconHomeBulby } from "./icons";
-import {
-  ProjectNavBar,
-  DrawerCollapsedNav,
-  useTabOrder,
-} from "./ProjectNavBar";
+import { ProjectNavBar, useTabOrder } from "./ProjectNavBar";
 import type { ProjectNavTabId } from "./ProjectNavBar";
 
 const SECTION_LINKS: {
@@ -576,505 +569,73 @@ export function AppLayout({
         />
       )}
       <div className={`app-layout${drawerOpen ? " is-drawer-open" : ""}`}>
-        <aside
-          className={`drawer ${drawerOpen ? "drawer-open" : "drawer-closed"}`}
-        >
-          {drawerOpen ? (
-            <>
-              <div className="drawer-header">
-                <div className="drawer-brand">
-                  <button
-                    type="button"
-                    className="drawer-toggle drawer-logo project-nav-drawer-toggle"
-                    onClick={() => setDrawerOpen(false)}
-                    aria-label="Close sidebar"
-                    title="Close sidebar"
-                  >
-                    <span
-                      className="drawer-logo-mark"
-                      role="img"
-                      aria-hidden="true"
-                    >
-                      <IconHomeBulby />
-                    </span>
-                  </button>
-                  <div className="drawer-brand-title">Idea Home</div>
-                </div>
-              </div>
-              <div className="drawer-content">
-                <nav className="drawer-nav">
-                  <div className="drawer-nav-label-row">
-                    <div className="drawer-nav-label">Projects</div>
-                    <button
-                      type="button"
-                      className="drawer-nav-label-add-btn"
-                      onClick={handleAddProject}
-                      aria-label="Add project"
-                      title="Add project"
-                    >
-                      +
-                    </button>
-                  </div>
-                  {creatingProject && (
-                    <div className="drawer-nav-item-row">
-                      <input
-                        ref={creatingProjectInputRef}
-                        type="text"
-                        className="drawer-nav-item drawer-nav-item-input"
-                        value={creatingProjectName}
-                        onChange={(e) => setCreatingProjectName(e.target.value)}
-                        onBlur={() => {
-                          void submitNewProject();
-                        }}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") {
-                            e.preventDefault();
-                            void submitNewProject();
-                          }
-                          if (e.key === "Escape") {
-                            e.preventDefault();
-                            setCreatingProject(false);
-                            setCreatingProjectName("");
-                          }
-                        }}
-                        placeholder="Project Name?"
-                        aria-label="Project Name"
-                      />
-                    </div>
-                  )}
-                  {orderedProjects.map((p) => (
-                    <div key={p.id} className="drawer-nav-item-row">
-                      {editingProjectId === p.id ? (
-                        <input
-                          ref={
-                            projectNameInputRef as React.RefObject<HTMLInputElement>
-                          }
-                          type="text"
-                          className="drawer-nav-item drawer-nav-item-input"
-                          value={editingProjectName}
-                          onChange={(e) =>
-                            setEditingProjectName(e.target.value)
-                          }
-                          onBlur={saveProjectName}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") saveProjectName();
-                            if (e.key === "Escape") cancelEditProjectName();
-                          }}
-                          onClick={(e) => e.stopPropagation()}
-                          aria-label="Project name"
-                        />
-                      ) : (
-                        <button
-                          type="button"
-                          className={`drawer-nav-item ${selectedProjectId === p.id ? "is-selected" : ""}`}
-                          onClick={() => {
-                            setSelectedProjectId(p.id);
-                            closeDrawerOnMobile();
-                          }}
-                          onDoubleClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            setEditingProjectId(p.id);
-                            setEditingProjectName(p.name);
-                          }}
-                          title="Double-click to edit name"
-                        >
-                          {p.name}
-                        </button>
-                      )}
-                      {editingProjectId !== p.id && (
-                        <button
-                          type="button"
-                          className="drawer-nav-item-edit"
-                          onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            setEditingProjectId(p.id);
-                            setEditingProjectName(p.name);
-                          }}
-                          aria-label={`Rename ${p.name}`}
-                          title={`Rename project "${p.name}"`}
-                        >
-                          ✎
-                        </button>
-                      )}
-                      {editingProjectId !== p.id && (
-                        <span className="drawer-nav-row-actions">
-                          <button
-                            type="button"
-                            className="drawer-nav-item-reorder"
-                            onClick={(e) => {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              moveProject(p.id, "up");
-                            }}
-                            aria-label={`Move ${p.name} up`}
-                            title="Move up"
-                            disabled={orderedProjects[0]?.id === p.id}
-                          >
-                            ▲
-                          </button>
-                        </span>
-                      )}
-                      {(showDeletePerProject || editingProjectId === p.id) && (
-                        <button
-                          type="button"
-                          className={`drawer-nav-item-delete${showDeletePerProject || editingProjectId === p.id ? " is-visible" : ""}`}
-                          onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            void handleDeleteProject(p);
-                            closeDrawerOnMobile();
-                          }}
-                          onTouchEnd={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            void handleDeleteProject(p);
-                            closeDrawerOnMobile();
-                          }}
-                          disabled={projectDeleting}
-                          aria-label={`Delete ${p.name}`}
-                          title={`Delete project "${p.name}"`}
-                        >
-                          <IconTrash />
-                        </button>
-                      )}
-                    </div>
-                  ))}
-                  <div className="drawer-nav-label-row drawer-nav-label-row-sections">
-                    <div className="drawer-nav-label">Sections</div>
-                    <button
-                      type="button"
-                      className="drawer-nav-label-add-btn"
-                      onClick={handleAddTab}
-                      aria-label="Add tab"
-                      title="Add tab"
-                    >
-                      +
-                    </button>
-                  </div>
-                  {creatingSection && (
-                    <div className="drawer-nav-section-row">
-                      <input
-                        ref={creatingSectionInputRef}
-                        type="text"
-                        className="drawer-nav-item drawer-nav-item-input"
-                        value={creatingSectionName}
-                        onChange={(e) => setCreatingSectionName(e.target.value)}
-                        onBlur={submitNewSection}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") {
-                            e.preventDefault();
-                            submitNewSection();
-                          }
-                          if (e.key === "Escape") {
-                            e.preventDefault();
-                            setCreatingSection(false);
-                            setCreatingSectionName("");
-                          }
-                        }}
-                        placeholder="Section Name?"
-                        aria-label="Section Name"
-                      />
-                    </div>
-                  )}
-                  {visibleOrderedNavLinks.map(({ href, label, tabId }) => (
-                    <div key={tabId} className="drawer-nav-section-row">
-                      {href ? (
-                        <Link
-                          href={href}
-                          prefetch={false}
-                          onClick={closeDrawerOnMobile}
-                          className={`drawer-nav-item ${activeTab === tabId ? "is-selected" : ""}`}
-                        >
-                          {label}
-                        </Link>
-                      ) : (
-                        <button
-                          type="button"
-                          className={`drawer-nav-item ${activeTab === tabId ? "is-selected" : ""}`}
-                          onClick={() => {}}
-                          title={label}
-                        >
-                          {label}
-                        </button>
-                      )}
-                      <span className="drawer-nav-row-actions">
-                        <button
-                          type="button"
-                          className="drawer-nav-item-reorder"
-                          onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            moveNavTab(tabId, "up");
-                          }}
-                          aria-label={`Move ${label} up`}
-                          title="Move up"
-                          disabled={visibleOrderedNavLinks[0]?.tabId === tabId}
-                        >
-                          ▲
-                        </button>
-                      </span>
-                    </div>
-                  ))}
-                </nav>
-              </div>
-              <div className="drawer-bottom-settings" ref={drawerSettingsRef}>
-                {drawerFiltersOpen && (
-                  <div className="drawer-bottom-filter-menu">
-                    {sortedFilterSections.map(({ tabId, label, visible }) => (
-                      <label key={tabId} className="drawer-bottom-filter-item">
-                        <input
-                          type="checkbox"
-                          checked={visible}
-                          onChange={() => {
-                            const next = visible
-                              ? [...hiddenTabIds, tabId]
-                              : hiddenTabIds.filter((id) => id !== tabId);
-                            setHiddenTabIds(next);
-                          }}
-                          aria-label={`${visible ? "Hide" : "Show"} ${label}`}
-                        />
-                        <span>{label}</span>
-                      </label>
-                    ))}
-                  </div>
-                )}
-                {drawerVoicesOpen && (
-                  <div className="drawer-bottom-voices-menu">
-                    {availableVoices.map((voice) => {
-                      const selected = voice.value === selectedVoiceUri;
-                      return (
-                        <button
-                          key={voice.value}
-                          type="button"
-                          className={`drawer-bottom-voice-item${selected ? " is-selected" : ""}`}
-                          onClick={() => {
-                            setSelectedVoiceUri(voice.value);
-                            setStoredAssistantVoiceUri(voice.value);
-                            setDrawerVoicesOpen(false);
-                          }}
-                          title={voice.label}
-                          aria-label={voice.label}
-                        >
-                          {selected ? "✓ " : ""}
-                          {voice.label}
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
-                {drawerDeleteSectionsOpen && (
-                  <div className="drawer-bottom-delete-sections-menu">
-                    {orderedNavLinks.map(({ tabId, label }) => {
-                      const canDelete = tabOrder.length > 1;
-                      return (
-                        <div key={tabId} className="drawer-bottom-delete-row">
-                          <span>{label}</span>
-                          <button
-                            type="button"
-                            className="drawer-bottom-delete-btn"
-                            onClick={() => deleteSectionTab(tabId)}
-                            aria-label={`Delete ${label}`}
-                            title={
-                              canDelete
-                                ? `Delete ${label}`
-                                : "At least one section must remain"
-                            }
-                            disabled={!canDelete}
-                          >
-                            <IconTrash />
-                          </button>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-                {drawerSettingsOpen && (
-                  <div className="drawer-bottom-settings-menu" role="menu">
-                    {drawerVoicesOpen ? (
-                      <button
-                        type="button"
-                        className="drawer-bottom-settings-menu-item is-source-active"
-                        role="menuitem"
-                        onClick={() => {
-                          setDrawerVoicesOpen(false);
-                        }}
-                        aria-label="Assistant voice"
-                        title={`Voice: ${selectedVoiceLabel}`}
-                      >
-                        <span
-                          className="drawer-bottom-settings-voice-icon"
-                          aria-hidden
-                        >
-                          <span className="drawer-bottom-settings-voice-gear">
-                            <IconSettings />
-                          </span>
-                          <span className="drawer-bottom-settings-voice-mic">
-                            <IconMic />
-                          </span>
-                        </span>
-                      </button>
-                    ) : drawerFiltersOpen ? (
-                      <button
-                        type="button"
-                        className="drawer-bottom-settings-menu-item is-source-active"
-                        role="menuitem"
-                        onClick={() => {
-                          setDrawerFiltersOpen(false);
-                        }}
-                        aria-label="Manage tabs"
-                        title="Manage tabs"
-                      >
-                        <IconFilter />
-                      </button>
-                    ) : drawerDeleteSectionsOpen ? (
-                      <button
-                        type="button"
-                        className="drawer-bottom-settings-menu-item is-source-active"
-                        role="menuitem"
-                        onClick={() => {
-                          setDrawerDeleteSectionsOpen(false);
-                        }}
-                        aria-label="Delete sections"
-                        title="Delete sections"
-                      >
-                        <IconTrash />
-                      </button>
-                    ) : (
-                      <>
-                        {availableVoices.length > 0 && (
-                        <button
-                          type="button"
-                          className="drawer-bottom-settings-menu-item drawer-bottom-settings-voice"
-                          role="menuitem"
-                          aria-label="Assistant voice"
-                          title={`Voice: ${selectedVoiceLabel}`}
-                          onClick={() => {
-                            setDrawerVoicesOpen((open) => !open);
-                            setDrawerFiltersOpen(false);
-                            setDrawerDeleteSectionsOpen(false);
-                          }}
-                        >
-                          <span className="drawer-bottom-settings-voice-icon" aria-hidden>
-                            <span className="drawer-bottom-settings-voice-gear">
-                              <IconSettings />
-                            </span>
-                            <span className="drawer-bottom-settings-voice-mic">
-                              <IconMic />
-                            </span>
-                          </span>
-                        </button>
-                        )}
-                        {canManageOpenRouterModel && (
-                          <label
-                            className="drawer-bottom-settings-model"
-                            aria-label="OpenRouter model"
-                          >
-                            <span className="drawer-bottom-settings-model-label">
-                              LLM
-                            </span>
-                            <select
-                              className="drawer-bottom-settings-model-select"
-                              value={selectedAiModel}
-                              onChange={(e) => {
-                                const nextModel = e.target.value;
-                                setSelectedAiModel(nextModel);
-                                setStoredOpenRouterModel(nextModel);
-                              }}
-                            >
-                              {openRouterModelOptions.map((model) => (
-                                <option key={model} value={model}>
-                                  {model}
-                                </option>
-                              ))}
-                            </select>
-                          </label>
-                        )}
-                        <button
-                          type="button"
-                          className="drawer-bottom-settings-menu-item"
-                          role="menuitem"
-                          onClick={() => {
-                            setDrawerFiltersOpen((open) => !open);
-                            setDrawerVoicesOpen(false);
-                            setDrawerDeleteSectionsOpen(false);
-                          }}
-                          aria-label="Manage tabs"
-                          title="Manage tabs"
-                        >
-                          <IconFilter />
-                        </button>
-                        <button
-                          type="button"
-                          className="drawer-bottom-settings-menu-item"
-                          role="menuitem"
-                          onClick={() => {
-                            setDrawerDeleteSectionsOpen((open) => !open);
-                            setDrawerFiltersOpen(false);
-                            setDrawerVoicesOpen(false);
-                          }}
-                          aria-label="Delete sections"
-                          title="Delete sections"
-                        >
-                          <IconTrash />
-                        </button>
-                        <button
-                          type="button"
-                          className="drawer-bottom-settings-menu-item"
-                          role="menuitem"
-                          onClick={() => {
-                            toggleTheme();
-                            setDrawerSettingsOpen(false);
-                            setDrawerFiltersOpen(false);
-                            setDrawerVoicesOpen(false);
-                            setDrawerDeleteSectionsOpen(false);
-                          }}
-                          aria-label={
-                            theme === "light"
-                              ? "Switch to dark theme"
-                              : "Switch to light theme"
-                          }
-                          title={
-                            theme === "light"
-                              ? "Switch to dark theme"
-                              : "Switch to light theme"
-                          }
-                        >
-                          {theme === "light" ? "☀" : "🌙"}
-                        </button>
-                      </>
-                    )}
-                  </div>
-                )}
-                <button
-                  type="button"
-                  className="drawer-bottom-settings-btn"
-                  onClick={() => {
-                    setDrawerSettingsOpen((open) => {
-                      const next = !open;
-                      if (!next) {
-                        setDrawerFiltersOpen(false);
-                        setDrawerVoicesOpen(false);
-                        setDrawerDeleteSectionsOpen(false);
-                      }
-                      return next;
-                    });
-                  }}
-                  aria-label="Settings"
-                  title="Settings"
-                >
-                  ⚙
-                </button>
-              </div>
-            </>
-          ) : (
-            <DrawerCollapsedNav
-              activeTab={activeTab}
-              onExpand={() => setDrawerOpen(true)}
-            />
-          )}
-        </aside>
+        <AppDrawer
+          drawerOpen={drawerOpen}
+          setDrawerOpen={setDrawerOpen}
+          activeTab={activeTab}
+          orderedProjects={orderedProjects}
+          selectedProjectId={selectedProjectId}
+          setSelectedProjectId={setSelectedProjectId}
+          editingProjectId={editingProjectId}
+          setEditingProjectId={setEditingProjectId}
+          editingProjectName={editingProjectName}
+          setEditingProjectName={setEditingProjectName}
+          saveProjectName={saveProjectName}
+          cancelEditProjectName={cancelEditProjectName}
+          projectNameInputRef={projectNameInputRef}
+          theme={theme}
+          toggleTheme={toggleTheme}
+          showDeletePerProject={showDeletePerProject}
+          handleDeleteProject={handleDeleteProject}
+          projectDeleting={projectDeleting}
+          moveProject={moveProject}
+          visibleOrderedNavLinks={visibleOrderedNavLinks}
+          moveNavTab={moveNavTab}
+          onAddProject={handleAddProject}
+          onAddTab={handleAddTab}
+          closeDrawerOnMobile={closeDrawerOnMobile}
+          creatingProject={creatingProject}
+          creatingProjectName={creatingProjectName}
+          setCreatingProjectName={setCreatingProjectName}
+          creatingProjectInputRef={creatingProjectInputRef}
+          submitNewProject={submitNewProject}
+          onCancelCreatingProject={() => {
+            setCreatingProject(false);
+            setCreatingProjectName("");
+          }}
+          creatingSection={creatingSection}
+          creatingSectionName={creatingSectionName}
+          setCreatingSectionName={setCreatingSectionName}
+          creatingSectionInputRef={creatingSectionInputRef}
+          submitNewSection={submitNewSection}
+          onCancelCreatingSection={() => {
+            setCreatingSection(false);
+            setCreatingSectionName("");
+          }}
+          drawerSettingsRef={drawerSettingsRef}
+          drawerSettingsOpen={drawerSettingsOpen}
+          setDrawerSettingsOpen={setDrawerSettingsOpen}
+          drawerFiltersOpen={drawerFiltersOpen}
+          setDrawerFiltersOpen={setDrawerFiltersOpen}
+          drawerVoicesOpen={drawerVoicesOpen}
+          setDrawerVoicesOpen={setDrawerVoicesOpen}
+          drawerDeleteSectionsOpen={drawerDeleteSectionsOpen}
+          setDrawerDeleteSectionsOpen={setDrawerDeleteSectionsOpen}
+          sortedFilterSections={sortedFilterSections}
+          hiddenTabIds={hiddenTabIds}
+          setHiddenTabIds={setHiddenTabIds}
+          availableVoices={availableVoices}
+          selectedVoiceUri={selectedVoiceUri}
+          setSelectedVoiceUri={setSelectedVoiceUri}
+          selectedVoiceLabel={selectedVoiceLabel}
+          openRouterModelOptions={openRouterModelOptions}
+          selectedAiModel={selectedAiModel}
+          setSelectedAiModel={setSelectedAiModel}
+          canManageOpenRouterModel={canManageOpenRouterModel}
+          orderedNavLinks={orderedNavLinks}
+          tabOrderLength={tabOrder.length}
+          deleteSectionTab={deleteSectionTab}
+        />
 
         <main className="main-content">
           <ProjectNavBar

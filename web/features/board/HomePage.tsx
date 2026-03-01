@@ -1761,7 +1761,6 @@ export default function Home() {
       setProjectToDelete={setProjectToDelete}
       projectDeleting={projectDeleting}
       handleDeleteProject={handleDeleteProject}
-      showDeletePerProject
       onNewProjectClick={() => setCreateProjectOpen(true)}
       onAddClick={() => setCreateOpen(true)}
       onCreateProject={handleCreateProjectWithName}

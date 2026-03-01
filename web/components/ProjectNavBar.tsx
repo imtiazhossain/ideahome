@@ -20,8 +20,6 @@ import {
 } from "../lib/customLists";
 import {
   IconChevronDown,
-  IconChevronLeft,
-  IconChevronRight,
   IconChevronUp,
   IconFilter,
   IconHomeBulby,
@@ -30,7 +28,6 @@ import {
   IconProfile,
   IconReorder,
   IconSearch,
-  IconSettings,
 } from "./icons";
 import { ErrorBanner } from "./ErrorBanner";
 import { IconFromName } from "./IconFromName";
@@ -772,58 +769,6 @@ export function ProjectNavBar({
         </div>
         {showSettingsButton && (
           <div ref={settingsMenuRef} className="project-nav-settings-wrap">
-            <button
-              type="button"
-              className="project-nav-add project-nav-settings-toggle-btn"
-              onClick={() => {
-                const next = !settingsButtonVisible;
-                setSettingsButtonVisible(next);
-                try {
-                  localStorage.setItem(
-                    getSettingsButtonVisibleStorageKey(),
-                    next ? "1" : "0"
-                  );
-                } catch {
-                  /* ignore */
-                }
-                if (!next) closeSettingsMenu();
-              }}
-              aria-label={
-                settingsButtonVisible ? "Hide settings" : "Show settings"
-              }
-              title={settingsButtonVisible ? "Hide settings" : "Show settings"}
-              aria-expanded={settingsButtonVisible}
-            >
-              {settingsButtonVisible ? (
-                <IconChevronRight />
-              ) : (
-                <IconChevronLeft />
-              )}
-            </button>
-            {settingsButtonVisible && (
-              <button
-                type="button"
-                className={`project-nav-add project-nav-settings-btn${settingsMenuOpen ? " is-open" : ""}`}
-                onClick={() => {
-                  const next = !settingsMenuOpen;
-                  setSettingsMenuOpen(next);
-                  if (next) {
-                    setShowTabsSectionOpen(false);
-                    setReorderSectionOpen(false);
-                    setAddSectionOpen(false);
-                    setDeleteProjectSectionOpen(false);
-                  } else {
-                    closeSettingsMenu();
-                  }
-                }}
-                aria-label="Settings"
-                title="Settings"
-                aria-expanded={settingsMenuOpen}
-                aria-haspopup="true"
-              >
-                <IconSettings />
-              </button>
-            )}
             {settingsButtonVisible && settingsMenuOpen && (
               <div
                 className="project-nav-settings-menu"
