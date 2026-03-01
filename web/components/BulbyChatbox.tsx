@@ -10,6 +10,8 @@ const BULBY_POSITION_KEY = "bulby-chatbox-position";
 const BULBY_CHATBOX_GAP = 12;
 /** Keep the chatbox panel within the viewport when Bulby is near an edge. */
 const VIEWPORT_MARGIN = 24;
+/** Min pointer movement (px) before treating as drag; avoids suppressing tap-to-open on mobile. */
+const DRAG_THRESHOLD_PX = 10;
 
 type DragPosition = { x: number; y: number };
 
@@ -164,7 +166,7 @@ export function BulbyChatbox({ projectId }: BulbyChatboxProps) {
     if (!state) return;
     const clientX = "touches" in e ? e.touches[0].clientX : e.clientX;
     const clientY = "touches" in e ? e.touches[0].clientY : e.clientY;
-    if (!state.moved && (Math.abs(clientX - state.startX) > 4 || Math.abs(clientY - state.startY) > 4)) {
+    if (!state.moved && (Math.abs(clientX - state.startX) > DRAG_THRESHOLD_PX || Math.abs(clientY - state.startY) > DRAG_THRESHOLD_PX)) {
       state.moved = true;
       justDraggedRef.current = true;
     }

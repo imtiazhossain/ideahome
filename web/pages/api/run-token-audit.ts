@@ -257,6 +257,38 @@ export default function handler(
       });
     }
 
+    const appTsx = byPath.get("app/App.tsx");
+    if (appTsx && appTsx.lines >= 800) {
+      findings.push({
+        id: "app-monolith",
+        title: "React Native App.tsx is too large",
+        severity: "high",
+        effort: "large",
+        why: `${appTsx.lines} lines in one file dominates context; extract screens, hooks, and shared components to app/src/.`,
+        action:
+          "Split into app/src/screens/*, app/src/hooks/*, app/src/components/*; keep App.tsx as thin shell.",
+        file: appTsx.relPath,
+        line: 1,
+        lines: appTsx.lines,
+      });
+    }
+
+    const homePage = byPath.get("web/features/board/HomePage.tsx");
+    if (homePage && homePage.lines >= 2000) {
+      findings.push({
+        id: "homepage-monolith",
+        title: "Board HomePage is monolithic",
+        severity: "high",
+        effort: "large",
+        why: `${homePage.lines} lines in one page increases prompt size and edit risk.`,
+        action:
+          "Split into web/features/board/* (columns, detail panel, comments, media) with hooks per concern.",
+        file: homePage.relPath,
+        line: 1,
+        lines: homePage.lines,
+      });
+    }
+
     const coverageDir = directoryFootprint(root, "web/public/coverage-report");
     if (coverageDir.files > 0) {
       findings.push({

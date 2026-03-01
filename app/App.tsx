@@ -19,7 +19,6 @@ import {
   Modal,
   Pressable,
   StatusBar,
-  StyleSheet,
   Text,
   TextInput,
   View,
@@ -103,7 +102,6 @@ import {
 import { AppButton } from "./src/components/ui/AppButton";
 import { AppCard } from "./src/components/ui/AppCard";
 import { TabSwitch } from "./src/components/ui/TabSwitch";
-import { colors, radii, spacing } from "./src/theme/tokens";
 import { buildIdeaChatContext } from "@ideahome/shared-assistant";
 import {
   AUTH_PARAM_ERROR,
@@ -121,661 +119,53 @@ import {
   readUrlParam,
   sanitizeAuthToken,
 } from "@ideahome/shared-config";
-
-type AuthProvider = "google";
-type AppTab =
-  | "home"
-  | "projects"
-  | "issues"
-  | "expenses"
-  | "features"
-  | "todos"
-  | "ideas"
-  | "bugs"
-  | "enhancements"
-  | "tests"
-  | "settings";
-
-type ChecklistKind = "features" | "todos" | "ideas" | "bugs" | "enhancements";
-type PendingCommentAttachment = {
-  id: string;
-  type: "screenshot" | "video";
-  base64: string;
-};
-
-type TestExecutionResult = {
-  success: boolean;
-  exitCode: number | null;
-  output: string;
-  errorOutput: string;
-};
-
-type AssistantChatMessage = {
-  id: string;
-  role: "user" | "assistant";
-  text: string;
-};
-
-const APP_WEB_URL = IDEAHOME_WEB_ORIGIN;
-const APP_API_URL = IDEAHOME_API_ORIGIN;
-const TOKEN_STORAGE_KEY = MOBILE_TOKEN_STORAGE_KEY;
-const AUTH_BYPASS_STORAGE_KEY = MOBILE_AUTH_BYPASS_STORAGE_KEY;
-const ACTIVE_TAB_STORAGE_KEY = MOBILE_ACTIVE_TAB_STORAGE_KEY;
-const SELECTED_PROJECT_STORAGE_KEY = MOBILE_SELECTED_PROJECT_STORAGE_KEY;
-const UI_TEST_PATTERNS = ["login", "issues", "comments", "attachments", "smoke"];
-const API_TEST_PATTERNS = ["issues", "projects", "comments", "expenses", "auth"];
-const EXPENSE_CATEGORIES = ["Travel", "Supplies", "Software", "Services", "Other", "General"];
-
-function parseTokenFromRedirect(redirectUrl: string): string {
-  return sanitizeAuthToken(readUrlParam(redirectUrl, AUTH_PARAM_TOKEN));
-}
-
-function parseErrorFromRedirect(redirectUrl: string): string {
-  return readUrlParam(redirectUrl, AUTH_PARAM_ERROR);
-}
-
-function buildMobileAuthUrl(provider: AuthProvider): string {
-  const url = new URL(`${APP_API_URL}${pathAuthMobile(provider)}`);
-  url.searchParams.set(AUTH_PARAM_REDIRECT_URI, MOBILE_DEEP_LINK_REDIRECT_URI);
-  return url.toString();
-}
-
-function previousStatus(current: string): string {
-  const index = ISSUE_STATUSES.findIndex((s) => s === current);
-  if (index <= 0) return ISSUE_STATUSES[0];
-  return ISSUE_STATUSES[index - 1];
-}
-
-function forwardStatus(current: string): string {
-  const index = ISSUE_STATUSES.findIndex((s) => s === current);
-  if (index < 0) return ISSUE_STATUSES[0];
-  if (index >= ISSUE_STATUSES.length - 1) return ISSUE_STATUSES[ISSUE_STATUSES.length - 1];
-  return ISSUE_STATUSES[index + 1];
-}
-
-function statusLabel(status: string): string {
-  return status.replace("_", " ");
-}
-
-function fileNameFromUri(uri: string, fallback: string): string {
-  const parts = uri.split("/");
-  const raw = parts[parts.length - 1] ?? "";
-  const cleaned = decodeURIComponent(raw).split("?")[0]?.trim() ?? "";
-  return cleaned || fallback;
-}
-
-function normalizeFilePath(uri: string): string {
-  if (uri.startsWith("file://")) return decodeURIComponent(uri.replace("file://", ""));
-  return decodeURIComponent(uri);
-}
-
-function readUserIdFromToken(jwt: string): string {
-  try {
-    const parts = jwt.split(".");
-    if (parts.length !== 3) return "";
-    const payload = parts[1];
-    const base64Raw = payload.replace(/-/g, "+").replace(/_/g, "/");
-    const padLen = (4 - (base64Raw.length % 4)) % 4;
-    const base64 = base64Raw + "=".repeat(padLen);
-    const decoded = atob(base64);
-    const parsed = JSON.parse(decoded) as { sub?: unknown };
-    return typeof parsed.sub === "string" ? parsed.sub.trim() : "";
-  } catch {
-    return "";
-  }
-}
-
-function readUserEmailFromToken(jwt: string): string {
-  try {
-    const parts = jwt.split(".");
-    if (parts.length !== 3) return "";
-    const payload = parts[1];
-    const base64Raw = payload.replace(/-/g, "+").replace(/_/g, "/");
-    const padLen = (4 - (base64Raw.length % 4)) % 4;
-    const base64 = base64Raw + "=".repeat(padLen);
-    const decoded = atob(base64);
-    const parsed = JSON.parse(decoded) as { email?: unknown };
-    return typeof parsed.email === "string" ? parsed.email.trim() : "";
-  } catch {
-    return "";
-  }
-}
-
-function enhancementsStorageKey(projectId: string, token: string): string {
-  const userId = readUserIdFromToken(token);
-  return userId
-    ? `ideahome-enhancements-${userId}-${projectId}`
-    : `ideahome-enhancements-${projectId}`;
-}
-
-function getCommentAttachmentStreamUrl(attachment: CommentAttachment): string {
-  if (attachment.type === "screenshot") {
-    return getScreenshotStreamUrl(attachment.mediaUrl);
-  }
-  return getRecordingStreamUrl(attachment.mediaUrl);
-}
-
-function commentAttachmentLabel(attachment: CommentAttachment): string {
-  const fileName = attachment.mediaUrl.replace(/^.*\//, "").split("?")[0] ?? "";
-  return fileName || attachment.type;
-}
-
-function pendingCommentAttachmentDataUri(attachment: PendingCommentAttachment): string {
-  if (attachment.type === "screenshot") return `data:image/jpeg;base64,${attachment.base64}`;
-  return `data:video/mp4;base64,${attachment.base64}`;
-}
-
-function parseAutomatedTestNames(value: string): string[] {
-  const trimmed = value.trim();
-  if (!trimmed) return [];
-  try {
-    const parsed = JSON.parse(trimmed);
-    if (Array.isArray(parsed)) {
-      return parsed
-        .flatMap((entry) => {
-          if (typeof entry === "string") return [entry];
-          if (entry && typeof entry === "object" && "name" in entry) {
-            const name = (entry as { name?: unknown }).name;
-            return typeof name === "string" ? [name] : [];
-          }
-          return [];
-        })
-        .map((name) => name.trim())
-        .filter(Boolean);
-    }
-  } catch {
-    // fallback below
-  }
-  return trimmed
-    .split(/\r?\n|,/)
-    .map((part) => part.trim())
-    .filter(Boolean);
-}
-
-function isAppTab(value: string): value is AppTab {
-  return [
-    "home",
-    "projects",
-    "issues",
-    "expenses",
-    "features",
-    "todos",
-    "ideas",
-    "bugs",
-    "enhancements",
-    "tests",
-    "settings",
-  ].includes(value);
-}
-
-type IssueBoardRowProps = {
-  issue: Issue;
-  isSelected: boolean;
-  isQuickEdit: boolean;
-  quickEditTitle: string;
-  quickEditQualityScore: string;
-  quickEditAssigneeId: string;
-  users: User[];
-  savingQuickEdit: boolean;
-  onQuickEditTitleChange: (text: string) => void;
-  onQuickEditQualityScoreChange: (text: string) => void;
-  onQuickEditAssigneeChange: (userId: string) => void;
-  onSelectIssue: () => void;
-  onStartQuickEdit: () => void;
-  onCancelQuickEdit: () => void;
-  onSaveQuickEdit: () => void;
-  onMoveBackward: () => void;
-  onMoveForward: () => void;
-  styles: Record<string, unknown>;
-};
-
-const IssueBoardRow = memo(function IssueBoardRow({
-  issue,
-  isSelected,
-  isQuickEdit,
-  quickEditTitle,
-  quickEditQualityScore,
-  quickEditAssigneeId,
-  users,
-  savingQuickEdit,
-  onQuickEditTitleChange,
-  onQuickEditQualityScoreChange,
-  onQuickEditAssigneeChange,
-  onSelectIssue,
-  onStartQuickEdit,
-  onCancelQuickEdit,
-  onSaveQuickEdit,
-  onMoveBackward,
-  onMoveForward,
-  styles,
-}: IssueBoardRowProps) {
-  const s = styles as Record<string, object>;
-  return (
-    <View style={[s.issueItem, isSelected ? s.listItemSelected : null]}>
-      <View style={s.issueItemMain}>
-        {isQuickEdit ? (
-          <View style={s.stack}>
-            <TextInput
-              style={s.input}
-              value={quickEditTitle}
-              onChangeText={onQuickEditTitleChange}
-              placeholder="Issue title"
-              placeholderTextColor="#94a3b8"
-            />
-            <TextInput
-              style={s.input}
-              value={quickEditQualityScore}
-              onChangeText={onQuickEditQualityScoreChange}
-              keyboardType="decimal-pad"
-              placeholder="Quality score"
-              placeholderTextColor="#94a3b8"
-            />
-            <View style={s.chipWrap}>
-              <Pressable
-                style={[s.chip, !quickEditAssigneeId ? s.chipActive : null]}
-                onPress={() => onQuickEditAssigneeChange("")}
-              >
-                <Text style={[s.chipText, !quickEditAssigneeId ? s.chipTextActive : null]}>
-                  Unassigned
-                </Text>
-              </Pressable>
-              {users.map((user) => (
-                <Pressable
-                  key={`quick-edit-${issue.id}-${user.id}`}
-                  style={[s.chip, quickEditAssigneeId === user.id ? s.chipActive : null]}
-                  onPress={() => onQuickEditAssigneeChange(user.id)}
-                >
-                  <Text
-                    style={[
-                      s.chipText,
-                      quickEditAssigneeId === user.id ? s.chipTextActive : null,
-                    ]}
-                  >
-                    {user.name || user.email}
-                  </Text>
-                </Pressable>
-              ))}
-            </View>
-          </View>
-        ) : (
-          <>
-            <Pressable onPress={onSelectIssue}>
-              <Text style={s.listItemTitle}>{issue.title}</Text>
-            </Pressable>
-            <Text style={s.listItemMeta}>
-              Assignee: {issue.assignee?.name ?? issue.assignee?.email ?? "Unassigned"}
-            </Text>
-            <Text style={s.listItemMeta}>Quality: {issue.qualityScore ?? "n/a"}</Text>
-            <Text
-              style={[
-                s.badge,
-                {
-                  color:
-                    colors.status[issue.status as keyof typeof colors.status] ?? colors.textMuted,
-                },
-              ]}
-            >
-              {statusLabel(issue.status)}
-            </Text>
-          </>
-        )}
-      </View>
-      <View style={s.inlineRowWrap}>
-        {isQuickEdit ? (
-          <>
-            <AppButton
-              label={savingQuickEdit ? "Saving..." : "Save"}
-              disabled={savingQuickEdit || !quickEditTitle.trim()}
-              onPress={onSaveQuickEdit}
-            />
-            <AppButton
-              label="Cancel"
-              variant="secondary"
-              disabled={savingQuickEdit}
-              onPress={onCancelQuickEdit}
-            />
-          </>
-        ) : (
-          <>
-            <AppButton label="Quick Edit" variant="secondary" onPress={onStartQuickEdit} />
-            <AppButton
-              label="Back"
-              variant="secondary"
-              disabled={issue.status === ISSUE_STATUSES[0]}
-              onPress={onMoveBackward}
-            />
-            <AppButton
-              label="Forward"
-              variant="secondary"
-              disabled={issue.status === ISSUE_STATUSES[ISSUE_STATUSES.length - 1]}
-              onPress={onMoveForward}
-            />
-          </>
-        )}
-      </View>
-    </View>
-  );
-});
-
-type IssueBoardColumnProps = {
-  status: string;
-  issues: Issue[];
-  collapsed: boolean;
-  onToggleCollapse: () => void;
-  selectedIssueId: string;
-  quickEditIssueId: string;
-  quickEditTitle: string;
-  quickEditQualityScore: string;
-  quickEditAssigneeId: string;
-  users: User[];
-  savingQuickEdit: boolean;
-  onQuickEditTitleChange: (text: string) => void;
-  onQuickEditQualityScoreChange: (text: string) => void;
-  onQuickEditAssigneeChange: (userId: string) => void;
-  onSelectIssue: (issueId: string) => void;
-  onStartQuickEdit: (issue: Issue) => void;
-  onCancelQuickEdit: () => void;
-  onSaveQuickEdit: (issueId: string) => void;
-  onMoveIssue: (issue: Issue, direction: "backward" | "forward") => void;
-  styles: Record<string, unknown>;
-};
-
-const ISSUE_BOARD_COLUMN_HEIGHT = 420;
-
-const IssueBoardColumn = memo(function IssueBoardColumn({
-  status,
-  issues,
-  collapsed,
-  onToggleCollapse,
-  selectedIssueId,
-  quickEditIssueId,
-  quickEditTitle,
-  quickEditQualityScore,
-  quickEditAssigneeId,
-  users,
-  savingQuickEdit,
-  onQuickEditTitleChange,
-  onQuickEditQualityScoreChange,
-  onQuickEditAssigneeChange,
-  onSelectIssue,
-  onStartQuickEdit,
-  onCancelQuickEdit,
-  onSaveQuickEdit,
-  onMoveIssue,
-  styles,
-}: IssueBoardColumnProps) {
-  const s = styles as Record<string, object>;
-  const renderIssueRow = useCallback(
-    ({ item: issue }: { item: Issue }) => (
-      <IssueBoardRow
-        issue={issue}
-        isSelected={issue.id === selectedIssueId}
-        isQuickEdit={quickEditIssueId === issue.id}
-        quickEditTitle={quickEditTitle}
-        quickEditQualityScore={quickEditQualityScore}
-        quickEditAssigneeId={quickEditAssigneeId}
-        users={users}
-        savingQuickEdit={savingQuickEdit}
-        onQuickEditTitleChange={onQuickEditTitleChange}
-        onQuickEditQualityScoreChange={onQuickEditQualityScoreChange}
-        onQuickEditAssigneeChange={onQuickEditAssigneeChange}
-        onSelectIssue={() => onSelectIssue(issue.id)}
-        onStartQuickEdit={() => onStartQuickEdit(issue)}
-        onCancelQuickEdit={onCancelQuickEdit}
-        onSaveQuickEdit={() => onSaveQuickEdit(issue.id)}
-        onMoveBackward={() => onMoveIssue(issue, "backward")}
-        onMoveForward={() => onMoveIssue(issue, "forward")}
-        styles={styles}
-      />
-    ),
-    [
-      selectedIssueId,
-      quickEditIssueId,
-      quickEditTitle,
-      quickEditQualityScore,
-      quickEditAssigneeId,
-      users,
-      savingQuickEdit,
-      onQuickEditTitleChange,
-      onQuickEditQualityScoreChange,
-      onQuickEditAssigneeChange,
-      onSelectIssue,
-      onStartQuickEdit,
-      onCancelQuickEdit,
-      onSaveQuickEdit,
-      onMoveIssue,
-      styles,
-    ]
-  );
-  const keyExtractor = useCallback((item: Issue) => item.id, []);
-  if (collapsed) {
-    return (
-      <View style={s.issueGroup}>
-        <View style={s.issueGroupHeader}>
-          <Text style={s.issueGroupTitle}>
-            {statusLabel(status)} ({issues.length})
-          </Text>
-          <AppButton
-            label="Expand"
-            variant="secondary"
-            onPress={onToggleCollapse}
-          />
-        </View>
-        {issues.length > 0 ? (
-          <Text style={s.subtle}>Lane collapsed</Text>
-        ) : null}
-      </View>
-    );
-  }
-  return (
-    <View style={s.issueGroup}>
-      <View style={s.issueGroupHeader}>
-        <Text style={s.issueGroupTitle}>
-          {statusLabel(status)} ({issues.length})
-        </Text>
-        <AppButton label="Collapse" variant="secondary" onPress={onToggleCollapse} />
-      </View>
-      {issues.length === 0 ? (
-        <Text style={s.subtle}>No issues</Text>
-      ) : (
-        <FlatList
-          data={issues}
-          keyExtractor={keyExtractor}
-          renderItem={renderIssueRow}
-          style={{ maxHeight: ISSUE_BOARD_COLUMN_HEIGHT }}
-          contentContainerStyle={s.listContainer}
-          ListHeaderComponent={null}
-        />
-      )}
-    </View>
-  );
-});
-
-type HomeTabProps = {
-  projectCount: number;
-  selectedProjectName: string;
-  issuesCount: number;
-  expensesTotal: number;
-  featuresCount: number;
-  todosCount: number;
-  ideasCount: number;
-  bugsCount: number;
-  enhancementsCount: number;
-  styles: Record<string, unknown>;
-};
-
-const HomeTab = memo(function HomeTab({
-  projectCount,
-  selectedProjectName,
-  issuesCount,
-  expensesTotal,
-  featuresCount,
-  todosCount,
-  ideasCount,
-  bugsCount,
-  enhancementsCount,
-  styles,
-}: HomeTabProps) {
-  const s = styles as Record<string, object>;
-  return (
-    <View style={s.stack}>
-      <AppCard title="Projects">
-        <Text style={s.bigValue}>{projectCount}</Text>
-      </AppCard>
-      <AppCard title="Current Project">
-        <Text style={s.valueText}>{selectedProjectName}</Text>
-      </AppCard>
-      <AppCard title="Summary">
-        <Text style={s.body}>Issues: {issuesCount}</Text>
-        <Text style={s.body}>Expenses: ${expensesTotal.toFixed(2)}</Text>
-        <Text style={s.body}>Features: {featuresCount}</Text>
-        <Text style={s.body}>Todos: {todosCount}</Text>
-        <Text style={s.body}>Ideas: {ideasCount}</Text>
-        <Text style={s.body}>Bugs: {bugsCount}</Text>
-        <Text style={s.body}>Enhancements: {enhancementsCount}</Text>
-      </AppCard>
-    </View>
-  );
-});
-
-type ProjectsTabProps = {
-  projects: Project[];
-  selectedProjectId: string;
-  selectedProject: Project | null;
-  createProjectName: string;
-  setCreateProjectName: (v: string) => void;
-  creatingProject: boolean;
-  projectEditName: string;
-  setProjectEditName: (v: string) => void;
-  savingProjectEdit: boolean;
-  deletingProject: boolean;
-  onSelectProject: (id: string) => void;
-  onCreateProject: () => Promise<void>;
-  onUpdateProject: () => Promise<void>;
-  onDeleteProject: () => Promise<void>;
-  styles: Record<string, unknown>;
-};
-
-const projectsListKeyExtractor = (item: Project) => item.id;
-
-const ProjectsTab = memo(function ProjectsTab({
-  projects,
-  selectedProjectId,
-  selectedProject,
-  createProjectName,
-  setCreateProjectName,
-  creatingProject,
-  projectEditName,
-  setProjectEditName,
-  savingProjectEdit,
-  deletingProject,
-  onSelectProject,
-  onCreateProject,
-  onUpdateProject,
-  onDeleteProject,
-  styles,
-}: ProjectsTabProps) {
-  const s = styles as Record<string, object>;
-  const renderProjectItem = useCallback(
-    ({ item }: { item: Project }) => (
-      <Pressable
-        style={[s.listItem, item.id === selectedProjectId ? s.listItemSelected : null]}
-        onPress={() => onSelectProject(item.id)}
-      >
-        <Text style={s.listItemTitle}>{item.name}</Text>
-        <Text style={s.listItemMeta}>{item.id}</Text>
-      </Pressable>
-    ),
-    [selectedProjectId, onSelectProject, styles]
-  );
-  return (
-    <View style={s.stackFill}>
-      <AppCard title="Create Project">
-        <View style={s.inlineRow}>
-          <TextInput
-            style={s.input}
-            value={createProjectName}
-            onChangeText={setCreateProjectName}
-            placeholder="Project name"
-            placeholderTextColor="#94a3b8"
-          />
-          <AppButton
-            label={creatingProject ? "Adding..." : "Add"}
-            disabled={creatingProject || !createProjectName.trim()}
-            onPress={() => onCreateProject().catch(() => {})}
-          />
-        </View>
-      </AppCard>
-      <AppCard title="Project Settings">
-        {selectedProject ? (
-          <View style={s.stack}>
-            <TextInput
-              style={s.input}
-              value={projectEditName}
-              onChangeText={setProjectEditName}
-              placeholder="Project name"
-              placeholderTextColor="#94a3b8"
-            />
-            <View style={s.inlineRow}>
-              <AppButton
-                label={savingProjectEdit ? "Saving..." : "Save Name"}
-                disabled={
-                  savingProjectEdit ||
-                  !projectEditName.trim() ||
-                  projectEditName.trim() === selectedProject.name
-                }
-                onPress={() => onUpdateProject().catch(() => {})}
-              />
-              <AppButton
-                label={deletingProject ? "Deleting..." : "Delete Project"}
-                variant="secondary"
-                disabled={deletingProject}
-                onPress={() => onDeleteProject().catch(() => {})}
-              />
-            </View>
-          </View>
-        ) : (
-          <Text style={s.subtle}>Select a project to edit or delete it.</Text>
-        )}
-      </AppCard>
-      <AppCard title="Projects" style={s.fillCard}>
-        <FlatList
-          data={projects}
-          keyExtractor={projectsListKeyExtractor}
-          contentContainerStyle={s.listContainer}
-          renderItem={renderProjectItem}
-          ListEmptyComponent={<Text style={s.subtle}>No projects yet.</Text>}
-        />
-      </AppCard>
-    </View>
-  );
-});
-
-type UserChipProps = {
-  userId: string;
-  label: string;
-  isSelected: boolean;
-  onSelect: (userId: string) => void;
-  styles: Record<string, unknown>;
-};
-
-const UserChip = memo(function UserChip({
-  userId,
-  label,
-  isSelected,
-  onSelect,
-  styles,
-}: UserChipProps) {
-  const s = styles as Record<string, object>;
-  return (
-    <Pressable
-      style={[s.chip, isSelected ? s.chipActive : null]}
-      onPress={() => onSelect(userId)}
-    >
-      <Text style={[s.chipText, isSelected ? s.chipTextActive : null]}>{label}</Text>
-    </Pressable>
-  );
-});
+import type {
+  AppTab,
+  AssistantChatMessage,
+  ChecklistKind,
+  PendingCommentAttachment,
+  TestExecutionResult,
+} from "./src/types";
+import {
+  ACTIVE_TAB_STORAGE_KEY,
+  API_TEST_PATTERNS,
+  APP_API_URL,
+  APP_WEB_URL,
+  AUTH_BYPASS_STORAGE_KEY,
+  EXPENSE_CATEGORIES,
+  SELECTED_PROJECT_STORAGE_KEY,
+  TOKEN_STORAGE_KEY,
+  UI_TEST_PATTERNS,
+} from "./src/constants";
+import {
+  buildMobileAuthUrl,
+  parseErrorFromRedirect,
+  parseTokenFromRedirect,
+  readUserEmailFromToken,
+  readUserIdFromToken,
+} from "./src/utils/auth";
+import { forwardStatus, previousStatus, statusLabel } from "./src/utils/issueStatus";
+import { fileNameFromUri, normalizeFilePath } from "./src/utils/files";
+import {
+  commentAttachmentLabel,
+  getCommentAttachmentStreamUrl,
+  pendingCommentAttachmentDataUri,
+} from "./src/utils/commentAttachment";
+import { enhancementsStorageKey } from "./src/utils/enhancementsStorage";
+import { parseAutomatedTestNames } from "./src/utils/parseAutomatedTestNames";
+import { isAppTab } from "./src/utils/isAppTab";
+import { appStyles } from "./src/theme/appStyles";
+import { HomeTab } from "./src/screens/HomeTab";
+import { ProjectsTab } from "./src/screens/ProjectsTab";
+import { ExpensesTab } from "./src/screens/ExpensesTab";
+import { SettingsTab } from "./src/screens/SettingsTab";
+import { TestsTab } from "./src/screens/TestsTab";
+import { ChecklistSection } from "./src/components/ChecklistSection";
+import { IssueBoardColumn } from "./src/components/IssueBoardColumn";
+import { ProjectPicker } from "./src/components/ProjectPicker";
+import { TestResultPanel } from "./src/components/TestResultPanel";
+import { UserChip } from "./src/components/UserChip";
+import type { AuthProvider } from "./src/types";
 
 export default function App() {
   const [token, setToken] = useState("");
@@ -1927,7 +1317,6 @@ export default function App() {
         onMoveIssue={(issue, direction) =>
           handleMoveIssue(issue, direction).catch(() => {})
         }
-        styles={styles}
       />
     ),
     [
@@ -1976,6 +1365,11 @@ export default function App() {
       setCreatingComment(false);
     }
   }, [loadIssueComments, newCommentBody, pendingCommentAttachments, selectedIssue, token]);
+
+  const readBase64FromUri = useCallback(async (uri: string) => {
+    const path = normalizeFilePath(uri);
+    return RNFS.readFile(path, "base64");
+  }, []);
 
   const handleAddPendingCommentScreenshot = useCallback(async () => {
     try {
@@ -2300,11 +1694,6 @@ export default function App() {
     },
     [editingFileId, loadIssues, selectedIssue, token]
   );
-
-  const readBase64FromUri = useCallback(async (uri: string) => {
-    const path = normalizeFilePath(uri);
-    return RNFS.readFile(path, "base64");
-  }, []);
 
   const handleUploadScreenshot = useCallback(async () => {
     if (!token || !selectedIssue) return;
@@ -3182,11 +2571,11 @@ export default function App() {
 
   if (initializing) {
     return (
-      <SafeAreaView style={styles.screen}>
+      <SafeAreaView style={appStyles.screen}>
         <StatusBar barStyle="dark-content" />
-        <View style={styles.centeredFill}>
+        <View style={appStyles.centeredFill}>
           <ActivityIndicator />
-          <Text style={styles.subtle}>Loading session...</Text>
+          <Text style={appStyles.subtle}>Loading session...</Text>
         </View>
       </SafeAreaView>
     );
@@ -3194,11 +2583,11 @@ export default function App() {
 
   if (!token && !authBypassEnabled) {
     return (
-      <SafeAreaView style={styles.screen}>
+      <SafeAreaView style={appStyles.screen}>
         <StatusBar barStyle="dark-content" />
-        <View style={styles.authContainer}>
-          <Text style={styles.title}>Idea Home</Text>
-          <Text style={styles.body}>Sign in with Google using secure native authentication.</Text>
+        <View style={appStyles.authContainer}>
+          <Text style={appStyles.title}>Idea Home</Text>
+          <Text style={appStyles.body}>Sign in with Google using secure native authentication.</Text>
           <AppButton
             label={authInProgress ? "Signing in..." : "Continue with Google"}
             disabled={authInProgress}
@@ -3208,7 +2597,7 @@ export default function App() {
               });
             }}
           />
-          <Text style={styles.subtle}>We use Safari for secure Google authentication.</Text>
+          <Text style={appStyles.subtle}>We use Safari for secure Google authentication.</Text>
           <AppButton
             label="Continue without login (testing)"
             variant="secondary"
@@ -3218,18 +2607,18 @@ export default function App() {
               });
             }}
           />
-          {authErrorMessage ? <Text style={styles.errorText}>{authErrorMessage}</Text> : null}
+          {authErrorMessage ? <Text style={appStyles.errorText}>{authErrorMessage}</Text> : null}
         </View>
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView style={styles.screen} edges={["top", "left", "right", "bottom"]}>
+    <SafeAreaView style={appStyles.screen} edges={["top", "left", "right", "bottom"]}>
       <StatusBar barStyle="dark-content" />
 
-      <View style={styles.topBar}>
-        <Text style={styles.brand}>Idea Home</Text>
+      <View style={appStyles.topBar}>
+        <Text style={appStyles.brand}>Idea Home</Text>
         <AppButton
           label={
             signOutInProgress
@@ -3277,7 +2666,7 @@ export default function App() {
         ]}
       />
 
-      <View style={styles.content}>
+      <View style={appStyles.content}>
         <ProjectPicker
           projects={projects}
           selectedProjectId={selectedProjectId}
@@ -3302,7 +2691,6 @@ export default function App() {
             ideasCount={ideas.length}
             bugsCount={bugs.length}
             enhancementsCount={enhancements.length}
-            styles={styles}
           />
         ) : null}
 
@@ -3322,16 +2710,15 @@ export default function App() {
             onCreateProject={handleCreateProject}
             onUpdateProject={handleUpdateProject}
             onDeleteProject={handleDeleteProject}
-            styles={styles}
           />
         ) : null}
 
         {activeTab === "issues" ? (
-          <View style={styles.stackFill}>
+          <View style={appStyles.stackFill}>
             <AppCard title="Create Issue">
-              <View style={styles.stack}>
+              <View style={appStyles.stack}>
                 <TextInput
-                  style={styles.input}
+                  style={appStyles.input}
                   value={issueSearch}
                   onChangeText={setIssueSearch}
                   placeholder="Search issues"
@@ -3347,14 +2734,14 @@ export default function App() {
                   }}
                 />
                 <TextInput
-                  style={styles.input}
+                  style={appStyles.input}
                   value={newIssueTitle}
                   onChangeText={setNewIssueTitle}
                   placeholder="Issue title"
                   placeholderTextColor="#94a3b8"
                 />
                 <TextInput
-                  style={[styles.input, styles.multilineInput]}
+                  style={[appStyles.input, appStyles.multilineInput]}
                   value={newIssueDescription}
                   onChangeText={setNewIssueDescription}
                   placeholder="Issue description"
@@ -3362,7 +2749,7 @@ export default function App() {
                   multiline
                 />
                 <TextInput
-                  style={[styles.input, styles.multilineInput]}
+                  style={[appStyles.input, appStyles.multilineInput]}
                   value={newIssueAcceptanceCriteria}
                   onChangeText={setNewIssueAcceptanceCriteria}
                   placeholder="Acceptance criteria"
@@ -3370,21 +2757,21 @@ export default function App() {
                   multiline
                 />
                 <TextInput
-                  style={styles.input}
+                  style={appStyles.input}
                   value={newIssueDatabase}
                   onChangeText={setNewIssueDatabase}
                   placeholder="Database notes"
                   placeholderTextColor="#94a3b8"
                 />
                 <TextInput
-                  style={styles.input}
+                  style={appStyles.input}
                   value={newIssueApi}
                   onChangeText={setNewIssueApi}
                   placeholder="API notes"
                   placeholderTextColor="#94a3b8"
                 />
                 <TextInput
-                  style={[styles.input, styles.multilineInput]}
+                  style={[appStyles.input, appStyles.multilineInput]}
                   value={newIssueTestCases}
                   onChangeText={setNewIssueTestCases}
                   placeholder="Test cases"
@@ -3392,7 +2779,7 @@ export default function App() {
                   multiline
                 />
                 <TextInput
-                  style={[styles.input, styles.multilineInput]}
+                  style={[appStyles.input, appStyles.multilineInput]}
                   value={newIssueAutomatedTest}
                   onChangeText={setNewIssueAutomatedTest}
                   placeholder="Automated tests"
@@ -3400,35 +2787,35 @@ export default function App() {
                   multiline
                 />
                 <TextInput
-                  style={styles.input}
+                  style={appStyles.input}
                   value={newIssueQualityScore}
                   onChangeText={setNewIssueQualityScore}
                   keyboardType="decimal-pad"
                   placeholder="Quality score (0-100)"
                   placeholderTextColor="#94a3b8"
                 />
-                <Text style={styles.sectionLabel}>Assignee</Text>
+                <Text style={appStyles.sectionLabel}>Assignee</Text>
                 {usersLoading ? <ActivityIndicator /> : null}
-                {usersError ? <Text style={styles.errorText}>{usersError}</Text> : null}
-                <View style={styles.chipWrap}>
+                {usersError ? <Text style={appStyles.errorText}>{usersError}</Text> : null}
+                <View style={appStyles.chipWrap}>
                   <Pressable
-                    style={[styles.chip, !newIssueAssigneeId ? styles.chipActive : null]}
+                    style={[appStyles.chip, !newIssueAssigneeId ? appStyles.chipActive : null]}
                     onPress={() => setNewIssueAssigneeId("")}
                   >
-                    <Text style={[styles.chipText, !newIssueAssigneeId ? styles.chipTextActive : null]}>
+                    <Text style={[appStyles.chipText, !newIssueAssigneeId ? appStyles.chipTextActive : null]}>
                       Unassigned
                     </Text>
                   </Pressable>
                   {users.map((user) => (
                     <Pressable
                       key={user.id}
-                      style={[styles.chip, newIssueAssigneeId === user.id ? styles.chipActive : null]}
+                      style={[appStyles.chip, newIssueAssigneeId === user.id ? appStyles.chipActive : null]}
                       onPress={() => setNewIssueAssigneeId(user.id)}
                     >
                       <Text
                         style={[
-                          styles.chipText,
-                          newIssueAssigneeId === user.id ? styles.chipTextActive : null,
+                          appStyles.chipText,
+                          newIssueAssigneeId === user.id ? appStyles.chipTextActive : null,
                         ]}
                       >
                         {user.name || user.email}
@@ -3437,7 +2824,7 @@ export default function App() {
                   ))}
                 </View>
               </View>
-              <View style={[styles.inlineRowWrap, styles.spaceTop]}>
+              <View style={[appStyles.inlineRowWrap, appStyles.spaceTop]}>
                 <AppButton
                   label={creatingIssue ? "Creating..." : "Create"}
                   disabled={creatingIssue || !newIssueTitle.trim() || !selectedProjectId}
@@ -3460,23 +2847,23 @@ export default function App() {
               </View>
             </AppCard>
 
-            <AppCard title="Issue Board" style={styles.fillCard}>
+            <AppCard title="Issue Board" style={appStyles.fillCard}>
               {issuesLoading ? <ActivityIndicator /> : null}
-              {issuesError ? <Text style={styles.errorText}>{issuesError}</Text> : null}
-              <View style={styles.issueMetaRow}>
-                <View style={styles.issueMetaPill}>
-                  <Text style={styles.listItemMeta}>Total: {filteredIssues.length}</Text>
+              {issuesError ? <Text style={appStyles.errorText}>{issuesError}</Text> : null}
+              <View style={appStyles.issueMetaRow}>
+                <View style={appStyles.issueMetaPill}>
+                  <Text style={appStyles.listItemMeta}>Total: {filteredIssues.length}</Text>
                 </View>
-                <View style={styles.issueMetaPill}>
-                  <Text style={styles.listItemMeta}>
+                <View style={appStyles.issueMetaPill}>
+                  <Text style={appStyles.listItemMeta}>
                     Open: {(issuesByStatus.backlog?.length ?? 0) + (issuesByStatus.todo?.length ?? 0) + (issuesByStatus.in_progress?.length ?? 0)}
                   </Text>
                 </View>
-                <View style={styles.issueMetaPill}>
-                  <Text style={styles.listItemMeta}>Done: {issuesByStatus.done?.length ?? 0}</Text>
+                <View style={appStyles.issueMetaPill}>
+                  <Text style={appStyles.listItemMeta}>Done: {issuesByStatus.done?.length ?? 0}</Text>
                 </View>
               </View>
-              <View style={styles.inlineRowWrap}>
+              <View style={appStyles.inlineRowWrap}>
                 <AppButton
                   label="Refresh Board"
                   variant="secondary"
@@ -3522,24 +2909,24 @@ export default function App() {
                   }
                 />
               </View>
-              <Text style={styles.sectionLabel}>Assignee Filter</Text>
-              <View style={styles.chipWrap}>
+              <Text style={appStyles.sectionLabel}>Assignee Filter</Text>
+              <View style={appStyles.chipWrap}>
                 <Pressable
-                  style={[styles.chip, issueAssigneeFilter === "all" ? styles.chipActive : null]}
+                  style={[appStyles.chip, issueAssigneeFilter === "all" ? appStyles.chipActive : null]}
                   onPress={() => setIssueAssigneeFilter("all")}
                 >
-                  <Text style={[styles.chipText, issueAssigneeFilter === "all" ? styles.chipTextActive : null]}>
+                  <Text style={[appStyles.chipText, issueAssigneeFilter === "all" ? appStyles.chipTextActive : null]}>
                     All
                   </Text>
                 </Pressable>
                 <Pressable
-                  style={[styles.chip, issueAssigneeFilter === "unassigned" ? styles.chipActive : null]}
+                  style={[appStyles.chip, issueAssigneeFilter === "unassigned" ? appStyles.chipActive : null]}
                   onPress={() => setIssueAssigneeFilter("unassigned")}
                 >
                   <Text
                     style={[
-                      styles.chipText,
-                      issueAssigneeFilter === "unassigned" ? styles.chipTextActive : null,
+                      appStyles.chipText,
+                      issueAssigneeFilter === "unassigned" ? appStyles.chipTextActive : null,
                     ]}
                   >
                     Unassigned
@@ -3552,29 +2939,28 @@ export default function App() {
                     label={user.name || user.email}
                     isSelected={issueAssigneeFilter === user.id}
                     onSelect={setIssueAssigneeFilter}
-                    styles={styles}
                   />
                 ))}
               </View>
-              <View style={styles.chipWrap}>
+              <View style={appStyles.chipWrap}>
                 <Pressable
-                  style={[styles.chip, issueBoardFocus === "all" ? styles.chipActive : null]}
+                  style={[appStyles.chip, issueBoardFocus === "all" ? appStyles.chipActive : null]}
                   onPress={() => setIssueBoardFocus("all")}
                 >
-                  <Text style={[styles.chipText, issueBoardFocus === "all" ? styles.chipTextActive : null]}>
+                  <Text style={[appStyles.chipText, issueBoardFocus === "all" ? appStyles.chipTextActive : null]}>
                     All
                   </Text>
                 </Pressable>
                 {ISSUE_STATUSES.map((status) => (
                   <Pressable
                     key={status}
-                    style={[styles.chip, issueBoardFocus === status ? styles.chipActive : null]}
+                    style={[appStyles.chip, issueBoardFocus === status ? appStyles.chipActive : null]}
                     onPress={() => setIssueBoardFocus(status)}
                   >
                     <Text
                       style={[
-                        styles.chipText,
-                        issueBoardFocus === status ? styles.chipTextActive : null,
+                        appStyles.chipText,
+                        issueBoardFocus === status ? appStyles.chipTextActive : null,
                       ]}
                     >
                       {statusLabel(status)} ({(issuesByStatus[status] ?? []).length})
@@ -3585,23 +2971,23 @@ export default function App() {
               <FlatList
                 data={issueBoardStatuses}
                 keyExtractor={issueBoardKeyExtractor}
-                contentContainerStyle={styles.listContainer}
+                contentContainerStyle={appStyles.listContainer}
                 renderItem={renderIssueBoardColumn}
               />
             </AppCard>
 
             <AppCard title="Issue Details">
               {selectedIssue ? (
-                <View style={styles.stack}>
-                  <View style={styles.issueMetaRow}>
-                    <View style={styles.issueMetaPill}>
-                      <Text style={styles.listItemMeta}>Key: {selectedIssue.key ?? "N/A"}</Text>
+                <View style={appStyles.stack}>
+                  <View style={appStyles.issueMetaRow}>
+                    <View style={appStyles.issueMetaPill}>
+                      <Text style={appStyles.listItemMeta}>Key: {selectedIssue.key ?? "N/A"}</Text>
                     </View>
-                    <View style={styles.issueMetaPill}>
-                      <Text style={styles.listItemMeta}>Status: {statusLabel(selectedIssue.status)}</Text>
+                    <View style={appStyles.issueMetaPill}>
+                      <Text style={appStyles.listItemMeta}>Status: {statusLabel(selectedIssue.status)}</Text>
                     </View>
-                    <View style={styles.issueMetaPill}>
-                      <Text style={styles.listItemMeta}>
+                    <View style={appStyles.issueMetaPill}>
+                      <Text style={appStyles.listItemMeta}>
                         Assignee:{" "}
                         {selectedIssue.assignee?.name ??
                           selectedIssue.assignee?.email ??
@@ -3609,17 +2995,17 @@ export default function App() {
                       </Text>
                     </View>
                   </View>
-                  <View style={styles.issueDetailSection}>
-                    <Text style={styles.sectionLabel}>Overview</Text>
+                  <View style={appStyles.issueDetailSection}>
+                    <Text style={appStyles.sectionLabel}>Overview</Text>
                   <TextInput
-                    style={styles.input}
+                    style={appStyles.input}
                     value={issueEditTitle}
                     onChangeText={setIssueEditTitle}
                     placeholder="Issue title"
                     placeholderTextColor="#94a3b8"
                   />
                   <TextInput
-                    style={[styles.input, styles.multilineInput]}
+                    style={[appStyles.input, appStyles.multilineInput]}
                     value={issueEditDescription}
                     onChangeText={setIssueEditDescription}
                     placeholder="Issue description"
@@ -3627,10 +3013,10 @@ export default function App() {
                     multiline
                   />
                   </View>
-                  <View style={styles.issueDetailSection}>
-                    <Text style={styles.sectionLabel}>Specification</Text>
+                  <View style={appStyles.issueDetailSection}>
+                    <Text style={appStyles.sectionLabel}>Specification</Text>
                   <TextInput
-                    style={[styles.input, styles.multilineInput]}
+                    style={[appStyles.input, appStyles.multilineInput]}
                     value={issueEditAcceptanceCriteria}
                     onChangeText={setIssueEditAcceptanceCriteria}
                     placeholder="Acceptance criteria"
@@ -3638,7 +3024,7 @@ export default function App() {
                     multiline
                   />
                   <TextInput
-                    style={[styles.input, styles.multilineInput]}
+                    style={[appStyles.input, appStyles.multilineInput]}
                     value={issueEditDatabase}
                     onChangeText={setIssueEditDatabase}
                     placeholder="Database notes"
@@ -3646,7 +3032,7 @@ export default function App() {
                     multiline
                   />
                   <TextInput
-                    style={[styles.input, styles.multilineInput]}
+                    style={[appStyles.input, appStyles.multilineInput]}
                     value={issueEditApi}
                     onChangeText={setIssueEditApi}
                     placeholder="API notes"
@@ -3654,7 +3040,7 @@ export default function App() {
                     multiline
                   />
                   <TextInput
-                    style={[styles.input, styles.multilineInput]}
+                    style={[appStyles.input, appStyles.multilineInput]}
                     value={issueEditTestCases}
                     onChangeText={setIssueEditTestCases}
                     placeholder="Test cases"
@@ -3662,7 +3048,7 @@ export default function App() {
                     multiline
                   />
                   <TextInput
-                    style={[styles.input, styles.multilineInput]}
+                    style={[appStyles.input, appStyles.multilineInput]}
                     value={issueEditAutomatedTest}
                     onChangeText={setIssueEditAutomatedTest}
                     placeholder="Automated tests"
@@ -3670,38 +3056,38 @@ export default function App() {
                     multiline
                   />
                   </View>
-                  <View style={styles.issueDetailSection}>
-                    <Text style={styles.sectionLabel}>Quality & Ownership</Text>
+                  <View style={appStyles.issueDetailSection}>
+                    <Text style={appStyles.sectionLabel}>Quality & Ownership</Text>
                   <TextInput
-                    style={styles.input}
+                    style={appStyles.input}
                     value={issueEditQualityScore}
                     onChangeText={setIssueEditQualityScore}
                     keyboardType="decimal-pad"
                     placeholder="Quality score (0-100)"
                     placeholderTextColor="#94a3b8"
                   />
-                  <Text style={styles.sectionLabel}>Assignee</Text>
+                  <Text style={appStyles.sectionLabel}>Assignee</Text>
                   {usersLoading ? <ActivityIndicator /> : null}
-                  {usersError ? <Text style={styles.errorText}>{usersError}</Text> : null}
-                  <View style={styles.chipWrap}>
+                  {usersError ? <Text style={appStyles.errorText}>{usersError}</Text> : null}
+                  <View style={appStyles.chipWrap}>
                     <Pressable
-                      style={[styles.chip, !issueEditAssigneeId ? styles.chipActive : null]}
+                      style={[appStyles.chip, !issueEditAssigneeId ? appStyles.chipActive : null]}
                       onPress={() => setIssueEditAssigneeId("")}
                     >
-                      <Text style={[styles.chipText, !issueEditAssigneeId ? styles.chipTextActive : null]}>
+                      <Text style={[appStyles.chipText, !issueEditAssigneeId ? appStyles.chipTextActive : null]}>
                         Unassigned
                       </Text>
                     </Pressable>
                     {users.map((user) => (
                       <Pressable
                         key={user.id}
-                        style={[styles.chip, issueEditAssigneeId === user.id ? styles.chipActive : null]}
+                        style={[appStyles.chip, issueEditAssigneeId === user.id ? appStyles.chipActive : null]}
                         onPress={() => setIssueEditAssigneeId(user.id)}
                       >
                         <Text
                           style={[
-                            styles.chipText,
-                            issueEditAssigneeId === user.id ? styles.chipTextActive : null,
+                            appStyles.chipText,
+                            issueEditAssigneeId === user.id ? appStyles.chipTextActive : null,
                           ]}
                         >
                           {user.name || user.email}
@@ -3709,7 +3095,7 @@ export default function App() {
                       </Pressable>
                     ))}
                   </View>
-                  <View style={styles.inlineRow}>
+                  <View style={appStyles.inlineRow}>
                     <AppButton
                       label={savingIssueEdit ? "Saving..." : "Save Issue"}
                       disabled={savingIssueEdit || !issueEditTitle.trim()}
@@ -3731,9 +3117,9 @@ export default function App() {
                     />
                   </View>
                   </View>
-                  <View style={styles.issueDetailSection}>
-                    <Text style={styles.sectionLabel}>Add Media</Text>
-                    <View style={styles.inlineRowWrap}>
+                  <View style={appStyles.issueDetailSection}>
+                    <Text style={appStyles.sectionLabel}>Add Media</Text>
+                    <View style={appStyles.inlineRowWrap}>
                       <AppButton
                         label={uploadingIssueAsset ? "Uploading..." : "Upload Screenshot"}
                         variant="secondary"
@@ -3786,9 +3172,9 @@ export default function App() {
                       />
                     </View>
                   </View>
-                  <View style={styles.issueDetailSection}>
-                    <Text style={styles.sectionLabel}>Automated Tests</Text>
-                    <View style={styles.inlineRowWrap}>
+                  <View style={appStyles.issueDetailSection}>
+                    <Text style={appStyles.sectionLabel}>Automated Tests</Text>
+                    <View style={appStyles.inlineRowWrap}>
                       <AppButton
                         label={
                           runningIssueAutomatedTests
@@ -3809,9 +3195,9 @@ export default function App() {
                         const result = uiTestResults[testName];
                         const running = runningUiTests[testName] === true;
                         return (
-                          <View key={testName} style={styles.listItem}>
-                            <Text style={styles.listItemTitle}>{testName}</Text>
-                            <View style={styles.inlineRowWrap}>
+                          <View key={testName} style={appStyles.listItem}>
+                            <Text style={appStyles.listItemTitle}>{testName}</Text>
+                            <View style={appStyles.inlineRowWrap}>
                               <AppButton
                                 label={running ? "Running..." : "Run Test"}
                                 variant="secondary"
@@ -3825,8 +3211,8 @@ export default function App() {
                               {result ? (
                                 <Text
                                   style={[
-                                    styles.listItemMeta,
-                                    !result.success ? styles.errorText : null,
+                                    appStyles.listItemMeta,
+                                    !result.success ? appStyles.errorText : null,
                                   ]}
                                 >
                                   {result.success ? "Passed" : "Failed"} (exit: {result.exitCode ?? "n/a"})
@@ -3834,22 +3220,22 @@ export default function App() {
                               ) : null}
                             </View>
                             {result?.errorOutput ? (
-                              <Text style={styles.errorText}>{result.errorOutput}</Text>
+                              <Text style={appStyles.errorText}>{result.errorOutput}</Text>
                             ) : null}
                           </View>
                         );
                       })
                     ) : (
-                      <Text style={styles.subtle}>
+                      <Text style={appStyles.subtle}>
                         Add automated tests in the issue field above to run them.
                       </Text>
                     )}
                   </View>
-                  <View style={styles.issueDetailSection}>
-                    <Text style={styles.sectionLabel}>Comments</Text>
-                    <View style={styles.inlineRow}>
+                  <View style={appStyles.issueDetailSection}>
+                    <Text style={appStyles.sectionLabel}>Comments</Text>
+                    <View style={appStyles.inlineRow}>
                       <TextInput
-                        style={styles.input}
+                        style={appStyles.input}
                         value={newCommentBody}
                         onChangeText={setNewCommentBody}
                         placeholder="Add a comment"
@@ -3868,7 +3254,7 @@ export default function App() {
                         }}
                       />
                     </View>
-                    <View style={styles.inlineRowWrap}>
+                    <View style={appStyles.inlineRowWrap}>
                       <AppButton
                         label="Add Photo"
                         variant="secondary"
@@ -3914,17 +3300,17 @@ export default function App() {
                       ) : null}
                     </View>
                     {pendingCommentAttachments.length ? (
-                      <View style={styles.stack}>
+                      <View style={appStyles.stack}>
                         {pendingCommentAttachments.map((attachment, index) => (
-                          <View key={attachment.id} style={styles.pendingAttachmentChip}>
-                            <View style={styles.flex}>
-                              <Text style={styles.listItemMeta}>
+                          <View key={attachment.id} style={appStyles.pendingAttachmentChip}>
+                            <View style={appStyles.flex}>
+                              <Text style={appStyles.listItemMeta}>
                                 {attachment.type === "screenshot" ? "Photo" : "Video"} #{index + 1}
                               </Text>
                               {attachment.type === "screenshot" ? (
                                 <Image
                                   source={{ uri: pendingCommentAttachmentDataUri(attachment) }}
-                                  style={styles.pendingAttachmentPreview}
+                                  style={appStyles.pendingAttachmentPreview}
                                   resizeMode="cover"
                                 />
                               ) : null}
@@ -3955,21 +3341,21 @@ export default function App() {
                       </View>
                     ) : null}
                     {commentsLoading ? <ActivityIndicator /> : null}
-                    {commentsError ? <Text style={styles.errorText}>{commentsError}</Text> : null}
+                    {commentsError ? <Text style={appStyles.errorText}>{commentsError}</Text> : null}
                     {issueComments.map((comment) => (
-                      <View key={comment.id} style={styles.stack}>
+                      <View key={comment.id} style={appStyles.stack}>
                         {editingCommentId === comment.id ? (
-                          <View style={styles.commentItem}>
-                            <View style={styles.flex}>
+                          <View style={appStyles.commentItem}>
+                            <View style={appStyles.flex}>
                               <TextInput
-                                style={[styles.input, styles.multilineInput]}
+                                style={[appStyles.input, appStyles.multilineInput]}
                                 value={commentEditBody}
                                 onChangeText={setCommentEditBody}
                                 placeholder="Comment"
                                 placeholderTextColor="#94a3b8"
                                 multiline
                               />
-                              <View style={styles.inlineRowWrap}>
+                              <View style={appStyles.inlineRowWrap}>
                                 <AppButton label="Save" onPress={() => {
                                   handleSaveComment().catch(() => {
                                     // handled
@@ -3987,12 +3373,12 @@ export default function App() {
                             </View>
                           </View>
                         ) : (
-                          <View style={styles.commentItem}>
-                            <View style={styles.flex}>
-                              <Text style={styles.listItemTitle}>{comment.body}</Text>
-                              <Text style={styles.listItemMeta}>{comment.createdAt}</Text>
+                          <View style={appStyles.commentItem}>
+                            <View style={appStyles.flex}>
+                              <Text style={appStyles.listItemTitle}>{comment.body}</Text>
+                              <Text style={appStyles.listItemMeta}>{comment.createdAt}</Text>
                             </View>
-                            <View style={styles.inlineRowWrap}>
+                            <View style={appStyles.inlineRowWrap}>
                               <AppButton
                                 label="Edit"
                                 variant="secondary"
@@ -4042,9 +3428,9 @@ export default function App() {
                           </View>
                         )}
                         {(comment.attachments ?? []).map((attachment: CommentAttachment) => (
-                          <View key={attachment.id} style={styles.commentAttachmentRow}>
-                            <View style={styles.stackFill}>
-                              <Text style={styles.listItemMeta}>
+                          <View key={attachment.id} style={appStyles.commentAttachmentRow}>
+                            <View style={appStyles.stackFill}>
+                              <Text style={appStyles.listItemMeta}>
                                 Attachment: {attachment.type} • {commentAttachmentLabel(attachment)}
                               </Text>
                               {attachment.type === "screenshot" ? (
@@ -4060,7 +3446,7 @@ export default function App() {
                                       uri: getCommentAttachmentStreamUrl(attachment),
                                       headers: { Authorization: `Bearer ${token}` },
                                     }}
-                                    style={styles.commentAttachmentPreview}
+                                    style={appStyles.commentAttachmentPreview}
                                     resizeMode="cover"
                                   />
                                 </Pressable>
@@ -4089,25 +3475,25 @@ export default function App() {
                       </View>
                     ))}
                     {!commentsLoading && !issueComments.length ? (
-                      <Text style={styles.subtle}>No comments yet.</Text>
+                      <Text style={appStyles.subtle}>No comments yet.</Text>
                     ) : null}
                   </View>
-                  <View style={styles.issueDetailSection}>
-                    <Text style={styles.sectionLabel}>Screenshots</Text>
+                  <View style={appStyles.issueDetailSection}>
+                    <Text style={appStyles.sectionLabel}>Screenshots</Text>
                     {(selectedIssue.screenshots ?? []).map((screenshot: IssueScreenshot) => (
-                      <View key={screenshot.id} style={styles.stack}>
+                      <View key={screenshot.id} style={appStyles.stack}>
                         <Image
                           source={{
                             uri: getScreenshotStreamUrl(screenshot.imageUrl),
                             headers: { Authorization: `Bearer ${token}` },
                           }}
-                          style={styles.screenshotPreview}
+                          style={appStyles.screenshotPreview}
                           resizeMode="cover"
                         />
                         {editingScreenshotId === screenshot.id ? (
-                          <View style={styles.inlineRowWrap}>
+                          <View style={appStyles.inlineRowWrap}>
                             <TextInput
-                              style={styles.input}
+                              style={appStyles.input}
                               value={screenshotEditName}
                               onChangeText={setScreenshotEditName}
                               placeholder="Screenshot name"
@@ -4128,8 +3514,8 @@ export default function App() {
                             />
                           </View>
                         ) : (
-                          <View style={styles.inlineRowWrap}>
-                            <Text style={styles.listItemMeta}>{screenshot.name ?? screenshot.imageUrl}</Text>
+                          <View style={appStyles.inlineRowWrap}>
+                            <Text style={appStyles.listItemMeta}>{screenshot.name ?? screenshot.imageUrl}</Text>
                             <AppButton
                               label="Edit Name"
                               variant="secondary"
@@ -4152,20 +3538,20 @@ export default function App() {
                       </View>
                     ))}
                     {!(selectedIssue.screenshots ?? []).length ? (
-                      <Text style={styles.subtle}>No screenshots attached.</Text>
+                      <Text style={appStyles.subtle}>No screenshots attached.</Text>
                     ) : null}
                   </View>
-                  <View style={styles.issueDetailSection}>
-                    <Text style={styles.sectionLabel}>Recordings</Text>
+                  <View style={appStyles.issueDetailSection}>
+                    <Text style={appStyles.sectionLabel}>Recordings</Text>
                     {(selectedIssue.recordings ?? []).map((recording: IssueRecording) => (
-                      <View key={recording.id} style={styles.listItem}>
-                        <Text style={styles.listItemMeta}>
+                      <View key={recording.id} style={appStyles.listItem}>
+                        <Text style={appStyles.listItemMeta}>
                           {recording.recordingType ?? recording.mediaType ?? "recording"} • {recording.createdAt}
                         </Text>
                         {editingRecordingId === recording.id ? (
-                          <View style={styles.inlineRowWrap}>
+                          <View style={appStyles.inlineRowWrap}>
                             <TextInput
-                              style={styles.input}
+                              style={appStyles.input}
                               value={recordingEditName}
                               onChangeText={setRecordingEditName}
                               placeholder="Recording name"
@@ -4186,8 +3572,8 @@ export default function App() {
                             />
                           </View>
                         ) : (
-                          <View style={styles.inlineRowWrap}>
-                            <Text style={styles.listItemTitle}>{recording.name ?? recording.videoUrl}</Text>
+                          <View style={appStyles.inlineRowWrap}>
+                            <Text style={appStyles.listItemTitle}>{recording.name ?? recording.videoUrl}</Text>
                             <AppButton
                               label="Edit Name"
                               variant="secondary"
@@ -4218,17 +3604,17 @@ export default function App() {
                       </View>
                     ))}
                     {!(selectedIssue.recordings ?? []).length ? (
-                      <Text style={styles.subtle}>No recordings attached.</Text>
+                      <Text style={appStyles.subtle}>No recordings attached.</Text>
                     ) : null}
                   </View>
-                  <View style={styles.issueDetailSection}>
-                    <Text style={styles.sectionLabel}>Files</Text>
+                  <View style={appStyles.issueDetailSection}>
+                    <Text style={appStyles.sectionLabel}>Files</Text>
                     {(selectedIssue.files ?? []).map((file: IssueFile) => (
-                      <View key={file.id} style={styles.listItem}>
+                      <View key={file.id} style={appStyles.listItem}>
                         {editingFileId === file.id ? (
-                          <View style={styles.inlineRowWrap}>
+                          <View style={appStyles.inlineRowWrap}>
                             <TextInput
-                              style={styles.input}
+                              style={appStyles.input}
                               value={fileEditName}
                               onChangeText={setFileEditName}
                               placeholder="File name"
@@ -4249,8 +3635,8 @@ export default function App() {
                             />
                           </View>
                         ) : (
-                          <View style={styles.inlineRowWrap}>
-                            <Text style={styles.listItemTitle}>{file.fileName}</Text>
+                          <View style={appStyles.inlineRowWrap}>
+                            <Text style={appStyles.listItemTitle}>{file.fileName}</Text>
                             <AppButton
                               label="Edit Name"
                               variant="secondary"
@@ -4281,273 +3667,55 @@ export default function App() {
                       </View>
                     ))}
                     {!(selectedIssue.files ?? []).length ? (
-                      <Text style={styles.subtle}>No files attached.</Text>
+                      <Text style={appStyles.subtle}>No files attached.</Text>
                     ) : null}
                   </View>
                 </View>
               ) : (
-                <Text style={styles.subtle}>Select an issue from the board to edit it.</Text>
+                <Text style={appStyles.subtle}>Select an issue from the board to edit it.</Text>
               )}
             </AppCard>
           </View>
         ) : null}
 
         {activeTab === "expenses" ? (
-          <View style={styles.stackFill}>
-            <AppCard title="Create Expense">
-              <View style={styles.stack}>
-                <TextInput
-                  style={styles.input}
-                  value={createExpenseForm.description}
-                  onChangeText={(value) =>
-                    setCreateExpenseForm((current) => ({ ...current, description: value }))
-                  }
-                  placeholder="Description"
-                  placeholderTextColor="#94a3b8"
-                />
-                <View style={styles.inlineRow}>
-                  <TextInput
-                    style={[styles.input, styles.flex]}
-                    value={createExpenseForm.amount}
-                    onChangeText={(value) =>
-                      setCreateExpenseForm((current) => ({ ...current, amount: value }))
-                    }
-                    keyboardType="decimal-pad"
-                    placeholder="Amount"
-                    placeholderTextColor="#94a3b8"
-                  />
-                  <TextInput
-                    style={[styles.input, styles.flex]}
-                    value={createExpenseForm.date}
-                    onChangeText={(value) =>
-                      setCreateExpenseForm((current) => ({ ...current, date: value }))
-                    }
-                    placeholder="YYYY-MM-DD"
-                    placeholderTextColor="#94a3b8"
-                  />
-                </View>
-                <TextInput
-                  style={styles.input}
-                  value={createExpenseForm.category}
-                  onChangeText={(value) =>
-                    setCreateExpenseForm((current) => ({ ...current, category: value }))
-                  }
-                  placeholder="Category"
-                  placeholderTextColor="#94a3b8"
-                />
-                <View style={styles.chipWrap}>
-                  {EXPENSE_CATEGORIES.map((category) => (
-                    <Pressable
-                      key={`create-expense-category-${category}`}
-                      style={[
-                        styles.chip,
-                        createExpenseForm.category === category ? styles.chipActive : null,
-                      ]}
-                      onPress={() =>
-                        setCreateExpenseForm((current) => ({ ...current, category }))
-                      }
-                    >
-                      <Text
-                        style={[
-                          styles.chipText,
-                          createExpenseForm.category === category ? styles.chipTextActive : null,
-                        ]}
-                      >
-                        {category}
-                      </Text>
-                    </Pressable>
-                  ))}
-                </View>
-                <AppButton
-                  label={creatingExpense ? "Saving..." : "Save Expense"}
-                  disabled={creatingExpense || !selectedProjectId}
-                  onPress={() => {
-                    handleCreateExpense().catch(() => {
-                      // handled
-                    });
-                  }}
-                />
-              </View>
-            </AppCard>
-
-            <AppCard title={`Expenses ($${expensesTotal.toFixed(2)})`} style={styles.fillCard}>
-              <View style={styles.stack}>
-                <TextInput
-                  style={styles.input}
-                  value={expenseSearchQuery}
-                  onChangeText={setExpenseSearchQuery}
-                  placeholder="Search expenses"
-                  placeholderTextColor="#94a3b8"
-                />
-                <View style={styles.chipWrap}>
-                  <Pressable
-                    style={[styles.chip, expenseCategoryFilter === "all" ? styles.chipActive : null]}
-                    onPress={() => setExpenseCategoryFilter("all")}
-                  >
-                    <Text
-                      style={[
-                        styles.chipText,
-                        expenseCategoryFilter === "all" ? styles.chipTextActive : null,
-                      ]}
-                    >
-                      All ({expenses.length})
-                    </Text>
-                  </Pressable>
-                  {EXPENSE_CATEGORIES.map((category) => {
-                    const count = expenses.filter((expense) => expense.category === category).length;
-                    return (
-                      <Pressable
-                        key={`expense-filter-${category}`}
-                        style={[
-                          styles.chip,
-                          expenseCategoryFilter === category ? styles.chipActive : null,
-                        ]}
-                        onPress={() => setExpenseCategoryFilter(category)}
-                      >
-                        <Text
-                          style={[
-                            styles.chipText,
-                            expenseCategoryFilter === category ? styles.chipTextActive : null,
-                          ]}
-                        >
-                          {category} ({count})
-                        </Text>
-                      </Pressable>
-                    );
-                  })}
-                </View>
-              </View>
-              {expensesLoading ? <ActivityIndicator /> : null}
-              {expensesError ? <Text style={styles.errorText}>{expensesError}</Text> : null}
-              <FlatList
-                data={filteredExpenses}
-                keyExtractor={(item) => item.id}
-                contentContainerStyle={styles.listContainer}
-                renderItem={({ item }) => (
-                  <View style={[styles.listItem, item.id === editingExpenseId ? styles.listItemSelected : null]}>
-                    {item.id === editingExpenseId ? (
-                      <View style={styles.stack}>
-                        <TextInput
-                          style={styles.input}
-                          value={expenseEditDescription}
-                          onChangeText={setExpenseEditDescription}
-                          placeholder="Description"
-                          placeholderTextColor="#94a3b8"
-                        />
-                        <TextInput
-                          style={styles.input}
-                          value={expenseEditAmount}
-                          onChangeText={setExpenseEditAmount}
-                          keyboardType="decimal-pad"
-                          placeholder="Amount"
-                          placeholderTextColor="#94a3b8"
-                        />
-                        <TextInput
-                          style={styles.input}
-                          value={expenseEditDate}
-                          onChangeText={setExpenseEditDate}
-                          placeholder="YYYY-MM-DD"
-                          placeholderTextColor="#94a3b8"
-                        />
-                        <TextInput
-                          style={styles.input}
-                          value={expenseEditCategory}
-                          onChangeText={setExpenseEditCategory}
-                          placeholder="Category"
-                          placeholderTextColor="#94a3b8"
-                        />
-                        <View style={styles.chipWrap}>
-                          {EXPENSE_CATEGORIES.map((category) => (
-                            <Pressable
-                              key={`edit-expense-${item.id}-${category}`}
-                              style={[
-                                styles.chip,
-                                expenseEditCategory === category ? styles.chipActive : null,
-                              ]}
-                              onPress={() => setExpenseEditCategory(category)}
-                            >
-                              <Text
-                                style={[
-                                  styles.chipText,
-                                  expenseEditCategory === category ? styles.chipTextActive : null,
-                                ]}
-                              >
-                                {category}
-                              </Text>
-                            </Pressable>
-                          ))}
-                        </View>
-                        <View style={styles.inlineRowWrap}>
-                          <AppButton
-                            label={savingExpenseEdit ? "Saving..." : "Save"}
-                            disabled={savingExpenseEdit}
-                            onPress={() => {
-                              handleSaveExpenseEdit().catch(() => {
-                                // handled
-                              });
-                            }}
-                          />
-                          <AppButton
-                            label="Cancel"
-                            variant="secondary"
-                            onPress={() => {
-                              setEditingExpenseId("");
-                              setExpenseEditDescription("");
-                              setExpenseEditAmount("");
-                              setExpenseEditDate("");
-                              setExpenseEditCategory("General");
-                            }}
-                          />
-                          <AppButton
-                            label={deletingExpenseId === item.id ? "Deleting..." : "Delete"}
-                            variant="secondary"
-                            disabled={deletingExpenseId === item.id}
-                            onPress={() => {
-                              handleDeleteExpense(item.id).catch(() => {
-                                // handled
-                              });
-                            }}
-                          />
-                        </View>
-                      </View>
-                    ) : (
-                      <View style={styles.stack}>
-                        <Text style={styles.listItemTitle}>{item.description}</Text>
-                        <Text style={styles.valueText}>${Number(item.amount).toFixed(2)}</Text>
-                        <Text style={styles.listItemMeta}>
-                          {item.category} • {item.date}
-                        </Text>
-                        <View style={styles.inlineRowWrap}>
-                          <AppButton
-                            label="Edit"
-                            variant="secondary"
-                            onPress={() => beginEditExpense(item)}
-                          />
-                          <AppButton
-                            label={deletingExpenseId === item.id ? "Deleting..." : "Delete"}
-                            variant="secondary"
-                            disabled={deletingExpenseId === item.id}
-                            onPress={() => {
-                              handleDeleteExpense(item.id).catch(() => {
-                                // handled
-                              });
-                            }}
-                          />
-                        </View>
-                      </View>
-                    )}
-                  </View>
-                )}
-                ListEmptyComponent={
-                  <Text style={styles.subtle}>
-                    {expenseSearchQuery.trim() || expenseCategoryFilter !== "all"
-                      ? "No matching expenses."
-                      : "No expenses yet."}
-                  </Text>
-                }
-              />
-            </AppCard>
-          </View>
+          <ExpensesTab
+            createExpenseForm={createExpenseForm}
+            setCreateExpenseForm={setCreateExpenseForm}
+            creatingExpense={creatingExpense}
+            selectedProjectId={selectedProjectId}
+            handleCreateExpense={handleCreateExpense}
+            expensesTotal={expensesTotal}
+            expenseSearchQuery={expenseSearchQuery}
+            setExpenseSearchQuery={setExpenseSearchQuery}
+            expenseCategoryFilter={expenseCategoryFilter}
+            setExpenseCategoryFilter={setExpenseCategoryFilter}
+            expenses={expenses}
+            expensesLoading={expensesLoading}
+            expensesError={expensesError}
+            filteredExpenses={filteredExpenses}
+            editingExpenseId={editingExpenseId}
+            expenseEditDescription={expenseEditDescription}
+            setExpenseEditDescription={setExpenseEditDescription}
+            expenseEditAmount={expenseEditAmount}
+            setExpenseEditAmount={setExpenseEditAmount}
+            expenseEditDate={expenseEditDate}
+            setExpenseEditDate={setExpenseEditDate}
+            expenseEditCategory={expenseEditCategory}
+            setExpenseEditCategory={setExpenseEditCategory}
+            savingExpenseEdit={savingExpenseEdit}
+            handleSaveExpenseEdit={handleSaveExpenseEdit}
+            deletingExpenseId={deletingExpenseId}
+            beginEditExpense={beginEditExpense}
+            handleDeleteExpense={handleDeleteExpense}
+            onCancelExpenseEdit={() => {
+              setEditingExpenseId("");
+              setExpenseEditDescription("");
+              setExpenseEditAmount("");
+              setExpenseEditDate("");
+              setExpenseEditCategory("General");
+            }}
+          />
         ) : null}
 
         {activeTab === "features" ? (
@@ -4734,327 +3902,68 @@ export default function App() {
         ) : null}
 
         {activeTab === "tests" ? (
-          <View style={styles.stackFill}>
-            <AppCard title="Run UI Tests">
-              <View style={styles.stack}>
-                <View style={styles.issueMetaRow}>
-                  <View style={styles.issueMetaPill}>
-                    <Text style={styles.listItemMeta}>Results: {uiTestResultEntries.length}</Text>
-                  </View>
-                  <View style={styles.issueMetaPill}>
-                    <Text style={styles.listItemMeta}>Passed: {uiTestPassCount}</Text>
-                  </View>
-                  <View style={styles.issueMetaPill}>
-                    <Text style={styles.listItemMeta}>Failed: {uiTestFailCount}</Text>
-                  </View>
-                </View>
-                <TextInput
-                  style={styles.input}
-                  value={testUiPattern}
-                  onChangeText={setTestUiPattern}
-                  placeholder='grep pattern, e.g. "login"'
-                  placeholderTextColor="#94a3b8"
-                />
-                <View style={styles.inlineRowWrap}>
-                  {UI_TEST_PATTERNS.map((pattern) => (
-                    <AppButton
-                      key={pattern}
-                      label={pattern}
-                      variant="secondary"
-                      onPress={() => setTestUiPattern(pattern)}
-                    />
-                  ))}
-                  <AppButton
-                    label="Clear"
-                    variant="secondary"
-                    onPress={() => setTestUiPattern("")}
-                  />
-                </View>
-                <View style={styles.inlineRowWrap}>
-                  <AppButton
-                    label={uiTestsCatalogLoading ? "Refreshing UI tests..." : "Refresh UI Tests List"}
-                    variant="secondary"
-                    disabled={uiTestsCatalogLoading}
-                    onPress={() => {
-                      loadUiTestsCatalog().catch(() => {
-                        // handled
-                      });
-                    }}
-                  />
-                  <AppButton
-                    label={runningAllUiTests ? "Running all UI tests..." : "Run All UI Tests"}
-                    variant="secondary"
-                    disabled={uiTestsBusy || !discoveredUiTestNames.length}
-                    onPress={() => {
-                      handleRunAllDiscoveredUiTests().catch(() => {
-                        // handled
-                      });
-                    }}
-                  />
-                  <AppButton
-                    label="Clear UI Results"
-                    variant="secondary"
-                    disabled={uiTestsBusy && !uiTestResultEntries.length}
-                    onPress={handleClearUiTestResults}
-                  />
-                </View>
-                {uiTestsCatalogError ? <Text style={styles.errorText}>{uiTestsCatalogError}</Text> : null}
-                {discoveredUiTestSuites.length ? (
-                  <View style={styles.stack}>
-                    {discoveredUiTestSuites.map((suite) => (
-                      <View key={suite.key} style={styles.testSuitePanel}>
-                        <View style={styles.inlineRowWrap}>
-                          <Text style={styles.sectionLabel}>{suite.suiteName}</Text>
-                          <AppButton
-                            label={runningUiSuiteKey === suite.key ? "Running..." : "Run Suite"}
-                            variant="secondary"
-                            disabled={uiTestsBusy}
-                            onPress={() => {
-                              handleRunUiSuite(suite.key, suite.tests).catch(() => {
-                                // handled
-                              });
-                            }}
-                          />
-                        </View>
-                        <View style={styles.stack}>
-                          {suite.tests.map((testName) => {
-                            const result = uiTestResults[testName];
-                            const running = runningUiTests[testName];
-                            return (
-                              <View key={`${suite.key}-${testName}`} style={styles.listItem}>
-                                <Text style={styles.listItemTitle}>{testName}</Text>
-                                <View style={styles.inlineRowWrap}>
-                                  <AppButton
-                                    label={running ? "Running..." : result ? "Run Again" : "Run"}
-                                    variant="secondary"
-                                    disabled={uiTestsBusy}
-                                    onPress={() => {
-                                      setTestUiPattern(testName);
-                                      handleRunAutomatedTest(testName).catch(() => {
-                                        // handled
-                                      });
-                                    }}
-                                  />
-                                  <AppButton
-                                    label="Use Pattern"
-                                    variant="secondary"
-                                    onPress={() => setTestUiPattern(testName)}
-                                  />
-                                  {result ? (
-                                    <Text style={result.success ? styles.subtle : styles.errorText}>
-                                      {result.success ? "Passed" : "Failed"}
-                                      {result.exitCode !== null ? ` (exit ${result.exitCode})` : ""}
-                                    </Text>
-                                  ) : null}
-                                </View>
-                              </View>
-                            );
-                          })}
-                        </View>
-                      </View>
-                    ))}
-                  </View>
-                ) : (
-                  <Text style={styles.subtle}>
-                    {uiTestsCatalogLoading ? "Loading discovered UI tests..." : "No discovered UI tests."}
-                  </Text>
-                )}
-                <AppButton
-                  label={runningTests.ui ? "Running UI tests..." : "Run UI Tests"}
-                  disabled={uiTestsBusy || !testUiPattern.trim()}
-                  onPress={() => {
-                    handleRunUiTests().catch(() => {
-                      // handled
-                    });
-                  }}
-                />
-                {latestUiTestResult ? (
-                  <TestResultPanel
-                    result={latestUiTestResult}
-                    expanded={showFullUiOutput}
-                    onToggleExpanded={() => setShowFullUiOutput((current) => !current)}
-                  />
-                ) : null}
-              </View>
-            </AppCard>
-
-            <AppCard title="Run API Tests">
-              <View style={styles.stack}>
-                <View style={styles.issueMetaRow}>
-                  <View style={styles.issueMetaPill}>
-                    <Text style={styles.listItemMeta}>Results: {apiTestResultEntries.length}</Text>
-                  </View>
-                  <View style={styles.issueMetaPill}>
-                    <Text style={styles.listItemMeta}>Passed: {apiTestPassCount}</Text>
-                  </View>
-                  <View style={styles.issueMetaPill}>
-                    <Text style={styles.listItemMeta}>Failed: {apiTestFailCount}</Text>
-                  </View>
-                </View>
-                <View style={styles.inlineRowWrap}>
-                  <AppButton
-                    label={runningAllApiTests ? "Running all API tests..." : "Run All API Tests"}
-                    variant="secondary"
-                    disabled={apiTestsBusy || !apiTestNames.length}
-                    onPress={() => {
-                      handleRunAllApiTests().catch(() => {
-                        // handled
-                      });
-                    }}
-                  />
-                  <AppButton
-                    label="Clear API Results"
-                    variant="secondary"
-                    disabled={apiTestsBusy && !apiTestResultEntries.length}
-                    onPress={handleClearApiTestResults}
-                  />
-                </View>
-                {API_TESTS.map((suite) => (
-                  <View key={suite.suite} style={styles.testSuitePanel}>
-                    <View style={styles.inlineRowWrap}>
-                      <Text style={styles.sectionLabel}>{suite.suite}</Text>
-                      <AppButton
-                        label={runningApiSuiteKey === suite.suite ? "Running..." : "Run Suite"}
-                        variant="secondary"
-                        disabled={apiTestsBusy}
-                        onPress={() => {
-                          handleRunApiSuite(suite.suite, suite.tests).catch(() => {
-                            // handled
-                          });
-                        }}
-                      />
-                    </View>
-                    <View style={styles.stack}>
-                      {suite.tests.map((testName) => {
-                        const isRunning = runningApiTestName === testName;
-                        const result = apiTestResultsByName[testName];
-                        return (
-                          <View key={testName} style={styles.listItem}>
-                            <Text style={styles.listItemTitle}>{testName}</Text>
-                            <View style={styles.inlineRowWrap}>
-                              <AppButton
-                                label={isRunning ? "Running..." : result ? "Run Again" : "Run"}
-                                variant="secondary"
-                                disabled={apiTestsBusy}
-                                onPress={() => {
-                                  handleRunSingleApiTest(testName).catch(() => {
-                                    // handled
-                                  });
-                                }}
-                              />
-                              {result ? (
-                                <Text style={result.success ? styles.subtle : styles.errorText}>
-                                  {result.success ? "Passed" : "Failed"}
-                                  {result.exitCode !== null ? ` (exit ${result.exitCode})` : ""}
-                                </Text>
-                              ) : null}
-                            </View>
-                          </View>
-                        );
-                      })}
-                    </View>
-                  </View>
-                ))}
-                <TextInput
-                  style={styles.input}
-                  value={testApiPattern}
-                  onChangeText={setTestApiPattern}
-                  placeholder='test name pattern, e.g. "issues"'
-                  placeholderTextColor="#94a3b8"
-                />
-                <View style={styles.inlineRowWrap}>
-                  {API_TEST_PATTERNS.map((pattern) => (
-                    <AppButton
-                      key={pattern}
-                      label={pattern}
-                      variant="secondary"
-                      onPress={() => setTestApiPattern(pattern)}
-                    />
-                  ))}
-                  <AppButton
-                    label="Clear"
-                    variant="secondary"
-                    onPress={() => setTestApiPattern("")}
-                  />
-                </View>
-                <AppButton
-                  label={runningTests.api ? "Running API tests..." : "Run API Tests"}
-                  disabled={apiTestsBusy || !testApiPattern.trim()}
-                  onPress={() => {
-                    handleRunApiTests().catch(() => {
-                      // handled
-                    });
-                  }}
-                />
-                {latestApiTestResult ? (
-                  <TestResultPanel
-                    result={latestApiTestResult}
-                    expanded={showFullApiOutput}
-                    onToggleExpanded={() => setShowFullApiOutput((current) => !current)}
-                  />
-                ) : null}
-              </View>
-            </AppCard>
-          </View>
+          <TestsTab
+            testUiPattern={testUiPattern}
+            setTestUiPattern={setTestUiPattern}
+            uiTestResultEntries={uiTestResultEntries}
+            uiTestPassCount={uiTestPassCount}
+            uiTestFailCount={uiTestFailCount}
+            loadUiTestsCatalog={loadUiTestsCatalog}
+            uiTestsCatalogLoading={uiTestsCatalogLoading}
+            handleRunAllDiscoveredUiTests={handleRunAllDiscoveredUiTests}
+            uiTestsBusy={uiTestsBusy}
+            discoveredUiTestNames={discoveredUiTestNames}
+            handleClearUiTestResults={handleClearUiTestResults}
+            uiTestsCatalogError={uiTestsCatalogError}
+            discoveredUiTestSuites={discoveredUiTestSuites}
+            runningUiSuiteKey={runningUiSuiteKey}
+            handleRunUiSuite={handleRunUiSuite}
+            runningUiTests={runningUiTests}
+            uiTestResults={uiTestResults}
+            handleRunAutomatedTest={handleRunAutomatedTest}
+            handleRunUiTests={handleRunUiTests}
+            latestUiTestResult={latestUiTestResult}
+            showFullUiOutput={showFullUiOutput}
+            setShowFullUiOutput={setShowFullUiOutput}
+            apiTestResultEntries={apiTestResultEntries}
+            apiTestPassCount={apiTestPassCount}
+            apiTestFailCount={apiTestFailCount}
+            handleRunAllApiTests={handleRunAllApiTests}
+            handleClearApiTestResults={handleClearApiTestResults}
+            runningApiSuiteKey={runningApiSuiteKey}
+            handleRunApiSuite={handleRunApiSuite}
+            apiTestsBusy={apiTestsBusy}
+            runningApiTestName={runningApiTestName}
+            apiTestResultsByName={apiTestResultsByName}
+            handleRunSingleApiTest={handleRunSingleApiTest}
+            testApiPattern={testApiPattern}
+            setTestApiPattern={setTestApiPattern}
+            handleRunApiTests={handleRunApiTests}
+            runningTests={runningTests}
+            latestApiTestResult={latestApiTestResult}
+            showFullApiOutput={showFullApiOutput}
+            setShowFullApiOutput={setShowFullApiOutput}
+          />
         ) : null}
 
         {activeTab === "settings" ? (
-          <View style={styles.stack}>
-            <AppCard title="Workspace">
-              <Text style={styles.body}>User ID: {readUserIdFromToken(token) || "unknown"}</Text>
-              <Text style={styles.body}>Email: {readUserEmailFromToken(token) || "unknown"}</Text>
-              <Text style={styles.body}>Current project: {selectedProject?.name ?? "none"}</Text>
-            </AppCard>
-            <AppCard title="Actions">
-              <View style={styles.inlineRowWrap}>
-                <AppButton
-                  label="Open Web in Safari"
-                  variant="secondary"
-                  onPress={() => {
-                    Linking.openURL(APP_WEB_URL).catch(() => {
-                      Alert.alert("Unable to open Safari");
-                    });
-                  }}
-                />
-                <AppButton
-                  label="Reload Projects"
-                  variant="secondary"
-                  onPress={() => {
-                    loadProjects().catch(() => {
-                      // handled
-                    });
-                  }}
-                />
-                <AppButton
-                  label="Reload Issues"
-                  variant="secondary"
-                  onPress={() => {
-                    loadIssues().catch(() => {
-                      // handled
-                    });
-                  }}
-                />
-                <AppButton
-                  label={clearingEnhancements ? "Clearing..." : "Clear Enhancements Cache"}
-                  variant="secondary"
-                  disabled={clearingEnhancements || !selectedProjectId}
-                  onPress={() => {
-                    clearEnhancementsForProject().catch(() => {
-                      // handled
-                    });
-                  }}
-                />
-              </View>
-            </AppCard>
-          </View>
+          <SettingsTab
+            token={token}
+            selectedProject={selectedProject}
+            loadProjects={loadProjects}
+            loadIssues={loadIssues}
+            clearingEnhancements={clearingEnhancements}
+            selectedProjectId={selectedProjectId}
+            clearEnhancementsForProject={clearEnhancementsForProject}
+          />
         ) : null}
       </View>
 
       <Modal visible={Boolean(previewUrl)} transparent animationType="slide">
-        <View style={styles.previewOverlay}>
-          <View style={styles.previewCard}>
-            <View style={styles.topBar}>
-              <Text style={styles.listItemTitle}>{previewTitle || "Preview"}</Text>
+        <View style={appStyles.previewOverlay}>
+          <View style={appStyles.previewCard}>
+            <View style={appStyles.topBar}>
+              <Text style={appStyles.listItemTitle}>{previewTitle || "Preview"}</Text>
               <AppButton
                 label="Close"
                 variant="secondary"
@@ -5070,7 +3979,7 @@ export default function App() {
                   uri: previewUrl,
                   headers: { Authorization: `Bearer ${token}` },
                 }}
-                style={styles.previewWebView}
+                style={appStyles.previewWebView}
               />
             ) : null}
           </View>
@@ -5079,692 +3988,3 @@ export default function App() {
     </SafeAreaView>
   );
 }
-
-function ProjectPicker({
-  projects,
-  selectedProjectId,
-  onSelect,
-  onRefresh,
-  loading,
-  error,
-}: {
-  projects: Project[];
-  selectedProjectId: string;
-  onSelect: (id: string) => void;
-  onRefresh: () => void;
-  loading: boolean;
-  error: string;
-}) {
-  return (
-    <AppCard title="Project Scope">
-      <View style={styles.inlineRowWrap}>
-        <AppButton label="Refresh Projects" variant="secondary" onPress={onRefresh} />
-      </View>
-      {loading ? <ActivityIndicator /> : null}
-      {error ? <Text style={styles.errorText}>{error}</Text> : null}
-      {projects.length ? (
-        <View style={styles.chipWrap}>
-          {projects.map((project) => (
-            <Pressable
-              key={project.id}
-              style={[styles.chip, project.id === selectedProjectId ? styles.chipActive : null]}
-              onPress={() => onSelect(project.id)}
-            >
-              <Text style={[styles.chipText, project.id === selectedProjectId ? styles.chipTextActive : null]}>
-                {project.name}
-              </Text>
-            </Pressable>
-          ))}
-        </View>
-      ) : (
-        <Text style={styles.subtle}>Create a project to continue.</Text>
-      )}
-    </AppCard>
-  );
-}
-
-function ChecklistSection({
-  title,
-  itemName,
-  setItemName,
-  creating,
-  loading,
-  error,
-  items,
-  selectedProjectId,
-  editingId,
-  editingName,
-  setEditingName,
-  onCreate,
-  onToggle,
-  onDelete,
-  onClearDone,
-  onReorder,
-  onStartEdit,
-  onSaveEdit,
-  onCancelEdit,
-  assistant,
-}: {
-  title: string;
-  itemName: string;
-  setItemName: (value: string) => void;
-  creating: boolean;
-  loading: boolean;
-  error: string;
-  items: ChecklistItem[];
-  selectedProjectId: string;
-  editingId: string;
-  editingName: string;
-  setEditingName: (value: string) => void;
-  onCreate: () => void;
-  onToggle: (item: ChecklistItem) => void;
-  onDelete: (item: ChecklistItem) => void;
-  onClearDone: () => void;
-  onReorder: (item: ChecklistItem, direction: "up" | "down") => void;
-  onStartEdit: (item: ChecklistItem) => void;
-  onSaveEdit: () => void;
-  onCancelEdit: () => void;
-  assistant?: {
-    title: string;
-    chatsById: Record<string, AssistantChatMessage[]>;
-    draftsById: Record<string, string>;
-    loadingById: Record<string, boolean>;
-    expandedById: Record<string, boolean>;
-    onToggle: (itemId: string) => void;
-    onDraftChange: (itemId: string, value: string) => void;
-    onSend: (item: ChecklistItem) => void;
-  };
-}) {
-  const [searchQuery, setSearchQuery] = useState("");
-  const [visibilityFilter, setVisibilityFilter] = useState<"all" | "pending" | "done">("all");
-  const normalizedSearch = searchQuery.trim().toLowerCase();
-
-  const sortedItems = useMemo(() => [...items].sort((a, b) => a.order - b.order), [items]);
-  const filteredItems = useMemo(
-    () =>
-      sortedItems.filter((item) => {
-        if (visibilityFilter === "pending" && item.done) return false;
-        if (visibilityFilter === "done" && !item.done) return false;
-        if (!normalizedSearch) return true;
-        return item.name.toLowerCase().includes(normalizedSearch);
-      }),
-    [normalizedSearch, sortedItems, visibilityFilter]
-  );
-  const pendingCount = sortedItems.filter((item) => !item.done).length;
-  const doneCount = sortedItems.filter((item) => item.done).length;
-  const canReorder = visibilityFilter === "all" && !searchQuery.trim();
-
-  return (
-    <View style={styles.stackFill}>
-      <AppCard title={`Create ${title.slice(0, -1)}`}>
-        <View style={styles.inlineRow}>
-          <TextInput
-            style={styles.input}
-            value={itemName}
-            onChangeText={setItemName}
-            placeholder={`${title.slice(0, -1)} name`}
-            placeholderTextColor="#94a3b8"
-          />
-          <AppButton
-            label={creating ? "Adding..." : "Add"}
-            disabled={creating || !itemName.trim() || !selectedProjectId}
-            onPress={onCreate}
-          />
-        </View>
-      </AppCard>
-
-      <AppCard title={title} style={styles.fillCard}>
-        <View style={styles.stack}>
-          <TextInput
-            style={styles.input}
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            placeholder={`Search ${title.toLowerCase()}`}
-            placeholderTextColor="#94a3b8"
-          />
-          <View style={styles.inlineRowWrap}>
-            <Pressable
-              style={[styles.chip, visibilityFilter === "all" ? styles.chipActive : null]}
-              onPress={() => setVisibilityFilter("all")}
-            >
-              <Text
-                style={[
-                  styles.chipText,
-                  visibilityFilter === "all" ? styles.chipTextActive : null,
-                ]}
-              >
-                All ({sortedItems.length})
-              </Text>
-            </Pressable>
-            <Pressable
-              style={[styles.chip, visibilityFilter === "pending" ? styles.chipActive : null]}
-              onPress={() => setVisibilityFilter("pending")}
-            >
-              <Text
-                style={[
-                  styles.chipText,
-                  visibilityFilter === "pending" ? styles.chipTextActive : null,
-                ]}
-              >
-                Pending ({pendingCount})
-              </Text>
-            </Pressable>
-            <Pressable
-              style={[styles.chip, visibilityFilter === "done" ? styles.chipActive : null]}
-              onPress={() => setVisibilityFilter("done")}
-            >
-              <Text
-                style={[
-                  styles.chipText,
-                  visibilityFilter === "done" ? styles.chipTextActive : null,
-                ]}
-              >
-                Done ({doneCount})
-              </Text>
-            </Pressable>
-            <AppButton label="Clear Done" variant="secondary" disabled={!doneCount} onPress={onClearDone} />
-          </View>
-        </View>
-        {loading ? <ActivityIndicator /> : null}
-        {error ? <Text style={styles.errorText}>{error}</Text> : null}
-        {!canReorder ? (
-          <Text style={styles.subtle}>Reorder is available only in All view with no search.</Text>
-        ) : null}
-        <FlatList
-          data={filteredItems}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.listContainer}
-          renderItem={({ item, index }) => (
-            <View style={styles.checklistItem}>
-              {editingId === item.id ? (
-                <View style={styles.stack}>
-                  <TextInput
-                    style={styles.input}
-                    value={editingName}
-                    onChangeText={setEditingName}
-                    placeholder={`${title.slice(0, -1)} name`}
-                    placeholderTextColor="#94a3b8"
-                  />
-                  <View style={styles.inlineRowWrap}>
-                    <AppButton label="Save" onPress={onSaveEdit} />
-                    <AppButton label="Cancel" variant="secondary" onPress={onCancelEdit} />
-                    <AppButton label="Delete" variant="secondary" onPress={() => onDelete(item)} />
-                  </View>
-                </View>
-              ) : (
-                <>
-                  <Pressable style={styles.checklistMain} onPress={() => onToggle(item)}>
-                    <Text style={[styles.listItemTitle, item.done ? styles.doneText : null]}>
-                      {item.name}
-                    </Text>
-                    <Text style={styles.listItemMeta}>{item.done ? "Done" : "Pending"}</Text>
-                  </Pressable>
-                  <View style={styles.inlineRowWrap}>
-                    <AppButton
-                      label="Edit"
-                      variant="secondary"
-                      onPress={() => onStartEdit(item)}
-                    />
-                    <AppButton
-                      label="Up"
-                      variant="secondary"
-                      disabled={!canReorder || index === 0}
-                      onPress={() => onReorder(item, "up")}
-                    />
-                    <AppButton
-                      label="Down"
-                      variant="secondary"
-                      disabled={!canReorder || index === filteredItems.length - 1}
-                      onPress={() => onReorder(item, "down")}
-                    />
-                    <AppButton
-                      label="Delete"
-                      variant="secondary"
-                      onPress={() => onDelete(item)}
-                    />
-                    {assistant ? (
-                      <AppButton
-                        label={assistant.expandedById[item.id] ? "Hide AI" : "Ask AI"}
-                        variant="secondary"
-                        onPress={() => assistant.onToggle(item.id)}
-                      />
-                    ) : null}
-                  </View>
-                  {assistant && assistant.expandedById[item.id] ? (
-                    <View style={styles.assistantPanel}>
-                      <Text style={styles.sectionLabel}>{assistant.title}</Text>
-                      {(assistant.chatsById[item.id] ?? []).length ? (
-                        <View style={styles.stack}>
-                          {(assistant.chatsById[item.id] ?? []).map((message) => (
-                            <View key={message.id} style={styles.assistantMessage}>
-                              <Text style={styles.listItemMeta}>
-                                {message.role === "user" ? "You" : "Assistant"}
-                              </Text>
-                              <Text style={styles.body}>{message.text}</Text>
-                            </View>
-                          ))}
-                        </View>
-                      ) : (
-                        <Text style={styles.subtle}>No messages yet.</Text>
-                      )}
-                      <TextInput
-                        style={styles.input}
-                        value={assistant.draftsById[item.id] ?? ""}
-                        onChangeText={(value) => assistant.onDraftChange(item.id, value)}
-                        placeholder="Ask the assistant for next steps"
-                        placeholderTextColor="#94a3b8"
-                        editable={!assistant.loadingById[item.id]}
-                        multiline
-                      />
-                      <AppButton
-                        label={assistant.loadingById[item.id] ? "Thinking..." : "Send"}
-                        disabled={
-                          assistant.loadingById[item.id] ||
-                          !(assistant.draftsById[item.id] ?? "").trim()
-                        }
-                        onPress={() => assistant.onSend(item)}
-                      />
-                    </View>
-                  ) : null}
-                </>
-              )}
-            </View>
-          )}
-          ListEmptyComponent={
-            <Text style={styles.subtle}>
-              {searchQuery.trim() || visibilityFilter !== "all" ? "No matching items." : "No items yet."}
-            </Text>
-          }
-        />
-      </AppCard>
-    </View>
-  );
-}
-
-function TestResultPanel({
-  result,
-  expanded,
-  onToggleExpanded,
-}: {
-  result: TestExecutionResult;
-  expanded: boolean;
-  onToggleExpanded: () => void;
-}) {
-  const output = result.output?.trim() ?? "";
-  const errorOutput = result.errorOutput?.trim() ?? "";
-  const visibleOutput = expanded ? output : output.slice(0, 2500);
-  const canExpand = output.length > 2500;
-
-  return (
-    <View style={styles.testResultPanel}>
-      <Text style={result.success ? styles.subtle : styles.errorText}>
-        {result.success ? "Passed" : "Failed"} (exit: {result.exitCode ?? "n/a"})
-      </Text>
-      {errorOutput ? <Text style={styles.errorText}>{errorOutput}</Text> : null}
-      {output ? (
-        <View style={styles.stack}>
-          <Text style={styles.testOutputText}>{visibleOutput}</Text>
-          {canExpand ? (
-            <AppButton
-              label={expanded ? "Show less output" : "Show full output"}
-              variant="secondary"
-              onPress={onToggleExpanded}
-            />
-          ) : null}
-        </View>
-      ) : null}
-    </View>
-  );
-}
-
-const styles = StyleSheet.create({
-  screen: {
-    flex: 1,
-    backgroundColor: colors.bgPage,
-  },
-  topBar: {
-    alignItems: "center",
-    backgroundColor: colors.bgCard,
-    borderBottomColor: colors.border,
-    borderBottomWidth: 1,
-    flexDirection: "row",
-    justifyContent: "space-between",
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-  },
-  brand: {
-    color: colors.accentStrong,
-    fontSize: 24,
-    fontWeight: "700",
-  },
-  content: {
-    flex: 1,
-    gap: spacing.md,
-    padding: spacing.md,
-  },
-  centeredFill: {
-    alignItems: "center",
-    flex: 1,
-    gap: spacing.sm,
-    justifyContent: "center",
-  },
-  authContainer: {
-    flex: 1,
-    gap: spacing.md,
-    justifyContent: "center",
-    paddingHorizontal: 24,
-  },
-  title: {
-    color: colors.accentStrong,
-    fontSize: 34,
-    fontWeight: "700",
-  },
-  body: {
-    color: colors.text,
-    fontSize: 15,
-    lineHeight: 22,
-  },
-  subtle: {
-    color: colors.textMuted,
-    fontSize: 13,
-  },
-  errorText: {
-    color: colors.danger,
-    fontSize: 12,
-  },
-  stack: {
-    gap: spacing.sm,
-  },
-  stackFill: {
-    flex: 1,
-    gap: spacing.sm,
-  },
-  inlineRow: {
-    alignItems: "center",
-    flexDirection: "row",
-    gap: spacing.sm,
-  },
-  inlineRowWrap: {
-    alignItems: "center",
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: spacing.sm,
-  },
-  spaceTop: {
-    marginTop: spacing.sm,
-  },
-  flex: {
-    flex: 1,
-  },
-  input: {
-    backgroundColor: colors.bgCard,
-    borderColor: colors.borderInput,
-    borderRadius: radii.control,
-    borderWidth: 1,
-    color: colors.text,
-    flex: 1,
-    fontSize: 14,
-    paddingHorizontal: 10,
-    paddingVertical: 10,
-  },
-  multilineInput: {
-    minHeight: 92,
-    textAlignVertical: "top",
-  },
-  sectionLabel: {
-    color: colors.accentStrong,
-    fontSize: 12,
-    fontWeight: "700",
-    textTransform: "uppercase",
-  },
-  chipWrap: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: spacing.sm,
-  },
-  chip: {
-    backgroundColor: "#f3f4f6",
-    borderRadius: radii.small,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-  },
-  chipActive: {
-    backgroundColor: colors.accentStrong,
-  },
-  chipText: {
-    color: colors.text,
-    fontSize: 12,
-    fontWeight: "600",
-  },
-  chipTextActive: {
-    color: "#ffffff",
-  },
-  fillCard: {
-    flex: 1,
-    minHeight: 180,
-  },
-  listContainer: {
-    gap: spacing.sm,
-    paddingBottom: spacing.sm,
-  },
-  listItem: {
-    backgroundColor: "#f9fafb",
-    borderColor: colors.border,
-    borderRadius: radii.control,
-    borderWidth: 1,
-    gap: 2,
-    paddingHorizontal: 10,
-    paddingVertical: 10,
-  },
-  listItemSelected: {
-    borderColor: colors.accent,
-  },
-  listItemTitle: {
-    color: colors.text,
-    fontSize: 14,
-    fontWeight: "600",
-  },
-  listItemMeta: {
-    color: colors.textMuted,
-    fontSize: 11,
-  },
-  issueGroup: {
-    borderColor: colors.border,
-    borderRadius: radii.control,
-    borderWidth: 1,
-    padding: spacing.sm,
-    gap: spacing.sm,
-  },
-  issueGroupHeader: {
-    alignItems: "center",
-    flexDirection: "row",
-    justifyContent: "space-between",
-  },
-  issueGroupTitle: {
-    color: colors.accentStrong,
-    fontSize: 13,
-    fontWeight: "700",
-    textTransform: "uppercase",
-  },
-  issueMetaRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: spacing.xs,
-  },
-  issueMetaPill: {
-    backgroundColor: "#eff6ff",
-    borderColor: colors.border,
-    borderRadius: radii.small,
-    borderWidth: 1,
-    paddingHorizontal: spacing.xs,
-    paddingVertical: 5,
-  },
-  issueDetailSection: {
-    backgroundColor: "#f8fafc",
-    borderColor: colors.border,
-    borderRadius: radii.control,
-    borderWidth: 1,
-    gap: spacing.sm,
-    padding: spacing.sm,
-  },
-  issueItem: {
-    alignItems: "center",
-    backgroundColor: "#f9fafb",
-    borderColor: colors.border,
-    borderRadius: radii.control,
-    borderWidth: 1,
-    flexDirection: "row",
-    justifyContent: "space-between",
-    padding: spacing.sm,
-  },
-  commentItem: {
-    alignItems: "center",
-    backgroundColor: "#f9fafb",
-    borderColor: colors.border,
-    borderRadius: radii.control,
-    borderWidth: 1,
-    flexDirection: "row",
-    gap: spacing.sm,
-    justifyContent: "space-between",
-    padding: spacing.sm,
-  },
-  commentAttachmentRow: {
-    alignItems: "flex-start",
-    backgroundColor: "#f9fafb",
-    borderColor: colors.border,
-    borderRadius: radii.small,
-    borderWidth: 1,
-    flexDirection: "row",
-    gap: spacing.sm,
-    justifyContent: "space-between",
-    padding: spacing.xs,
-  },
-  commentAttachmentPreview: {
-    borderColor: colors.border,
-    borderRadius: radii.small,
-    borderWidth: 1,
-    height: 88,
-    marginTop: spacing.xs,
-    width: 140,
-  },
-  pendingAttachmentChip: {
-    alignItems: "flex-start",
-    backgroundColor: "#eef2ff",
-    borderColor: colors.border,
-    borderRadius: radii.small,
-    borderWidth: 1,
-    flexDirection: "row",
-    gap: spacing.xs,
-    paddingHorizontal: spacing.xs,
-    paddingVertical: 6,
-  },
-  pendingAttachmentPreview: {
-    borderColor: colors.border,
-    borderRadius: radii.small,
-    borderWidth: 1,
-    height: 70,
-    marginTop: spacing.xs,
-    width: 110,
-  },
-  testResultPanel: {
-    backgroundColor: "#f9fafb",
-    borderColor: colors.border,
-    borderRadius: radii.control,
-    borderWidth: 1,
-    gap: spacing.sm,
-    padding: spacing.sm,
-  },
-  testSuitePanel: {
-    backgroundColor: "#f9fafb",
-    borderColor: colors.border,
-    borderRadius: radii.control,
-    borderWidth: 1,
-    gap: spacing.sm,
-    padding: spacing.sm,
-  },
-  testOutputText: {
-    color: colors.textMuted,
-    fontFamily: "Menlo",
-    fontSize: 11,
-    lineHeight: 15,
-  },
-  screenshotPreview: {
-    borderColor: colors.border,
-    borderRadius: radii.control,
-    borderWidth: 1,
-    height: 120,
-    width: "100%",
-  },
-  issueItemMain: {
-    flex: 1,
-    paddingRight: spacing.sm,
-  },
-  badge: {
-    fontSize: 11,
-    fontWeight: "700",
-    marginTop: 2,
-    textTransform: "uppercase",
-  },
-  checklistItem: {
-    alignItems: "center",
-    backgroundColor: "#f9fafb",
-    borderColor: colors.border,
-    borderRadius: radii.control,
-    borderWidth: 1,
-    flexDirection: "row",
-    gap: spacing.sm,
-    justifyContent: "space-between",
-    padding: spacing.sm,
-  },
-  checklistMain: {
-    flex: 1,
-  },
-  assistantPanel: {
-    backgroundColor: "#f9fafb",
-    borderColor: colors.border,
-    borderRadius: radii.control,
-    borderWidth: 1,
-    gap: spacing.sm,
-    marginTop: spacing.sm,
-    padding: spacing.sm,
-    width: "100%",
-  },
-  assistantMessage: {
-    borderBottomColor: colors.border,
-    borderBottomWidth: 1,
-    gap: spacing.xs,
-    paddingBottom: spacing.xs,
-  },
-  doneText: {
-    textDecorationLine: "line-through",
-    opacity: 0.7,
-  },
-  bigValue: {
-    color: colors.accentStrong,
-    fontSize: 34,
-    fontWeight: "700",
-  },
-  valueText: {
-    color: colors.text,
-    fontSize: 17,
-    fontWeight: "600",
-  },
-  previewOverlay: {
-    alignItems: "center",
-    backgroundColor: "rgba(0,0,0,0.35)",
-    flex: 1,
-    justifyContent: "center",
-    padding: spacing.md,
-  },
-  previewCard: {
-    backgroundColor: colors.bgCard,
-    borderRadius: radii.card,
-    flex: 1,
-    maxHeight: "85%",
-    overflow: "hidden",
-    width: "100%",
-  },
-  previewWebView: {
-    flex: 1,
-  },
-});
