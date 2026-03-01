@@ -121,6 +121,12 @@ export function BulbyChatbox({ projectId }: BulbyChatboxProps) {
   const justDraggedRef = useRef(false);
   /** Set when we toggle open on touchend so the subsequent synthetic click doesn't toggle again. */
   const tapHandledInTouchendRef = useRef(false);
+  /** When we close the panel because user started dragging, reopen when they release. */
+  const reopenOnDragEndRef = useRef(false);
+  const openRef = useRef(open);
+  useEffect(() => {
+    openRef.current = open;
+  }, [open]);
 
   useEffect(() => {
     const el = threadRef.current;
@@ -171,6 +177,10 @@ export function BulbyChatbox({ projectId }: BulbyChatboxProps) {
     if (!state.moved && (Math.abs(clientX - state.startX) > DRAG_THRESHOLD_PX || Math.abs(clientY - state.startY) > DRAG_THRESHOLD_PX)) {
       state.moved = true;
       justDraggedRef.current = true;
+      if (openRef.current) {
+        setOpen(false);
+        reopenOnDragEndRef.current = true;
+      }
     }
     if (!state.moved) return;
     if ("touches" in e) e.preventDefault();
@@ -221,13 +231,20 @@ export function BulbyChatbox({ projectId }: BulbyChatboxProps) {
       const onMouseEnd = () => {
         removeListeners();
         handleDragEnd();
+        if (reopenOnDragEndRef.current) {
+          reopenOnDragEndRef.current = false;
+          setOpen(true);
+        }
       };
 
       const onTouchEnd = () => {
         const state = dragRef.current;
         removeListeners();
         handleDragEnd();
-        if (state && !state.moved) {
+        if (reopenOnDragEndRef.current) {
+          reopenOnDragEndRef.current = false;
+          setOpen(true);
+        } else if (state && !state.moved) {
           setOpen((o) => !o);
           tapHandledInTouchendRef.current = true;
         }
