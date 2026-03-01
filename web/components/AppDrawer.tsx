@@ -8,6 +8,7 @@ import { IconTrash } from "./IconTrash";
 import {
   IconBulbyHide,
   IconBulbyShow,
+  IconEdit,
   IconFilter,
   IconHomeBulby,
   IconMic,
@@ -308,7 +309,7 @@ export function AppDrawer({
                       aria-label={`Rename ${p.name}`}
                       title={`Rename project "${p.name}"`}
                     >
-                      ✎
+                      <IconEdit size={14} />
                     </button>
                   )}
                   {editingProjectId !== p.id && (

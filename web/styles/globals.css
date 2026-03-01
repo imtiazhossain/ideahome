@@ -572,6 +572,7 @@ textarea {
   opacity: 0;
 }
 
+/* Same color scheme as idea-plan-generate-btn (no border/background) */
 .drawer-nav-item-edit {
   flex-shrink: 0;
   width: 28px;
@@ -579,15 +580,15 @@ textarea {
   margin-left: 4px;
   padding: 0;
   border: none;
-  border-radius: 4px;
+  border-radius: 6px;
   background: transparent;
-  color: var(--text);
+  color: #bfdbfe;
   font-size: 15px;
   line-height: 1;
   cursor: pointer;
   transition:
     color 0.15s ease,
-    background 0.15s ease,
+    box-shadow 0.15s ease,
     opacity 0.15s ease;
   display: inline-flex;
   align-items: center;
@@ -642,8 +643,10 @@ textarea {
 }
 
 .drawer-nav-item-edit:hover {
-  color: var(--accent, #2b6cb0);
-  background: transparent;
+  color: #eff6ff;
+  box-shadow:
+    0 0 0 1px rgba(147, 197, 253, 0.35) inset,
+    0 0 14px rgba(59, 130, 246, 0.35);
 }
 
 .drawer-nav-item-row:hover .drawer-nav-item-delete {
