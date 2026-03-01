@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/router";
+import { EXPENSE_CATEGORIES } from "@ideahome/shared-config";
 import {
   createExpense,
   deleteExpense,
@@ -21,7 +22,6 @@ import { useTheme } from "./_app";
 const EXPENSES_STORAGE_PREFIX = "ideahome-expenses";
 const LEGACY_EXPENSES_KEY = "ideahome-expenses";
 const LEGACY_COSTS_KEY = "ideahome-costs-expenses";
-const CATEGORIES = ["Travel", "Supplies", "Software", "Services", "Other"];
 
 function getExpensesStorageKey(): string {
   return getUserScopedStorageKey(EXPENSES_STORAGE_PREFIX, LEGACY_EXPENSES_KEY);
@@ -429,7 +429,7 @@ export default function ExpensesPage() {
                   aria-label="Category"
                   className="expenses-input"
                 >
-                  {CATEGORIES.map((c) => (
+                  {EXPENSE_CATEGORIES.map((c) => (
                     <option key={c} value={c}>
                       {c}
                     </option>
@@ -493,7 +493,7 @@ export default function ExpensesPage() {
                           aria-label={`Edit category for ${item.description}`}
                           className="expenses-category-select"
                         >
-                          {CATEGORIES.map((c) => (
+                          {EXPENSE_CATEGORIES.map((c) => (
                             <option key={c} value={c}>
                               {c}
                             </option>

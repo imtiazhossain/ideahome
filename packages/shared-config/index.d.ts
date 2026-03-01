@@ -126,6 +126,7 @@ export declare const AUTH_PARAM_REDIRECT_URI: string;
 export declare const MOBILE_DEEP_LINK_REDIRECT_URI: string;
 export declare const NATIVE_BRIDGE_AUTH_CHANGE: "auth-change";
 export declare const NATIVE_BRIDGE_AUTH_ERROR: "auth-error";
+export declare const EXPENSE_CATEGORIES: string[];
 export declare const IDEAHOME_APP_ORIGIN: string;
 export declare const IDEAHOME_API_ORIGIN: string;
 export declare const IDEAHOME_WEB_ORIGIN: string;

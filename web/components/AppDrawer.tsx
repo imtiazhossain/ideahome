@@ -17,7 +17,6 @@ import {
   BULBY_TRIGGER_HIDDEN_KEY,
   BULBY_TRIGGER_VISIBILITY_EVENT,
 } from "./BulbyChatbox";
-import { DrawerCollapsedNav } from "./ProjectNavBar";
 import type { ProjectNavTabId } from "./ProjectNavBar";
 
 export interface AppDrawerNavLink {
@@ -705,12 +704,7 @@ export function AppDrawer({
             </button>
           </div>
         </>
-      ) : (
-        <DrawerCollapsedNav
-          activeTab={activeTab}
-          onExpand={() => setDrawerOpen(true)}
-        />
-      )}
+      ) : null}
     </aside>
   );
 }

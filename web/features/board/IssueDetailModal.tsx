@@ -49,6 +49,7 @@ import {
 } from "./comment-blocks";
 import { IssueDetailModalHeader } from "./IssueDetailModalHeader";
 import { IssueDetailModalActions } from "./IssueDetailModalActions";
+import { IssueDetailModalScreenshots } from "./IssueDetailModalScreenshots";
 
 export type IssueDetailModalProps = {
   selectedIssue: Issue;
@@ -707,198 +708,25 @@ export function IssueDetailModal(props: IssueDetailModalProps) {
               </div>
             </div>
           )}
-          <div className="form-group" ref={screenshotsSectionRef}>
-            <label>
-              Screenshots
-              {(selectedIssue.screenshots ?? []).length > 0
-                ? ` (${(selectedIssue.screenshots ?? []).length})`
-                : ""}
-            </label>
-            <div className="recording-section">
-              {(selectedIssue.screenshots ?? []).length > 0 && (
-                <div
-                  className="screenshots-list"
-                  style={{
-                    display: "flex",
-                    flexWrap: "wrap",
-                    gap: 12,
-                    marginBottom: 8,
-                  }}
-                >
-                  {(selectedIssue.screenshots ?? []).map(
-                    (shot: IssueScreenshot, shotIdx: number) => {
-                      const displayName =
-                        shot.name ??
-                        screenshotNameFromComments.get(shot.id) ??
-                        `Screenshot ${shotIdx + 1}`;
-                      const isEditingScreenshotName =
-                        editingScreenshotId === shot.id;
-                      return (
-                        <div
-                          key={shot.id}
-                          className="screenshot-item"
-                          data-screenshot-id={shot.id}
-                          style={{ position: "relative" }}
-                        >
-                          <a
-                            href={getScreenshotUrl(shot.imageUrl)}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            style={{ display: "block" }}
-                          >
-                            <img
-                              src={getScreenshotUrl(shot.imageUrl)}
-                              alt={
-                                isEditingScreenshotName
-                                  ? editingScreenshotName
-                                  : displayName
-                              }
-                              style={{
-                                maxWidth: 160,
-                                maxHeight: 120,
-                                objectFit: "contain",
-                                borderRadius: 6,
-                                border: "1px solid var(--border)",
-                              }}
-                            />
-                          </a>
-                          <div
-                            style={{
-                              fontSize: 12,
-                              color: "var(--text-muted)",
-                              marginTop: 4,
-                              maxWidth: isEditingScreenshotName ? 400 : 160,
-                              minWidth: isEditingScreenshotName
-                                ? 160
-                                : undefined,
-                            }}
-                          >
-                            {isEditingScreenshotName ? (
-                              <input
-                                type="text"
-                                value={editingScreenshotName}
-                                onChange={(e) =>
-                                  setEditingScreenshotName(e.target.value)
-                                }
-                                onFocus={(e) => {
-                                  const input = e.currentTarget;
-                                  requestAnimationFrame(() => {
-                                    requestAnimationFrame(() =>
-                                      input.setSelectionRange(0, 0)
-                                    );
-                                  });
-                                }}
-                                onBlur={() =>
-                                  handleSaveScreenshotName(
-                                    shot.id,
-                                    editingScreenshotName
-                                  )
-                                }
-                                onKeyDown={(e) => {
-                                  if (e.key === "Enter")
-                                    e.currentTarget.blur();
-                                  else if (e.key === "Escape") {
-                                    setEditingScreenshotId(null);
-                                    setEditingScreenshotName("");
-                                  }
-                                }}
-                                autoFocus
-                                aria-label="Screenshot name"
-                                style={{
-                                  width: `${Math.min(400, Math.max(160, editingScreenshotName.length * 8 + 24))}px`,
-                                  padding: "2px 6px",
-                                  fontSize: 12,
-                                  border: "1px solid var(--border)",
-                                  borderRadius: 4,
-                                  boxSizing: "border-box",
-                                }}
-                              />
-                            ) : (
-                              <span
-                                style={{
-                                  display: "block",
-                                  overflow: "hidden",
-                                  textOverflow: "ellipsis",
-                                  whiteSpace: "nowrap",
-                                  cursor: "pointer",
-                                }}
-                                onClick={() => {
-                                  setEditingScreenshotId(shot.id);
-                                  setEditingScreenshotName(displayName);
-                                }}
-                                title="Click to edit name"
-                                role="button"
-                                tabIndex={0}
-                                onKeyDown={(e) => {
-                                  if (e.key === "Enter" || e.key === " ") {
-                                    e.preventDefault();
-                                    setEditingScreenshotId(shot.id);
-                                    setEditingScreenshotName(displayName);
-                                  }
-                                }}
-                              >
-                                {displayName}
-                              </span>
-                            )}
-                          </div>
-                          <button
-                            type="button"
-                            className="btn btn-secondary btn-icon screenshot-item-delete"
-                            style={{
-                              position: "absolute",
-                              top: 4,
-                              right: 4,
-                              minWidth: 28,
-                              padding: "4px 6px",
-                            }}
-                            onClick={() => handleDeleteScreenshot(shot.id)}
-                            aria-label="Delete screenshot"
-                            title="Delete screenshot"
-                          >
-                            <IconTrash />
-                          </button>
-                        </div>
-                      );
-                    }
-                  )}
-                </div>
-              )}
-              {!screenshotUploading && !screenshotTaking && (
-                <>
-                  <button
-                    type="button"
-                    className="btn btn-secondary"
-                    onClick={handleTakeScreenshot}
-                    disabled={!canScreenRecord}
-                  >
-                    <IconScreenshot size={14} /> Take Screenshot
-                  </button>
-                  <input
-                    ref={screenshotFileInputRef}
-                    type="file"
-                    accept="image/*"
-                    style={{ display: "none" }}
-                    onChange={handleScreenshotUpload}
-                    aria-label="Choose screenshot image"
-                  />
-                </>
-              )}
-              {(screenshotUploading || screenshotTaking) && (
-                <div className="recording-uploading">
-                  {screenshotTaking
-                    ? "Capturing screen…"
-                    : "Uploading screenshot…"}
-                </div>
-              )}
-              {screenshotError && (
-                <ErrorBanner
-                  message={screenshotError}
-                  onDismiss={() => setScreenshotError(null)}
-                  style={{ marginTop: 8 }}
-                />
-              )}
-            </div>
-          </div>
+          <IssueDetailModalScreenshots
+            screenshots={selectedIssue.screenshots ?? []}
+            screenshotNameFromComments={screenshotNameFromComments}
+            editingScreenshotId={editingScreenshotId}
+            editingScreenshotName={editingScreenshotName}
+            setEditingScreenshotId={setEditingScreenshotId}
+            setEditingScreenshotName={setEditingScreenshotName}
+            handleSaveScreenshotName={handleSaveScreenshotName}
+            handleDeleteScreenshot={handleDeleteScreenshot}
+            handleTakeScreenshot={handleTakeScreenshot}
+            handleScreenshotUpload={handleScreenshotUpload}
+            screenshotFileInputRef={screenshotFileInputRef}
+            canScreenRecord={canScreenRecord}
+            screenshotTaking={screenshotTaking}
+            screenshotUploading={screenshotUploading}
+            screenshotError={screenshotError}
+            setScreenshotError={setScreenshotError}
+            screenshotsSectionRef={screenshotsSectionRef}
+          />
           <div className="form-group" ref={recordingsSectionRef}>
             <div className="recording-section">
               {!isRecording && !recordingUploading && (

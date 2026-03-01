@@ -255,6 +255,15 @@ const IDEAHOME_APP_ORIGIN = "https://ideahome.vercel.app";
 const IDEAHOME_API_ORIGIN = IDEAHOME_APP_ORIGIN;
 const IDEAHOME_WEB_ORIGIN = IDEAHOME_APP_ORIGIN;
 
+const EXPENSE_CATEGORIES = [
+  "Travel",
+  "Supplies",
+  "Software",
+  "Services",
+  "Other",
+  "General",
+];
+
 const sharedConfig = {
   AUTH_PARAM_ERROR,
   AUTH_PARAM_REDIRECT_URI,
@@ -266,6 +275,7 @@ const sharedConfig = {
   AUTH_TOKEN_KEY,
   AUTH_TOKEN_SESSION_KEY,
   ISSUE_STATUS_IDS,
+  EXPENSE_CATEGORIES,
   IDEAHOME_API_ORIGIN,
   IDEAHOME_APP_ORIGIN,
   IDEAHOME_WEB_ORIGIN,

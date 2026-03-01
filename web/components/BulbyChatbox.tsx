@@ -30,14 +30,14 @@ const VIEWPORT_MARGIN = 24;
 const DRAG_THRESHOLD_PX = 10;
 /** How far off-viewport (px) before stored position is considered off-screen (for load/restore). */
 const HIDE_OFF_SCREEN_THRESHOLD = 20;
-/** Trigger size for bounds and off-screen check (px). */
-const TRIGGER_SIZE = 88;
+/** Trigger size for bounds and off-screen check (px); sized to fit alongside project nav (52px). */
+const TRIGGER_SIZE = 52;
 /** Margin from viewport edges when clamping drag (px). */
 const DRAG_BOUNDS_MARGIN = 8;
 
 type DragPosition = { x: number; y: number };
 
-/** Clamp position so the trigger stays fully within the viewport (with margin). */
+/** Clamp position so the trigger stays fully on the viewport (never off page). */
 function clampPositionToViewport(pos: DragPosition): DragPosition {
   if (typeof window === "undefined") return pos;
   const w = window.innerWidth;
@@ -52,11 +52,12 @@ function clampPositionToViewport(pos: DragPosition): DragPosition {
   };
 }
 
+/** Default: Bulby at top-center of the page, fully on page. */
 function getDefaultPosition(): DragPosition {
-  if (typeof window === "undefined") return { x: 100, y: 100 };
+  if (typeof window === "undefined") return { x: 100, y: DRAG_BOUNDS_MARGIN };
   return clampPositionToViewport({
-    x: window.innerWidth - TRIGGER_SIZE - 20,
-    y: window.innerHeight - TRIGGER_SIZE - 20,
+    x: window.innerWidth / 2 - TRIGGER_SIZE / 2,
+    y: DRAG_BOUNDS_MARGIN,
   });
 }
 
@@ -172,7 +173,9 @@ export function BulbyChatbox({ projectId }: BulbyChatboxProps) {
   const threadRef = useRef<HTMLDivElement | null>(null);
   const chatboxRef = useRef<HTMLDivElement | null>(null);
   const panelRef = useRef<HTMLDivElement | null>(null);
-  const [position, setPosition] = useState<DragPosition | null>(loadStoredPosition);
+  const [position, setPosition] = useState<DragPosition | null>(
+    () => loadStoredPosition() ?? getDefaultPosition()
+  );
   const [panelOffset, setPanelOffset] = useState({ x: 0, y: 0 });
   const [panelOpensBelow, setPanelOpensBelow] = useState(false);
   const [triggerHidden, setTriggerHiddenState] = useState(getTriggerHidden);

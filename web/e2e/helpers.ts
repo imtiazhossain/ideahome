@@ -1,5 +1,9 @@
 import { expect, type Page } from "@playwright/test";
-import { pathProjectById, pathProjects } from "@ideahome/shared-config";
+import {
+  pathProjectById,
+  pathProjects,
+  type Project,
+} from "@ideahome/shared-config";
 
 /**
  * E2E helpers. Use from Node (Playwright), not browser.
@@ -7,7 +11,7 @@ import { pathProjectById, pathProjects } from "@ideahome/shared-config";
  */
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
 
-export type Project = { id: string; name: string };
+export type { Project };
 
 /** Fetch all projects from the backend. */
 export async function fetchProjects(): Promise<Project[]> {

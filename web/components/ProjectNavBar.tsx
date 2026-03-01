@@ -4,15 +4,10 @@ import { useRouter } from "next/router";
 import { AUTH_CHANGE_EVENT, getStoredToken } from "../lib/api/auth";
 import { logout } from "../lib/api/session";
 import {
-  fetchBugSearch,
-  fetchFeatureSearch,
-  fetchIdeaSearch,
-  fetchIssueSearch,
-  fetchTodoSearch,
-} from "../lib/api/search";
+  useProjectSearch,
+  type ProjectSearchResult,
+} from "../lib/useProjectSearch";
 import { useTheme } from "../lib/ThemeContext";
-import type { Bug, Feature, Idea, Todo } from "../lib/api/checklists";
-import type { Issue } from "../lib/api/issues";
 import {
   addCustomList,
   getCustomListTabId,
@@ -84,21 +79,6 @@ export interface ProjectNavBarProps {
   showSettingsButton?: boolean;
 }
 
-const PROJECT_SEARCH_DEBOUNCE_MS = 250;
-const PROJECT_SEARCH_MAX_ISSUES = 8;
-const PROJECT_SEARCH_MAX_PER_LIST = 4;
-
-type ProjectSearchResult =
-  | { type: "issue"; id: string; title: string; status?: string }
-  | {
-      type: "list";
-      id: string;
-      name: string;
-      page: string;
-      pageLabel: string;
-      projectId: string;
-    };
-
 export function ProjectNavBar({
   projectName,
   projectId,
@@ -153,13 +133,14 @@ export function ProjectNavBar({
   }, [showCreateProjectInput]);
 
   const [projectSearchQuery, setProjectSearchQuery] = useState("");
-  const [projectSearchResults, setProjectSearchResults] = useState<
-    ProjectSearchResult[]
-  >([]);
+  const {
+    results: projectSearchResults,
+    setResults: setProjectSearchResults,
+    loading: projectSearchLoading,
+  } = useProjectSearch(projectId, projectSearchQuery);
   const [projectSearchOpen, setProjectSearchOpen] = useState(false);
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   const [compactTabs, setCompactTabs] = useState(false);
-  const [projectSearchLoading, setProjectSearchLoading] = useState(false);
   const projectSearchRef = useRef<HTMLDivElement>(null);
   const projectSearchInputRef = useRef<HTMLInputElement>(null);
   const [hasToken, setHasToken] = useState<boolean | null>(null);
@@ -209,118 +190,6 @@ export function ProjectNavBar({
     setAuthMenuOpen(false);
     logout("/login");
   }, []);
-
-  useEffect(() => {
-    if (!projectId || !projectSearchQuery.trim()) {
-      setProjectSearchResults([]);
-      return;
-    }
-    setProjectSearchLoading(true);
-    const q = projectSearchQuery.trim();
-    const t = setTimeout(() => {
-      const fetches = [
-        fetchIssueSearch(projectId, q),
-        fetchTodoSearch(projectId, q),
-        fetchIdeaSearch(projectId, q),
-        fetchBugSearch(projectId, q),
-        fetchFeatureSearch(projectId, q),
-      ];
-      Promise.allSettled(fetches)
-        .then((settled) => {
-          const [issuesRes, todosRes, ideasRes, bugsRes, featuresRes] = settled;
-          const issues = (
-            issuesRes.status === "fulfilled" ? issuesRes.value : []
-          ) as Issue[];
-          const todos = (
-            todosRes.status === "fulfilled" ? todosRes.value : []
-          ) as Todo[];
-          const ideas = (
-            ideasRes.status === "fulfilled" ? ideasRes.value : []
-          ) as Idea[];
-          const bugs = (
-            bugsRes.status === "fulfilled" ? bugsRes.value : []
-          ) as Bug[];
-          const features = (
-            featuresRes.status === "fulfilled" ? featuresRes.value : []
-          ) as Feature[];
-          if (
-            issuesRes.status === "rejected" ||
-            todosRes.status === "rejected" ||
-            ideasRes.status === "rejected" ||
-            bugsRes.status === "rejected" ||
-            featuresRes.status === "rejected"
-          ) {
-            console.warn(
-              "[ProjectNavBar] Search partial failure:",
-              [
-                issuesRes.status === "rejected" && "issues",
-                todosRes.status === "rejected" && "todos",
-                ideasRes.status === "rejected" && "ideas",
-                bugsRes.status === "rejected" && "bugs",
-                featuresRes.status === "rejected" && "features",
-              ]
-                .filter(Boolean)
-                .join(", ")
-            );
-          }
-          const results: ProjectSearchResult[] = [];
-          issues.slice(0, PROJECT_SEARCH_MAX_ISSUES).forEach((i: Issue) => {
-            results.push({
-              type: "issue",
-              id: i.id,
-              title: i.title,
-              status: i.status ?? undefined,
-            });
-          });
-          todos.slice(0, PROJECT_SEARCH_MAX_PER_LIST).forEach((item: Todo) => {
-            results.push({
-              type: "list",
-              id: item.id,
-              name: item.name,
-              page: "/todo",
-              pageLabel: "To-Do",
-              projectId: item.projectId,
-            });
-          });
-          ideas.slice(0, PROJECT_SEARCH_MAX_PER_LIST).forEach((item: Idea) => {
-            results.push({
-              type: "list",
-              id: item.id,
-              name: item.name,
-              page: "/ideas",
-              pageLabel: "Ideas",
-              projectId: item.projectId,
-            });
-          });
-          bugs.slice(0, PROJECT_SEARCH_MAX_PER_LIST).forEach((item: Bug) => {
-            results.push({
-              type: "list",
-              id: item.id,
-              name: item.name,
-              page: "/bugs",
-              pageLabel: "Bugs",
-              projectId: item.projectId,
-            });
-          });
-          features
-            .slice(0, PROJECT_SEARCH_MAX_PER_LIST)
-            .forEach((item: Feature) => {
-              results.push({
-                type: "list",
-                id: item.id,
-                name: item.name,
-                page: "/features",
-                pageLabel: "Features",
-                projectId: item.projectId,
-              });
-            });
-          setProjectSearchResults(results);
-        })
-        .catch(() => setProjectSearchResults([]))
-        .finally(() => setProjectSearchLoading(false));
-    }, PROJECT_SEARCH_DEBOUNCE_MS);
-    return () => clearTimeout(t);
-  }, [projectId, projectSearchQuery]);
 
   const closeSettingsMenu = useCallback(() => {
     setSettingsMenuOpen(false);
