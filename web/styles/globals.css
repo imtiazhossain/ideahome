@@ -4942,7 +4942,7 @@ a.automated-tests-chip-text:hover {
   line-height: 1;
 }
 
-/* Icon-only trigger: circular Bulby character, no pill (z-index so panel can sit in front of glow) */
+/* Icon-only trigger: circular Bulby character, no pill (z-index so panel can sit in front of glow); draggable */
 .bulby-chatbox-trigger--icon {
   position: relative;
   z-index: 0;
@@ -4958,14 +4958,15 @@ a.automated-tests-chip-text:hover {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  cursor: grab;
 }
-
 .bulby-chatbox-trigger--icon:hover {
   border: none;
   background: rgba(59, 130, 246, 0.12);
 }
 
 .bulby-chatbox-trigger--icon:active {
+  cursor: grabbing;
   background: rgba(59, 130, 246, 0.2);
 }
 

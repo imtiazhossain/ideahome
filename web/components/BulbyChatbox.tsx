@@ -1,8 +1,40 @@
 "use client";
 
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { BulbyCharacter } from "./BulbyCharacter";
+
+const BULBY_POSITION_KEY = "bulby-chatbox-position";
+
+/** When we have an explicit position, panel is absolutely positioned above the trigger so the container never grows (avoids open glitch). */
+const BULBY_CHATBOX_GAP = 12;
+/** Keep the chatbox panel within the viewport when Bulby is near an edge. */
+const VIEWPORT_MARGIN = 24;
+
+type DragPosition = { x: number; y: number };
+
+function loadStoredPosition(): DragPosition | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = localStorage.getItem(BULBY_POSITION_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as { x: number; y: number };
+    if (typeof parsed.x === "number" && typeof parsed.y === "number") return parsed;
+  } catch {
+    /* ignore */
+  }
+  return null;
+}
+
+function storePosition(pos: DragPosition | null) {
+  if (typeof window === "undefined") return;
+  try {
+    if (pos) localStorage.setItem(BULBY_POSITION_KEY, JSON.stringify(pos));
+    else localStorage.removeItem(BULBY_POSITION_KEY);
+  } catch {
+    /* ignore */
+  }
+}
 import {
   buildIdeaChatContext,
   shouldUseWebSearch,
@@ -78,11 +110,131 @@ export function BulbyChatbox({ projectId }: BulbyChatboxProps) {
   const [loading, setLoading] = useState(false);
   const [loadingStatus, setLoadingStatus] = useState("Thinking...");
   const threadRef = useRef<HTMLDivElement | null>(null);
+  const chatboxRef = useRef<HTMLDivElement | null>(null);
+  const panelRef = useRef<HTMLDivElement | null>(null);
+  const [position, setPosition] = useState<DragPosition | null>(loadStoredPosition);
+  const [panelOffset, setPanelOffset] = useState({ x: 0, y: 0 });
+  const [panelOpensBelow, setPanelOpensBelow] = useState(false);
+  const dragRef = useRef<{ startX: number; startY: number; offsetX: number; offsetY: number; moved: boolean } | null>(null);
+  const justDraggedRef = useRef(false);
 
   useEffect(() => {
     const el = threadRef.current;
     if (el) el.scrollTop = el.scrollHeight;
   }, [messages, loading]);
+
+  useEffect(() => {
+    setPosition(loadStoredPosition());
+  }, []);
+
+  const lastPositionRef = useRef<DragPosition | null>(null);
+
+  /* When open with explicit position: open below if not enough room above; nudge panel so it stays visible; never overlap Bulby. */
+  useLayoutEffect(() => {
+    if (!open || position == null) {
+      setPanelOffset({ x: 0, y: 0 });
+      setPanelOpensBelow(false);
+      return;
+    }
+    const el = panelRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    const w = window.innerWidth;
+    const h = window.innerHeight;
+
+    if (rect.top < VIEWPORT_MARGIN && !panelOpensBelow) {
+      setPanelOpensBelow(true);
+      setPanelOffset({ x: 0, y: 0 });
+      return;
+    }
+
+    let x = 0;
+    let y = 0;
+    if (rect.left < VIEWPORT_MARGIN) x = VIEWPORT_MARGIN - rect.left;
+    else if (rect.right > w - VIEWPORT_MARGIN) x = w - VIEWPORT_MARGIN - rect.right;
+    if (rect.top < VIEWPORT_MARGIN) y = VIEWPORT_MARGIN - rect.top;
+    else if (rect.bottom > h - VIEWPORT_MARGIN) y = h - VIEWPORT_MARGIN - rect.bottom;
+    if (panelOpensBelow && y < 0) y = 0;
+    else if (!panelOpensBelow && y > 0) y = 0;
+    setPanelOffset({ x, y });
+  }, [open, position, messages, panelOpensBelow]);
+
+  const handleDragMove = useCallback((e: MouseEvent | TouchEvent) => {
+    const state = dragRef.current;
+    if (!state) return;
+    const clientX = "touches" in e ? e.touches[0].clientX : e.clientX;
+    const clientY = "touches" in e ? e.touches[0].clientY : e.clientY;
+    if (!state.moved && (Math.abs(clientX - state.startX) > 4 || Math.abs(clientY - state.startY) > 4)) {
+      state.moved = true;
+      justDraggedRef.current = true;
+    }
+    if (!state.moved) return;
+    if ("touches" in e) e.preventDefault();
+    const box = chatboxRef.current?.getBoundingClientRect();
+    const w = box?.width ?? 88;
+    const h = box?.height ?? 120;
+    const x = Math.max(0, Math.min(window.innerWidth - w, clientX - state.offsetX));
+    const y = Math.max(0, Math.min(window.innerHeight - h, clientY - state.offsetY));
+    const next = { x, y };
+    lastPositionRef.current = next;
+    setPosition(next);
+  }, []);
+
+  const handleDragEnd = useCallback(() => {
+    const state = dragRef.current;
+    dragRef.current = null;
+    const toStore = lastPositionRef.current ?? position;
+    if (state?.moved && toStore) {
+      storePosition(toStore);
+    }
+  }, [position]);
+
+  const handleDragStart = useCallback(
+    (e: React.MouseEvent | React.TouchEvent) => {
+      const clientX = "touches" in e ? e.touches[0].clientX : e.clientX;
+      const clientY = "touches" in e ? e.touches[0].clientY : e.clientY;
+      const box = chatboxRef.current?.getBoundingClientRect();
+      if (!box) return;
+      const currentX = position?.x ?? window.innerWidth - box.width - 20;
+      const currentY = position?.y ?? window.innerHeight - box.height - 20;
+      dragRef.current = {
+        startX: clientX,
+        startY: clientY,
+        offsetX: clientX - currentX,
+        offsetY: clientY - currentY,
+        moved: false,
+      };
+      const onMove = (ev: MouseEvent | TouchEvent) => handleDragMove(ev);
+      const endOpts = { capture: true };
+      const onEnd = () => {
+        window.removeEventListener("mousemove", onMove);
+        window.removeEventListener("mouseup", onEnd);
+        window.removeEventListener("touchmove", onMove, endOpts);
+        window.removeEventListener("touchend", onEnd, endOpts);
+        handleDragEnd();
+      };
+      window.addEventListener("mousemove", onMove);
+      window.addEventListener("mouseup", onEnd);
+      window.addEventListener("touchmove", onMove, { capture: true, passive: false });
+      window.addEventListener("touchend", onEnd, endOpts);
+    },
+    [position, handleDragMove, handleDragEnd]
+  );
+
+  const handleTriggerClick = useCallback(() => {
+    if (justDraggedRef.current) {
+      justDraggedRef.current = false;
+      return;
+    }
+    setOpen((o) => !o);
+  }, []);
+
+  const handlePointerDown = useCallback(
+    (e: React.MouseEvent | React.TouchEvent) => {
+      handleDragStart(e);
+    },
+    [handleDragStart]
+  );
 
   const appendAssistantMessage = useCallback((text: string) => {
     setMessages((prev) => [
@@ -169,9 +321,32 @@ export function BulbyChatbox({ projectId }: BulbyChatboxProps) {
   if (!projectId) return null;
 
   const content = (
-    <div className="bulby-chatbox">
+    <div
+      ref={chatboxRef}
+      className="bulby-chatbox"
+      style={
+        position != null
+          ? { left: position.x, top: position.y, right: "auto", bottom: "auto" }
+          : undefined
+      }
+    >
       {open && (
-        <div className="bulby-chatbox-panel idea-plan-card">
+        <div
+          ref={panelRef}
+          className="bulby-chatbox-panel idea-plan-card"
+          style={
+            position != null
+              ? {
+                  position: "absolute",
+                  left: "50%",
+                  ...(panelOpensBelow
+                    ? { top: "100%", marginTop: BULBY_CHATBOX_GAP }
+                    : { bottom: "100%", marginBottom: BULBY_CHATBOX_GAP }),
+                  transform: `translate(calc(-50% + ${panelOffset.x}px), ${panelOffset.y}px)`,
+                }
+              : undefined
+          }
+        >
           <div className="idea-plan-card-head">
             <span className="idea-plan-card-badge">Ask Bulby</span>
             <button
@@ -241,9 +416,11 @@ export function BulbyChatbox({ projectId }: BulbyChatboxProps) {
       <button
         type="button"
         className={`bulby-chatbox-trigger bulby-chatbox-trigger--icon${open ? " bulby-chatbox-trigger--open" : ""}${loading ? " is-thinking" : ""}`}
-        onClick={() => setOpen((o) => !o)}
+        onClick={handleTriggerClick}
+        onMouseDown={handlePointerDown}
+        onTouchStart={handlePointerDown}
         aria-label={open ? "Minimize Bulby chat" : "Open Bulby chat"}
-        title={open ? "Minimize chat" : "Ask Bulby anything"}
+        title={open ? "Minimize chat" : "Ask Bulby — drag to move"}
       >
         <BulbyCharacter />
       </button>
