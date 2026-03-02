@@ -37,6 +37,7 @@ import {
   OPEN_SETTINGS_MENU_EVENT,
   TABS,
   TabOrderProvider,
+  useIsMobile,
   useTabOrder,
   type ProjectNavTabId,
 } from "./project-nav/tab-order";
@@ -47,6 +48,7 @@ export {
   getFirstVisibleTabHref,
   OPEN_SETTINGS_MENU_EVENT,
   TabOrderProvider,
+  useIsMobile,
   useTabOrder,
 };
 export type { ProjectNavTabId };
@@ -107,6 +109,7 @@ export function ProjectNavBar({
     deletedTabIds,
     setDeletedTabIds,
   } = useTabOrder();
+  const isMobile = useIsMobile();
   const [settingsButtonVisible, setSettingsButtonVisible] = useState(true);
   const [settingsMenuOpen, setSettingsMenuOpen] = useState(false);
   const [reorderSectionOpen, setReorderSectionOpen] = useState(false);
@@ -294,13 +297,16 @@ export function ProjectNavBar({
       setHiddenTabIds(nextHidden);
       setDeletedTabIds(nextDeleted);
       if (activeTab === tabId) {
-        void router.push(getFirstVisibleTabHref());
+        void router.push(
+          getFirstVisibleTabHref(isMobile ? ["code"] : undefined)
+        );
       }
     },
     [
       activeTab,
       deletedTabIds,
       hiddenTabIds,
+      isMobile,
       router,
       setDeletedTabIds,
       setHiddenTabIds,
@@ -328,6 +334,7 @@ export function ProjectNavBar({
         icon: React.ReactNode;
         href?: string;
         hasDropdown?: boolean;
+        desktopOnly?: boolean;
       } | null => {
         const builtIn = TABS.find((t) => t.id === id);
         if (builtIn) return builtIn;
@@ -345,7 +352,11 @@ export function ProjectNavBar({
         return null;
       }
     )
-    .filter(Boolean) as {
+    .filter(Boolean)
+    .filter(
+      (t): t is NonNullable<typeof t> =>
+        t != null && !(isMobile && "desktopOnly" in t && t.desktopOnly)
+    ) as {
     id: ProjectNavTabId;
     label: string;
     icon: React.ReactNode;
@@ -677,9 +688,12 @@ export function ProjectNavBar({
                 {reorderSectionOpen && (
                   <ul className="project-nav-reorder-list" role="list">
                     {(() => {
-                      const visibleTabs = tabOrder.filter(
-                        (id) => !hiddenSet.has(id)
-                      );
+                      const visibleTabs = tabOrder
+                        .filter((id) => !hiddenSet.has(id))
+                        .filter(
+                          (id) =>
+                            !(isMobile && TABS.find((t) => t.id === id)?.desktopOnly)
+                        );
                       return visibleTabs.map((id, visibleIdx) => {
                         const builtIn = TABS.find((t) => t.id === id);
                         const label =
@@ -724,6 +738,10 @@ export function ProjectNavBar({
                 {showTabsSectionOpen && (
                   <ul className="project-nav-filter-list" role="list">
                     {[...tabOrder]
+                      .filter(
+                        (id) =>
+                          !(isMobile && TABS.find((t) => t.id === id)?.desktopOnly)
+                      )
                       .map((id) => {
                         const builtIn = TABS.find((t) => t.id === id);
                         const label =

@@ -23,7 +23,7 @@ import {
 } from "../lib/customLists";
 import { AppDrawer } from "./AppDrawer";
 import { BulbyChatbox } from "./BulbyChatbox";
-import { ProjectNavBar, useTabOrder } from "./ProjectNavBar";
+import { ProjectNavBar, useIsMobile, useTabOrder } from "./ProjectNavBar";
 import type { ProjectNavTabId } from "./ProjectNavBar";
 
 const SECTION_LINKS: {
@@ -195,6 +195,7 @@ export function AppLayout({
     deletedTabIds,
     setDeletedTabIds,
   } = useTabOrder();
+  const isMobile = useIsMobile();
   const drawerSettingsRef = React.useRef<HTMLDivElement>(null);
   const [drawerSettingsOpen, setDrawerSettingsOpen] = React.useState(false);
   const [drawerFiltersOpen, setDrawerFiltersOpen] = React.useState(false);
@@ -288,8 +289,21 @@ export function AppLayout({
   }, [tabOrder]);
 
   const visibleOrderedNavLinks = React.useMemo(
-    () => orderedNavLinks.filter((link) => !hiddenTabIds.includes(link.tabId)),
-    [hiddenTabIds, orderedNavLinks]
+    () =>
+      orderedNavLinks
+        .filter((link) => !hiddenTabIds.includes(link.tabId))
+        .filter(
+          (link) =>
+            !(isMobile && link.tabId === "code")
+        ),
+    [hiddenTabIds, isMobile, orderedNavLinks]
+  );
+  const drawerOrderedNavLinks = React.useMemo(
+    () =>
+      orderedNavLinks.filter(
+        (link) => !(isMobile && link.tabId === "code")
+      ),
+    [isMobile, orderedNavLinks]
   );
   const sortedFilterSections = React.useMemo(
     () =>
@@ -305,6 +319,13 @@ export function AppLayout({
           });
         }),
     [hiddenTabIds, orderedNavLinks]
+  );
+  const drawerSortedFilterSections = React.useMemo(
+    () =>
+      sortedFilterSections.filter(
+        (s) => !(isMobile && s.tabId === "code")
+      ),
+    [isMobile, sortedFilterSections]
   );
 
   const moveNavTab = React.useCallback(
@@ -621,7 +642,7 @@ export function AppLayout({
           setDrawerVoicesOpen={setDrawerVoicesOpen}
           drawerDeleteSectionsOpen={drawerDeleteSectionsOpen}
           setDrawerDeleteSectionsOpen={setDrawerDeleteSectionsOpen}
-          sortedFilterSections={sortedFilterSections}
+          sortedFilterSections={drawerSortedFilterSections}
           hiddenTabIds={hiddenTabIds}
           setHiddenTabIds={setHiddenTabIds}
           availableVoices={availableVoices}
@@ -632,7 +653,7 @@ export function AppLayout({
           selectedAiModel={selectedAiModel}
           setSelectedAiModel={setSelectedAiModel}
           canManageOpenRouterModel={canManageOpenRouterModel}
-          orderedNavLinks={orderedNavLinks}
+          orderedNavLinks={drawerOrderedNavLinks}
           tabOrderLength={tabOrder.length}
           deleteSectionTab={deleteSectionTab}
         />

@@ -5,6 +5,7 @@ import { useRouter } from "next/router";
 import {
   TabOrderProvider,
   getFirstVisibleTabHref,
+  useIsMobile,
   EXPLICIT_BOARD_SESSION_KEY,
 } from "../components/ProjectNavBar";
 import {
@@ -19,6 +20,7 @@ export { useTheme } from "../lib/ThemeContext";
 function RedirectToFirstTab({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const { selectedProjectId } = useSelectedProject();
+  const isMobile = useIsMobile();
   useEffect(() => {
     if (router.pathname !== "/") {
       try {
@@ -40,9 +42,11 @@ function RedirectToFirstTab({ children }: { children: React.ReactNode }) {
     // Without a selected project, redirecting to list pages can cause a loop
     // back to "/" (those pages redirect home when no project exists).
     if (!selectedProjectId) return;
-    const firstHref = getFirstVisibleTabHref();
+    const firstHref = getFirstVisibleTabHref(
+      isMobile ? ["code"] : undefined
+    );
     if (firstHref !== "/") router.replace(firstHref);
-  }, [router.pathname, router.isReady, selectedProjectId]);
+  }, [router.pathname, router.isReady, selectedProjectId, isMobile]);
   return <>{children}</>;
 }
 

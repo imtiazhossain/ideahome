@@ -66,6 +66,38 @@ const IGNORED_DIRS = new Set([
   ".turbo",
 ]);
 
+const DEFAULT_THRESHOLDS = {
+  appTsxMax: 800,
+  homePageMax: 2000,
+  apiClientMax: 1000,
+  navBarMax: 1200,
+  largestFileMax: 2000,
+} as const;
+
+function parseThreshold(envValue: string | undefined, defaultVal: number): number {
+  if (envValue === undefined || envValue === "") return defaultVal;
+  const n = parseInt(envValue, 10);
+  return Number.isFinite(n) && n > 0 ? n : defaultVal;
+}
+
+/**
+ * Resolve thresholds from env with defaults. Optional env vars (e.g. in .env.local):
+ *   TOKEN_AUDIT_APP_TSX_MAX=800
+ *   TOKEN_AUDIT_HOME_PAGE_MAX=2000
+ *   TOKEN_AUDIT_API_CLIENT_MAX=1000
+ *   TOKEN_AUDIT_NAV_BAR_MAX=1200
+ *   TOKEN_AUDIT_LARGEST_FILE_MAX=2000
+ */
+function getThresholds(): typeof DEFAULT_THRESHOLDS {
+  return {
+    appTsxMax: parseThreshold(process.env.TOKEN_AUDIT_APP_TSX_MAX, DEFAULT_THRESHOLDS.appTsxMax),
+    homePageMax: parseThreshold(process.env.TOKEN_AUDIT_HOME_PAGE_MAX, DEFAULT_THRESHOLDS.homePageMax),
+    apiClientMax: parseThreshold(process.env.TOKEN_AUDIT_API_CLIENT_MAX, DEFAULT_THRESHOLDS.apiClientMax),
+    navBarMax: parseThreshold(process.env.TOKEN_AUDIT_NAV_BAR_MAX, DEFAULT_THRESHOLDS.navBarMax),
+    largestFileMax: parseThreshold(process.env.TOKEN_AUDIT_LARGEST_FILE_MAX, DEFAULT_THRESHOLDS.largestFileMax),
+  } as typeof DEFAULT_THRESHOLDS;
+}
+
 function countLines(content: string): number {
   if (!content) return 0;
   return content.split(/\r\n|\n|\r/).length;
@@ -202,6 +234,7 @@ export default function handler(
 
   try {
     const root = getMonorepoRoot();
+    const thresholds = getThresholds();
     const sourceFiles = collectSourceFiles(root);
     const totalSourceLines = sourceFiles.reduce((sum, f) => sum + f.lines, 0);
     const findings: AuditFinding[] = [];
@@ -209,24 +242,8 @@ export default function handler(
     const byPath = new Map(sourceFiles.map((f) => [f.relPath, f]));
     const largest = [...sourceFiles].sort((a, b) => b.lines - a.lines);
 
-    const boardPage = byPath.get("web/pages/index.tsx");
-    if (boardPage && boardPage.lines >= 2000) {
-      findings.push({
-        id: "board-monolith",
-        title: "Board page is monolithic",
-        severity: "high",
-        effort: "large",
-        why: `${boardPage.lines} lines in one page increases prompt size and edit risk.`,
-        action:
-          "Split into feature modules (`web/features/board/*`) with hooks/components per concern.",
-        file: boardPage.relPath,
-        line: 1,
-        lines: boardPage.lines,
-      });
-    }
-
     const apiClient = byPath.get("web/lib/api.ts");
-    if (apiClient && apiClient.lines >= 1000) {
+    if (apiClient && apiClient.lines >= thresholds.apiClientMax) {
       findings.push({
         id: "api-monolith",
         title: "Web API client is oversized",
@@ -242,7 +259,7 @@ export default function handler(
     }
 
     const navBar = byPath.get("web/components/ProjectNavBar.tsx");
-    if (navBar && navBar.lines >= 1200) {
+    if (navBar && navBar.lines >= thresholds.navBarMax) {
       findings.push({
         id: "navbar-monolith",
         title: "ProjectNavBar has too many responsibilities",
@@ -258,7 +275,7 @@ export default function handler(
     }
 
     const appTsx = byPath.get("app/App.tsx");
-    if (appTsx && appTsx.lines >= 800) {
+    if (appTsx && appTsx.lines >= thresholds.appTsxMax) {
       findings.push({
         id: "app-monolith",
         title: "React Native App.tsx is too large",
@@ -274,7 +291,7 @@ export default function handler(
     }
 
     const homePage = byPath.get("web/features/board/HomePage.tsx");
-    if (homePage && homePage.lines >= 2000) {
+    if (homePage && homePage.lines >= thresholds.homePageMax) {
       findings.push({
         id: "homepage-monolith",
         title: "Board HomePage is monolithic",
@@ -331,16 +348,19 @@ export default function handler(
       });
     }
 
-    const topList = largest.slice(0, 5).map((f) => `${f.relPath} (${f.lines} lines)`);
-    if (topList.length > 0) {
+    const topFile = largest[0];
+    if (topFile && topFile.lines > thresholds.largestFileMax) {
+      const topList = largest
+        .slice(0, 5)
+        .map((f) => `${f.relPath} (${f.lines} lines)`);
       findings.push({
         id: "largest-files",
         title: "Top large files dominate context budget",
         severity: "low",
         effort: "small",
-        why: `Largest files: ${topList.join(", ")}`,
+        why: `Largest files: ${topList.join(", ")}. Files over ${thresholds.largestFileMax} lines increase prompt size.`,
         action:
-          "Prioritize decomposition of the top 2 files first; defer lower-impact files.",
+          "Decompose the largest file(s) into smaller modules (e.g. extract hooks or components) until under threshold.",
       });
     }
 

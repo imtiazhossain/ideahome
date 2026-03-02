@@ -8,7 +8,7 @@ import {
   JUST_LOGGED_IN_SESSION_KEY,
   readUrlParam,
   sanitizeAuthToken,
-} from "@ideahome/shared-config";
+} from "@ideahome/shared";
 import {
   setStoredToken,
   clearStoredToken,

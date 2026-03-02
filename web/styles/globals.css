@@ -3963,15 +3963,11 @@ a.automated-tests-chip-text:hover {
   align-items: center;
 }
 
-.tests-page-section-footer-left {
-  display: flex;
-  align-items: center;
-}
-
 .tests-page-section-footer-right {
   display: flex;
   gap: 8px;
   align-items: center;
+  margin-left: auto;
 }
 
 .tests-page-section-refresh {

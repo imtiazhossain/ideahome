@@ -3,7 +3,7 @@ import {
   pathProjectById,
   pathProjects,
   type Project,
-} from "@ideahome/shared-config";
+} from "@ideahome/shared";
 
 /**
  * E2E helpers. Use from Node (Playwright), not browser.

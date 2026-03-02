@@ -7,16 +7,7 @@ import React, {
 } from "react";
 import Link from "next/link";
 import { useRouter } from "next/router";
-import {
-  closestCenter,
-  DndContext,
-  PointerSensor,
-  useSensor,
-  useSensors,
-  type DragEndEvent,
-  type DragOverEvent,
-  type DragStartEvent,
-} from "@dnd-kit/core";
+import { closestCenter, DndContext } from "@dnd-kit/core";
 import {
   getStoredToken,
   isAuthenticated,
@@ -36,7 +27,6 @@ import {
 import {
   fetchIssues,
   fetchIssue,
-  createIssue,
   updateIssue,
   updateIssueStatus,
   fetchIssueComments,
@@ -68,7 +58,7 @@ import {
   type IssueScreenshot,
   type IssueFile,
 } from "../../lib/api/media";
-import { fetchUsers, type User } from "../../lib/api/users";
+import { type User } from "../../lib/api/users";
 import { runUiTest, type RunUiTestResult } from "../../lib/api/tests";
 import { uiTests, testNameToSlug } from "../../lib/ui-tests";
 import { AppLayout } from "../../components/AppLayout";
@@ -129,6 +119,8 @@ import { createMediaUploadHandlers } from "./media-upload-handlers";
 import { createCommentCrudHandlers } from "./comment-crud-handlers";
 import { lockScrollToAnchor } from "./scroll-lock";
 import { issueKey } from "./issue-key";
+import { useBoardCreateIssue } from "./useBoardCreateIssue";
+import { useBoardDnd } from "./useBoardDnd";
 import { IssueDetailModal } from "./IssueDetailModal";
 import { BoardColumn, IssueCard } from "./BoardDnd";
 import { useTheme } from "../../pages/_app";
@@ -147,18 +139,7 @@ export default function Home() {
   const [issues, setIssues] = useState<Issue[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [createOpen, setCreateOpen] = useState(false);
   const [selectedIssue, setSelectedIssue] = useState<Issue | null>(null);
-  const [createTitle, setCreateTitle] = useState("");
-  const [createDescription, setCreateDescription] = useState("");
-  const [createAcceptanceCriteria, setCreateAcceptanceCriteria] = useState("");
-  const [createDatabase, setCreateDatabase] = useState("");
-  const [createApi, setCreateApi] = useState("");
-  const [createTestCases, setCreateTestCases] = useState("");
-  const [createAssigneeId, setCreateAssigneeId] = useState("");
-  const [users, setUsers] = useState<User[]>([]);
-  const [submitting, setSubmitting] = useState(false);
-  const [createError, setCreateError] = useState<string | null>(null);
   const [createProjectOpen, setCreateProjectOpen] = useState(false);
   const [organizations, setOrganizations] = useState<Organization[]>([]);
   const [newProjectName, setNewProjectName] = useState("");
@@ -170,14 +151,43 @@ export default function Home() {
   const [projectSubmitting, setProjectSubmitting] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const { theme, toggleTheme } = useTheme();
+
+  const createIssueForm = useBoardCreateIssue({
+    selectedProjectId: selectedProjectId ?? "",
+    projects,
+    setIssues,
+    setSelectedProjectId,
+    setError,
+  });
+  const {
+    createOpen,
+    setCreateOpen,
+    createTitle,
+    setCreateTitle,
+    createDescription,
+    setCreateDescription,
+    createAcceptanceCriteria,
+    setCreateAcceptanceCriteria,
+    createDatabase,
+    setCreateDatabase,
+    createApi,
+    setCreateApi,
+    createTestCases,
+    setCreateTestCases,
+    createAssigneeId,
+    setCreateAssigneeId,
+    users,
+    submitting,
+    createError,
+    setCreateError,
+    handleCreate,
+  } = createIssueForm;
   const [issueSaving, setIssueSaving] = useState(false);
   const [issueSaveError, setIssueSaveError] = useState<string | null>(null);
   const [issueSaveSuccess, setIssueSaveSuccess] = useState(false);
   const [issueDetailOriginal, setIssueDetailOriginal] = useState<Issue | null>(
     null
   );
-  const [dragOverColumnId, setDragOverColumnId] = useState<string | null>(null);
-  const [draggingIssueId, setDraggingIssueId] = useState<string | null>(null);
   const [projectToDelete, setProjectToDelete] = useState<Project | null>(null);
   const [projectDeleting, setProjectDeleting] = useState(false);
   const [issueToDelete, setIssueToDelete] = useState<Issue | null>(null);
@@ -734,15 +744,6 @@ export default function Home() {
     }
   };
 
-  const loadUsers = async () => {
-    try {
-      const data = await fetchUsers();
-      setUsers(data);
-    } catch {
-      setUsers([]);
-    }
-  };
-
   useEffect(() => {
     if (isSkipLoginDev()) {
       setAuthResolved(true);
@@ -890,17 +891,6 @@ export default function Home() {
   }, [projectsLoaded, projects.length]);
 
   useEffect(() => {
-    if (createOpen) {
-      loadUsers();
-      setCreateError(null);
-      // Pre-select first project so Create button works when "All projects" is selected in header
-      if (projects.length > 0 && !selectedProjectId) {
-        setSelectedProjectId(projects[0].id);
-      }
-    }
-  }, [createOpen]);
-
-  useEffect(() => {
     if (createProjectOpen) {
       setProjectCreateError(null);
       fetchOrganizations()
@@ -943,13 +933,6 @@ export default function Home() {
     router.query.projectName,
     handleCreateProjectWithName,
   ]);
-
-  // Keep modal's project selection in sync when projects load (e.g. after opening)
-  useEffect(() => {
-    if (createOpen && projects.length > 0 && !selectedProjectId) {
-      setSelectedProjectId(projects[0].id);
-    }
-  }, [createOpen, projects, selectedProjectId]);
 
   useEffect(() => {
     if (!automatedTestDropdownOpen) return;
@@ -1035,56 +1018,6 @@ export default function Home() {
           ? e.message
           : "Status change could not be saved. It will not persist after refresh."
       );
-    }
-  };
-
-  const handleCreate = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setCreateError(null);
-    if (!createTitle.trim()) {
-      setCreateError("Please enter a title.");
-      return;
-    }
-    if (!selectedProjectId) {
-      setCreateError("Please select a project.");
-      return;
-    }
-    setSubmitting(true);
-    setError(null);
-    try {
-      const qualityScore = computeQualityScore({
-        title: createTitle,
-        description: createDescription,
-        acceptanceCriteria: createAcceptanceCriteria,
-        database: createDatabase,
-        testCases: createTestCases,
-      });
-      const created = await createIssue({
-        title: createTitle.trim(),
-        description: createDescription.trim() || undefined,
-        acceptanceCriteria: createAcceptanceCriteria.trim() || undefined,
-        database: createDatabase.trim() || undefined,
-        api: createApi.trim() || undefined,
-        testCases: createTestCases || undefined,
-        projectId: selectedProjectId,
-        assigneeId: createAssigneeId || undefined,
-        qualityScore,
-      });
-      setIssues((prev) => [created, ...prev]);
-      setCreateOpen(false);
-      setCreateTitle("");
-      setCreateDescription("");
-      setCreateAcceptanceCriteria("");
-      setCreateDatabase("");
-      setCreateApi("");
-      setCreateTestCases("");
-      setCreateAssigneeId("");
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : "Failed to create issue";
-      setCreateError(msg);
-      setError(msg);
-    } finally {
-      setSubmitting(false);
     }
   };
 
@@ -1666,65 +1599,7 @@ export default function Home() {
     });
   };
 
-  const issuesByStatus = STATUSES.reduce(
-    (acc, { id }) => {
-      acc[id] = issues.filter((i) => i.status === id);
-      return acc;
-    },
-    {} as Record<string, Issue[]>
-  );
-
-  // While dragging, show the ticket in the lane we're over (transition state)
-  const issuesByStatusForDisplay = React.useMemo(() => {
-    if (!draggingIssueId || !dragOverColumnId) return issuesByStatus;
-    const dragged = issues.find((i) => i.id === draggingIssueId);
-    if (!dragged) return issuesByStatus;
-    const result = { ...issuesByStatus };
-    result[dragged.status] = (result[dragged.status] ?? []).filter(
-      (i) => i.id !== draggingIssueId
-    );
-    result[dragOverColumnId] = [...(result[dragOverColumnId] ?? []), dragged];
-    return result;
-  }, [issuesByStatus, draggingIssueId, dragOverColumnId, issues]);
-
-  const boardSensors = useSensors(
-    useSensor(PointerSensor, {
-      activationConstraint: { distance: 8 },
-    })
-  );
-
-  const handleBoardDragStart = React.useCallback((event: DragStartEvent) => {
-    const issueId = (event.active.data.current as { issueId?: string } | undefined)
-      ?.issueId;
-    setDraggingIssueId(issueId ?? null);
-  }, []);
-
-  const handleBoardDragOver = React.useCallback((event: DragOverEvent) => {
-    const status = (event.over?.data.current as { status?: string } | undefined)
-      ?.status;
-    setDragOverColumnId(status ?? null);
-  }, []);
-
-  const handleBoardDragEnd = React.useCallback(
-    (event: DragEndEvent) => {
-      const issueId = (event.active.data.current as { issueId?: string } | undefined)
-        ?.issueId;
-      const targetStatus = (event.over?.data.current as { status?: string } | undefined)
-        ?.status;
-      setDraggingIssueId(null);
-      setDragOverColumnId(null);
-      if (!issueId || !targetStatus) return;
-      const issue = issues.find((item) => item.id === issueId);
-      if (!issue || issue.status === targetStatus) return;
-      handleStatusChange(issueId, targetStatus);
-    },
-    [issues, handleStatusChange]
-  );
-
-  const handleBoardDragCancel = React.useCallback(() => {
-    setDraggingIssueId(null);
-    setDragOverColumnId(null);
-  }, []);
+  const boardDnd = useBoardDnd(issues, handleStatusChange);
 
   if (!authResolved || !isAuthenticated()) {
     return null;
@@ -1779,25 +1654,25 @@ export default function Home() {
           </div>
         ) : (
           <DndContext
-            sensors={boardSensors}
+            sensors={boardDnd.boardSensors}
             collisionDetection={closestCenter}
-            onDragStart={handleBoardDragStart}
-            onDragOver={handleBoardDragOver}
-            onDragEnd={handleBoardDragEnd}
-            onDragCancel={handleBoardDragCancel}
+            onDragStart={boardDnd.handleBoardDragStart}
+            onDragOver={boardDnd.handleBoardDragOver}
+            onDragEnd={boardDnd.handleBoardDragEnd}
+            onDragCancel={boardDnd.handleBoardDragCancel}
           >
             <div className="board-columns">
               {STATUSES.map(({ id, label }) => {
-                const columnIssues = issuesByStatusForDisplay[id] ?? [];
+                const columnIssues = boardDnd.issuesByStatusForDisplay[id] ?? [];
                 const isPreviewColumn =
-                  dragOverColumnId === id && draggingIssueId;
+                  boardDnd.dragOverColumnId === id && boardDnd.draggingIssueId;
                 return (
                   <BoardColumn
                     key={id}
                     id={id}
                     label={label}
                     count={columnIssues.length}
-                    isDropTarget={dragOverColumnId === id}
+                    isDropTarget={boardDnd.dragOverColumnId === id}
                   >
                     {columnIssues.map((issue) => (
                       <IssueCard
@@ -1807,9 +1682,9 @@ export default function Home() {
                           setSelectedIssue(nextIssue);
                           setIssueDetailOriginal(nextIssue);
                         }}
-                        draggingIssueId={draggingIssueId}
+                        draggingIssueId={boardDnd.draggingIssueId}
                         isPreview={
-                          !!(isPreviewColumn && issue.id === draggingIssueId)
+                          !!(isPreviewColumn && issue.id === boardDnd.draggingIssueId)
                         }
                       />
                     ))}

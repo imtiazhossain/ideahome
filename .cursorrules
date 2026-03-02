@@ -1,16 +1,20 @@
 # Idea Home Project Rules
 
 ## Project overview
-- **Monorepo**: pnpm workspaces — `backend`, `web`, `mobile`
+- **Monorepo**: pnpm workspaces — `backend`, `web`, `mobile`, `app`
 - **Backend**: NestJS 9, Prisma 4, PostgreSQL, TypeScript 5, Jest (unit + e2e)
 - **Web**: Next.js 13, React 18
-- **Mobile**: Expo 48, React Native 0.71
+- **Mobile**: Expo 48, React Native 0.71 (placeholder in `mobile/`)
+- **iOS / Android app**: React Native 0.84 in `app/` — full Idea Home (projects, issues, expenses, features, tests, etc.). This is the native app version of the project.
 
 ## Commands (from repo root)
 - `pnpm install` — install all workspaces
 - `pnpm dev:backend` — backend on http://localhost:3001
 - `pnpm dev:web` — Next.js dev
-- `pnpm dev:mobile` — Expo start
+- `pnpm dev:mobile` — Expo start (placeholder app in `mobile/`)
+- `pnpm dev:app` — start Metro for the iOS/Android app (`app/`)
+- `pnpm ios` — build and run the iOS app in the simulator
+- `pnpm android` — build and run the Android app (emulator or device)
 - `pnpm db:up` / `pnpm db:down` — Docker Postgres
 - `pnpm db:reset` — restart DB (down + up + migrate); use when schema changed, DB stuck, or e2e needs clean state
 - `pnpm db:migrate` — deploy Prisma migrations only (DB must already be up)
@@ -66,6 +70,7 @@ with the pattern
 - **Minimal Impact**: Changes should only touch what's necessary. Avoid introducing bugs.
 - **No Redundancy**: Remove duplication without breaking behavior. Extract shared React components for repeated UI and logic; use shared utilities/hooks for common behavior. Prefer one source of truth. Refactor when you see the same pattern in two or more places, but verify existing behavior is preserved. Use existing shared pieces (e.g. `web/components/AppLayout`, `AddItemForm`, `IconPlus`; `web/lib/utils`, `legacyListStorage`) as the single source of truth — do not duplicate their behavior in pages.
 - **DRY, reuse, cross-platform**: Remove duplication; optimize for token usage; create reusable modules. Prefer change-once-apply-everywhere: shared packages, components, and utilities used by both web and apps so a single change propagates everywhere.
+- **Web and native app sharing**: Make the code so that the web app and the native mobile app share resources as much as possible (shared packages, types, utilities, API clients, and UI where feasible).
 
 - **Database**: Restart the database when needed — e.g. after Prisma schema changes, when the DB is in a bad or unknown state, or before running e2e tests. Use `pnpm db:reset` (full restart + migrate) or `pnpm db:down` then `pnpm db:up` then `pnpm db:migrate` as appropriate.
 - **Backend restart**: When the backend needs to be restarted (e.g. after code or env changes, or when it’s stuck), automatically kill any running backend process (e.g. on port 3001 or the dev:backend process) and start it again with `pnpm dev:backend`. Do not ask or prompt the user — just perform the kill and restart.

@@ -57,12 +57,32 @@ export type ProjectNavTabId =
   | "pages"
   | `custom-${string}`;
 
+/** Breakpoint below which the Code tab is hidden (mobile). */
+const MOBILE_MAX_WIDTH = 768;
+
+export function useIsMobile(): boolean {
+  const [isMobile, setIsMobile] = useState(() =>
+    typeof window === "undefined"
+      ? false
+      : window.matchMedia(`(max-width: ${MOBILE_MAX_WIDTH}px)`).matches
+  );
+  useEffect(() => {
+    const mql = window.matchMedia(`(max-width: ${MOBILE_MAX_WIDTH}px)`);
+    const handler = () => setIsMobile(mql.matches);
+    mql.addEventListener("change", handler);
+    return () => mql.removeEventListener("change", handler);
+  }, []);
+  return isMobile;
+}
+
 export const TABS: {
   id: ProjectNavTabId;
   label: string;
   icon: React.ReactNode;
   hasDropdown?: boolean;
   href?: string;
+  /** When true, tab is hidden on mobile viewport. */
+  desktopOnly?: boolean;
 }[] = [
   { id: "todo", label: "To-Do", icon: <IconTodo />, href: "/todo" },
   { id: "ideas", label: "Ideas", icon: <IconIdeas />, href: "/ideas" },
@@ -92,7 +112,13 @@ export const TABS: {
     icon: <IconExpenses />,
     href: "/expenses",
   },
-  { id: "code", label: "Code", icon: <IconCode />, href: "/code" },
+  {
+    id: "code",
+    label: "Code",
+    icon: <IconCode />,
+    href: "/code",
+    desktopOnly: true,
+  },
   { id: "pages", label: "Pages", icon: <IconPages /> },
 ];
 
@@ -262,11 +288,13 @@ export function DrawerCollapsedNav({
   onExpand,
 }: DrawerCollapsedNavProps) {
   const { tabOrder, hiddenTabIds } = useTabOrder();
+  const isMobile = useIsMobile();
   const hiddenSet = new Set(hiddenTabIds);
   const drawerTabs = tabOrder
     .filter((id) => !hiddenSet.has(id))
     .map((id) => TABS.find((t) => t.id === id))
-    .filter((t): t is (typeof TABS)[number] => Boolean(t && t.href));
+    .filter((t): t is (typeof TABS)[number] => Boolean(t && t.href))
+    .filter((t) => !(isMobile && t.desktopOnly));
   return (
     <div className="drawer-collapsed-inner">
       <button
@@ -351,14 +379,17 @@ function saveTabOrder(order: ProjectNavTabId[]) {
 }
 
 /** Returns the href of the first visible tab (user's tab order, excluding hidden). */
-export function getFirstVisibleTabHref(): string {
+export function getFirstVisibleTabHref(
+  excludeTabIds?: ProjectNavTabId[]
+): string {
   if (typeof window === "undefined") return "/";
   const deletedTabIds = loadDeletedTabIds();
   const tabOrder = loadTabOrder(deletedTabIds);
   const hiddenSet = new Set(loadHiddenTabIds());
+  const excludeSet = new Set(excludeTabIds ?? []);
   const customLists = getCustomLists();
   for (const id of tabOrder) {
-    if (hiddenSet.has(id)) continue;
+    if (hiddenSet.has(id) || excludeSet.has(id)) continue;
     const builtIn = TABS.find((t) => t.id === id);
     if (builtIn?.href) return builtIn.href;
     if (typeof id === "string" && id.startsWith("custom-")) {

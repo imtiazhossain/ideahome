@@ -5,7 +5,7 @@ import {
   pathIdeasElevenlabsVoices,
   pathIdeasOpenrouterModels,
   pathIdeasTts,
-} from "@ideahome/shared-config";
+} from "@ideahome/shared";
 
 export type ElevenLabsVoice = { id: string; name: string };
 

@@ -104,7 +104,7 @@ export function CheckableListPageShell({
               )}
               {(onCopyList || canUndo || canBulkDelete) && (
                 <div className="tests-page-section-footer">
-                  <div className="tests-page-section-footer-left">
+                  <div className="tests-page-section-footer-right">
                     {onCopyList ? (
                       <button
                         type="button"
@@ -116,8 +116,6 @@ export function CheckableListPageShell({
                         <IconCopy />
                       </button>
                     ) : null}
-                  </div>
-                  <div className="tests-page-section-footer-right">
                     {canUndo ? (
                       <button
                         type="button"

@@ -44,8 +44,6 @@
 		<key>NSAllowsLocalNetworking</key>
 		<true/>
 	</dict>
-	<key>NSLocationWhenInUseUsageDescription</key>
-	<string></string>
 	<key>NSCameraUsageDescription</key>
 	<string>Idea Home needs camera access to capture screenshots and record videos for issues.</string>
 	<key>NSMicrophoneUsageDescription</key>

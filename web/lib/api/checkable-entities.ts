@@ -2,7 +2,7 @@ import {
   pathChecklistItem,
   pathChecklistList,
   pathChecklistReorder,
-} from "@ideahome/shared-config";
+} from "@ideahome/shared";
 
 export type Todo = {
   id: string;

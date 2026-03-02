@@ -11,11 +11,11 @@ import {
   NATIVE_BRIDGE_AUTH_ERROR,
   readUrlParam,
   sanitizeAuthToken,
-} from "@ideahome/shared-config";
+} from "@ideahome/shared";
 import type {
   NativeBridgeAuthChangePayload,
   NativeBridgeAuthErrorPayload,
-} from "@ideahome/shared-config";
+} from "@ideahome/shared";
 
 type CallbackStatus = "loading" | "done" | "error";
 

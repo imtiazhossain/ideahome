@@ -48,7 +48,16 @@ export const IssueBoardRow = memo(function IssueBoardRow({
 }: IssueBoardRowProps) {
   const s = appStyles;
   return (
-    <View style={[s.issueItem, isSelected ? s.listItemSelected : null]}>
+    <View style={[s.issueCard, isSelected ? s.listItemSelected : null]}>
+      {!isQuickEdit ? (
+        <View style={s.issueCardQualityScore}>
+          <Text style={s.issueCardQualityScoreText}>
+            {issue.qualityScore != null
+              ? Math.round(Number(issue.qualityScore))
+              : "—"}
+          </Text>
+        </View>
+      ) : null}
       <View style={s.issueItemMain}>
         {isQuickEdit ? (
           <View style={s.stack}>
@@ -97,59 +106,48 @@ export const IssueBoardRow = memo(function IssueBoardRow({
         ) : (
           <>
             <Pressable onPress={onSelectIssue}>
-              <Text style={s.listItemTitle}>{issue.title}</Text>
+              <Text style={s.issueCardTitle} numberOfLines={2}>
+                {issue.title || "Untitled"}
+              </Text>
             </Pressable>
-            <Text style={s.listItemMeta}>
-              Assignee: {issue.assignee?.name ?? issue.assignee?.email ?? "Unassigned"}
-            </Text>
-            <Text style={s.listItemMeta}>Quality: {issue.qualityScore ?? "n/a"}</Text>
-            <Text
-              style={[
-                s.badge,
-                {
-                  color:
-                    colors.status[issue.status as keyof typeof colors.status] ?? colors.textMuted,
-                },
-              ]}
-            >
-              {statusLabel(issue.status)}
-            </Text>
+            <View style={s.issueCardMeta}>
+              <Text style={s.listItemMeta}>
+                {issue.key ?? `${issue.id.slice(-4).toUpperCase()}`}
+              </Text>
+              <Text style={s.listItemMeta} numberOfLines={1}>
+                {issue.assignee?.name ?? issue.assignee?.email ?? "Unassigned"}
+              </Text>
+            </View>
           </>
         )}
       </View>
-      <View style={s.inlineRowWrap}>
-        {isQuickEdit ? (
-          <>
-            <AppButton
-              label={savingQuickEdit ? "Saving..." : "Save"}
-              disabled={savingQuickEdit || !quickEditTitle.trim()}
-              onPress={onSaveQuickEdit}
-            />
-            <AppButton
-              label="Cancel"
-              variant="secondary"
-              disabled={savingQuickEdit}
-              onPress={onCancelQuickEdit}
-            />
-          </>
-        ) : (
-          <>
-            <AppButton label="Quick Edit" variant="secondary" onPress={onStartQuickEdit} />
-            <AppButton
-              label="Back"
-              variant="secondary"
-              disabled={issue.status === ISSUE_STATUSES[0]}
-              onPress={onMoveBackward}
-            />
-            <AppButton
-              label="Forward"
-              variant="secondary"
-              disabled={issue.status === ISSUE_STATUSES[ISSUE_STATUSES.length - 1]}
-              onPress={onMoveForward}
-            />
-          </>
-        )}
-      </View>
+      {isQuickEdit ? (
+        <View style={s.inlineRowWrap}>
+          <AppButton
+            label={savingQuickEdit ? "Saving..." : "Save"}
+            disabled={savingQuickEdit || !quickEditTitle.trim()}
+            onPress={onSaveQuickEdit}
+          />
+          <AppButton
+            label="Cancel"
+            variant="secondary"
+            disabled={savingQuickEdit}
+            onPress={onCancelQuickEdit}
+          />
+          <AppButton
+            label="Back"
+            variant="secondary"
+            disabled={issue.status === ISSUE_STATUSES[0]}
+            onPress={onMoveBackward}
+          />
+          <AppButton
+            label="Forward"
+            variant="secondary"
+            disabled={issue.status === ISSUE_STATUSES[ISSUE_STATUSES.length - 1]}
+            onPress={onMoveForward}
+          />
+        </View>
+      ) : null}
     </View>
   );
 });

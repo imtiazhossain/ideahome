@@ -2,10 +2,17 @@
   "name": "ideahome-monorepo",
   "private": true,
   "packageManager": "pnpm@10.30.0",
+  "pnpm": {
+    "overrides": {
+      "@types/react": "^18.0.0",
+      "@types/react-dom": "^18.0.0"
+    }
+  },
   "workspaces": [
     "backend",
     "web",
     "mobile",
+    "app",
     "packages/*"
   ],
   "dependencies": {
@@ -22,7 +29,8 @@
   },
   "scripts": {
     "install": "node -e \"process.exit(0)\"",
-    "build": "pnpm build:backend && pnpm build:web",
+    "build": "pnpm build:shared && pnpm build:backend && pnpm build:web",
+    "build:shared": "pnpm --filter @ideahome/shared build",
     "build:backend": "pnpm --filter backend run prisma:generate && pnpm --filter backend build",
     "build:web": "pnpm --filter web build",
     "dev:backend": "pnpm --filter backend dev",
@@ -36,8 +44,11 @@
     "test:e2e:web": "pnpm --filter web run test:e2e",
     "test:e2e:one": "pnpm --filter web run test:e2e:one",
     "coverage:copy": "node scripts/copy-coverage.js",
-    "format": "prettier --write \"backend/src/**/*.ts\" \"backend/test/**/*.ts\" \"web/**/*.{ts,tsx,js,jsx,json}\" \"mobile/**/*.{ts,tsx,js,jsx,json}\"",
-    "format:check": "prettier --check \"backend/src/**/*.ts\" \"backend/test/**/*.ts\" \"web/**/*.{ts,tsx,js,jsx,json}\" \"mobile/**/*.{ts,tsx,js,jsx,json}\""
+    "format": "prettier --write \"backend/src/**/*.ts\" \"backend/test/**/*.ts\" \"web/**/*.{ts,tsx,js,jsx,json}\" \"mobile/**/*.{ts,tsx,js,jsx,json}\" \"app/**/*.{ts,tsx,js,jsx,json}\"",
+    "format:check": "prettier --check \"backend/src/**/*.ts\" \"backend/test/**/*.ts\" \"web/**/*.{ts,tsx,js,jsx,json}\" \"mobile/**/*.{ts,tsx,js,jsx,json}\" \"app/**/*.{ts,tsx,js,jsx,json}\"",
+    "dev:app": "pnpm --filter IdeaHomeApp start",
+    "ios": "pnpm --filter IdeaHomeApp run ios",
+    "android": "pnpm --filter IdeaHomeApp run android"
   },
   "devDependencies": {
     "prettier": "^3.2.0"

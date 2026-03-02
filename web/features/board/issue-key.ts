@@ -1,4 +1,4 @@
-import { projectNameToAcronym } from "@ideahome/shared-config";
+import { projectNameToAcronym } from "@ideahome/shared";
 import type { Issue } from "../../lib/api";
 
 export function issueKey(issue: Issue): string {

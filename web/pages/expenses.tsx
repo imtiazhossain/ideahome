@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/router";
-import { EXPENSE_CATEGORIES } from "@ideahome/shared-config";
+import { EXPENSE_CATEGORIES } from "@ideahome/shared";
 import {
   createExpense,
   deleteExpense,

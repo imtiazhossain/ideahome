@@ -5,6 +5,7 @@ import { AppButton } from "./ui/AppButton";
 import { IssueBoardRow } from "./IssueBoardRow";
 import { statusLabel } from "../utils/issueStatus";
 import { appStyles } from "../theme/appStyles";
+import { colors } from "../theme/tokens";
 
 const ISSUE_BOARD_COLUMN_HEIGHT = 420;
 
@@ -94,11 +95,13 @@ export const IssueBoardColumn = memo(function IssueBoardColumn({
   );
   const keyExtractor = useCallback((item: Issue) => item.id, []);
   if (collapsed) {
+    const statusColor =
+      (colors.status as Record<string, string>)[status] ?? colors.textMuted;
     return (
-      <View style={s.issueGroup}>
-        <View style={s.issueGroupHeader}>
-          <Text style={s.issueGroupTitle}>
-            {statusLabel(status)} ({issues.length})
+      <View style={s.column}>
+        <View style={s.columnHeader}>
+          <Text style={[s.columnTitle, { color: statusColor }]}>
+            {statusLabel(status)}
           </Text>
           <AppButton label="Expand" variant="secondary" onPress={onToggleCollapse} />
         </View>
@@ -106,13 +109,15 @@ export const IssueBoardColumn = memo(function IssueBoardColumn({
       </View>
     );
   }
+  const statusColor =
+    (colors.status as Record<string, string>)[status] ?? colors.textMuted;
   return (
-    <View style={s.issueGroup}>
-      <View style={s.issueGroupHeader}>
-        <Text style={s.issueGroupTitle}>
-          {statusLabel(status)} ({issues.length})
+    <View style={s.column}>
+      <View style={s.columnHeader}>
+        <Text style={[s.columnTitle, { color: statusColor }]}>
+          {statusLabel(status)}
         </Text>
-        <AppButton label="Collapse" variant="secondary" onPress={onToggleCollapse} />
+        <Text style={s.columnCount}>{issues.length}</Text>
       </View>
       {issues.length === 0 ? (
         <Text style={s.subtle}>No issues</Text>

@@ -2,6 +2,7 @@ packages:
   - 'backend'
   - 'web'
   - 'mobile'
+  - 'app'
   - 'packages/*'
 
 # Allow these dependencies to run lifecycle scripts (pnpm v10+)

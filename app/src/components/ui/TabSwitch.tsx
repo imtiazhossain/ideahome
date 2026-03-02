@@ -34,6 +34,8 @@ export function TabSwitch<T extends string>({
   );
 }
 
+const TAB_ACTIVE_COLOR = "#1d4ed8";
+
 const styles = StyleSheet.create({
   row: {
     backgroundColor: "#ffffff",
@@ -46,18 +48,22 @@ const styles = StyleSheet.create({
   },
   tab: {
     borderRadius: radii.small,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    position: "relative",
   },
   tabActive: {
-    backgroundColor: "#f3f4f6",
+    borderBottomColor: TAB_ACTIVE_COLOR,
+    borderBottomWidth: 2,
+    marginBottom: -1,
   },
   tabText: {
     color: colors.textMuted,
-    fontSize: 13,
-    fontWeight: "600",
+    fontSize: 14,
+    fontWeight: "500",
   },
   tabTextActive: {
-    color: colors.accentStrong,
+    color: TAB_ACTIVE_COLOR,
+    fontWeight: "600",
   },
 });

@@ -32,7 +32,7 @@ import {
   pathTestsRunApi,
   pathTestsRunUi,
   pathUsers,
-} from "@ideahome/shared-config";
+} from "@ideahome/shared";
 import type {
   AddCommentAttachmentInput,
   CommentAttachment as SharedCommentAttachment,
@@ -60,7 +60,7 @@ import type {
   UpdateIssueStatusInput,
   UpdateProjectInput,
   User as SharedUser,
-} from "@ideahome/shared-config";
+} from "@ideahome/shared";
 import {
   safeLocalStorageGet,
   safeLocalStorageRemove,

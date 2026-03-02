@@ -16,7 +16,6 @@ import {
   FlatList,
   Image,
   Linking,
-  Modal,
   Pressable,
   StatusBar,
   Text,
@@ -24,7 +23,6 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { WebView } from "react-native-webview";
 import {
   ISSUE_STATUSES,
   addCommentAttachment,
@@ -155,7 +153,9 @@ import { enhancementsStorageKey } from "./src/utils/enhancementsStorage";
 import { parseAutomatedTestNames } from "./src/utils/parseAutomatedTestNames";
 import { isAppTab } from "./src/utils/isAppTab";
 import { appStyles } from "./src/theme/appStyles";
+import { colors } from "./src/theme/tokens";
 import { HomeTab } from "./src/screens/HomeTab";
+import { BoardTab } from "./src/screens/BoardTab";
 import { ProjectsTab } from "./src/screens/ProjectsTab";
 import { ExpensesTab } from "./src/screens/ExpensesTab";
 import { SettingsTab } from "./src/screens/SettingsTab";
@@ -170,7 +170,18 @@ import { IssueBoardColumn } from "./src/components/IssueBoardColumn";
 import { ProjectPicker } from "./src/components/ProjectPicker";
 import { TestResultPanel } from "./src/components/TestResultPanel";
 import { UserChip } from "./src/components/UserChip";
+import { PreviewModal } from "./src/components/PreviewModal";
+import { AppDrawer } from "./src/components/AppDrawer";
+import { BulbyModal } from "./src/components/BulbyModal";
+import { TabPreferencesModal } from "./src/components/TabPreferencesModal";
+import { ComingSoonTab } from "./src/screens/ComingSoonTab";
+import { CustomListTab } from "./src/screens/CustomListTab";
 import type { AuthProvider } from "./src/types";
+import { getCustomListTabId } from "./src/utils/customListsStorage";
+import { buildIssuesTabProps } from "./src/utils/buildIssuesTabProps";
+import { getTabLabel } from "./src/utils/tabLabels";
+import { isCustomListTab } from "./src/utils/isAppTab";
+import { useCustomListItems } from "./src/hooks/useCustomListItems";
 
 export default function App() {
   const state = useAppState();
@@ -404,7 +415,30 @@ export default function App() {
     bugs,
     enhancements,
     setEditingExpenseId,
+    customLists,
+    loadCustomLists,
+    createCustomList,
+    deleteCustomListAndSwitch,
+    visibleTabOrder,
+    fullTabOrder,
+    tabOrder,
+    setTabOrder,
+    hiddenTabIds,
+    setHiddenTabIds,
   } = state;
+
+  const [showTabPrefsModal, setShowTabPrefsModal] = useState(false);
+  const [showBulbyModal, setShowBulbyModal] = useState(false);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+
+  const customListSlug = isCustomListTab(activeTab) ? activeTab.slice(7) : "";
+  const customListUserId = readUserIdFromToken(token);
+  const customListItemsState = useCustomListItems(customListSlug, customListUserId);
+  const customList = customLists.find((l) => l.slug === customListSlug);
+  const tabOptions: Array<{ value: AppTab; label: string }> = visibleTabOrder.map((id) => ({
+    value: id,
+    label: getTabLabel(id, customLists.find((l) => getCustomListTabId(l.slug) === id)?.name),
+  }));
 
   if (initializing) {
     return (
@@ -455,6 +489,13 @@ export default function App() {
       <StatusBar barStyle="dark-content" />
 
       <View style={appStyles.topBar}>
+        <Pressable
+          onPress={() => setDrawerOpen(true)}
+          style={{ paddingVertical: 8, paddingRight: 12 }}
+          accessibilityLabel="Open menu"
+        >
+          <Text style={{ fontSize: 22, color: colors.accentStrong }}>☰</Text>
+        </Pressable>
         <Text style={appStyles.brand}>Idea Home</Text>
         <AppButton
           label={
@@ -488,19 +529,7 @@ export default function App() {
       <TabSwitch<AppTab>
         value={activeTab}
         onChange={setActiveTab}
-        options={[
-          { value: "home", label: "Home" },
-          { value: "projects", label: "Projects" },
-          { value: "issues", label: "Issues" },
-          { value: "expenses", label: "Expenses" },
-          { value: "features", label: "Features" },
-          { value: "todos", label: "Todos" },
-          { value: "ideas", label: "Ideas" },
-          { value: "bugs", label: "Bugs" },
-          { value: "enhancements", label: "Enhancements" },
-          { value: "tests", label: "Tests" },
-          { value: "settings", label: "Settings" },
-        ]}
+        options={tabOptions}
       />
 
       <View style={appStyles.content}>
@@ -516,6 +545,59 @@ export default function App() {
           loading={projectsLoading}
           error={projectsError}
         />
+
+        {activeTab === "board" ? (
+          <BoardTab
+            issuesByStatus={issuesByStatus}
+            issueBoardStatuses={issueBoardStatuses}
+            issueBoardKeyExtractor={issueBoardKeyExtractor}
+            renderIssueBoardColumn={renderIssueBoardColumn}
+            issueBoardFocus={issueBoardFocus}
+            setIssueBoardFocus={setIssueBoardFocus}
+            issueAssigneeFilter={issueAssigneeFilter}
+            setIssueAssigneeFilter={setIssueAssigneeFilter}
+            users={users}
+            selectedIssue={selectedIssue}
+            selectedIssueId={selectedIssueId}
+            setSelectedIssueId={setSelectedIssueId}
+            issueEditTitle={issueEditTitle}
+            setIssueEditTitle={setIssueEditTitle}
+            issueEditDescription={issueEditDescription}
+            setIssueEditDescription={setIssueEditDescription}
+            issueEditAcceptanceCriteria={issueEditAcceptanceCriteria}
+            setIssueEditAcceptanceCriteria={setIssueEditAcceptanceCriteria}
+            issueEditDatabase={issueEditDatabase}
+            setIssueEditDatabase={setIssueEditDatabase}
+            issueEditApi={issueEditApi}
+            setIssueEditApi={setIssueEditApi}
+            issueEditTestCases={issueEditTestCases}
+            setIssueEditTestCases={setIssueEditTestCases}
+            issueEditAutomatedTest={issueEditAutomatedTest}
+            setIssueEditAutomatedTest={setIssueEditAutomatedTest}
+            issueEditQualityScore={issueEditQualityScore}
+            setIssueEditQualityScore={setIssueEditQualityScore}
+            issueEditAssigneeId={issueEditAssigneeId}
+            setIssueEditAssigneeId={setIssueEditAssigneeId}
+            savingIssueEdit={savingIssueEdit}
+            deletingIssue={deletingIssue}
+            handleSaveIssue={handleSaveIssue}
+            handleDeleteIssue={handleDeleteIssue}
+            usersLoading={usersLoading}
+            usersError={usersError}
+            uploadingIssueAsset={uploadingIssueAsset}
+            handleUploadScreenshot={handleUploadScreenshot}
+            handleUploadRecording={handleUploadRecording}
+            handleUploadFile={handleUploadFile}
+            handleCaptureScreenshot={handleCaptureScreenshot}
+            handleCaptureRecording={handleCaptureRecording}
+            automatedTestNames={automatedTestNames}
+            runningIssueAutomatedTests={runningIssueAutomatedTests}
+            runningUiTests={runningUiTests}
+            uiTestResults={uiTestResults}
+            handleRunAllIssueAutomatedTests={handleRunAllIssueAutomatedTests}
+            handleRunAutomatedTest={handleRunAutomatedTest}
+          />
+        ) : null}
 
         {activeTab === "home" ? (
           <HomeTab
@@ -551,132 +633,7 @@ export default function App() {
         ) : null}
 
         {activeTab === "issues" ? (
-          <IssuesTab
-            token={token}
-            issueSearch={issueSearch}
-            setIssueSearch={setIssueSearch}
-            loadIssues={loadIssues}
-            newIssueTitle={newIssueTitle}
-            setNewIssueTitle={setNewIssueTitle}
-            newIssueDescription={newIssueDescription}
-            setNewIssueDescription={setNewIssueDescription}
-            newIssueAcceptanceCriteria={newIssueAcceptanceCriteria}
-            setNewIssueAcceptanceCriteria={setNewIssueAcceptanceCriteria}
-            newIssueDatabase={newIssueDatabase}
-            setNewIssueDatabase={setNewIssueDatabase}
-            newIssueApi={newIssueApi}
-            setNewIssueApi={setNewIssueApi}
-            newIssueTestCases={newIssueTestCases}
-            setNewIssueTestCases={setNewIssueTestCases}
-            newIssueAutomatedTest={newIssueAutomatedTest}
-            setNewIssueAutomatedTest={setNewIssueAutomatedTest}
-            newIssueQualityScore={newIssueQualityScore}
-            setNewIssueQualityScore={setNewIssueQualityScore}
-            newIssueAssigneeId={newIssueAssigneeId}
-            setNewIssueAssigneeId={setNewIssueAssigneeId}
-            usersLoading={usersLoading}
-            usersError={usersError}
-            users={users}
-            creatingIssue={creatingIssue}
-            selectedProjectId={selectedProjectId}
-            handleCreateIssue={handleCreateIssue}
-            clearingIssues={clearingIssues}
-            issues={issues}
-            handleDeleteAllIssues={handleDeleteAllIssues}
-            issuesLoading={issuesLoading}
-            issuesError={issuesError}
-            filteredIssues={filteredIssues}
-            issuesByStatus={issuesByStatus}
-            handleResetIssueBoardFilters={handleResetIssueBoardFilters}
-            selectedIssueId={selectedIssueId}
-            setSelectedIssueId={setSelectedIssueId}
-            setCollapsedIssueStatuses={setCollapsedIssueStatuses}
-            issueAssigneeFilter={issueAssigneeFilter}
-            setIssueAssigneeFilter={setIssueAssigneeFilter}
-            issueBoardFocus={issueBoardFocus}
-            setIssueBoardFocus={setIssueBoardFocus}
-            issueBoardStatuses={issueBoardStatuses}
-            issueBoardKeyExtractor={issueBoardKeyExtractor}
-            renderIssueBoardColumn={renderIssueBoardColumn}
-            selectedIssue={selectedIssue}
-            issueEditTitle={issueEditTitle}
-            setIssueEditTitle={setIssueEditTitle}
-            issueEditDescription={issueEditDescription}
-            setIssueEditDescription={setIssueEditDescription}
-            issueEditAcceptanceCriteria={issueEditAcceptanceCriteria}
-            setIssueEditAcceptanceCriteria={setIssueEditAcceptanceCriteria}
-            issueEditDatabase={issueEditDatabase}
-            setIssueEditDatabase={setIssueEditDatabase}
-            issueEditApi={issueEditApi}
-            setIssueEditApi={setIssueEditApi}
-            issueEditTestCases={issueEditTestCases}
-            setIssueEditTestCases={setIssueEditTestCases}
-            issueEditAutomatedTest={issueEditAutomatedTest}
-            setIssueEditAutomatedTest={setIssueEditAutomatedTest}
-            issueEditQualityScore={issueEditQualityScore}
-            setIssueEditQualityScore={setIssueEditQualityScore}
-            issueEditAssigneeId={issueEditAssigneeId}
-            setIssueEditAssigneeId={setIssueEditAssigneeId}
-            savingIssueEdit={savingIssueEdit}
-            deletingIssue={deletingIssue}
-            handleSaveIssue={handleSaveIssue}
-            handleDeleteIssue={handleDeleteIssue}
-            uploadingIssueAsset={uploadingIssueAsset}
-            handleUploadScreenshot={handleUploadScreenshot}
-            handleUploadRecording={handleUploadRecording}
-            handleUploadFile={handleUploadFile}
-            handleCaptureScreenshot={handleCaptureScreenshot}
-            handleCaptureRecording={handleCaptureRecording}
-            automatedTestNames={automatedTestNames}
-            runningIssueAutomatedTests={runningIssueAutomatedTests}
-            runningUiTests={runningUiTests}
-            uiTestResults={uiTestResults}
-            handleRunAllIssueAutomatedTests={handleRunAllIssueAutomatedTests}
-            handleRunAutomatedTest={handleRunAutomatedTest}
-            setPreviewTitle={setPreviewTitle}
-            setPreviewUrl={setPreviewUrl}
-            newCommentBody={newCommentBody}
-            setNewCommentBody={setNewCommentBody}
-            creatingComment={creatingComment}
-            pendingCommentAttachments={pendingCommentAttachments}
-            setPendingCommentAttachments={setPendingCommentAttachments}
-            handleCreateComment={handleCreateComment}
-            handleAddPendingCommentScreenshot={handleAddPendingCommentScreenshot}
-            handleCapturePendingCommentScreenshot={handleCapturePendingCommentScreenshot}
-            handleAddPendingCommentVideo={handleAddPendingCommentVideo}
-            handleCapturePendingCommentVideo={handleCapturePendingCommentVideo}
-            issueComments={issueComments}
-            commentsLoading={commentsLoading}
-            commentsError={commentsError}
-            editingCommentId={editingCommentId}
-            commentEditBody={commentEditBody}
-            setCommentEditBody={setCommentEditBody}
-            setEditingCommentId={setEditingCommentId}
-            handleSaveComment={handleSaveComment}
-            handleAttachCommentScreenshot={handleAttachCommentScreenshot}
-            handleAttachCommentVideo={handleAttachCommentVideo}
-            handleDeleteComment={handleDeleteComment}
-            handleDeleteCommentAttachment={handleDeleteCommentAttachment}
-            uploadingCommentAttachmentId={uploadingCommentAttachmentId}
-            editingScreenshotId={editingScreenshotId}
-            screenshotEditName={screenshotEditName}
-            setScreenshotEditName={setScreenshotEditName}
-            setEditingScreenshotId={setEditingScreenshotId}
-            handleSaveScreenshotName={handleSaveScreenshotName}
-            handleDeleteScreenshot={handleDeleteScreenshot}
-            editingRecordingId={editingRecordingId}
-            recordingEditName={recordingEditName}
-            setRecordingEditName={setRecordingEditName}
-            setEditingRecordingId={setEditingRecordingId}
-            handleSaveRecordingName={handleSaveRecordingName}
-            handleDeleteRecording={handleDeleteRecording}
-            editingFileId={editingFileId}
-            fileEditName={fileEditName}
-            setFileEditName={setFileEditName}
-            setEditingFileId={setEditingFileId}
-            handleSaveFileName={handleSaveFileName}
-            handleDeleteFile={handleDeleteFile}
-          />
+          <IssuesTab {...buildIssuesTabProps(state)} />
         ) : null}
 
         {activeTab === "expenses" ? (
@@ -721,6 +678,37 @@ export default function App() {
 
         {isChecklistTab(activeTab) ? (
           <ChecklistSection {...checklistSectionPropsByKind[activeTab]} />
+        ) : null}
+
+        {activeTab === "timeline" ? (
+          <ComingSoonTab title="Timeline" />
+        ) : null}
+        {activeTab === "calendar" ? (
+          <ComingSoonTab title="Calendar" />
+        ) : null}
+        {activeTab === "goals" ? (
+          <ComingSoonTab title="Goals" />
+        ) : null}
+        {activeTab === "pages" ? (
+          <ComingSoonTab title="Pages" />
+        ) : null}
+        {activeTab === "development" ? (
+          <ComingSoonTab title="Code Health" />
+        ) : null}
+        {isCustomListTab(activeTab) && customList ? (
+          <CustomListTab
+            listName={customList.name}
+            slug={customList.slug}
+            userId={customListUserId}
+            onDeleteList={() => deleteCustomListAndSwitch(customList.slug)}
+            items={customListItemsState.items}
+            loading={customListItemsState.loading}
+            addItem={customListItemsState.addItem}
+            toggleDone={customListItemsState.toggleDone}
+            removeItem={customListItemsState.removeItem}
+            updateItemName={customListItemsState.updateItemName}
+            reorder={customListItemsState.reorder}
+          />
         ) : null}
 
         {activeTab === "tests" ? (
@@ -777,36 +765,68 @@ export default function App() {
             clearingEnhancements={clearingEnhancements}
             selectedProjectId={selectedProjectId}
             clearEnhancementsForProject={clearEnhancementsForProject}
+            onCreateCustomList={createCustomList}
+            onOpenTabPrefs={() => setShowTabPrefsModal(true)}
           />
         ) : null}
       </View>
 
-      <Modal visible={Boolean(previewUrl)} transparent animationType="slide">
-        <View style={appStyles.previewOverlay}>
-          <View style={appStyles.previewCard}>
-            <View style={appStyles.topBar}>
-              <Text style={appStyles.listItemTitle}>{previewTitle || "Preview"}</Text>
-              <AppButton
-                label="Close"
-                variant="secondary"
-                onPress={() => {
-                  setPreviewUrl("");
-                  setPreviewTitle("");
-                }}
-              />
-            </View>
-            {previewUrl ? (
-              <WebView
-                source={{
-                  uri: previewUrl,
-                  headers: { Authorization: `Bearer ${token}` },
-                }}
-                style={appStyles.previewWebView}
-              />
-            ) : null}
-          </View>
-        </View>
-      </Modal>
+      <AppDrawer
+        visible={drawerOpen}
+        onClose={() => setDrawerOpen(false)}
+        projects={projects}
+        selectedProjectId={selectedProjectId}
+        onSelectProject={setSelectedProjectId}
+        projectsLoading={projectsLoading}
+        onRefreshProjects={() => loadProjects().catch(() => {})}
+        visibleTabOrder={visibleTabOrder}
+        activeTab={activeTab}
+        onSelectTab={setActiveTab}
+        customLists={customLists}
+        onOpenTabPrefs={() => setShowTabPrefsModal(true)}
+      />
+
+      <TabPreferencesModal
+        visible={showTabPrefsModal}
+        onClose={() => setShowTabPrefsModal(false)}
+        fullTabOrder={fullTabOrder}
+        hiddenTabIds={hiddenTabIds}
+        setTabOrder={setTabOrder}
+        setHiddenTabIds={setHiddenTabIds}
+        customLists={customLists}
+      />
+
+      <Pressable
+        style={{
+          position: "absolute",
+          bottom: 24,
+          right: 16,
+          backgroundColor: "#1d4ed8",
+          borderRadius: 24,
+          paddingVertical: 12,
+          paddingHorizontal: 16,
+        }}
+        onPress={() => setShowBulbyModal(true)}
+      >
+        <Text style={{ color: "#fff", fontWeight: "600", fontSize: 14 }}>Bulby</Text>
+      </Pressable>
+
+      <BulbyModal
+        visible={showBulbyModal}
+        onClose={() => setShowBulbyModal(false)}
+        webAppUrl={APP_WEB_URL}
+      />
+
+      <PreviewModal
+        visible={Boolean(previewUrl)}
+        url={previewUrl ?? ""}
+        title={previewTitle ?? ""}
+        token={token ?? ""}
+        onClose={() => {
+          setPreviewUrl("");
+          setPreviewTitle("");
+        }}
+      />
     </SafeAreaView>
   );
 }

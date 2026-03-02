@@ -7,10 +7,12 @@
     "android:clean": "adb uninstall com.ideahome || true && adb uninstall com.ideahomeapp || true",
     "ios": "react-native run-ios",
     "lint": "eslint .",
+    "prestart": "pnpm --filter @ideahome/shared build",
     "start": "react-native start",
     "test": "jest"
   },
   "dependencies": {
+    "@ideahome/shared": "workspace:*",
     "@ideahome/shared-assistant": "file:../packages/shared-assistant",
     "@ideahome/shared-config": "file:../packages/shared-config",
     "@react-native-async-storage/async-storage": "^2.2.0",

@@ -1,6 +1,8 @@
 export const colors = {
   bgPage: "#f5f5f7",
+  bgBar: "#ffffff",
   bgCard: "#ffffff",
+  columnBg: "#f9fafb",
   border: "#e5e7eb",
   borderInput: "#d1d5db",
   text: "#1f2937",
@@ -8,6 +10,7 @@ export const colors = {
   accent: "#374151",
   accentStrong: "#111827",
   danger: "#b91c1c",
+  cardShadow: "0 1px 3px rgba(0, 0, 0, 0.06)",
   status: {
     backlog: "#6b7280",
     todo: "#3b82f6",

@@ -1,5 +1,14 @@
 import React, { useEffect, useState } from "react";
-import Link from "next/link";
+import NextLink from "next/link";
+
+/** Typed alias to avoid React 18/19 type conflict in monorepo (Link vs ReactNode). */
+const Link = NextLink as React.ComponentType<{
+  href: string;
+  prefetch?: boolean;
+  onClick?: () => void;
+  className?: string;
+  children?: React.ReactNode;
+}>;
 import {
   setStoredAssistantVoiceUri,
   setStoredOpenRouterModel,

@@ -6,7 +6,7 @@ import {
   pathAuthGithub,
   pathAuthGoogle,
   pathAuthProviders,
-} from "@ideahome/shared-config";
+} from "@ideahome/shared";
 
 type OAuthProviders = {
   google: boolean;
