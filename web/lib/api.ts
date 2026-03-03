@@ -504,6 +504,20 @@ export function getApiBase(): string {
   if (typeof window !== "undefined") {
     const mobileBase = getMobileDevApiBase();
     if (mobileBase) return mobileBase;
+    const host = window.location.hostname;
+    if (!API_BASE_RAW) {
+      if (host !== "localhost" && host !== "127.0.0.1") {
+        return "";
+      }
+    }
+    if (
+      (API_BASE_RESOLVED === "http://localhost:3001" ||
+        API_BASE_RESOLVED === "http://127.0.0.1:3001") &&
+      host !== "localhost" &&
+      host !== "127.0.0.1"
+    ) {
+      return "";
+    }
     if (window.location.origin === API_BASE_RESOLVED) return "";
   }
   return API_BASE_RESOLVED;
