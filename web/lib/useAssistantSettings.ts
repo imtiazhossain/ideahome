@@ -9,6 +9,13 @@ const DEFAULT_OPENROUTER_MODELS = [
   "openai/gpt-5-mini",
 ];
 
+function readPublicEnv(name: string): string | undefined {
+  const maybeProcess = (globalThis as {
+    process?: { env?: Record<string, string | undefined> };
+  }).process;
+  return maybeProcess?.env?.[name];
+}
+
 function parseCsvValues(raw: string | undefined): string[] {
   if (!raw) return [];
   return Array.from(
@@ -23,14 +30,14 @@ function parseCsvValues(raw: string | undefined): string[] {
 
 const INITIAL_OPENROUTER_MODEL_OPTIONS = (() => {
   const fromEnv = parseCsvValues(
-    process.env.NEXT_PUBLIC_OPENROUTER_MODEL_OPTIONS
+    readPublicEnv("NEXT_PUBLIC_OPENROUTER_MODEL_OPTIONS")
   );
   return fromEnv.length > 0 ? fromEnv : DEFAULT_OPENROUTER_MODELS;
 })();
 
 const OPENROUTER_MODEL_SWITCHER_EMAILS = new Set(
   parseCsvValues(
-    process.env.NEXT_PUBLIC_OPENROUTER_MODEL_SWITCHER_EMAILS
+    readPublicEnv("NEXT_PUBLIC_OPENROUTER_MODEL_SWITCHER_EMAILS")
   ).map((email) => email.toLowerCase())
 );
 
@@ -189,4 +196,3 @@ export function useAssistantSettings() {
     canManageOpenRouterModel,
   };
 }
-

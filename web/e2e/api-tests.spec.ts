@@ -1,5 +1,13 @@
 import { test, expect } from "@playwright/test";
-import { expectHomeUrl, expandSidebarIfNeeded } from "./helpers";
+import {
+  ensureProjectExists,
+  expectHomeUrl,
+  expandSidebarIfNeeded,
+} from "./helpers";
+
+test.beforeAll(async () => {
+  await ensureProjectExists();
+});
 
 test.afterEach(async ({ page }) => {
   await page.close();
@@ -25,7 +33,10 @@ test.describe("API Tests page", () => {
       await page.goto("/api-tests");
     });
     await test.step("Click Back to Idea Home", async () => {
-      await page.getByRole("link", { name: "Back to Idea Home" }).click();
+      await Promise.all([
+        page.waitForURL(/\/(?:\?.*)?$/),
+        page.getByRole("link", { name: "Back to Idea Home" }).click(),
+      ]);
     });
     await test.step("Verify home URL and Idea Home title", async () => {
       await expectHomeUrl(page);

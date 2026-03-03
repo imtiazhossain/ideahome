@@ -20,6 +20,21 @@ export async function fetchProjects(): Promise<Project[]> {
   return r.json();
 }
 
+/** Ensure at least one project exists so non-home pages don't redirect to "/". */
+export async function ensureProjectExists(name = "E2E Seed Project"): Promise<void> {
+  try {
+    const projects = await fetchProjects();
+    if (projects.length > 0) return;
+    await fetch(`${API_BASE}${pathProjects()}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name }),
+    });
+  } catch (e) {
+    console.warn("e2e setup: could not ensure seed project exists:", e);
+  }
+}
+
 /** Delete a project by id. No-op if request fails (e.g. backend not running). */
 export async function deleteProjectById(id: string): Promise<void> {
   const r = await fetch(`${API_BASE}${pathProjectById(id)}`, { method: "DELETE" });
@@ -53,7 +68,7 @@ export async function deleteTestProjectsByNames(
 
 /** Home route now lands on /ideas in some flows; accept either. */
 export async function expectHomeUrl(page: Page): Promise<void> {
-  await expect(page).toHaveURL(/\/(?:ideas)?$/);
+  await expect(page).toHaveURL(/\/(?:ideas)?(?:\?.*)?$/);
 }
 
 /**
@@ -66,6 +81,26 @@ export async function dismissCreateProjectModalIfPresent(
   const overlay = page.locator(".modal-overlay").first();
   if (!(await overlay.isVisible().catch(() => false))) {
     return;
+  }
+
+  const createProjectModal = page
+    .locator(".modal")
+    .filter({ hasText: "Create project" })
+    .first();
+  if (await createProjectModal.isVisible().catch(() => false)) {
+    const nameInput = createProjectModal.getByPlaceholder(
+      "e.g. Engineering, Marketing"
+    );
+    if (await nameInput.isVisible().catch(() => false)) {
+      await nameInput.fill(`E2E Seed ${Date.now()}`);
+      await createProjectModal
+        .getByRole("button", { name: "Create" })
+        .click()
+        .catch(() => {});
+      if (!(await overlay.isVisible().catch(() => false))) {
+        return;
+      }
+    }
   }
 
   for (let attempt = 0; attempt < 3; attempt++) {

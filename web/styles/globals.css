@@ -8012,17 +8012,12 @@ html[data-theme="dark"] .calendar-picker-popup {
   width: 100%;
 }
 
-/* Code page: keep collapsed section header content vertically centered in cards */
-.tests-page-section[class*="code-page-"] .expenses-list-section-header {
-  min-height: 56px;
-  align-items: center;
-}
-
 .tests-page-section[class*="code-page-"][data-collapsed="true"] {
   display: flex;
   align-items: center;
 }
 
+/* Code page: keep collapsed section header content vertically centered in cards */
 .tests-page-section[class*="code-page-"][data-collapsed="true"]
   .expenses-list-section-header {
   width: 100%;
@@ -9295,6 +9290,7 @@ html[data-theme="dark"] .calendar-picker-popup {
 .code-page-repos-copy {
   margin: 0;
   font-size: 13px;
+  line-height: 1.45;
   color: var(--text-muted);
 }
 
@@ -9302,6 +9298,7 @@ html[data-theme="dark"] .calendar-picker-popup {
   display: grid;
   grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) auto;
   gap: 10px;
+  margin-top: 8px;
   align-items: end;
 }
 
@@ -9318,7 +9315,7 @@ html[data-theme="dark"] .calendar-picker-popup {
 .code-page-field {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
 }
 
 .code-page-field-label {

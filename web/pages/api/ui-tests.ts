@@ -2,6 +2,7 @@ import type { NextApiRequest, NextApiResponse } from "next";
 import path from "path";
 import fs from "fs";
 import { ensureInternalApiAccess } from "../../lib/server/internal-api-access";
+import { uiTests as staticUiTests } from "../../lib/ui-tests";
 
 export type UITestSuite = {
   name: string;
@@ -134,19 +135,8 @@ export default function handler(
     if (discovered && discovered.length > 0) {
       return res.status(200).json(discovered);
     }
-    // Fallback to static list
-    if (process.env.NODE_ENV === "development") {
-      try {
-        const resolved = require.resolve("../../lib/ui-tests");
-        if (resolved && typeof resolved === "string") {
-          delete require.cache[resolved];
-        }
-      } catch {
-        // ignore
-      }
-    }
-    const { uiTests } = require("../../lib/ui-tests");
-    return res.status(200).json(uiTests);
+    // Fallback to static list.
+    return res.status(200).json(staticUiTests);
   } catch (err) {
     console.error("ui-tests API:", err);
     return res.status(500).json({

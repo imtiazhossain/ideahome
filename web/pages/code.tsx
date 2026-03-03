@@ -180,6 +180,7 @@ export default function CodePage() {
   const [securityAuditGeneratedAt, setSecurityAuditGeneratedAt] = useState<
     string | null
   >(null);
+  const [projectFlowRefreshNonce, setProjectFlowRefreshNonce] = useState(0);
   const runSecurityAudit = useCallback(async () => {
     setSecurityAuditRunning(true);
     setSecurityAuditError(null);
@@ -213,6 +214,9 @@ export default function CodePage() {
     } finally {
       setSecurityAuditRunning(false);
     }
+  }, []);
+  const updateProjectFlowDiagram = useCallback(() => {
+    setProjectFlowRefreshNonce((prev) => prev + 1);
   }, []);
 
   const sensors = useSensors(
@@ -275,6 +279,8 @@ export default function CodePage() {
         handleCopyPrompt,
         wireframe,
         generateWireframe,
+        projectFlowRefreshNonce,
+        updateProjectFlowDiagram,
         securityAuditRunning,
         securityAuditError,
         securityAuditSummary,
@@ -317,6 +323,8 @@ export default function CodePage() {
       handleCopyPrompt,
       wireframe,
       generateWireframe,
+      projectFlowRefreshNonce,
+      updateProjectFlowDiagram,
       securityAuditRunning,
       securityAuditError,
       securityAuditSummary,
@@ -440,6 +448,8 @@ function renderCodeSectionInner(
     handleCopyPrompt: () => Promise<void>;
     wireframe: WireframeSnapshot | null;
     generateWireframe: () => void;
+    projectFlowRefreshNonce: number;
+    updateProjectFlowDiagram: () => void;
     securityAuditRunning: boolean;
     securityAuditError: string | null;
     securityAuditSummary: SecurityAuditSummary | null;
@@ -485,6 +495,8 @@ function renderCodeSectionInner(
     handleCopyPrompt,
     wireframe,
     generateWireframe,
+    projectFlowRefreshNonce,
+    updateProjectFlowDiagram,
     securityAuditRunning,
     securityAuditError,
     securityAuditSummary,
@@ -1046,7 +1058,15 @@ function renderCodeSectionInner(
           How the monorepo fits together: shared packages, backend modules, web
           (Next.js), app (React Native), and API flow.
         </p>
+        <button
+          type="button"
+          className="code-page-wireframe-btn"
+          onClick={updateProjectFlowDiagram}
+        >
+          Update flow diagram
+        </button>
         <ProjectFlowDiagram
+          key={projectFlowRefreshNonce}
           visible={!isSectionCollapsed("code-project-flow")}
         />
       </CollapsibleSection>

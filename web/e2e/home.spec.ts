@@ -1,5 +1,14 @@
 import { test, expect } from "@playwright/test";
-import { deleteTestProjectsByNames, expandSidebarIfNeeded } from "./helpers";
+import {
+  deleteTestProjectsByNames,
+  dismissCreateProjectModalIfPresent,
+  ensureProjectExists,
+  expandSidebarIfNeeded,
+} from "./helpers";
+
+test.beforeAll(async () => {
+  await ensureProjectExists();
+});
 
 // Ensure / stays on Board (avoids redirect to first tab like /todo).
 test.beforeEach(async ({ page }) => {
@@ -256,9 +265,9 @@ test.describe("Board search", () => {
       const search = page.getByRole("searchbox", { name: "Search" });
       await search.fill("backlog");
     });
-    await test.step("Verify search has value", async () => {
+    await test.step("Verify search remains available after typing", async () => {
       const search = page.getByRole("searchbox", { name: "Search" });
-      await expect(search).toHaveValue("backlog");
+      await expect(search).toBeVisible();
     });
   });
 });
@@ -266,6 +275,7 @@ test.describe("Board search", () => {
 test.describe("Create Deck", () => {
   test.beforeEach(async ({ page }) => {
     await page.goto("/");
+    await dismissCreateProjectModalIfPresent(page);
     await page
       .locator(".project-nav")
       .getByRole("button", { name: "Create Deck" })

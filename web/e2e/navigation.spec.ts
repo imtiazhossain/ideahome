@@ -2,9 +2,14 @@ import { test, expect } from "@playwright/test";
 import {
   deleteTestProjectsByNames,
   dismissCreateProjectModalIfPresent,
+  ensureProjectExists,
   expectHomeUrl,
   expandSidebarIfNeeded,
 } from "./helpers";
+
+test.beforeAll(async () => {
+  await ensureProjectExists();
+});
 
 test.afterEach(async ({ page }) => {
   await page.close();

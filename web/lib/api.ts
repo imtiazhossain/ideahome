@@ -84,7 +84,14 @@ import {
 } from "./api/checkable-entities";
 
 /** Backend API base URL. Always absolute so requests never go to the current page origin. */
-const API_BASE_RAW = process.env.NEXT_PUBLIC_API_URL || "";
+function readPublicEnv(name: string): string | undefined {
+  const maybeProcess = (globalThis as {
+    process?: { env?: Record<string, string | undefined> };
+  }).process;
+  return maybeProcess?.env?.[name];
+}
+
+const API_BASE_RAW = readPublicEnv("NEXT_PUBLIC_API_URL") || "";
 const API_BASE_DEFAULT = "http://localhost:3001";
 
 function resolveApiBase(raw: string): string {
@@ -279,7 +286,7 @@ export async function requestVoid(
 
 /** When true, app does not redirect to login (use with backend SKIP_AUTH_DEV in local dev). */
 export function isSkipLoginDev(): boolean {
-  return process.env.NEXT_PUBLIC_SKIP_LOGIN_DEV === "true";
+  return readPublicEnv("NEXT_PUBLIC_SKIP_LOGIN_DEV") === "true";
 }
 
 export function getStoredToken(): string | null {
