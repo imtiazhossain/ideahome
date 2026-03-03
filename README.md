@@ -34,6 +34,9 @@ To work without signing in locally, set in `backend/.env`: `SKIP_AUTH_DEV=true`.
 **Vercel deployment (single app)**  
 Deploy web + backend together. See **`docs/VERCEL-MIGRATION.md`** for setup. Root Directory: `web`, set `USE_BUILTIN_API=true` and add `DATABASE_URL`, `JWT_SECRET`, etc.
 
+**Browser automation (agent-browser)**  
+[Vercel Agent Browser](https://github.com/vercel-labs/agent-browser) is available for CLI browser automation (e.g. for scripts or AI agents). After `pnpm install`, run: `pnpm browser:agent open <url>`, then `pnpm browser:agent snapshot -i` for element refs, and `pnpm browser:agent click @e1` etc. Optional: `pnpm browser:agent install` to ensure Chromium is installed (may require Playwright on PATH).
+
 Packages:
 - backend: NestJS API + Prisma schema
 - web: Next.js frontend

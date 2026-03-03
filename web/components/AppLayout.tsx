@@ -2,25 +2,12 @@ import React from "react";
 import Head from "next/head";
 import { useRouter } from "next/router";
 import {
-  AUTH_CHANGE_EVENT,
-  ASSISTANT_VOICE_CHANGE_EVENT,
-  getStoredAssistantVoiceUri,
-  getStoredOpenRouterModel,
-  getUserEmailFromToken,
-  getUserScopedStorageKey,
-  setStoredAssistantVoiceUri,
-  setStoredOpenRouterModel,
-} from "../lib/api/auth";
-import { fetchElevenLabsVoices, fetchOpenRouterModels } from "../lib/api";
-import {
-  safeLocalStorageGetJson,
-  safeLocalStorageSetJson,
-} from "../lib/storage";
-import {
   addCustomList,
   getCustomListTabId,
   getCustomLists,
 } from "../lib/customLists";
+import { useProjectOrder } from "../lib/useProjectOrder";
+import { useAssistantSettings } from "../lib/useAssistantSettings";
 import { AppDrawer } from "./AppDrawer";
 import { BulbyChatbox } from "./BulbyChatbox";
 import { ProjectNavBar, useIsMobile, useTabOrder } from "./ProjectNavBar";
@@ -42,76 +29,10 @@ const SECTION_LINKS: {
   { tabId: "list", label: "Features", href: "/features" },
   { tabId: "forms", label: "Bugs", href: "/bugs" },
   { tabId: "goals", label: "Goals" },
-  { tabId: "development", label: "Code Health", href: "/coverage" },
-  { tabId: "expenses", label: "Expenses", href: "/expenses" },
+  { tabId: "expenses", label: "Finances", href: "/finances" },
   { tabId: "code", label: "Code", href: "/code" },
   { tabId: "pages", label: "Pages" },
 ];
-
-const PROJECT_ORDER_STORAGE_PREFIX = "ideahome-drawer-project-order";
-const PROJECT_ORDER_LEGACY_KEY = "ideahome-drawer-project-order";
-const DEFAULT_OPENROUTER_MODELS = ["openai/gpt-4o-mini", "openai/gpt-5-mini"];
-
-function parseCsvValues(raw: string | undefined): string[] {
-  if (!raw) return [];
-  return Array.from(
-    new Set(
-      raw
-        .split(",")
-        .map((value) => value.trim())
-        .filter(Boolean)
-    )
-  );
-}
-
-const INITIAL_OPENROUTER_MODEL_OPTIONS = (() => {
-  const fromEnv = parseCsvValues(
-    process.env.NEXT_PUBLIC_OPENROUTER_MODEL_OPTIONS
-  );
-  return fromEnv.length > 0 ? fromEnv : DEFAULT_OPENROUTER_MODELS;
-})();
-
-const OPENROUTER_MODEL_SWITCHER_EMAILS = new Set(
-  parseCsvValues(process.env.NEXT_PUBLIC_OPENROUTER_MODEL_SWITCHER_EMAILS).map(
-    (email) => email.toLowerCase()
-  )
-);
-
-function getProjectOrderStorageKey(): string {
-  return getUserScopedStorageKey(
-    PROJECT_ORDER_STORAGE_PREFIX,
-    PROJECT_ORDER_LEGACY_KEY
-  );
-}
-
-function mergeProjectOrder(
-  projects: { id: string; name: string }[],
-  orderIds: string[]
-): string[] {
-  const validIds = new Set(projects.map((p) => p.id));
-  const deduped = orderIds.filter(
-    (id, idx) => validIds.has(id) && orderIds.indexOf(id) === idx
-  );
-  const missing = projects
-    .map((p) => p.id)
-    .filter((id) => !deduped.includes(id));
-  return [...deduped, ...missing];
-}
-
-function loadProjectOrderIds(): string[] {
-  if (typeof window === "undefined") return [];
-  const parsed = safeLocalStorageGetJson<unknown[]>(
-    getProjectOrderStorageKey(),
-    (value): value is unknown[] => Array.isArray(value)
-  );
-  if (!parsed) return [];
-  return parsed.filter((id): id is string => typeof id === "string");
-}
-
-function saveProjectOrderIds(ids: string[]) {
-  if (typeof window === "undefined") return;
-  safeLocalStorageSetJson(getProjectOrderStorageKey(), ids);
-}
 
 export interface AppLayoutProps {
   title: string;
@@ -202,62 +123,25 @@ export function AppLayout({
   const [drawerVoicesOpen, setDrawerVoicesOpen] = React.useState(false);
   const [drawerDeleteSectionsOpen, setDrawerDeleteSectionsOpen] =
     React.useState(false);
-  const [projectOrderIds, setProjectOrderIds] = React.useState<string[]>([]);
   const [creatingProject, setCreatingProject] = React.useState(false);
   const [creatingProjectName, setCreatingProjectName] = React.useState("");
   const [creatingSection, setCreatingSection] = React.useState(false);
   const [creatingSectionName, setCreatingSectionName] = React.useState("");
-  const [currentUserEmail, setCurrentUserEmail] = React.useState<string | null>(
-    null
-  );
-  const [openRouterModelOptions, setOpenRouterModelOptions] = React.useState<
-    string[]
-  >(INITIAL_OPENROUTER_MODEL_OPTIONS);
-  const [selectedAiModel, setSelectedAiModel] = React.useState<string>(() => {
-    const stored = getStoredOpenRouterModel();
-    if (stored && INITIAL_OPENROUTER_MODEL_OPTIONS.includes(stored))
-      return stored;
-    return INITIAL_OPENROUTER_MODEL_OPTIONS[0] ?? "";
-  });
-  const [availableVoices, setAvailableVoices] = React.useState<
-    Array<{ value: string; label: string }>
-  >([]);
-  const [selectedVoiceUri, setSelectedVoiceUri] = React.useState<string>("");
   const creatingProjectInputRef = React.useRef<HTMLInputElement>(null);
   const creatingSectionInputRef = React.useRef<HTMLInputElement>(null);
 
-  React.useEffect(() => {
-    setProjectOrderIds((prev) => {
-      const base = prev.length > 0 ? prev : loadProjectOrderIds();
-      return mergeProjectOrder(projects, base);
-    });
-  }, [projects]);
+  const { orderedProjects, moveProject } = useProjectOrder(projects);
 
-  React.useEffect(() => {
-    if (projectOrderIds.length > 0) saveProjectOrderIds(projectOrderIds);
-  }, [projectOrderIds]);
-
-  const orderedProjects = React.useMemo(() => {
-    if (projectOrderIds.length === 0) return projects;
-    const map = new Map(projects.map((p) => [p.id, p]));
-    return mergeProjectOrder(projects, projectOrderIds)
-      .map((id) => map.get(id))
-      .filter((p): p is { id: string; name: string } => Boolean(p));
-  }, [projects, projectOrderIds]);
-
-  const moveProject = React.useCallback(
-    (projectId: string, direction: "up" | "down") => {
-      const ids = orderedProjects.map((p) => p.id);
-      const from = ids.indexOf(projectId);
-      if (from === -1) return;
-      const to = direction === "up" ? from - 1 : from + 1;
-      if (to < 0 || to >= ids.length) return;
-      const next = [...ids];
-      [next[from], next[to]] = [next[to], next[from]];
-      setProjectOrderIds(next);
-    },
-    [orderedProjects]
-  );
+  const {
+    availableVoices,
+    selectedVoiceUri,
+    setSelectedVoiceUri,
+    selectedVoiceLabel,
+    openRouterModelOptions,
+    selectedAiModel,
+    setSelectedAiModel,
+    canManageOpenRouterModel,
+  } = useAssistantSettings();
   const orderedNavLinks = React.useMemo(() => {
     const byId = new Map(SECTION_LINKS.map((l) => [l.tabId, l]));
     const customById = new Map<
@@ -466,96 +350,6 @@ export function AppLayout({
   React.useEffect(() => {
     if (creatingSection) creatingSectionInputRef.current?.focus();
   }, [creatingSection]);
-
-  React.useEffect(() => {
-    const syncFromAuth = () => {
-      const email = getUserEmailFromToken();
-      setCurrentUserEmail(email);
-      setSelectedVoiceUri(getStoredAssistantVoiceUri() ?? "");
-      const stored = getStoredOpenRouterModel();
-      if (stored && openRouterModelOptions.includes(stored)) {
-        setSelectedAiModel(stored);
-        return;
-      }
-      setSelectedAiModel(openRouterModelOptions[0] ?? "");
-    };
-
-    syncFromAuth();
-    window.addEventListener(AUTH_CHANGE_EVENT, syncFromAuth);
-    return () => window.removeEventListener(AUTH_CHANGE_EVENT, syncFromAuth);
-  }, [openRouterModelOptions]);
-
-  React.useEffect(() => {
-    if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
-    const synth = window.speechSynthesis;
-    const syncVoices = async () => {
-      const browserVoices = synth
-        .getVoices()
-        .map((voice) => ({
-          value: `browser:${voice.voiceURI}`,
-          label: `${voice.name} (${voice.lang})`,
-        }))
-        .filter((voice, idx, arr) => {
-          const voiceUri = voice.value.replace(/^browser:/, "");
-          if (!voiceUri) return false;
-          return arr.findIndex((v) => v.value === voice.value) === idx;
-        })
-        .sort((a, b) => a.label.localeCompare(b.label));
-
-      let elevenLabsVoices: Array<{ value: string; label: string }> = [];
-      try {
-        const voices = await fetchElevenLabsVoices();
-        elevenLabsVoices = voices.map((voice) => ({
-          value: `elevenlabs:${voice.id}`,
-          label: `11Labs: ${voice.name}`,
-        }));
-      } catch {
-        // keep browser voices only when ElevenLabs is unavailable
-      }
-
-      const voices = [...elevenLabsVoices, ...browserVoices];
-      setAvailableVoices(voices);
-      const stored = getStoredAssistantVoiceUri();
-      const normalizedStored =
-        stored && !stored.includes(":") ? `browser:${stored}` : stored;
-      if (
-        normalizedStored &&
-        voices.some((voice) => voice.value === normalizedStored)
-      ) {
-        setSelectedVoiceUri(normalizedStored);
-        if (stored !== normalizedStored)
-          setStoredAssistantVoiceUri(normalizedStored);
-      } else if (voices[0]) {
-        setSelectedVoiceUri(voices[0].value);
-      } else {
-        setSelectedVoiceUri("");
-      }
-    };
-    void syncVoices();
-    const onVoicesChanged = () => {
-      void syncVoices();
-    };
-    synth.addEventListener("voiceschanged", onVoicesChanged);
-    window.addEventListener(ASSISTANT_VOICE_CHANGE_EVENT, onVoicesChanged);
-    return () => {
-      synth.removeEventListener("voiceschanged", onVoicesChanged);
-      window.removeEventListener(ASSISTANT_VOICE_CHANGE_EVENT, onVoicesChanged);
-    };
-  }, []);
-
-  const canManageOpenRouterModel = React.useMemo(() => {
-    const email = currentUserEmail?.toLowerCase().trim();
-    if (!email) return false;
-    if (openRouterModelOptions.length === 0) return false;
-    return OPENROUTER_MODEL_SWITCHER_EMAILS.has(email);
-  }, [currentUserEmail, openRouterModelOptions]);
-
-  const selectedVoiceLabel = React.useMemo(
-    () =>
-      availableVoices.find((voice) => voice.value === selectedVoiceUri)?.label ??
-      "Assistant voice",
-    [availableVoices, selectedVoiceUri]
-  );
 
   React.useEffect(() => {
     if (!canManageOpenRouterModel) return;

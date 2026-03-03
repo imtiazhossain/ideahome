@@ -39,17 +39,16 @@ export function adjustEditingIndexAfterRemove(
 }
 
 /**
- * Index where a new unchecked item should be inserted (before first done item).
+ * Index where a new unchecked item should be inserted (top of list).
  */
 export function indexForNewUncheckedItem<T extends { done: boolean }>(
-  items: T[]
+  _items: T[]
 ): number {
-  const firstDoneIndex = items.findIndex((i) => i.done);
-  return firstDoneIndex === -1 ? items.length : firstDoneIndex;
+  return 0;
 }
 
 /**
- * Insert a new item at the correct position (before first done item).
+ * Insert a new item at the position given by indexForNewUncheckedItem (top of list).
  */
 export function insertUncheckedItem<T extends { done: boolean }>(
   items: T[],
@@ -156,12 +155,41 @@ export function getRecordingDisplayLabel(
   return `Screen Recording ${index}`;
 }
 
+/** Format a Date as YYYY-MM-DD (local date, no timezone shift). */
+export function toYYYYMMDD(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
 /** Format number as USD currency. */
 export function formatCurrency(amount: number): string {
   return new Intl.NumberFormat(undefined, {
     style: "currency",
     currency: "USD",
   }).format(amount);
+}
+
+/** Format an ISO date string as relative time (e.g. "2 min ago", "yesterday"). */
+export function formatRelativeTime(isoString: string): string {
+  const date = new Date(isoString);
+  if (Number.isNaN(date.getTime())) return isoString;
+  const now = new Date();
+  const sec = Math.floor((now.getTime() - date.getTime()) / 1000);
+  if (sec < 60) return "just now";
+  const min = Math.floor(sec / 60);
+  if (min < 60) return `${min} min ago`;
+  const hr = Math.floor(min / 60);
+  if (hr < 24) return `${hr} hr ago`;
+  const day = Math.floor(hr / 24);
+  if (day === 1) return "yesterday";
+  if (day < 7) return `${day} days ago`;
+  return date.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: date.getFullYear() !== now.getFullYear() ? "numeric" : undefined,
+  });
 }
 
 /** Reorder array: move item from index `from` to index `to`. */

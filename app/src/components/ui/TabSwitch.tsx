@@ -34,11 +34,9 @@ export function TabSwitch<T extends string>({
   );
 }
 
-const TAB_ACTIVE_COLOR = "#1d4ed8";
-
 const styles = StyleSheet.create({
   row: {
-    backgroundColor: "#ffffff",
+    backgroundColor: colors.bgCard,
     borderBottomColor: colors.border,
     borderBottomWidth: 1,
     flexDirection: "row",
@@ -53,7 +51,7 @@ const styles = StyleSheet.create({
     position: "relative",
   },
   tabActive: {
-    borderBottomColor: TAB_ACTIVE_COLOR,
+    borderBottomColor: colors.accent,
     borderBottomWidth: 2,
     marginBottom: -1,
   },
@@ -63,7 +61,7 @@ const styles = StyleSheet.create({
     fontWeight: "500",
   },
   tabTextActive: {
-    color: TAB_ACTIVE_COLOR,
+    color: colors.accent,
     fontWeight: "600",
   },
 });

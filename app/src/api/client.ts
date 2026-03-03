@@ -6,6 +6,7 @@ import {
   pathCommentAttachments,
   pathExpenseById,
   pathExpenses,
+  pathExpensesDeleteImported,
   pathIdeaAssistantChat,
   pathIssueById,
   pathIssueFileById,
@@ -342,6 +343,17 @@ export function updateExpense(
 
 export function deleteExpense(token: string, id: string): Promise<void> {
   return request<void>(pathExpenseById(id), token, { method: "DELETE" });
+}
+
+export function deleteAllImportedExpenses(
+  token: string,
+  projectId: string
+): Promise<{ deleted: number }> {
+  return request<{ deleted: number }>(
+    pathExpensesDeleteImported(projectId),
+    token,
+    { method: "DELETE" }
+  );
 }
 
 export function updateIssueRecording(

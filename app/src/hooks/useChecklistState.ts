@@ -709,6 +709,8 @@ export function useChecklistState(
       onStartEdit: (item: ChecklistItem) => startChecklistEdit(kind, item),
       onSaveEdit: () => saveChecklistEdit(kind),
       onCancelEdit: cancelChecklistEdit,
+      // For the To-Do screen we hide the extra search/filters so it matches the mobile web UI more closely.
+      showFiltersAndSearch: kind !== "todos",
     });
     return {
       features: {

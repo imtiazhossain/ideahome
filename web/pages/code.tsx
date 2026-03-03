@@ -1,367 +1,496 @@
-import React, { useMemo, useState } from "react";
-import Head from "next/head";
-import Link from "next/link";
+import React, { useCallback, useMemo } from "react";
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import { AppLayout } from "../components/AppLayout";
+import { AutoResizeTextarea } from "../components/AutoResizeTextarea";
+import { CodeHealthSection } from "../components/CodeHealthSection";
+import { CollapsibleSection } from "../components/CollapsibleSection";
+import { IconGrip } from "../components/IconGrip";
+import { ProjectFlowDiagram } from "../components/ProjectFlowDiagram";
+import { severityLabel } from "../lib/codePageUtils";
+import { useCodePageState } from "../lib/useCodePageState";
+import { useProjectLayout } from "../lib/useProjectLayout";
+import { useTheme } from "./_app";
 
-type AuditSeverity = "high" | "medium" | "low";
-type AuditEffort = "small" | "medium" | "large";
-
-type AuditFinding = {
-  id: string;
-  title: string;
-  severity: AuditSeverity;
-  effort: AuditEffort;
-  why: string;
-  action: string;
-  file?: string;
-  line?: number;
-  lines?: number;
-};
-
-type AuditSummary = {
-  sourceFiles: number;
-  sourceLines: number;
-  high: number;
-  medium: number;
-  low: number;
-};
-
-type AuditPayload = {
-  ok: boolean;
-  runId: string;
-  generatedAt: string;
-  durationMs: number;
-  summary: AuditSummary;
-  findings: AuditFinding[];
-  error?: string;
-};
-
-type CodePreviewPayload = {
-  ok: boolean;
-  filePath?: string;
-  line?: number;
-  lines?: string[];
-  error?: string;
-};
-
-type CodePreviewState = {
-  filePath: string;
-  startLine: number;
-  lines: string[];
-  targetLine: number;
-};
-
-type WireframeNodeTone = "ui" | "api" | "data" | "hotspot";
-
-type WireframeNode = {
-  id: string;
-  title: string;
-  subtitle: string;
-  tone: WireframeNodeTone;
-};
-
-type WireframeLane = {
-  id: string;
-  title: string;
-  nodes: WireframeNode[];
-};
-
-type WireframeSnapshot = {
-  generatedAt: string;
-  runId: string | null;
-  lanes: WireframeLane[];
-  highlights: string[];
-};
-
-async function readJsonIfAvailable<T>(
-  response: Response
-): Promise<{ data: T | null; text: string | null }> {
-  const contentType = response.headers.get("content-type") ?? "";
-  const bodyText = await response.text();
-  if (!contentType.toLowerCase().includes("application/json")) {
-    return { data: null, text: bodyText };
-  }
-  try {
-    return { data: JSON.parse(bodyText) as T, text: bodyText };
-  } catch {
-    return { data: null, text: bodyText };
-  }
-}
-
-function severityLabel(severity: AuditSeverity): string {
-  if (severity === "high") return "High";
-  if (severity === "medium") return "Medium";
-  return "Low";
-}
-
-function bySeverityDesc(a: AuditFinding, b: AuditFinding): number {
-  const rank: Record<AuditSeverity, number> = {
-    high: 3,
-    medium: 2,
-    low: 1,
+function SortableCodeSection({
+  sectionId,
+  children,
+}: {
+  sectionId: string;
+  children: (dragHandle: React.ReactNode) => React.ReactNode;
+}) {
+  const {
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+    attributes,
+    listeners,
+  } = useSortable({ id: sectionId });
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
   };
-  return rank[b.severity] - rank[a.severity];
-}
-
-function findingHighlight(finding: AuditFinding): string {
-  const fileRef = finding.file ? ` (${finding.file})` : "";
-  return `${severityLabel(finding.severity)}: ${finding.title}${fileRef}`;
-}
-
-function buildWireframe(payload: AuditPayload | null): WireframeSnapshot {
-  const sortedFindings = [...(payload?.findings ?? [])].sort(bySeverityDesc);
-  const topFindings = sortedFindings.slice(0, 3);
-  const highlights =
-    topFindings.length > 0
-      ? topFindings.map(findingHighlight)
-      : [
-          "Run token audit to attach current code hotspots to this app flow map.",
-        ];
-  const sourceFiles = payload?.summary.sourceFiles ?? 0;
-  const sourceLines = payload?.summary.sourceLines ?? 0;
-  const generatedAt = new Date().toISOString();
-
-  return {
-    generatedAt,
-    runId: payload?.runId ?? null,
-    highlights,
-    lanes: [
-      {
-        id: "entry",
-        title: "Entry + Auth Flow",
-        nodes: [
-          {
-            id: "client-entry",
-            title: "Web + Mobile Entry",
-            subtitle: "Next.js pages and React Native tabs",
-            tone: "ui",
-          },
-          {
-            id: "sso",
-            title: "Login + Callback",
-            subtitle: "/login -> /auth/* -> token storage",
-            tone: "ui",
-          },
-          {
-            id: "authz",
-            title: "Authorized API Access",
-            subtitle: "Bearer/cookie token on client requests",
-            tone: "hotspot",
-          },
-        ],
-      },
-      {
-        id: "product",
-        title: "Core Product Flow",
-        nodes: [
-          {
-            id: "project-select",
-            title: "Project + Org Context",
-            subtitle: "select/create project, scoped data",
-            tone: "ui",
-          },
-          {
-            id: "board-issues",
-            title: "Board + Issues",
-            subtitle: "create/update/status/comments/assignee",
-            tone: "ui",
-          },
-          {
-            id: "media",
-            title: "Media + Files",
-            subtitle: "recordings, screenshots, attachments, streams",
-            tone: "hotspot",
-          },
-          {
-            id: "checklists",
-            title: "Lists + Planning",
-            subtitle: "todos, ideas, bugs, features, enhancements",
-            tone: "ui",
-          },
-          {
-            id: "quality",
-            title: "Tests + Expenses + Code",
-            subtitle: "ui/api tests, costs, code insights",
-            tone: "ui",
-          },
-        ],
-      },
-      {
-        id: "backend",
-        title: "Backend + Data Flow",
-        nodes: [
-          {
-            id: "rewrite",
-            title: "Routing Layer",
-            subtitle: "Next rewrites -> backend or /api serverless",
-            tone: "api",
-          },
-          {
-            id: "guard-controller",
-            title: "JwtAuthGuard + Controllers",
-            subtitle: "auth check + request dispatch",
-            tone: "api",
-          },
-          {
-            id: "services",
-            title: "Domain Services",
-            subtitle: "org scope, validation, business logic",
-            tone: "api",
-          },
-          {
-            id: "prisma",
-            title: "Prisma + PostgreSQL",
-            subtitle: "persistent app entities",
-            tone: "data",
-          },
-          {
-            id: "storage",
-            title: "StorageService + Uploads",
-            subtitle: "file/media read-write",
-            tone: "data",
-          },
-        ],
-      },
-      {
-        id: "observability",
-        title: "Code Health Overlay",
-        nodes: [
-          {
-            id: "repo-size",
-            title: "Source Footprint",
-            subtitle: `${sourceFiles} files · ${sourceLines} lines tracked`,
-            tone: "data",
-          },
-          {
-            id: "audit-output",
-            title: "Token Audit Findings",
-            subtitle: `${payload?.findings.length ?? 0} findings from last run`,
-            tone: "api",
-          },
-          {
-            id: "wireframe",
-            title: "Updated App Flow Wireframe",
-            subtitle: "product-map + current engineering hotspots",
-            tone: "hotspot",
-          },
-        ],
-      },
-    ],
-  };
+  const dragHandle = (
+    <span
+      className="code-page-section-drag-handle features-list-drag-handle"
+      {...attributes}
+      {...listeners}
+      aria-label="Drag to reorder"
+      title="Drag to reorder"
+    >
+      <IconGrip />
+    </span>
+  );
+  return (
+    <div ref={setNodeRef} style={style}>
+      {children(dragHandle)}
+    </div>
+  );
 }
 
 export default function CodePage() {
-  const [running, setRunning] = useState(false);
-  const [payload, setPayload] = useState<AuditPayload | null>(null);
-  const [requestError, setRequestError] = useState<string | null>(null);
-  const [preview, setPreview] = useState<CodePreviewState | null>(null);
-  const [previewError, setPreviewError] = useState<string | null>(null);
-  const [previewLoading, setPreviewLoading] = useState(false);
-  const [wireframe, setWireframe] = useState<WireframeSnapshot | null>(null);
+  const layout = useProjectLayout();
+  const {
+    projects,
+    selectedProjectId,
+    setSelectedProjectId,
+    projectDisplayName,
+    drawerOpen,
+    setDrawerOpen,
+    editingProjectId,
+    setEditingProjectId,
+    editingProjectName,
+    setEditingProjectName,
+    projectNameInputRef,
+    saveProjectName,
+    cancelEditProjectName,
+    projectToDelete,
+    setProjectToDelete,
+    projectDeleting,
+    handleDeleteProject,
+  } = layout;
+  const { theme, toggleTheme } = useTheme();
+  const codeState = useCodePageState(selectedProjectId);
+  const {
+    running,
+    payload,
+    requestError,
+    wireframe,
+    codeRating,
+    auditRating,
+    repos,
+    reposLoading,
+    reposError,
+    connectRepoName,
+    setConnectRepoName,
+    connectRepoBranch,
+    setConnectRepoBranch,
+    connectSubmitting,
+    promptCopied,
+    questionCopied,
+    auditPromptCopied,
+    toggleSection,
+    isSectionCollapsed,
+    sectionOrder,
+    setSectionOrder,
+    runAudit,
+    generateWireframe,
+    handleCopyPrompt,
+    handleCopyQuestion,
+    handleCopyAuditPrompt,
+    handleConnectRepo,
+    ratingQuestion,
+    setRatingQuestion,
+    codeRatingLabel,
+    auditRatingLabel,
+    staffPromptText,
+    setStaffPromptText,
+    auditPromptText,
+  } = codeState;
 
+  const hasSelectedProject = Boolean(selectedProjectId);
   const findings = payload?.findings ?? [];
   const generatedAt = useMemo(() => {
     if (!payload?.generatedAt) return null;
     return new Date(payload.generatedAt).toLocaleString();
   }, [payload?.generatedAt]);
 
-  async function runAudit() {
-    setRunning(true);
-    setRequestError(null);
-    setPayload(null);
-    setPreview(null);
-    setPreviewError(null);
-    try {
-      const response = await fetch(`/api/run-token-audit?ts=${Date.now()}`, {
-        method: "POST",
-        cache: "no-store",
-        headers: {
-          Pragma: "no-cache",
-          "Cache-Control": "no-cache",
-        },
-      });
-      const { data, text } = await readJsonIfAvailable<AuditPayload>(response);
-      if (!data) {
-        setPayload(null);
-        const detail = text
-          ? text.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 180)
-          : "";
-        setRequestError(
-          `Audit request failed (${response.status} ${response.statusText})${detail ? `: ${detail}` : ""}`
-        );
-        return;
-      }
-      setPayload(data);
-      setWireframe(buildWireframe(data));
-      if (!response.ok || data.ok !== true) {
-        setRequestError(data.error ?? `Audit failed (${response.status})`);
-      }
-    } catch (error) {
-      setPayload(null);
-      setRequestError(
-        error instanceof Error ? error.message : "Failed to run token audit"
-      );
-    } finally {
-      setRunning(false);
-    }
-  }
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
 
-  function generateWireframe() {
-    setWireframe(buildWireframe(payload));
-  }
+  const handleSectionDragEnd = useCallback(
+    (event: DragEndEvent) => {
+      const { active, over } = event;
+      if (!over || active.id === over.id) return;
+      const oldIndex = sectionOrder.indexOf(String(active.id));
+      const newIndex = sectionOrder.indexOf(String(over.id));
+      if (oldIndex === -1 || newIndex === -1) return;
+      const next = [...sectionOrder];
+      const [removed] = next.splice(oldIndex, 1);
+      next.splice(newIndex, 0, removed);
+      setSectionOrder(next);
+    },
+    [sectionOrder, setSectionOrder]
+  );
 
-  async function openFilePreview(filePath: string, line = 1) {
-    setPreviewError(null);
-    setPreviewLoading(true);
-    try {
-      const params = new URLSearchParams({
-        path: filePath,
-        line: String(line),
-      });
-      const response = await fetch(`/api/code-file?${params.toString()}`);
-      const { data, text } = await readJsonIfAvailable<CodePreviewPayload>(response);
-      if (!data) {
-        const detail = text
-          ? text.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 180)
-          : "";
-        setPreviewError(
-          `Failed to load file preview (${response.status} ${response.statusText})${detail ? `: ${detail}` : ""}`
-        );
-        return;
-      }
-      if (!response.ok || data.ok !== true || !data.filePath || !data.lines) {
-        setPreviewError(data.error ?? `Failed to load file preview (${response.status})`);
-        return;
-      }
-      setPreview({
-        filePath: data.filePath,
-        startLine: data.line ?? 1,
-        lines: data.lines,
-        targetLine: line,
-      });
-    } catch (error) {
-      setPreviewError(
-        error instanceof Error ? error.message : "Failed to load file preview"
-      );
-    } finally {
-      setPreviewLoading(false);
-    }
-  }
+  const renderCodeSection = useCallback(
+    (sectionId: string, dragHandle: React.ReactNode) =>
+      renderCodeSectionInner(sectionId, dragHandle, {
+        hasSelectedProject,
+        connectRepoName,
+        setConnectRepoName,
+        connectRepoBranch,
+        setConnectRepoBranch,
+        connectSubmitting,
+        selectedProjectId,
+        handleConnectRepo,
+        reposError,
+        reposLoading,
+        repos,
+        isSectionCollapsed,
+        toggleSection,
+        running,
+        runAudit,
+        auditRating,
+        auditRatingLabel,
+        handleCopyAuditPrompt,
+        auditPromptCopied,
+        auditPromptText,
+        payload,
+        findings,
+        requestError,
+        codeRating,
+        codeRatingLabel,
+        ratingQuestion,
+        setRatingQuestion,
+        questionCopied,
+        handleCopyQuestion,
+        staffPromptText,
+        setStaffPromptText,
+        promptCopied,
+        handleCopyPrompt,
+        wireframe,
+        generateWireframe,
+      }),
+    [
+      hasSelectedProject,
+      connectRepoName,
+      connectRepoBranch,
+      connectSubmitting,
+      selectedProjectId,
+      handleConnectRepo,
+      reposError,
+      reposLoading,
+      repos,
+      isSectionCollapsed,
+      toggleSection,
+      running,
+      runAudit,
+      auditRating,
+      auditRatingLabel,
+      handleCopyAuditPrompt,
+      auditPromptCopied,
+      auditPromptText,
+      payload,
+      findings,
+      requestError,
+      codeRating,
+      codeRatingLabel,
+      ratingQuestion,
+      setRatingQuestion,
+      questionCopied,
+      handleCopyQuestion,
+      staffPromptText,
+      setStaffPromptText,
+      promptCopied,
+      handleCopyPrompt,
+      wireframe,
+      generateWireframe,
+    ]
+  );
 
   return (
-    <>
-      <Head>
-        <title>Code · Idea Home</title>
-      </Head>
-      <div className="code-page">
-        <header className="code-page-header">
-          <Link href="/" className="code-page-back">
-            ← Back to Idea Home
-          </Link>
-          <h1 className="code-page-title">Code</h1>
-          <p className="code-page-subtitle">
-            Run a token-efficiency audit and get prioritized refactor guidance.
-          </p>
-          <div className="code-page-actions">
+    <AppLayout
+      title="Code · Idea Home"
+      activeTab="code"
+      projectName={projectDisplayName}
+      projectId={selectedProjectId || undefined}
+      searchPlaceholder="Search project"
+      drawerOpen={drawerOpen}
+      setDrawerOpen={setDrawerOpen}
+      projects={projects}
+      selectedProjectId={selectedProjectId ?? ""}
+      setSelectedProjectId={setSelectedProjectId}
+      editingProjectId={editingProjectId}
+      setEditingProjectId={setEditingProjectId}
+      editingProjectName={editingProjectName}
+      setEditingProjectName={setEditingProjectName}
+      saveProjectName={saveProjectName}
+      cancelEditProjectName={cancelEditProjectName}
+      projectNameInputRef={projectNameInputRef}
+      theme={theme}
+      toggleTheme={toggleTheme}
+      projectToDelete={projectToDelete}
+      setProjectToDelete={setProjectToDelete}
+      projectDeleting={projectDeleting}
+      handleDeleteProject={handleDeleteProject}
+      onCreateProject={layout.createProjectByName}
+    >
+      <div className="tests-page-content expenses-page-content">
+        <div className="code-page">
+          <header className="code-page-header">
+            <h1 className="code-page-title">Code</h1>
+            <p className="code-page-subtitle">
+              Connect a GitHub repo per project and run a token-efficiency audit
+              with prioritized refactor guidance.
+            </p>
+          </header>
+
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragEnd={handleSectionDragEnd}
+          >
+            <SortableContext
+              items={sectionOrder}
+              strategy={verticalListSortingStrategy}
+            >
+              {sectionOrder.map((sectionId) => (
+                <SortableCodeSection
+                  key={sectionId}
+                  sectionId={sectionId}
+                >
+                  {(dragHandle) =>
+                    renderCodeSection(sectionId, dragHandle)
+                  }
+                </SortableCodeSection>
+              ))}
+            </SortableContext>
+          </DndContext>
+
+          {requestError && (
+            <section className="code-page-error" aria-live="polite">
+              {requestError}
+            </section>
+          )}
+
+          {generatedAt && (
+            <p className="code-page-generated-at">
+              Last audit: {generatedAt}
+              {payload?.durationMs != null ? ` · ${payload.durationMs} ms` : ""}
+              {payload?.runId ? ` · run ${payload.runId}` : ""}
+            </p>
+          )}
+        </div>
+      </div>
+    </AppLayout>
+  );
+}
+
+function renderCodeSectionInner(
+  sectionId: string,
+  dragHandle: React.ReactNode,
+  ctx: {
+    hasSelectedProject: boolean;
+    connectRepoName: string;
+    setConnectRepoName: (s: string) => void;
+    connectRepoBranch: string;
+    setConnectRepoBranch: (s: string) => void;
+    connectSubmitting: boolean;
+    selectedProjectId: string | null;
+    handleConnectRepo: () => Promise<void>;
+    reposError: string | null;
+    reposLoading: boolean;
+    repos: { id: string; repoFullName: string; defaultBranch: string | null }[];
+    isSectionCollapsed: (id: string) => boolean;
+    toggleSection: (id: string) => void;
+    running: boolean;
+    runAudit: () => void;
+    auditRating: number | null;
+    auditRatingLabel: string | null;
+    handleCopyAuditPrompt: () => Promise<void>;
+    auditPromptCopied: boolean;
+    auditPromptText: string;
+    payload: unknown;
+    findings: unknown[];
+    requestError: string | null;
+    codeRating: number;
+    codeRatingLabel: string;
+    ratingQuestion: string;
+    setRatingQuestion: (s: string) => void;
+    questionCopied: boolean;
+    handleCopyQuestion: () => Promise<void>;
+    staffPromptText: string;
+    setStaffPromptText: (s: string) => void;
+    promptCopied: boolean;
+    handleCopyPrompt: () => Promise<void>;
+    wireframe: unknown;
+    generateWireframe: () => void;
+  }
+) {
+  const {
+    hasSelectedProject,
+    connectRepoName,
+    setConnectRepoName,
+    connectRepoBranch,
+    setConnectRepoBranch,
+    connectSubmitting,
+    selectedProjectId,
+    handleConnectRepo,
+    reposError,
+    reposLoading,
+    repos,
+    isSectionCollapsed,
+    toggleSection,
+    running,
+    runAudit,
+    auditRating,
+    auditRatingLabel,
+    handleCopyAuditPrompt,
+    auditPromptCopied,
+    auditPromptText,
+    payload,
+    findings,
+    requestError,
+    codeRating,
+    codeRatingLabel,
+    ratingQuestion,
+    setRatingQuestion,
+    questionCopied,
+    handleCopyQuestion,
+    staffPromptText,
+    setStaffPromptText,
+    promptCopied,
+    handleCopyPrompt,
+    wireframe,
+    generateWireframe,
+  } = ctx;
+  if (sectionId === "code-repos") {
+    return (
+          <CollapsibleSection
+            sectionId="code-repos"
+            title="Project codebases"
+            collapsed={isSectionCollapsed("code-repos")}
+            onToggle={() => toggleSection("code-repos")}
+            sectionClassName="code-page-repos-section code-page-body-section"
+            headingId="code-page-repos-heading"
+            headerTrailing={dragHandle}
+          >
+            {!hasSelectedProject ? (
+              <p className="code-page-repos-empty">
+                Select a project to connect its codebase.
+              </p>
+            ) : (
+              <>
+                <p className="code-page-repos-copy">
+                  Connect one or more GitHub repositories to this project. Each
+                  project can have its own codebase connections.
+                </p>
+                <div className="code-page-repos-connect">
+                  <label className="code-page-field">
+                    <span className="code-page-field-label">
+                      GitHub repo (owner/name)
+                    </span>
+                    <input
+                      type="text"
+                      value={connectRepoName}
+                      onChange={(e) => setConnectRepoName(e.target.value)}
+                      placeholder="acme/monorepo"
+                      className="expenses-input"
+                    />
+                  </label>
+                  <label className="code-page-field">
+                    <span className="code-page-field-label">
+                      Default branch (optional)
+                    </span>
+                    <input
+                      type="text"
+                      value={connectRepoBranch}
+                      onChange={(e) => setConnectRepoBranch(e.target.value)}
+                      placeholder="main"
+                      className="expenses-input"
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    className="code-page-run-btn"
+                    disabled={
+                      !connectRepoName.trim() || connectSubmitting || !selectedProjectId
+                    }
+                    onClick={() => void handleConnectRepo()}
+                  >
+                    {connectSubmitting ? "Connecting…" : "Connect repo"}
+                  </button>
+                </div>
+                {reposError && (
+                  <p className="code-page-error-inline">{reposError}</p>
+                )}
+                <div className="code-page-repos-list">
+                  {reposLoading && !repos.length && (
+                    <p className="code-page-repos-empty">Loading repositories…</p>
+                  )}
+                  {!reposLoading && repos.length === 0 && (
+                    <p className="code-page-repos-empty">
+                      No repositories connected yet.
+                    </p>
+                  )}
+                  {repos.length > 0 && (
+                    <ul className="code-page-repos-items">
+                      {repos.map((repo) => (
+                        <li key={repo.id} className="code-page-repo-item">
+                          <span className="code-page-repo-name">
+                            {repo.repoFullName}
+                          </span>
+                          {repo.defaultBranch && (
+                            <span className="code-page-repo-branch">
+                              {repo.defaultBranch}
+                            </span>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              </>
+            )}
+          </CollapsibleSection>
+    );
+  }
+  if (sectionId === "code-audit") {
+    return (
+          <CollapsibleSection
+            sectionId="code-audit"
+            title="Token audit"
+            collapsed={isSectionCollapsed("code-audit")}
+            onToggle={() => toggleSection("code-audit")}
+            sectionClassName="code-page-audit-section code-page-summary-section code-page-body-section"
+            headingId="code-page-audit-heading"
+            headerTrailing={dragHandle}
+          >
+            <p className="code-page-audit-copy">
+              Analyze this repo for token-efficiency hotspots across web, backend,
+              and app surfaces.
+            </p>
             <button
               type="button"
               className="code-page-run-btn"
@@ -370,6 +499,229 @@ export default function CodePage() {
             >
               {running ? "Running audit…" : "Run token audit"}
             </button>
+            {auditRating != null && (
+              <p className="code-page-rating-score">
+                <span className="code-page-rating-score-value">
+                  {auditRating.toFixed(1)}/10
+                </span>
+                <span className="code-page-rating-score-label">
+                  {auditRatingLabel}
+                </span>
+              </p>
+            )}
+            <div className="code-page-rating-prompt-block">
+              <div className="code-page-rating-prompt-header">
+                <label
+                  htmlFor="code-audit-prompt"
+                  className="code-page-rating-prompt-label"
+                >
+                  Prompt to improve token audit score:
+                </label>
+                <button
+                  type="button"
+                  className="code-page-rating-prompt-copy-btn"
+                  onClick={handleCopyAuditPrompt}
+                >
+                  {auditPromptCopied ? "Copied" : "Copy"}
+                </button>
+              </div>
+              <textarea
+                id="code-audit-prompt"
+                className="code-page-rating-prompt"
+                readOnly
+                rows={8}
+                value={auditPromptText}
+              />
+            </div>
+            {payload?.summary && (
+              <section
+                className="code-page-summary"
+                aria-labelledby="code-page-summary-heading"
+              >
+                <h3 id="code-page-summary-heading">Audit summary</h3>
+                <div className="code-page-summary-grid">
+                  <div className="code-page-summary-item">
+                    <span className="code-page-summary-label">Source Files</span>
+                    <strong>{payload.summary.sourceFiles}</strong>
+                  </div>
+                  <div className="code-page-summary-item">
+                    <span className="code-page-summary-label">Source Lines</span>
+                    <strong>{payload.summary.sourceLines}</strong>
+                  </div>
+                  <div className="code-page-summary-item">
+                    <span className="code-page-summary-label">High</span>
+                    <strong>{payload.summary.high}</strong>
+                  </div>
+                  <div className="code-page-summary-item">
+                    <span className="code-page-summary-label">Medium</span>
+                    <strong>{payload.summary.medium}</strong>
+                  </div>
+                  <div className="code-page-summary-item">
+                    <span className="code-page-summary-label">Low</span>
+                    <strong>{payload.summary.low}</strong>
+                  </div>
+                </div>
+              </section>
+            )}
+            {payload && (
+              <section className="code-page-body">
+                <h3 id="code-findings-heading" className="code-page-findings-title">
+                  Audit findings
+                </h3>
+                <section className="code-page-findings">
+                  {findings.length === 0 && !requestError && (
+                    <div className="code-page-empty">No findings.</div>
+                  )}
+                  {findings.map((finding) => (
+                    <article key={finding.id} className="code-finding">
+                      <header className="code-finding-header">
+                        <h2 className="code-finding-title">{finding.title}</h2>
+                        <div className="code-finding-badges">
+                          <span
+                            className={`code-finding-badge code-finding-badge--${finding.severity}`}
+                          >
+                            {severityLabel(finding.severity)}
+                          </span>
+                          <span className="code-finding-badge code-finding-badge--effort">
+                            {finding.effort}
+                          </span>
+                        </div>
+                      </header>
+                      <p className="code-finding-why">{finding.why}</p>
+                      <p className="code-finding-action">{finding.action}</p>
+                      {(finding.file || finding.lines != null) && (
+                        <p className="code-finding-meta">
+                          {finding.file ? (
+                            <>
+                              File:{" "}
+                              <span className="code-finding-file-link">{finding.file}</span>
+                            </>
+                          ) : (
+                            ""
+                          )}
+                          {finding.file && finding.lines != null ? " · " : ""}
+                          {finding.lines != null ? `${finding.lines} lines` : ""}
+                        </p>
+                      )}
+                    </article>
+                  ))}
+                </section>
+              </section>
+            )}
+          </CollapsibleSection>
+    );
+  }
+  if (sectionId === "code-rating") {
+    return (
+          <CollapsibleSection
+            sectionId="code-rating"
+            title="Codebase rating"
+            collapsed={isSectionCollapsed("code-rating")}
+            onToggle={() => toggleSection("code-rating")}
+            sectionClassName="code-page-rating"
+            headingId="code-page-rating-heading"
+            headerTrailing={dragHandle}
+          >
+            <p className="code-page-rating-score">
+              <span className="code-page-rating-score-value">
+                {codeRating.toFixed(1)}/10
+              </span>
+              <span className="code-page-rating-score-label">
+                {codeRatingLabel}
+              </span>
+            </p>
+            <details className="code-page-rating-description">
+              <summary>How this rating is calculated</summary>
+              <p>
+                The codebase rating reflects a staff-style assessment of the
+                overall engineering quality (structure, tests, type safety,
+                performance, and UX) rather than a direct formula from the token
+                audit. When this score changes, it's because the underlying
+                codebase has improved in those dimensions.
+              </p>
+            </details>
+            <div className="code-page-rating-prompt-block code-page-rating-prompt-block--short">
+              <div className="code-page-rating-prompt-header">
+                <label
+                  htmlFor="code-rating-question"
+                  className="code-page-rating-prompt-label"
+                >
+                  Ask an AI to rate the codebase:
+                </label>
+                <button
+                  type="button"
+                  className="code-page-rating-prompt-copy-btn"
+                  onClick={handleCopyQuestion}
+                >
+                  {questionCopied ? "Copied" : "Copy"}
+                </button>
+              </div>
+              <AutoResizeTextarea
+                id="code-rating-question"
+                className="code-page-rating-prompt code-page-rating-prompt--short"
+                rows={1}
+                value={ratingQuestion}
+                onChange={(e) => setRatingQuestion(e.target.value)}
+              />
+            </div>
+            <div className="code-page-rating-prompt-block">
+              <div className="code-page-rating-prompt-header">
+                <label
+                  htmlFor="code-rating-prompt"
+                  className="code-page-rating-prompt-label"
+                >
+                  Prompt to improve codebase rating:
+                </label>
+                <button
+                  type="button"
+                  className="code-page-rating-prompt-copy-btn"
+                  onClick={handleCopyPrompt}
+                >
+                  {promptCopied ? "Copied" : "Copy"}
+                </button>
+              </div>
+              <AutoResizeTextarea
+                id="code-rating-prompt"
+                className="code-page-rating-prompt"
+                rows={8}
+                value={staffPromptText}
+                onChange={(e) => setStaffPromptText(e.target.value)}
+              />
+            </div>
+          </CollapsibleSection>
+    );
+  }
+  if (sectionId === "code-health") {
+    return (
+          <CollapsibleSection
+            sectionId="code-health"
+            title="Code Health"
+            collapsed={isSectionCollapsed("code-health")}
+            onToggle={() => toggleSection("code-health")}
+            sectionClassName="code-page-code-health-section code-page-body-section"
+            headingId="code-page-code-health-heading"
+            headerTrailing={dragHandle}
+          >
+            <CodeHealthSection />
+          </CollapsibleSection>
+    );
+  }
+  if (sectionId === "code-wireframe") {
+    return (
+
+          <CollapsibleSection
+            sectionId="code-wireframe"
+            title="Entire app flow wireframe"
+            collapsed={isSectionCollapsed("code-wireframe")}
+            onToggle={() => toggleSection("code-wireframe")}
+            sectionClassName="code-page-wireframe-section code-wireframe-section"
+            headingId="code-wireframe-map-heading"
+            headerTrailing={dragHandle}
+          >
+            <p className="code-page-wireframe-copy">
+              Generate a visual map of the entire app flow, with overlays from the
+              latest token audit.
+            </p>
             <button
               type="button"
               className="code-page-wireframe-btn"
@@ -380,181 +732,80 @@ export default function CodePage() {
                 ? "Refresh app flow wireframe"
                 : "Generate app flow wireframe"}
             </button>
-          </div>
-        </header>
-
-        {requestError && (
-          <section className="code-page-error" aria-live="polite">
-            {requestError}
-          </section>
-        )}
-
-        {payload?.summary && (
-          <section className="code-page-summary">
-            <div className="code-page-summary-item">
-              <span className="code-page-summary-label">Source Files</span>
-              <strong>{payload.summary.sourceFiles}</strong>
-            </div>
-            <div className="code-page-summary-item">
-              <span className="code-page-summary-label">Source Lines</span>
-              <strong>{payload.summary.sourceLines}</strong>
-            </div>
-            <div className="code-page-summary-item">
-              <span className="code-page-summary-label">High</span>
-              <strong>{payload.summary.high}</strong>
-            </div>
-            <div className="code-page-summary-item">
-              <span className="code-page-summary-label">Medium</span>
-              <strong>{payload.summary.medium}</strong>
-            </div>
-            <div className="code-page-summary-item">
-              <span className="code-page-summary-label">Low</span>
-              <strong>{payload.summary.low}</strong>
-            </div>
-          </section>
-        )}
-
-        {generatedAt && (
-          <p className="code-page-generated-at">
-            Last audit: {generatedAt}
-            {payload?.durationMs != null ? ` · ${payload.durationMs} ms` : ""}
-            {payload?.runId ? ` · run ${payload.runId}` : ""}
-          </p>
-        )}
-
-        {wireframe && (
-          <section className="code-wireframe" aria-live="polite">
-            <header className="code-wireframe-header">
-              <h2 className="code-wireframe-title">Entire App Flow Wireframe</h2>
-              <p className="code-wireframe-meta">
-                Updated {new Date(wireframe.generatedAt).toLocaleString()}
-                {wireframe.runId ? ` · from run ${wireframe.runId}` : " · baseline mode"}
+            {!payload && (
+              <p className="code-page-wireframe-hint">
+                Run a token audit first to attach current hotspots to this
+                wireframe.
               </p>
-            </header>
-            <div className="code-wireframe-lanes">
-              {wireframe.lanes.map((lane) => (
-                <section key={lane.id} className="code-wireframe-lane">
-                  <h3 className="code-wireframe-lane-title">{lane.title}</h3>
-                  <div className="code-wireframe-track">
-                    {lane.nodes.map((node, index) => (
-                      <React.Fragment key={node.id}>
-                        <article className={`code-wireframe-node tone-${node.tone}`}>
-                          <h4 className="code-wireframe-node-title">{node.title}</h4>
-                          <p className="code-wireframe-node-subtitle">
-                            {node.subtitle}
-                          </p>
-                        </article>
-                        {index < lane.nodes.length - 1 && (
-                          <span className="code-wireframe-arrow" aria-hidden="true">
-                            →
-                          </span>
-                        )}
-                      </React.Fragment>
-                    ))}
-                  </div>
-                </section>
-              ))}
-            </div>
-            <section className="code-wireframe-highlights">
-              <h3 className="code-wireframe-lane-title">Current Hotspots</h3>
-              <ul className="code-wireframe-highlight-list">
-                {wireframe.highlights.map((item) => (
-                  <li key={item} className="code-wireframe-highlight-item">
-                    {item}
-                  </li>
-                ))}
-              </ul>
-            </section>
-          </section>
-        )}
-
-        <div className="code-page-body">
-          <section className="code-page-findings">
-          {findings.length === 0 && payload && !requestError && (
-            <div className="code-page-empty">No findings.</div>
-          )}
-          {findings.map((finding) => (
-            <article key={finding.id} className="code-finding">
-              <header className="code-finding-header">
-                <h2 className="code-finding-title">{finding.title}</h2>
-                <div className="code-finding-badges">
-                  <span
-                    className={`code-finding-badge code-finding-badge--${finding.severity}`}
-                  >
-                    {severityLabel(finding.severity)}
-                  </span>
-                  <span className="code-finding-badge code-finding-badge--effort">
-                    {finding.effort}
-                  </span>
+            )}
+            {wireframe && (
+              <section className="code-wireframe" aria-live="polite">
+                <header className="code-wireframe-header">
+                  <h3 className="code-wireframe-title">Entire App Flow Wireframe</h3>
+                  <p className="code-wireframe-meta">
+                    Updated {new Date(wireframe.generatedAt).toLocaleString()}
+                    {wireframe.runId ? ` · from run ${wireframe.runId}` : " · baseline mode"}
+                  </p>
+                </header>
+                <div className="code-wireframe-lanes">
+                  {wireframe.lanes.map((lane) => (
+                    <section key={lane.id} className="code-wireframe-lane">
+                      <h3 className="code-wireframe-lane-title">{lane.title}</h3>
+                      <div className="code-wireframe-track">
+                        {lane.nodes.map((node, index) => (
+                          <React.Fragment key={node.id}>
+                            <article className={`code-wireframe-node tone-${node.tone}`}>
+                              <h4 className="code-wireframe-node-title">{node.title}</h4>
+                              <p className="code-wireframe-node-subtitle">
+                                {node.subtitle}
+                              </p>
+                            </article>
+                            {index < lane.nodes.length - 1 && (
+                              <span className="code-wireframe-arrow" aria-hidden="true">
+                                →
+                              </span>
+                            )}
+                          </React.Fragment>
+                        ))}
+                      </div>
+                    </section>
+                  ))}
                 </div>
-              </header>
-              <p className="code-finding-why">{finding.why}</p>
-              <p className="code-finding-action">{finding.action}</p>
-              {(finding.file || finding.lines != null) && (
-                <p className="code-finding-meta">
-                  {finding.file ? (
-                    <>
-                      File:{" "}
-                      <button
-                        type="button"
-                        className="code-finding-file-link"
-                        onClick={() =>
-                          openFilePreview(finding.file as string, finding.line ?? 1)
-                        }
-                      >
-                        {finding.file}
-                      </button>
-                    </>
-                  ) : (
-                    ""
-                  )}
-                  {finding.file && finding.lines != null ? " · " : ""}
-                  {finding.lines != null ? `${finding.lines} lines` : ""}
-                </p>
-              )}
-            </article>
-          ))}
-          </section>
-          <aside className="code-page-preview">
-            <div className="code-page-preview-header">
-              <h3 className="code-page-preview-title">File Viewer</h3>
-              {preview?.filePath && (
-                <span className="code-page-preview-path">{preview.filePath}</span>
-              )}
-            </div>
-            {previewLoading && (
-              <div className="code-page-preview-empty">Loading file…</div>
+                <section className="code-wireframe-highlights">
+                  <h3 className="code-wireframe-lane-title">Current Hotspots</h3>
+                  <ul className="code-wireframe-highlight-list">
+                    {wireframe.highlights.map((item) => (
+                      <li key={item} className="code-wireframe-highlight-item">
+                        {item}
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              </section>
             )}
-            {!previewLoading && previewError && (
-              <div className="code-page-preview-error">{previewError}</div>
-            )}
-            {!previewLoading && !previewError && !preview && (
-              <div className="code-page-preview-empty">
-                Click a finding file to preview it here.
-              </div>
-            )}
-            {!previewLoading && !previewError && preview && (
-              <pre className="code-page-preview-code">
-                {preview.lines.map((lineText, index) => {
-                  const lineNo = preview.startLine + index;
-                  const highlight = lineNo === preview.targetLine;
-                  return (
-                    <div
-                      key={`${lineNo}-${lineText.slice(0, 16)}`}
-                      className={`code-page-preview-line${highlight ? " is-highlighted" : ""}`}
-                    >
-                      <span className="code-page-preview-line-no">{lineNo}</span>
-                      <span className="code-page-preview-line-text">
-                        {lineText || " "}
-                      </span>
-                    </div>
-                  );
-                })}
-              </pre>
-            )}
-          </aside>
-        </div>
-      </div>
-    </>
-  );
+          </CollapsibleSection>
+    );
+  }
+  if (sectionId === "code-project-flow") {
+    return (
+          <CollapsibleSection
+            sectionId="code-project-flow"
+            title="Project flow diagram"
+            collapsed={isSectionCollapsed("code-project-flow")}
+            onToggle={() => toggleSection("code-project-flow")}
+            sectionClassName="code-page-project-flow-section code-page-body-section"
+            headingId="code-page-project-flow-heading"
+            headerTrailing={dragHandle}
+          >
+            <p className="code-page-project-flow-copy">
+              How the monorepo fits together: shared packages, backend modules,
+              web (Next.js), app (React Native), and API flow.
+            </p>
+            <ProjectFlowDiagram
+              visible={!isSectionCollapsed("code-project-flow")}
+            />
+          </CollapsibleSection>
+    );
+  }
+  return null;
 }

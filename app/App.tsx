@@ -1,474 +1,60 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import React, { useCallback, useEffect, useMemo, useState, memo } from "react";
-import {
-  errorCodes as documentPickerErrorCodes,
-  isErrorWithCode as isDocumentPickerErrorWithCode,
-  keepLocalCopy as keepPickedFileLocalCopy,
-  pick as pickDocument,
-  types as documentPickerTypes,
-} from "@react-native-documents/picker";
-import RNFS from "react-native-fs";
-import { launchImageLibrary } from "react-native-image-picker";
-import { launchCamera } from "react-native-image-picker";
+import React, { useState } from "react";
 import {
   ActivityIndicator,
   Alert,
-  FlatList,
-  Image,
-  Linking,
-  Pressable,
   StatusBar,
   Text,
-  TextInput,
   View,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
-import {
-  ISSUE_STATUSES,
-  addCommentAttachment,
-  createBug,
-  createExpense,
-  createFeature,
-  createIdea,
-  createIssueComment,
-  createIssue,
-  createProject,
-  createTodo,
-  deleteCommentAttachment,
-  deleteExpense,
-  deleteFeature,
-  deleteIssueFile,
-  deleteIssue,
-  deleteIssueComment,
-  deleteIssueRecording,
-  deleteIssueScreenshot,
-  deleteProject,
-  deleteBug,
-  deleteAllIssues,
-  deleteIdea,
-  deleteTodo,
-  fetchBugs,
-  fetchExpenses,
-  fetchFeatures,
-  fetchIdeas,
-  fetchIssueComments,
-  fetchIssues,
-  fetchProjects,
-  fetchTodos,
-  fetchUsers,
-  fetchUiTestsCatalog,
-  generateIdeaAssistantChat,
-  runUiTest,
-  runApiTest,
-  uploadIssueFile,
-  uploadIssueRecording,
-  uploadIssueScreenshot,
-  reorderBugs,
-  reorderFeatures,
-  reorderIdeas,
-  reorderTodos,
-  updateExpense,
-  updateIssueFile,
-  updateIssue,
-  updateIssueComment,
-  updateIssueRecording,
-  updateIssueScreenshot,
-  updateProject,
-  updateBug,
-  updateIdea,
-  updateIssueStatus,
-  updateTodo,
-  updateFeature,
-  getIssueFileStreamUrl,
-  getRecordingStreamUrl,
-  type ChecklistItem,
-  type CommentAttachment,
-  type Expense,
-  getScreenshotStreamUrl,
-  type IssueFile,
-  type IssueComment,
-  type IssueRecording,
-  type IssueScreenshot,
-  type Issue,
-  type Project,
-  type RunUiTestResult,
-  type RunApiTestResult,
-  type User,
-  type UITestFile,
-  type IdeaAssistantChatResult,
-} from "./src/api/client";
+import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import { AppButton } from "./src/components/ui/AppButton";
-import { AppCard } from "./src/components/ui/AppCard";
-import { TabSwitch } from "./src/components/ui/TabSwitch";
-import { buildIdeaChatContext } from "@ideahome/shared-assistant";
-import {
-  AUTH_PARAM_ERROR,
-  AUTH_PARAM_REDIRECT_URI,
-  AUTH_PARAM_TOKEN,
-  IDEAHOME_API_ORIGIN,
-  IDEAHOME_WEB_ORIGIN,
-  API_TESTS,
-  MOBILE_ACTIVE_TAB_STORAGE_KEY,
-  MOBILE_AUTH_BYPASS_STORAGE_KEY,
-  MOBILE_DEEP_LINK_REDIRECT_URI,
-  MOBILE_SELECTED_PROJECT_STORAGE_KEY,
-  MOBILE_TOKEN_STORAGE_KEY,
-  pathAuthMobile,
-  readUrlParam,
-  sanitizeAuthToken,
-} from "@ideahome/shared-config";
-import type {
-  AppTab,
-  AssistantChatMessage,
-  ChecklistKind,
-  PendingCommentAttachment,
-  TestExecutionResult,
-} from "./src/types";
-import {
-  ACTIVE_TAB_STORAGE_KEY,
-  API_TEST_PATTERNS,
-  APP_API_URL,
-  APP_WEB_URL,
-  AUTH_BYPASS_STORAGE_KEY,
-  EXPENSE_CATEGORIES,
-  SELECTED_PROJECT_STORAGE_KEY,
-  TOKEN_STORAGE_KEY,
-  UI_TEST_PATTERNS,
-} from "./src/constants";
-import {
-  buildMobileAuthUrl,
-  parseErrorFromRedirect,
-  parseTokenFromRedirect,
-  readUserEmailFromToken,
-  readUserIdFromToken,
-} from "./src/utils/auth";
-import { forwardStatus, previousStatus, statusLabel } from "./src/utils/issueStatus";
-import { fileNameFromUri, normalizeFilePath } from "./src/utils/files";
-import {
-  commentAttachmentLabel,
-  getCommentAttachmentStreamUrl,
-  pendingCommentAttachmentDataUri,
-} from "./src/utils/commentAttachment";
-import { enhancementsStorageKey } from "./src/utils/enhancementsStorage";
-import { parseAutomatedTestNames } from "./src/utils/parseAutomatedTestNames";
-import { isAppTab } from "./src/utils/isAppTab";
+import { AuthWebViewModal } from "./src/components/AuthWebViewModal";
 import { appStyles } from "./src/theme/appStyles";
-import { colors } from "./src/theme/tokens";
-import { HomeTab } from "./src/screens/HomeTab";
-import { BoardTab } from "./src/screens/BoardTab";
-import { ProjectsTab } from "./src/screens/ProjectsTab";
-import { ExpensesTab } from "./src/screens/ExpensesTab";
-import { SettingsTab } from "./src/screens/SettingsTab";
-import { TestsTab } from "./src/screens/TestsTab";
-import { IssuesTab } from "./src/screens/IssuesTab";
-import {
-  ChecklistSection,
-  type ChecklistSectionProps,
-} from "./src/components/ChecklistSection";
 import { useAppState } from "./src/hooks/useAppState";
-import { IssueBoardColumn } from "./src/components/IssueBoardColumn";
-import { ProjectPicker } from "./src/components/ProjectPicker";
-import { TestResultPanel } from "./src/components/TestResultPanel";
-import { UserChip } from "./src/components/UserChip";
-import { PreviewModal } from "./src/components/PreviewModal";
-import { AppDrawer } from "./src/components/AppDrawer";
-import { BulbyModal } from "./src/components/BulbyModal";
-import { TabPreferencesModal } from "./src/components/TabPreferencesModal";
-import { ComingSoonTab } from "./src/screens/ComingSoonTab";
-import { CustomListTab } from "./src/screens/CustomListTab";
-import type { AuthProvider } from "./src/types";
-import { getCustomListTabId } from "./src/utils/customListsStorage";
-import { buildIssuesTabProps } from "./src/utils/buildIssuesTabProps";
-import { getTabLabel } from "./src/utils/tabLabels";
-import { isCustomListTab } from "./src/utils/isAppTab";
-import { useCustomListItems } from "./src/hooks/useCustomListItems";
+import { AppMain } from "./src/components/AppMain";
 
 export default function App() {
   const state = useAppState();
   const {
     initializing,
     token,
-    setToken,
     authBypassEnabled,
     authInProgress,
     signOutInProgress,
     authErrorMessage,
-    activeTab,
-    setActiveTab,
-    signOutNative,
-    disableAuthBypass,
-    enableAuthBypass,
     signIn,
-    selectedProject,
-    projects,
-    projectsLoading,
-    projectsError,
-    selectedProjectId,
-    setSelectedProjectId,
-    loadProjects,
-    createProjectName,
-    setCreateProjectName,
-    creatingProject,
-    projectEditName,
-    setProjectEditName,
-    savingProjectEdit,
-    deletingProject,
-    handleCreateProject,
-    handleUpdateProject,
-    handleDeleteProject,
-    issueSearch,
-    setIssueSearch,
-    loadIssues,
-    newIssueTitle,
-    setNewIssueTitle,
-    newIssueDescription,
-    setNewIssueDescription,
-    newIssueAcceptanceCriteria,
-    setNewIssueAcceptanceCriteria,
-    newIssueDatabase,
-    setNewIssueDatabase,
-    newIssueApi,
-    setNewIssueApi,
-    newIssueTestCases,
-    setNewIssueTestCases,
-    newIssueAutomatedTest,
-    setNewIssueAutomatedTest,
-    newIssueQualityScore,
-    setNewIssueQualityScore,
-    newIssueAssigneeId,
-    setNewIssueAssigneeId,
-    usersLoading,
-    usersError,
-    users,
-    creatingIssue,
-    handleCreateIssue,
-    clearingIssues,
-    handleDeleteAllIssues,
-    issues,
-    issuesLoading,
-    issuesError,
-    filteredIssues,
-    issuesByStatus,
-    handleResetIssueBoardFilters,
-    selectedIssueId,
-    setSelectedIssueId,
-    setCollapsedIssueStatuses,
-    issueAssigneeFilter,
-    setIssueAssigneeFilter,
-    issueBoardFocus,
-    setIssueBoardFocus,
-    issueBoardStatuses,
-    issueBoardKeyExtractor,
-    renderIssueBoardColumn,
-    selectedIssue,
-    issueEditTitle,
-    setIssueEditTitle,
-    issueEditDescription,
-    setIssueEditDescription,
-    issueEditAcceptanceCriteria,
-    setIssueEditAcceptanceCriteria,
-    issueEditDatabase,
-    setIssueEditDatabase,
-    issueEditApi,
-    setIssueEditApi,
-    issueEditTestCases,
-    setIssueEditTestCases,
-    issueEditAutomatedTest,
-    setIssueEditAutomatedTest,
-    issueEditQualityScore,
-    setIssueEditQualityScore,
-    issueEditAssigneeId,
-    setIssueEditAssigneeId,
-    savingIssueEdit,
-    deletingIssue,
-    handleSaveIssue,
-    handleDeleteIssue,
-    uploadingIssueAsset,
-    handleUploadScreenshot,
-    handleUploadRecording,
-    handleUploadFile,
-    handleCaptureScreenshot,
-    handleCaptureRecording,
-    automatedTestNames,
-    runningIssueAutomatedTests,
-    runningUiTests,
-    uiTestResults,
-    handleRunAllIssueAutomatedTests,
-    handleRunAutomatedTest,
-    newCommentBody,
-    setNewCommentBody,
-    creatingComment,
-    pendingCommentAttachments,
-    setPendingCommentAttachments,
-    handleCreateComment,
-    handleAddPendingCommentScreenshot,
-    handleCapturePendingCommentScreenshot,
-    handleAddPendingCommentVideo,
-    handleCapturePendingCommentVideo,
-    issueComments,
-    commentsLoading,
-    commentsError,
-    editingCommentId,
-    commentEditBody,
-    setCommentEditBody,
-    setEditingCommentId,
-    handleSaveComment,
-    handleAttachCommentScreenshot,
-    handleAttachCommentVideo,
-    handleDeleteComment,
-    handleDeleteCommentAttachment,
-    uploadingCommentAttachmentId,
-    editingScreenshotId,
-    screenshotEditName,
-    setScreenshotEditName,
-    setEditingScreenshotId,
-    handleSaveScreenshotName,
-    handleDeleteScreenshot,
-    editingRecordingId,
-    recordingEditName,
-    setRecordingEditName,
-    setEditingRecordingId,
-    handleSaveRecordingName,
-    handleDeleteRecording,
-    editingFileId,
-    fileEditName,
-    setFileEditName,
-    setEditingFileId,
-    handleSaveFileName,
-    handleDeleteFile,
-    createExpenseForm,
-    setCreateExpenseForm,
-    creatingExpense,
-    handleCreateExpense,
-    expensesTotal,
-    expenseSearchQuery,
-    setExpenseSearchQuery,
-    expenseCategoryFilter,
-    setExpenseCategoryFilter,
-    expenses,
-    expensesLoading,
-    expensesError,
-    filteredExpenses,
-    editingExpenseId,
-    expenseEditDescription,
-    setExpenseEditDescription,
-    expenseEditAmount,
-    setExpenseEditAmount,
-    expenseEditDate,
-    setExpenseEditDate,
-    expenseEditCategory,
-    setExpenseEditCategory,
-    savingExpenseEdit,
-    handleSaveExpenseEdit,
-    deletingExpenseId,
-    beginEditExpense,
-    handleDeleteExpense,
-    isChecklistTab,
-    checklistSectionPropsByKind,
-    testUiPattern,
-    setTestUiPattern,
-    uiTestResultEntries,
-    uiTestPassCount,
-    uiTestFailCount,
-    loadUiTestsCatalog,
-    uiTestsCatalogLoading,
-    handleRunAllDiscoveredUiTests,
-    uiTestsBusy,
-    discoveredUiTestNames,
-    handleClearUiTestResults,
-    uiTestsCatalogError,
-    discoveredUiTestSuites,
-    runningUiSuiteKey,
-    handleRunUiSuite,
-    handleRunUiTests,
-    latestUiTestResult,
-    showFullUiOutput,
-    setShowFullUiOutput,
-    apiTestResultEntries,
-    apiTestPassCount,
-    apiTestFailCount,
-    handleRunAllApiTests,
-    handleClearApiTestResults,
-    runningApiSuiteKey,
-    handleRunApiSuite,
-    apiTestsBusy,
-    runningApiTestName,
-    apiTestResultsByName,
-    handleRunSingleApiTest,
-    testApiPattern,
-    setTestApiPattern,
-    handleRunApiTests,
-    runningTests,
-    latestApiTestResult,
-    showFullApiOutput,
-    setShowFullApiOutput,
-    clearingEnhancements,
-    clearEnhancementsForProject,
-    previewUrl,
-    setPreviewUrl,
-    previewTitle,
-    setPreviewTitle,
-    setSignOutInProgress,
-    features,
-    todos,
-    ideas,
-    bugs,
-    enhancements,
-    setEditingExpenseId,
-    customLists,
-    loadCustomLists,
-    createCustomList,
-    deleteCustomListAndSwitch,
-    visibleTabOrder,
-    fullTabOrder,
-    tabOrder,
-    setTabOrder,
-    hiddenTabIds,
-    setHiddenTabIds,
+    enableAuthBypass,
+    showAuthWebView,
+    authUrlForWebView,
+    handleAuthRedirectFromWebView,
+    closeAuthWebView,
   } = state;
 
   const [showTabPrefsModal, setShowTabPrefsModal] = useState(false);
   const [showBulbyModal, setShowBulbyModal] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
 
-  const customListSlug = isCustomListTab(activeTab) ? activeTab.slice(7) : "";
-  const customListUserId = readUserIdFromToken(token);
-  const customListItemsState = useCustomListItems(customListSlug, customListUserId);
-  const customList = customLists.find((l) => l.slug === customListSlug);
-  const tabOptions: Array<{ value: AppTab; label: string }> = visibleTabOrder.map((id) => ({
-    value: id,
-    label: getTabLabel(id, customLists.find((l) => getCustomListTabId(l.slug) === id)?.name),
-  }));
-
-  if (initializing) {
-    return (
-      <SafeAreaView style={appStyles.screen}>
+  const content = initializing ? (
+    <SafeAreaView style={appStyles.screen}>
         <StatusBar barStyle="dark-content" />
         <View style={appStyles.centeredFill}>
           <ActivityIndicator />
           <Text style={appStyles.subtle}>Loading session...</Text>
         </View>
       </SafeAreaView>
-    );
-  }
-
-  if (!token && !authBypassEnabled) {
-    return (
-      <SafeAreaView style={appStyles.screen}>
+  ) : !token && !authBypassEnabled ? (
+    <SafeAreaView style={appStyles.screen}>
         <StatusBar barStyle="dark-content" />
         <View style={appStyles.authContainer}>
           <Text style={appStyles.title}>Idea Home</Text>
-          <Text style={appStyles.body}>Sign in with Google using secure native authentication.</Text>
+          <Text style={appStyles.body}>Sign in with Google to continue. You’ll stay in the app.</Text>
           <AppButton
             label={authInProgress ? "Signing in..." : "Continue with Google"}
             disabled={authInProgress}
             onPress={() => {
-              signIn("google").catch(() => {
-                // handled in signIn
-              });
+              signIn("google").catch(() => {});
             }}
           />
-          <Text style={appStyles.subtle}>We use Safari for secure Google authentication.</Text>
           <AppButton
             label="Continue without login (testing)"
             variant="secondary"
@@ -481,352 +67,27 @@ export default function App() {
           {authErrorMessage ? <Text style={appStyles.errorText}>{authErrorMessage}</Text> : null}
         </View>
       </SafeAreaView>
-    );
-  }
+  ) : (
+    <AppMain
+      state={state}
+      showTabPrefsModal={showTabPrefsModal}
+      setShowTabPrefsModal={setShowTabPrefsModal}
+      showBulbyModal={showBulbyModal}
+      setShowBulbyModal={setShowBulbyModal}
+      drawerOpen={drawerOpen}
+      setDrawerOpen={setDrawerOpen}
+    />
+  );
 
   return (
-    <SafeAreaView style={appStyles.screen} edges={["top", "left", "right", "bottom"]}>
-      <StatusBar barStyle="dark-content" />
-
-      <View style={appStyles.topBar}>
-        <Pressable
-          onPress={() => setDrawerOpen(true)}
-          style={{ paddingVertical: 8, paddingRight: 12 }}
-          accessibilityLabel="Open menu"
-        >
-          <Text style={{ fontSize: 22, color: colors.accentStrong }}>☰</Text>
-        </Pressable>
-        <Text style={appStyles.brand}>Idea Home</Text>
-        <AppButton
-          label={
-            signOutInProgress
-              ? "Signing out..."
-              : token
-              ? "Sign out"
-              : authBypassEnabled
-              ? "Exit test mode"
-              : "Sign out"
-          }
-          variant="secondary"
-          disabled={signOutInProgress}
-          onPress={() => {
-            if (!token && authBypassEnabled) {
-              disableAuthBypass().catch(() => {
-                Alert.alert("Unable to disable test mode");
-              });
-              return;
-            }
-            setSignOutInProgress(true);
-            signOutNative()
-              .catch(() => {
-                Alert.alert("Unable to clear session");
-              })
-              .finally(() => setSignOutInProgress(false));
-          }}
-        />
-      </View>
-
-      <TabSwitch<AppTab>
-        value={activeTab}
-        onChange={setActiveTab}
-        options={tabOptions}
+    <SafeAreaProvider style={appStyles.screen}>
+      {content}
+      <AuthWebViewModal
+        visible={showAuthWebView && !!authUrlForWebView}
+        authUrl={authUrlForWebView}
+        onRedirect={handleAuthRedirectFromWebView}
+        onClose={closeAuthWebView}
       />
-
-      <View style={appStyles.content}>
-        <ProjectPicker
-          projects={projects}
-          selectedProjectId={selectedProjectId}
-          onSelect={setSelectedProjectId}
-          onRefresh={() => {
-            loadProjects().catch(() => {
-              // handled in loadProjects
-            });
-          }}
-          loading={projectsLoading}
-          error={projectsError}
-        />
-
-        {activeTab === "board" ? (
-          <BoardTab
-            issuesByStatus={issuesByStatus}
-            issueBoardStatuses={issueBoardStatuses}
-            issueBoardKeyExtractor={issueBoardKeyExtractor}
-            renderIssueBoardColumn={renderIssueBoardColumn}
-            issueBoardFocus={issueBoardFocus}
-            setIssueBoardFocus={setIssueBoardFocus}
-            issueAssigneeFilter={issueAssigneeFilter}
-            setIssueAssigneeFilter={setIssueAssigneeFilter}
-            users={users}
-            selectedIssue={selectedIssue}
-            selectedIssueId={selectedIssueId}
-            setSelectedIssueId={setSelectedIssueId}
-            issueEditTitle={issueEditTitle}
-            setIssueEditTitle={setIssueEditTitle}
-            issueEditDescription={issueEditDescription}
-            setIssueEditDescription={setIssueEditDescription}
-            issueEditAcceptanceCriteria={issueEditAcceptanceCriteria}
-            setIssueEditAcceptanceCriteria={setIssueEditAcceptanceCriteria}
-            issueEditDatabase={issueEditDatabase}
-            setIssueEditDatabase={setIssueEditDatabase}
-            issueEditApi={issueEditApi}
-            setIssueEditApi={setIssueEditApi}
-            issueEditTestCases={issueEditTestCases}
-            setIssueEditTestCases={setIssueEditTestCases}
-            issueEditAutomatedTest={issueEditAutomatedTest}
-            setIssueEditAutomatedTest={setIssueEditAutomatedTest}
-            issueEditQualityScore={issueEditQualityScore}
-            setIssueEditQualityScore={setIssueEditQualityScore}
-            issueEditAssigneeId={issueEditAssigneeId}
-            setIssueEditAssigneeId={setIssueEditAssigneeId}
-            savingIssueEdit={savingIssueEdit}
-            deletingIssue={deletingIssue}
-            handleSaveIssue={handleSaveIssue}
-            handleDeleteIssue={handleDeleteIssue}
-            usersLoading={usersLoading}
-            usersError={usersError}
-            uploadingIssueAsset={uploadingIssueAsset}
-            handleUploadScreenshot={handleUploadScreenshot}
-            handleUploadRecording={handleUploadRecording}
-            handleUploadFile={handleUploadFile}
-            handleCaptureScreenshot={handleCaptureScreenshot}
-            handleCaptureRecording={handleCaptureRecording}
-            automatedTestNames={automatedTestNames}
-            runningIssueAutomatedTests={runningIssueAutomatedTests}
-            runningUiTests={runningUiTests}
-            uiTestResults={uiTestResults}
-            handleRunAllIssueAutomatedTests={handleRunAllIssueAutomatedTests}
-            handleRunAutomatedTest={handleRunAutomatedTest}
-          />
-        ) : null}
-
-        {activeTab === "home" ? (
-          <HomeTab
-            projectCount={projects.length}
-            selectedProjectName={selectedProject?.name ?? "No project selected"}
-            issuesCount={issues.length}
-            expensesTotal={expensesTotal}
-            featuresCount={features.length}
-            todosCount={todos.length}
-            ideasCount={ideas.length}
-            bugsCount={bugs.length}
-            enhancementsCount={enhancements.length}
-          />
-        ) : null}
-
-        {activeTab === "projects" ? (
-          <ProjectsTab
-            projects={projects}
-            selectedProjectId={selectedProjectId}
-            selectedProject={selectedProject}
-            createProjectName={createProjectName}
-            setCreateProjectName={setCreateProjectName}
-            creatingProject={creatingProject}
-            projectEditName={projectEditName}
-            setProjectEditName={setProjectEditName}
-            savingProjectEdit={savingProjectEdit}
-            deletingProject={deletingProject}
-            onSelectProject={setSelectedProjectId}
-            onCreateProject={handleCreateProject}
-            onUpdateProject={handleUpdateProject}
-            onDeleteProject={handleDeleteProject}
-          />
-        ) : null}
-
-        {activeTab === "issues" ? (
-          <IssuesTab {...buildIssuesTabProps(state)} />
-        ) : null}
-
-        {activeTab === "expenses" ? (
-          <ExpensesTab
-            createExpenseForm={createExpenseForm}
-            setCreateExpenseForm={setCreateExpenseForm}
-            creatingExpense={creatingExpense}
-            selectedProjectId={selectedProjectId}
-            handleCreateExpense={handleCreateExpense}
-            expensesTotal={expensesTotal}
-            expenseSearchQuery={expenseSearchQuery}
-            setExpenseSearchQuery={setExpenseSearchQuery}
-            expenseCategoryFilter={expenseCategoryFilter}
-            setExpenseCategoryFilter={setExpenseCategoryFilter}
-            expenses={expenses}
-            expensesLoading={expensesLoading}
-            expensesError={expensesError}
-            filteredExpenses={filteredExpenses}
-            editingExpenseId={editingExpenseId}
-            expenseEditDescription={expenseEditDescription}
-            setExpenseEditDescription={setExpenseEditDescription}
-            expenseEditAmount={expenseEditAmount}
-            setExpenseEditAmount={setExpenseEditAmount}
-            expenseEditDate={expenseEditDate}
-            setExpenseEditDate={setExpenseEditDate}
-            expenseEditCategory={expenseEditCategory}
-            setExpenseEditCategory={setExpenseEditCategory}
-            savingExpenseEdit={savingExpenseEdit}
-            handleSaveExpenseEdit={handleSaveExpenseEdit}
-            deletingExpenseId={deletingExpenseId}
-            beginEditExpense={beginEditExpense}
-            handleDeleteExpense={handleDeleteExpense}
-            onCancelExpenseEdit={() => {
-              setEditingExpenseId("");
-              setExpenseEditDescription("");
-              setExpenseEditAmount("");
-              setExpenseEditDate("");
-              setExpenseEditCategory("General");
-            }}
-          />
-        ) : null}
-
-        {isChecklistTab(activeTab) ? (
-          <ChecklistSection {...checklistSectionPropsByKind[activeTab]} />
-        ) : null}
-
-        {activeTab === "timeline" ? (
-          <ComingSoonTab title="Timeline" />
-        ) : null}
-        {activeTab === "calendar" ? (
-          <ComingSoonTab title="Calendar" />
-        ) : null}
-        {activeTab === "goals" ? (
-          <ComingSoonTab title="Goals" />
-        ) : null}
-        {activeTab === "pages" ? (
-          <ComingSoonTab title="Pages" />
-        ) : null}
-        {activeTab === "development" ? (
-          <ComingSoonTab title="Code Health" />
-        ) : null}
-        {isCustomListTab(activeTab) && customList ? (
-          <CustomListTab
-            listName={customList.name}
-            slug={customList.slug}
-            userId={customListUserId}
-            onDeleteList={() => deleteCustomListAndSwitch(customList.slug)}
-            items={customListItemsState.items}
-            loading={customListItemsState.loading}
-            addItem={customListItemsState.addItem}
-            toggleDone={customListItemsState.toggleDone}
-            removeItem={customListItemsState.removeItem}
-            updateItemName={customListItemsState.updateItemName}
-            reorder={customListItemsState.reorder}
-          />
-        ) : null}
-
-        {activeTab === "tests" ? (
-          <TestsTab
-            testUiPattern={testUiPattern}
-            setTestUiPattern={setTestUiPattern}
-            uiTestResultEntries={uiTestResultEntries}
-            uiTestPassCount={uiTestPassCount}
-            uiTestFailCount={uiTestFailCount}
-            loadUiTestsCatalog={loadUiTestsCatalog}
-            uiTestsCatalogLoading={uiTestsCatalogLoading}
-            handleRunAllDiscoveredUiTests={handleRunAllDiscoveredUiTests}
-            uiTestsBusy={uiTestsBusy}
-            discoveredUiTestNames={discoveredUiTestNames}
-            handleClearUiTestResults={handleClearUiTestResults}
-            uiTestsCatalogError={uiTestsCatalogError}
-            discoveredUiTestSuites={discoveredUiTestSuites}
-            runningUiSuiteKey={runningUiSuiteKey}
-            handleRunUiSuite={handleRunUiSuite}
-            runningUiTests={runningUiTests}
-            uiTestResults={uiTestResults}
-            handleRunAutomatedTest={handleRunAutomatedTest}
-            handleRunUiTests={handleRunUiTests}
-            latestUiTestResult={latestUiTestResult}
-            showFullUiOutput={showFullUiOutput}
-            setShowFullUiOutput={setShowFullUiOutput}
-            apiTestResultEntries={apiTestResultEntries}
-            apiTestPassCount={apiTestPassCount}
-            apiTestFailCount={apiTestFailCount}
-            handleRunAllApiTests={handleRunAllApiTests}
-            handleClearApiTestResults={handleClearApiTestResults}
-            runningApiSuiteKey={runningApiSuiteKey}
-            handleRunApiSuite={handleRunApiSuite}
-            apiTestsBusy={apiTestsBusy}
-            runningApiTestName={runningApiTestName}
-            apiTestResultsByName={apiTestResultsByName}
-            handleRunSingleApiTest={handleRunSingleApiTest}
-            testApiPattern={testApiPattern}
-            setTestApiPattern={setTestApiPattern}
-            handleRunApiTests={handleRunApiTests}
-            runningTests={runningTests}
-            latestApiTestResult={latestApiTestResult}
-            showFullApiOutput={showFullApiOutput}
-            setShowFullApiOutput={setShowFullApiOutput}
-          />
-        ) : null}
-
-        {activeTab === "settings" ? (
-          <SettingsTab
-            token={token}
-            selectedProject={selectedProject}
-            loadProjects={loadProjects}
-            loadIssues={loadIssues}
-            clearingEnhancements={clearingEnhancements}
-            selectedProjectId={selectedProjectId}
-            clearEnhancementsForProject={clearEnhancementsForProject}
-            onCreateCustomList={createCustomList}
-            onOpenTabPrefs={() => setShowTabPrefsModal(true)}
-          />
-        ) : null}
-      </View>
-
-      <AppDrawer
-        visible={drawerOpen}
-        onClose={() => setDrawerOpen(false)}
-        projects={projects}
-        selectedProjectId={selectedProjectId}
-        onSelectProject={setSelectedProjectId}
-        projectsLoading={projectsLoading}
-        onRefreshProjects={() => loadProjects().catch(() => {})}
-        visibleTabOrder={visibleTabOrder}
-        activeTab={activeTab}
-        onSelectTab={setActiveTab}
-        customLists={customLists}
-        onOpenTabPrefs={() => setShowTabPrefsModal(true)}
-      />
-
-      <TabPreferencesModal
-        visible={showTabPrefsModal}
-        onClose={() => setShowTabPrefsModal(false)}
-        fullTabOrder={fullTabOrder}
-        hiddenTabIds={hiddenTabIds}
-        setTabOrder={setTabOrder}
-        setHiddenTabIds={setHiddenTabIds}
-        customLists={customLists}
-      />
-
-      <Pressable
-        style={{
-          position: "absolute",
-          bottom: 24,
-          right: 16,
-          backgroundColor: "#1d4ed8",
-          borderRadius: 24,
-          paddingVertical: 12,
-          paddingHorizontal: 16,
-        }}
-        onPress={() => setShowBulbyModal(true)}
-      >
-        <Text style={{ color: "#fff", fontWeight: "600", fontSize: 14 }}>Bulby</Text>
-      </Pressable>
-
-      <BulbyModal
-        visible={showBulbyModal}
-        onClose={() => setShowBulbyModal(false)}
-        webAppUrl={APP_WEB_URL}
-      />
-
-      <PreviewModal
-        visible={Boolean(previewUrl)}
-        url={previewUrl ?? ""}
-        title={previewTitle ?? ""}
-        token={token ?? ""}
-        onClose={() => {
-          setPreviewUrl("");
-          setPreviewTitle("");
-        }}
-      />
-    </SafeAreaView>
+    </SafeAreaProvider>
   );
 }

@@ -156,4 +156,56 @@ test.describe("Navigation", () => {
       );
     });
   });
+
+  test("tab hide preference persists after reload (Manage tabs)", async ({
+    page,
+  }) => {
+    await test.step("Navigate to home and expand sidebar", async () => {
+      await page.goto("/");
+      await expandSidebarIfNeeded(page);
+      await expect(page.locator(".drawer-open")).toBeVisible({ timeout: 10000 });
+    });
+    const drawer = page.locator(".drawer-open");
+    await test.step("Open Settings then Manage tabs", async () => {
+      await drawer.getByRole("button", { name: "Settings" }).click();
+      await expect(
+        page.locator(".drawer-bottom-settings-menu")
+      ).toBeVisible({ timeout: 5000 });
+      await page.getByRole("menuitem", { name: "Manage tabs" }).click();
+      await expect(
+        page.locator(".drawer-bottom-filter-menu")
+      ).toBeVisible({ timeout: 5000 });
+    });
+    await test.step("Hide Finances tab", async () => {
+      const hideFinances = page.getByRole("checkbox", {
+        name: "Hide Finances",
+      });
+      await expect(hideFinances).toBeVisible({ timeout: 5000 });
+      await hideFinances.click();
+    });
+    await test.step("Reload and reopen Manage tabs", async () => {
+      await page.reload();
+      await expandSidebarIfNeeded(page);
+      await expect(page.locator(".drawer-open")).toBeVisible({ timeout: 10000 });
+      await page
+        .locator(".drawer-open")
+        .getByRole("button", { name: "Settings" })
+        .click();
+      await expect(
+        page.locator(".drawer-bottom-settings-menu")
+      ).toBeVisible({ timeout: 5000 });
+      await page.getByRole("menuitem", { name: "Manage tabs" }).click();
+      await expect(
+        page.locator(".drawer-bottom-filter-menu")
+      ).toBeVisible({ timeout: 5000 });
+    });
+    await test.step("Verify Finances is still hidden (Show Finances checkbox)", async () => {
+      await expect(
+        page.getByRole("checkbox", { name: "Show Finances" })
+      ).toBeVisible();
+    });
+    await test.step("Restore Finances tab for other tests", async () => {
+      await page.getByRole("checkbox", { name: "Show Finances" }).click();
+    });
+  });
 });

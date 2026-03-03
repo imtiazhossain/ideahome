@@ -546,7 +546,9 @@ export function IssuesTab(props: IssuesTabProps) {
 
       <AppCard title="Issue Details">
         {selectedIssue ? (
-          <View style={appStyles.stack}>
+          <View style={appStyles.editModeWrap}>
+            <View style={appStyles.editModeWrapInner}>
+            <View style={appStyles.stack}>
             <View style={appStyles.issueMetaRow}>
               <View style={appStyles.issueMetaPill}>
                 <Text style={appStyles.listItemMeta}>Key: {selectedIssue.key ?? "N/A"}</Text>
@@ -1199,6 +1201,8 @@ export function IssuesTab(props: IssuesTabProps) {
               {!(selectedIssue.files ?? []).length ? (
                 <Text style={appStyles.subtle}>No files attached.</Text>
               ) : null}
+            </View>
+          </View>
             </View>
           </View>
         ) : (

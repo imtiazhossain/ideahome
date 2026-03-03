@@ -74,10 +74,7 @@ import type { AppTab, AuthProvider, PendingCommentAttachment } from "../types";
 import {
   ACTIVE_TAB_STORAGE_KEY,
   AUTH_BYPASS_STORAGE_KEY,
-  DEFAULT_TAB_ORDER,
-  HIDDEN_TABS_STORAGE_PREFIX,
   SELECTED_PROJECT_STORAGE_KEY,
-  TAB_ORDER_STORAGE_PREFIX,
   TOKEN_STORAGE_KEY,
 } from "../constants";
 import {
@@ -100,6 +97,7 @@ import {
 import { appStyles } from "../theme/appStyles";
 import { IssueBoardColumn } from "../components/IssueBoardColumn";
 import { useChecklistState } from "./useChecklistState";
+import { useTabOrder } from "./useTabOrder";
 
 export function useAppState() {
   const [token, setToken] = useState("");
@@ -108,6 +106,8 @@ export function useAppState() {
   const [authInProgress, setAuthInProgress] = useState(false);
   const [signOutInProgress, setSignOutInProgress] = useState(false);
   const [authErrorMessage, setAuthErrorMessage] = useState("");
+  const [showAuthWebView, setShowAuthWebView] = useState(false);
+  const [authUrlForWebView, setAuthUrlForWebView] = useState("");
 
   const [activeTab, setActiveTab] = useState<AppTab>("board");
 
@@ -207,10 +207,16 @@ export function useAppState() {
   const [runningUiSuiteKey, setRunningUiSuiteKey] = useState<string | null>(null);
   const [runningAllUiTests, setRunningAllUiTests] = useState(false);
   const [customLists, setCustomLists] = useState<CustomList[]>([]);
-  const [tabOrder, setTabOrderState] = useState<AppTab[]>(() => [...DEFAULT_TAB_ORDER]);
-  const [hiddenTabIds, setHiddenTabIdsState] = useState<string[]>([]);
 
   const checklist = useChecklistState(token, selectedProjectId, activeTab);
+  const {
+    tabOrder,
+    setTabOrder,
+    hiddenTabIds,
+    setHiddenTabIds,
+    fullTabOrder,
+    visibleTabOrder,
+  } = useTabOrder(token, customLists, activeTab, setActiveTab);
 
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [expensesLoading, setExpensesLoading] = useState(false);
@@ -496,34 +502,6 @@ export function useAppState() {
         setAuthBypassEnabled(bypass === "1");
         if (storedActiveTab && isAppTab(storedActiveTab)) setActiveTab(storedActiveTab);
         if (storedProjectId?.trim()) setSelectedProjectId(storedProjectId.trim());
-
-        const userId = readUserIdFromToken(normalized);
-        const orderKey = userId ? `${TAB_ORDER_STORAGE_PREFIX}_${userId}` : TAB_ORDER_STORAGE_PREFIX;
-        const hiddenKey = userId ? `${HIDDEN_TABS_STORAGE_PREFIX}_${userId}` : HIDDEN_TABS_STORAGE_PREFIX;
-        const [storedOrder, storedHidden] = await Promise.all([
-          AsyncStorage.getItem(orderKey),
-          AsyncStorage.getItem(hiddenKey),
-        ]);
-        if (storedOrder) {
-          try {
-            const parsed = JSON.parse(storedOrder) as string[];
-            if (Array.isArray(parsed) && parsed.length > 0) {
-              setTabOrderState(parsed.filter((id): id is AppTab => isAppTab(id)));
-            }
-          } catch {
-            // ignore
-          }
-        }
-        if (storedHidden) {
-          try {
-            const parsed = JSON.parse(storedHidden) as string[];
-            if (Array.isArray(parsed)) {
-              setHiddenTabIdsState(parsed.filter((id) => typeof id === "string"));
-            }
-          } catch {
-            // ignore
-          }
-        }
       })
       .finally(() => setInitializing(false));
   }, []);
@@ -533,50 +511,6 @@ export function useAppState() {
       // best effort persistence
     });
   }, [activeTab]);
-
-  useEffect(() => {
-    if (initializing) return;
-    const userId = readUserIdFromToken(token);
-    const orderKey = userId ? `${TAB_ORDER_STORAGE_PREFIX}_${userId}` : TAB_ORDER_STORAGE_PREFIX;
-    const hiddenKey = userId ? `${HIDDEN_TABS_STORAGE_PREFIX}_${userId}` : HIDDEN_TABS_STORAGE_PREFIX;
-    AsyncStorage.setItem(orderKey, JSON.stringify(tabOrder)).catch(() => {});
-    AsyncStorage.setItem(hiddenKey, JSON.stringify(hiddenTabIds)).catch(() => {});
-  }, [initializing, token, tabOrder, hiddenTabIds]);
-
-  const setTabOrder = useCallback((order: AppTab[]) => {
-    setTabOrderState(order);
-  }, []);
-
-  const setHiddenTabIds = useCallback((ids: string[] | ((prev: string[]) => string[])) => {
-    setHiddenTabIdsState(ids);
-  }, []);
-
-  const fullTabOrder = useMemo(() => {
-    const order = tabOrder.filter(
-      (id) =>
-        !id.startsWith("custom-") ||
-        customLists.some((l) => getCustomListTabId(l.slug) === id)
-    );
-    customLists.forEach((l) => {
-      const id = getCustomListTabId(l.slug);
-      if (!order.includes(id)) {
-        const settingsIdx = order.indexOf("settings");
-        order.splice(settingsIdx >= 0 ? settingsIdx : order.length, 0, id);
-      }
-    });
-    return order;
-  }, [tabOrder, customLists]);
-
-  const visibleTabOrder = useMemo(
-    () => fullTabOrder.filter((id) => !hiddenTabIds.includes(id)),
-    [fullTabOrder, hiddenTabIds]
-  );
-
-  useEffect(() => {
-    if (hiddenTabIds.includes(activeTab) && visibleTabOrder.length > 0) {
-      setActiveTab(visibleTabOrder[0]);
-    }
-  }, [activeTab, hiddenTabIds, visibleTabOrder]);
 
   useEffect(() => {
     if (!selectedProjectId) {
@@ -839,10 +773,28 @@ export function useAppState() {
     };
   }, [handleAuthRedirectUrl]);
 
+  const handleAuthRedirectFromWebView = useCallback(
+    (url: string) => {
+      handleAuthRedirectUrl(url).finally(() => setShowAuthWebView(false));
+    },
+    [handleAuthRedirectUrl]
+  );
+
+  const closeAuthWebView = useCallback(() => {
+    setShowAuthWebView(false);
+  }, []);
+
   const signIn = useCallback(
-    async (provider: AuthProvider, options?: { showContinueAlert?: boolean }) => {
-      setAuthInProgress(true);
+    async (provider: AuthProvider, options?: { inApp?: boolean; showContinueAlert?: boolean }) => {
       setAuthErrorMessage("");
+      const useInApp = options?.inApp !== false;
+      if (useInApp) {
+        setAuthUrlForWebView(buildMobileAuthUrl(provider));
+        setShowAuthWebView(true);
+        setAuthInProgress(false);
+        return;
+      }
+      setAuthInProgress(true);
       try {
         const authUrl = buildMobileAuthUrl(provider);
         await Linking.openURL(authUrl);
@@ -1986,6 +1938,7 @@ export function useAppState() {
 
   return {
     initializing, token, setToken, authBypassEnabled, authInProgress, signOutInProgress, authErrorMessage,
+    showAuthWebView, authUrlForWebView, handleAuthRedirectFromWebView, closeAuthWebView,
     activeTab, setActiveTab, signOutNative, disableAuthBypass, enableAuthBypass, signIn,
     selectedProject, projects, projectsLoading, projectsError, selectedProjectId, setSelectedProjectId,
     loadProjects, createProjectName, setCreateProjectName, creatingProject, projectEditName, setProjectEditName,

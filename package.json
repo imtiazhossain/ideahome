@@ -48,9 +48,11 @@
     "format:check": "prettier --check \"backend/src/**/*.ts\" \"backend/test/**/*.ts\" \"web/**/*.{ts,tsx,js,jsx,json}\" \"mobile/**/*.{ts,tsx,js,jsx,json}\" \"app/**/*.{ts,tsx,js,jsx,json}\"",
     "dev:app": "pnpm --filter IdeaHomeApp start",
     "ios": "pnpm --filter IdeaHomeApp run ios",
-    "android": "pnpm --filter IdeaHomeApp run android"
+    "android": "pnpm --filter IdeaHomeApp run android",
+    "browser:agent": "agent-browser"
   },
   "devDependencies": {
+    "agent-browser": "latest",
     "prettier": "^3.2.0"
   }
 }

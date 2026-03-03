@@ -3,6 +3,29 @@
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { BulbyCharacter } from "./BulbyCharacter";
+import {
+  buildIdeaChatContext,
+  shouldUseWebSearch,
+  formatProjectListsAsContext,
+  combineAssistantContext,
+} from "@ideahome/shared-assistant";
+import {
+  fetchTodos,
+  fetchIdeas,
+  fetchBugs,
+  fetchFeatures,
+  generateListItemAssistantChat,
+  getStoredOpenRouterModel,
+  createTodo,
+  fetchExpenses,
+} from "../lib/api";
+import { invalidateList } from "../lib/listCache";
+import {
+  isExpenseOverviewQuery,
+  summarizeExpensesForDate,
+  summarizeExpensesOverview,
+  tryParseExpenseQuery,
+} from "../lib/assistantExpenses";
 
 const BULBY_POSITION_KEY = "bulby-chatbox-position";
 
@@ -96,22 +119,6 @@ function storePosition(pos: DragPosition | null) {
     /* ignore */
   }
 }
-import {
-  buildIdeaChatContext,
-  shouldUseWebSearch,
-  formatProjectListsAsContext,
-  combineAssistantContext,
-} from "@ideahome/shared-assistant";
-import {
-  fetchTodos,
-  fetchIdeas,
-  fetchBugs,
-  fetchFeatures,
-  generateListItemAssistantChat,
-  getStoredOpenRouterModel,
-  createTodo,
-} from "../lib/api";
-import { invalidateList } from "../lib/listCache";
 
 const BULBY_ITEM_NAME = "General";
 
@@ -171,14 +178,18 @@ export function BulbyChatbox({ projectId }: BulbyChatboxProps) {
   const [loading, setLoading] = useState(false);
   const [loadingStatus, setLoadingStatus] = useState("Thinking...");
   const threadRef = useRef<HTMLDivElement | null>(null);
+  const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const chatboxRef = useRef<HTMLDivElement | null>(null);
   const panelRef = useRef<HTMLDivElement | null>(null);
-  const [position, setPosition] = useState<DragPosition | null>(
-    () => loadStoredPosition() ?? getDefaultPosition()
-  );
+  const [position, setPosition] = useState<DragPosition | null>(null);
   const [panelOffset, setPanelOffset] = useState({ x: 0, y: 0 });
   const [panelOpensBelow, setPanelOpensBelow] = useState(false);
-  const [triggerHidden, setTriggerHiddenState] = useState(getTriggerHidden);
+  const [triggerHidden, setTriggerHiddenState] = useState(false);
+
+  useEffect(() => {
+    setPosition(loadStoredPosition() ?? getDefaultPosition());
+    setTriggerHiddenState(getTriggerHidden());
+  }, []);
   const dragRef = useRef<{ startX: number; startY: number; offsetX: number; offsetY: number; moved: boolean } | null>(null);
   /** Last position when trigger was in viewport; used to restore when unhiding. */
   const lastInViewportPositionRef = useRef<DragPosition | null>(null);
@@ -229,6 +240,21 @@ export function BulbyChatbox({ projectId }: BulbyChatboxProps) {
     const el = threadRef.current;
     if (el) el.scrollTop = el.scrollHeight;
   }, [messages, loading]);
+
+  useEffect(() => {
+    if (!open) return;
+    const el = inputRef.current;
+    if (!el) return;
+    // Focus the chat input when the panel opens so the user can start typing immediately.
+    el.focus();
+    // Move caret to the end of any existing text.
+    const len = el.value.length;
+    try {
+      el.setSelectionRange(len, len);
+    } catch {
+      // Some browsers may not support setSelectionRange on textarea; ignore.
+    }
+  }, [open]);
 
   useEffect(() => {
     setPosition(loadStoredPosition());
@@ -433,6 +459,45 @@ export function BulbyChatbox({ projectId }: BulbyChatboxProps) {
       return;
     }
 
+    const expenseQuery = tryParseExpenseQuery(draft);
+    if (expenseQuery) {
+      setLoading(true);
+      setLoadingStatus("Looking up your expenses...");
+      try {
+        const expenses = await fetchExpenses(projectId);
+        const summary = summarizeExpensesForDate(expenses, expenseQuery);
+        appendAssistantMessage(summary);
+      } catch (err) {
+        appendAssistantMessage(
+          err instanceof Error
+            ? err.message
+            : "I couldn't look up your expenses right now. Try again."
+        );
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
+
+    if (isExpenseOverviewQuery(draft)) {
+      setLoading(true);
+      setLoadingStatus("Looking up your expenses...");
+      try {
+        const expenses = await fetchExpenses(projectId);
+        const summary = summarizeExpensesOverview(expenses);
+        appendAssistantMessage(summary);
+      } catch (err) {
+        appendAssistantMessage(
+          err instanceof Error
+            ? err.message
+            : "I couldn't look up your expenses right now. Try again."
+        );
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
+
     const prior = [...messages, userMessage];
     const conversationContext = buildIdeaChatContext(prior, draft);
     const appContext = await buildAppContextBlock(projectId);
@@ -535,7 +600,14 @@ export function BulbyChatbox({ projectId }: BulbyChatboxProps) {
                 key={msg.id}
                 className={`idea-chat-message idea-chat-message--${msg.role}`}
               >
-                <p className="idea-plan-summary">{msg.text}</p>
+                {msg.text.split(/\r?\n/).map((line, index) => (
+                  <p
+                    key={`${msg.id}-${index}`}
+                    className="idea-plan-summary"
+                  >
+                    {line}
+                  </p>
+                ))}
               </div>
             ))}
             {loading && (
@@ -546,6 +618,7 @@ export function BulbyChatbox({ projectId }: BulbyChatboxProps) {
           </div>
           <div className="idea-chat-input-row">
             <textarea
+              ref={inputRef}
               className="idea-chat-input"
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}

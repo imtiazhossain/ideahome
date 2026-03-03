@@ -17,6 +17,7 @@ import { IconTrash } from "../../components/IconTrash";
 import { SectionLoadingSpinner } from "../../components/SectionLoadingSpinner";
 import { getRecordingDisplayLabel, getRecordingKind } from "../../lib/utils";
 import { PendingAttachmentVideoPlayer } from "./PendingAttachmentVideoPlayer";
+import { CommentBlockRow } from "./CommentBlockRow";
 import { commentBodyWithFileButtons } from "./comment-utils";
 import { serializeEditingBlocksToBody } from "./comment-blocks";
 import type {
@@ -217,7 +218,7 @@ export function IssueDetailModalComments(props: IssueDetailModalCommentsProps) {
                   );
                 }
                 if (block.kind === "attachment") {
-                  const label =
+                  const attLabel =
                     block.name ??
                     (block.attType === "screenshot"
                       ? "Screenshot"
@@ -227,50 +228,35 @@ export function IssueDetailModalComments(props: IssueDetailModalCommentsProps) {
                           ? "Camera recording"
                           : "Video");
                   return (
-                    <div
+                    <CommentBlockRow
                       key={`att-${bi}`}
-                      data-comment-block-index={bi}
-                      className="comment-block-row"
-                      style={{ gap: 4 }}
-                    >
-                      <button
-                        type="button"
-                        className="btn btn-secondary btn-sm"
-                        onClick={() => {
-                          setViewingBlockIndex(bi);
-                          setTimeout(
-                            () =>
-                              document
-                                .querySelector(
-                                  `[data-comment-block-index="${bi}"]`
-                                )
-                                ?.scrollIntoView({
-                                  behavior: "smooth",
-                                  block: "nearest",
-                                }),
-                            0
-                          );
-                        }}
-                        aria-label={`Open ${label}`}
-                        title={`Open ${label}`}
-                      >
-                        {block.attType === "screenshot" ? (
+                      dataCommentBlockIndex={bi}
+                      label={attLabel}
+                      openAriaLabel={`Open ${attLabel}`}
+                      icon={
+                        block.attType === "screenshot" ? (
                           <IconScreenshot size={14} />
                         ) : (
                           <IconRecordCamera size={14} />
-                        )}{" "}
-                        {label}
-                      </button>
-                      <button
-                        type="button"
-                        className="btn btn-icon btn-icon-sm"
-                        onClick={() => removeCommentBlock(bi)}
-                        aria-label="Remove"
-                        title="Remove"
-                      >
-                        <IconX size={10} />
-                      </button>
-                    </div>
+                        )
+                      }
+                      onOpen={() => {
+                        setViewingBlockIndex(bi);
+                        setTimeout(
+                          () =>
+                            document
+                              .querySelector(
+                                `[data-comment-block-index="${bi}"]`
+                              )
+                              ?.scrollIntoView({
+                                behavior: "smooth",
+                                block: "nearest",
+                              }),
+                          0
+                        );
+                      }}
+                      onRemove={() => removeCommentBlock(bi)}
+                    />
                   );
                 }
                 if (block.kind === "recording") {
@@ -287,28 +273,13 @@ export function IssueDetailModalComments(props: IssueDetailModalCommentsProps) {
                   );
                   const displayLabel = rec.name ?? defaultLabel;
                   return (
-                    <div
+                    <CommentBlockRow
                       key={`rec-${bi}`}
-                      className="comment-block-row"
-                    >
-                      <button
-                        type="button"
-                        className="btn btn-secondary btn-sm"
-                        aria-label={`Go to ${displayLabel}`}
-                        title={`Go to ${displayLabel}`}
-                      >
-                        <IconPlay size={14} /> {displayLabel}
-                      </button>
-                      <button
-                        type="button"
-                        className="btn btn-icon btn-icon-sm"
-                        onClick={() => removeCommentBlock(bi)}
-                        aria-label="Remove"
-                        title="Remove"
-                      >
-                        <IconX size={10} />
-                      </button>
-                    </div>
+                      label={displayLabel}
+                      openAriaLabel={`Go to ${displayLabel}`}
+                      icon={<IconPlay size={14} />}
+                      onRemove={() => removeCommentBlock(bi)}
+                    />
                   );
                 }
                 if (block.kind === "screenshot") {
@@ -321,28 +292,13 @@ export function IssueDetailModalComments(props: IssueDetailModalCommentsProps) {
                   const displayLabel =
                     block.name ?? shot.name ?? `Screenshot ${sIdx}`;
                   return (
-                    <div
+                    <CommentBlockRow
                       key={`shot-${bi}`}
-                      className="comment-block-row"
-                    >
-                      <button
-                        type="button"
-                        className="btn btn-secondary btn-sm"
-                        aria-label={`Go to ${displayLabel}`}
-                        title={`Go to ${displayLabel}`}
-                      >
-                        <IconScreenshot size={14} /> {displayLabel}
-                      </button>
-                      <button
-                        type="button"
-                        className="btn btn-icon btn-icon-sm"
-                        onClick={() => removeCommentBlock(bi)}
-                        aria-label="Remove"
-                        title="Remove"
-                      >
-                        <IconX size={10} />
-                      </button>
-                    </div>
+                      label={displayLabel}
+                      openAriaLabel={`Go to ${displayLabel}`}
+                      icon={<IconScreenshot size={14} />}
+                      onRemove={() => removeCommentBlock(bi)}
+                    />
                   );
                 }
                 if (block.kind === "file") {
@@ -351,28 +307,13 @@ export function IssueDetailModalComments(props: IssueDetailModalCommentsProps) {
                   );
                   if (!f) return null;
                   return (
-                    <div
+                    <CommentBlockRow
                       key={`file-${bi}`}
-                      className="comment-block-row"
-                    >
-                      <button
-                        type="button"
-                        className="btn btn-secondary btn-sm"
-                        aria-label={`Go to file ${f.fileName}`}
-                        title={`Go to file ${f.fileName}`}
-                      >
-                        <IconUpload size={14} /> {f.fileName}
-                      </button>
-                      <button
-                        type="button"
-                        className="btn btn-icon btn-icon-sm"
-                        onClick={() => removeCommentBlock(bi)}
-                        aria-label="Remove"
-                        title="Remove"
-                      >
-                        <IconX size={10} />
-                      </button>
-                    </div>
+                      label={f.fileName}
+                      openAriaLabel={`Go to file ${f.fileName}`}
+                      icon={<IconUpload size={14} />}
+                      onRemove={() => removeCommentBlock(bi)}
+                    />
                   );
                 }
                 return null;

@@ -122,25 +122,17 @@ test.describe("Idea Home home", () => {
     });
   });
 
-  test("Code Health nav link opens coverage page", async ({ page }) => {
-    await test.step("Navigate to home", async () => {
-      await page.goto("/");
+  test("Code page has Code Health section", async ({ page }) => {
+    await test.step("Navigate to Code page", async () => {
+      await page.goto("/code");
     });
-    await test.step("Click Code Health link in nav bar", async () => {
-      await page
-        .locator(".project-nav-tab")
-        .filter({ hasText: "Code Health" })
-        .click();
-    });
-    await test.step("Verify coverage page URL and title", async () => {
-      await expect(page).toHaveURL(/\/coverage/);
-      await expect(page.locator(".coverage-page-title")).toHaveText(
-        "Code Health"
-      );
-    });
-    await test.step("Verify Back to Idea Home link is visible", async () => {
+    await test.step("Verify Code page and Code Health section", async () => {
+      await expect(page).toHaveURL(/\/code/);
       await expect(
-        page.getByRole("link", { name: /Back to Idea Home/ })
+        page.getByRole("heading", { name: "Code Health", level: 2 })
+      ).toBeVisible();
+      await expect(
+        page.getByRole("button", { name: "Run coverage" })
       ).toBeVisible();
     });
   });

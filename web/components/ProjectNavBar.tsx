@@ -24,6 +24,7 @@ import {
   IconReorder,
   IconSearch,
 } from "./icons";
+import { AccessibleModal } from "./AccessibleModal";
 import { ErrorBanner } from "./ErrorBanner";
 import { IconFromName } from "./IconFromName";
 import { IconPlus } from "./IconPlus";
@@ -81,6 +82,268 @@ export interface ProjectNavBarProps {
   showSettingsButton?: boolean;
 }
 
+interface ProjectNavSearchProps {
+  projectId?: string;
+  searchPlaceholder: string;
+  searchValue: string;
+  onSearchChange?: (value: string) => void;
+  projectSearchOpen: boolean;
+  setProjectSearchOpen: (open: boolean) => void;
+}
+
+function ProjectNavSearch({
+  projectId,
+  searchPlaceholder,
+  searchValue,
+  onSearchChange,
+  projectSearchOpen,
+  setProjectSearchOpen,
+}: ProjectNavSearchProps) {
+  const [projectSearchQuery, setProjectSearchQuery] = useState("");
+  const {
+    results: projectSearchResults,
+    setResults: setProjectSearchResults,
+    loading: projectSearchLoading,
+  } = useProjectSearch(projectId, projectSearchQuery);
+  const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
+  const projectSearchRef = useRef<HTMLDivElement>(null);
+  const projectSearchInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (
+        projectSearchRef.current &&
+        !projectSearchRef.current.contains(e.target as Node)
+      ) {
+        setProjectSearchOpen(false);
+        setMobileSearchOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, []);
+
+  return (
+    <div
+      className={`project-nav-search-wrap${
+        mobileSearchOpen ? " is-mobile-search-open" : ""
+      }`}
+      ref={projectSearchRef}
+      style={projectId ? { position: "relative" } : undefined}
+    >
+      <button
+        type="button"
+        className="project-nav-search-icon"
+        aria-label="Open search"
+        onClick={() => {
+          if (
+            typeof window !== "undefined" &&
+            window.matchMedia("(max-width: 1024px)").matches
+          ) {
+            setMobileSearchOpen(true);
+            requestAnimationFrame(() =>
+              projectSearchInputRef.current?.focus()
+            );
+            return;
+          }
+          projectSearchInputRef.current?.focus();
+        }}
+      >
+        <IconSearch />
+      </button>
+      <input
+        ref={projectSearchInputRef}
+        type="search"
+        id="project-nav-search-input"
+        className="project-nav-search"
+        placeholder={
+          projectId
+            ? "A little light to find things in the dark..."
+            : searchPlaceholder
+        }
+        value={projectId ? projectSearchQuery : searchValue}
+        onChange={(e) => {
+          if (projectId) {
+            const v = e.target.value;
+            setProjectSearchQuery(v);
+            setProjectSearchOpen(!!v.trim());
+          } else {
+            onSearchChange?.(e.target.value);
+          }
+        }}
+        onFocus={() => {
+          setMobileSearchOpen(true);
+          if (projectId && projectSearchQuery.trim()) {
+            setProjectSearchOpen(true);
+          }
+        }}
+        onBlur={() => {
+          if (
+            typeof window !== "undefined" &&
+            window.matchMedia("(max-width: 1024px)").matches &&
+            !(
+              projectId ? projectSearchQuery.trim() : searchValue.trim()
+            )
+          ) {
+            setMobileSearchOpen(false);
+          }
+        }}
+        aria-label="Search"
+        aria-expanded={
+          projectId
+            ? projectSearchOpen && projectSearchResults.length > 0
+            : undefined
+        }
+        aria-controls={projectId ? "project-search-results" : undefined}
+        aria-autocomplete={projectId ? "list" : undefined}
+      />
+      {projectId &&
+        projectSearchOpen &&
+        (projectSearchResults.length > 0 || projectSearchLoading) && (
+          <ul
+            id="project-search-results"
+            className="project-nav-search-results"
+            role="listbox"
+            aria-label="Search results"
+          >
+            {projectSearchLoading ? (
+              <li
+                className="project-nav-search-results-loading"
+                role="option"
+                aria-selected={false}
+              >
+                Searching…
+              </li>
+            ) : (
+              projectSearchResults.map((item) => {
+                const key =
+                  item.type === "issue"
+                    ? `issue-${item.id}`
+                    : `list-${item.page}-${item.id}`;
+                const href =
+                  item.type === "issue"
+                    ? `/?issueId=${encodeURIComponent(item.id)}`
+                    : `${item.page}?projectId=${encodeURIComponent(
+                        item.projectId
+                      )}`;
+                const title =
+                  item.type === "issue" ? item.title : item.name;
+                const meta =
+                  item.type === "issue" ? item.status : item.pageLabel;
+                return (
+                  <li key={key} role="option">
+                    <Link
+                      href={href}
+                      prefetch={false}
+                      className="project-nav-search-result-item"
+                      onClick={() => {
+                        setProjectSearchOpen(false);
+                        setProjectSearchQuery("");
+                        setProjectSearchResults([]);
+                      }}
+                    >
+                      <span className="project-nav-search-result-title">
+                        {title}
+                      </span>
+                      {meta && (
+                        <span className="project-nav-search-result-meta">
+                          {meta}
+                        </span>
+                      )}
+                    </Link>
+                  </li>
+                );
+              })
+            )}
+          </ul>
+        )}
+    </div>
+  );
+}
+
+interface ProjectNavAuthMenuProps {
+  hasToken: boolean | null;
+  authMenuOpen: boolean;
+  setAuthMenuOpen: (open: boolean) => void;
+}
+
+function ProjectNavAuthMenu({
+  hasToken,
+  authMenuOpen,
+  setAuthMenuOpen,
+}: ProjectNavAuthMenuProps) {
+  const authMenuRef = useRef<HTMLSpanElement | null>(null);
+
+  const handleLogout = useCallback(() => {
+    setAuthMenuOpen(false);
+    logout("/login");
+  }, [setAuthMenuOpen]);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (
+        authMenuRef.current &&
+        !authMenuRef.current.contains(e.target as Node)
+      ) {
+        setAuthMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [setAuthMenuOpen]);
+
+  if (hasToken === null) return null;
+
+  return (
+    <span
+      className="project-nav-auth project-nav-auth-wrap"
+      ref={authMenuRef}
+    >
+      <button
+        type="button"
+        className={`project-nav-auth-btn${authMenuOpen ? " is-open" : ""}`}
+        onClick={() => setAuthMenuOpen((o) => !o)}
+        aria-label={hasToken ? "Account menu" : "Sign in"}
+        title={hasToken ? "Account menu" : "Sign in"}
+        aria-expanded={authMenuOpen}
+        aria-haspopup="true"
+      >
+        <IconProfile />
+      </button>
+      {authMenuOpen && (
+        <div className="project-nav-auth-menu" role="menu">
+          {hasToken ? (
+            <button
+              type="button"
+              className="project-nav-auth-menu-item project-nav-auth-menu-item--icon"
+              role="menuitem"
+              onClick={handleLogout}
+              aria-label="Log out"
+              title="Log out"
+            >
+              <IconLogout />
+            </button>
+          ) : (
+            <Link
+              href="/login"
+              prefetch={false}
+              className="project-nav-auth-menu-item project-nav-auth-menu-item--icon"
+              role="menuitem"
+              onClick={() => setAuthMenuOpen(false)}
+              aria-label="Log in"
+              title="Log in"
+            >
+              <IconLogin />
+            </Link>
+          )}
+        </div>
+      )}
+    </span>
+  );
+}
+
 export function ProjectNavBar({
   projectName,
   projectId,
@@ -121,8 +384,6 @@ export function ProjectNavBar({
   const [createListModalOpen, setCreateListModalOpen] = useState(false);
   const [createListName, setCreateListName] = useState("");
   const [createListError, setCreateListError] = useState<string | null>(null);
-  const [authMenuOpen, setAuthMenuOpen] = useState(false);
-  const authMenuRef = useRef<HTMLDivElement>(null);
   const [projectSwitcherOpen, setProjectSwitcherOpen] = useState(false);
   const projectSwitcherRef = useRef<HTMLDivElement>(null);
   const [showCreateProjectInput, setShowCreateProjectInput] = useState(false);
@@ -135,17 +396,9 @@ export function ProjectNavBar({
     }
   }, [showCreateProjectInput]);
 
-  const [projectSearchQuery, setProjectSearchQuery] = useState("");
-  const {
-    results: projectSearchResults,
-    setResults: setProjectSearchResults,
-    loading: projectSearchLoading,
-  } = useProjectSearch(projectId, projectSearchQuery);
-  const [projectSearchOpen, setProjectSearchOpen] = useState(false);
-  const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   const [compactTabs, setCompactTabs] = useState(false);
-  const projectSearchRef = useRef<HTMLDivElement>(null);
-  const projectSearchInputRef = useRef<HTMLInputElement>(null);
+  const [projectSearchOpen, setProjectSearchOpen] = useState(false);
+  const [authMenuOpen, setAuthMenuOpen] = useState(false);
   const [hasToken, setHasToken] = useState<boolean | null>(null);
   const { theme, toggleTheme } = useTheme();
   useEffect(() => {
@@ -205,23 +458,10 @@ export function ProjectNavBar({
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (
-        projectSearchRef.current &&
-        !projectSearchRef.current.contains(e.target as Node)
-      ) {
-        setProjectSearchOpen(false);
-        setMobileSearchOpen(false);
-      }
-      if (
         settingsMenuRef.current &&
         !settingsMenuRef.current.contains(e.target as Node)
       ) {
         closeSettingsMenu();
-      }
-      if (
-        authMenuRef.current &&
-        !authMenuRef.current.contains(e.target as Node)
-      ) {
-        setAuthMenuOpen(false);
       }
       if (
         projectSwitcherRef.current &&
@@ -396,132 +636,14 @@ export function ProjectNavBar({
             <h1 className="project-nav-project-name">
               {projectName || "Project"}
             </h1>
-            <div
-              className={`project-nav-search-wrap${mobileSearchOpen ? " is-mobile-search-open" : ""}`}
-              ref={projectSearchRef}
-              style={projectId ? { position: "relative" } : undefined}
-            >
-              <button
-                type="button"
-                className="project-nav-search-icon"
-                aria-label="Open search"
-                onClick={() => {
-                  if (
-                    typeof window !== "undefined" &&
-                    window.matchMedia("(max-width: 1024px)").matches
-                  ) {
-                    setMobileSearchOpen(true);
-                    requestAnimationFrame(() =>
-                      projectSearchInputRef.current?.focus()
-                    );
-                    return;
-                  }
-                  projectSearchInputRef.current?.focus();
-                }}
-              >
-                <IconSearch />
-              </button>
-              <input
-                ref={projectSearchInputRef}
-                type="search"
-                id="project-nav-search-input"
-                className="project-nav-search"
-                placeholder={projectId ? "A little light to find things in the dark..." : searchPlaceholder}
-                value={projectId ? projectSearchQuery : searchValue}
-                onChange={(e) => {
-                  if (projectId) {
-                    const v = e.target.value;
-                    setProjectSearchQuery(v);
-                    setProjectSearchOpen(!!v.trim());
-                  } else {
-                    onSearchChange?.(e.target.value);
-                  }
-                }}
-                onFocus={() => {
-                  setMobileSearchOpen(true);
-                  if (projectId && projectSearchQuery.trim()) {
-                    setProjectSearchOpen(true);
-                  }
-                }}
-                onBlur={() => {
-                  if (
-                    typeof window !== "undefined" &&
-                    window.matchMedia("(max-width: 1024px)").matches &&
-                    !(projectId
-                      ? projectSearchQuery.trim()
-                      : searchValue.trim())
-                  ) {
-                    setMobileSearchOpen(false);
-                  }
-                }}
-                aria-label="Search"
-                aria-expanded={
-                  projectId
-                    ? projectSearchOpen && projectSearchResults.length > 0
-                    : undefined
-                }
-                aria-controls={projectId ? "project-search-results" : undefined}
-                aria-autocomplete={projectId ? "list" : undefined}
-              />
-              {projectId &&
-                projectSearchOpen &&
-                (projectSearchResults.length > 0 || projectSearchLoading) && (
-                  <ul
-                    id="project-search-results"
-                    className="project-nav-search-results"
-                    role="listbox"
-                    aria-label="Search results"
-                  >
-                    {projectSearchLoading ? (
-                      <li
-                        className="project-nav-search-results-loading"
-                        role="option"
-                        aria-selected={false}
-                      >
-                        Searching…
-                      </li>
-                    ) : (
-                      projectSearchResults.map((item) => {
-                        const key =
-                          item.type === "issue"
-                            ? `issue-${item.id}`
-                            : `list-${item.page}-${item.id}`;
-                        const href =
-                          item.type === "issue"
-                            ? `/?issueId=${encodeURIComponent(item.id)}`
-                            : `${item.page}?projectId=${encodeURIComponent(item.projectId)}`;
-                        const title =
-                          item.type === "issue" ? item.title : item.name;
-                        const meta =
-                          item.type === "issue" ? item.status : item.pageLabel;
-                        return (
-                          <li key={key} role="option">
-                            <Link
-                              href={href}
-                              prefetch={false}
-                              className="project-nav-search-result-item"
-                              onClick={() => {
-                                setProjectSearchOpen(false);
-                                setProjectSearchQuery("");
-                                setProjectSearchResults([]);
-                              }}
-                            >
-                              <span className="project-nav-search-result-title">
-                                {title}
-                              </span>
-                              {meta && (
-                                <span className="project-nav-search-result-meta">
-                                  {meta}
-                                </span>
-                              )}
-                            </Link>
-                          </li>
-                        );
-                      })
-                    )}
-                  </ul>
-                )}
-            </div>
+            <ProjectNavSearch
+              projectId={projectId}
+              searchPlaceholder={searchPlaceholder}
+              searchValue={searchValue}
+              onSearchChange={onSearchChange}
+              projectSearchOpen={projectSearchOpen}
+              setProjectSearchOpen={setProjectSearchOpen}
+            />
             {onAddClick && (
               <button
                 type="button"
@@ -533,52 +655,11 @@ export function ProjectNavBar({
                 Create Deck
               </button>
             )}
-            {hasToken !== null && (
-              <span
-                className="project-nav-auth project-nav-auth-wrap"
-                ref={authMenuRef}
-              >
-                <button
-                  type="button"
-                  className={`project-nav-auth-btn${authMenuOpen ? " is-open" : ""}`}
-                  onClick={() => setAuthMenuOpen((o) => !o)}
-                  aria-label={hasToken ? "Account menu" : "Sign in"}
-                  title={hasToken ? "Account menu" : "Sign in"}
-                  aria-expanded={authMenuOpen}
-                  aria-haspopup="true"
-                >
-                  <IconProfile />
-                </button>
-                {authMenuOpen && (
-                  <div className="project-nav-auth-menu" role="menu">
-                    {hasToken ? (
-                      <button
-                        type="button"
-                        className="project-nav-auth-menu-item project-nav-auth-menu-item--icon"
-                        role="menuitem"
-                        onClick={handleLogout}
-                        aria-label="Log out"
-                        title="Log out"
-                      >
-                        <IconLogout />
-                      </button>
-                    ) : (
-                      <Link
-                        href="/login"
-                        prefetch={false}
-                        className="project-nav-auth-menu-item project-nav-auth-menu-item--icon"
-                        role="menuitem"
-                        onClick={() => setAuthMenuOpen(false)}
-                        aria-label="Log in"
-                        title="Log in"
-                      >
-                        <IconLogin />
-                      </Link>
-                    )}
-                  </div>
-                )}
-              </span>
-            )}
+            <ProjectNavAuthMenu
+              hasToken={hasToken}
+              authMenuOpen={authMenuOpen}
+              setAuthMenuOpen={setAuthMenuOpen}
+            />
           </div>
         </div>
       </div>
@@ -588,6 +669,41 @@ export function ProjectNavBar({
             <div className="project-nav-tabs-inner">
               {orderedTabs.map((tab) =>
                 tab.href ? (
+                  tab.href === "/" ? (
+                    <button
+                      key={tab.id}
+                      type="button"
+                      className={`project-nav-tab ${activeTab === tab.id ? "is-active" : ""}`}
+                      aria-current={activeTab === tab.id ? "page" : undefined}
+                      data-tab-id={tab.id}
+                      title={tab.label}
+                      onClick={() => {
+                        setProjectSearchOpen(false);
+                        closeSettingsMenu();
+                        setAuthMenuOpen(false);
+                        setProjectSwitcherOpen(false);
+                        try {
+                          sessionStorage.setItem(
+                            EXPLICIT_BOARD_SESSION_KEY,
+                            "1"
+                          );
+                        } catch {
+                          /* ignore */
+                        }
+                        if (activeTab === tab.id) {
+                          const main = document.querySelector(".main-content");
+                          if (main) main.scrollTo({ top: 0, behavior: "smooth" });
+                        } else {
+                          void router.push("/");
+                        }
+                      }}
+                    >
+                      <span className="project-nav-tab-icon">{tab.icon}</span>
+                      <span className="project-nav-tab-label">
+                        {getTabLabel(tab.id, tab.label)}
+                      </span>
+                    </button>
+                  ) : (
                   <Link
                     key={tab.id}
                     href={tab.href}
@@ -601,16 +717,6 @@ export function ProjectNavBar({
                       closeSettingsMenu();
                       setAuthMenuOpen(false);
                       setProjectSwitcherOpen(false);
-                      if (tab.href === "/") {
-                        try {
-                          sessionStorage.setItem(
-                            EXPLICIT_BOARD_SESSION_KEY,
-                            "1"
-                          );
-                        } catch {
-                          /* ignore */
-                        }
-                      }
                       if (activeTab === tab.id) {
                         const main = document.querySelector(".main-content");
                         if (main) main.scrollTo({ top: 0, behavior: "smooth" });
@@ -622,6 +728,7 @@ export function ProjectNavBar({
                       {getTabLabel(tab.id, tab.label)}
                     </span>
                   </Link>
+                  )
                 ) : (
                   <button
                     key={tab.id}
@@ -918,73 +1025,59 @@ export function ProjectNavBar({
         )}
       </nav>
 
-      {createListModalOpen && (
-        <div
-          className="modal-overlay"
-          onClick={() => setCreateListModalOpen(false)}
+      <AccessibleModal
+        open={createListModalOpen}
+        onClose={() => setCreateListModalOpen(false)}
+        title="New list page"
+      >
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            setCreateListError(null);
+            const name = createListName.trim();
+            if (!name) {
+              setCreateListError("Enter a name for the list.");
+              return;
+            }
+            const list = addCustomList(name);
+            const newTabId = getCustomListTabId(list.slug);
+            setTabOrder([...tabOrder, newTabId]);
+            setCreateListModalOpen(false);
+            setCreateListName("");
+            router.push(`/list/${list.slug}`);
+          }}
         >
-          <div className="modal" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <h2>New list page</h2>
-              <button
-                type="button"
-                className="modal-close"
-                onClick={() => setCreateListModalOpen(false)}
-                aria-label="Close"
-              >
-                ×
-              </button>
-            </div>
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                setCreateListError(null);
-                const name = createListName.trim();
-                if (!name) {
-                  setCreateListError("Enter a name for the list.");
-                  return;
-                }
-                const list = addCustomList(name);
-                const newTabId = getCustomListTabId(list.slug);
-                setTabOrder([...tabOrder, newTabId]);
-                setCreateListModalOpen(false);
-                setCreateListName("");
-                router.push(`/list/${list.slug}`);
-              }}
-            >
-              {createListError && (
-                <ErrorBanner
-                  message={createListError}
-                  style={{ marginBottom: 16 }}
-                />
-              )}
-              <div className="form-group">
-                <label htmlFor="create-list-name">Page name</label>
-                <input
-                  id="create-list-name"
-                  type="text"
-                  value={createListName}
-                  onChange={(e) => setCreateListName(e.target.value)}
-                  placeholder="e.g. Reading list"
-                  autoFocus
-                />
-              </div>
-              <div className="modal-actions">
-                <button
-                  type="button"
-                  className="btn btn-secondary"
-                  onClick={() => setCreateListModalOpen(false)}
-                >
-                  Cancel
-                </button>
-                <button type="submit" className="btn btn-primary">
-                  Create
-                </button>
-              </div>
-            </form>
+          {createListError && (
+            <ErrorBanner
+              message={createListError}
+              style={{ marginBottom: 16 }}
+            />
+          )}
+          <div className="form-group">
+            <label htmlFor="create-list-name">Page name</label>
+            <input
+              id="create-list-name"
+              type="text"
+              value={createListName}
+              onChange={(e) => setCreateListName(e.target.value)}
+              placeholder="e.g. Reading list"
+              autoFocus
+            />
           </div>
-        </div>
-      )}
+          <div className="modal-actions">
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={() => setCreateListModalOpen(false)}
+            >
+              Cancel
+            </button>
+            <button type="submit" className="btn btn-primary">
+              Create
+            </button>
+          </div>
+        </form>
+      </AccessibleModal>
     </header>
   );
 }

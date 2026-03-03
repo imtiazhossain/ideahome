@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev -H 0.0.0.0",
     "build": "next build",
     "start": "next start",
     "test:e2e": "env -u NO_COLOR -u FORCE_COLOR playwright test",
@@ -19,7 +19,9 @@
     "backend": "workspace:*",
     "next": "^13.0.0",
     "react": "^18.0.0",
-    "react-dom": "^18.0.0"
+    "react-dom": "^18.0.0",
+    "react-plaid-link": "^4.1.1",
+    "mermaid": "^11.0.0"
   },
   "devDependencies": {
     "@playwright/test": "^1.49.0",

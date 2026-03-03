@@ -57,6 +57,14 @@ export class ExpensesController {
     return this.svc.update(id, requireUserId(req), body ?? {});
   }
 
+  @Delete("imported")
+  deleteAllImported(
+    @Query("projectId") projectId: string,
+    @Req() req: AuthenticatedRequest
+  ) {
+    return this.svc.removeAllImported(projectId, requireUserId(req));
+  }
+
   @Delete(":id")
   remove(@Param("id") id: string, @Req() req: AuthenticatedRequest) {
     return this.svc.remove(id, requireUserId(req));

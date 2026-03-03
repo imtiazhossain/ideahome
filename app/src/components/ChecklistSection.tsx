@@ -38,6 +38,11 @@ export type ChecklistSectionProps = {
   onSaveEdit: () => void;
   onCancelEdit: () => void;
   assistant?: ChecklistSectionAssistant;
+  /**
+   * When true, shows the search box and All/Pending/Done filter chips.
+   * For the To-Do screen we hide these so the layout matches the mobile web UI.
+   */
+  showFiltersAndSearch?: boolean;
 };
 
 export function ChecklistSection({
@@ -61,6 +66,7 @@ export function ChecklistSection({
   onSaveEdit,
   onCancelEdit,
   assistant,
+  showFiltersAndSearch = true,
 }: ChecklistSectionProps) {
   const s = appStyles;
   const [searchQuery, setSearchQuery] = useState("");
@@ -70,31 +76,37 @@ export function ChecklistSection({
   const sortedItems = useMemo(() => [...items].sort((a, b) => a.order - b.order), [items]);
   const filteredItems = useMemo(
     () =>
-      sortedItems.filter((item) => {
-        if (visibilityFilter === "pending" && item.done) return false;
-        if (visibilityFilter === "done" && !item.done) return false;
-        if (!normalizedSearch) return true;
-        return item.name.toLowerCase().includes(normalizedSearch);
-      }),
-    [normalizedSearch, sortedItems, visibilityFilter]
+      !showFiltersAndSearch
+        ? sortedItems
+        : sortedItems.filter((item) => {
+            if (visibilityFilter === "pending" && item.done) return false;
+            if (visibilityFilter === "done" && !item.done) return false;
+            if (!normalizedSearch) return true;
+            return item.name.toLowerCase().includes(normalizedSearch);
+          }),
+    [normalizedSearch, showFiltersAndSearch, sortedItems, visibilityFilter]
   );
   const pendingCount = sortedItems.filter((item) => !item.done).length;
   const doneCount = sortedItems.filter((item) => item.done).length;
-  const canReorder = visibilityFilter === "all" && !searchQuery.trim();
+  const canReorder = !showFiltersAndSearch || (visibilityFilter === "all" && !searchQuery.trim());
 
   return (
     <View style={s.stackFill}>
-      <AppCard title={`Create ${title.slice(0, -1)}`}>
-        <View style={s.inlineRow}>
+      <AppCard>
+        <View style={s.addFormWrap}>
           <TextInput
-            style={s.input}
+            style={[s.input, s.addFormInput]}
             value={itemName}
             onChangeText={setItemName}
-            placeholder={`${title.slice(0, -1)} name`}
+            placeholder={
+              title === "Ideas" ? "Your ideas light me up!" : `${title.slice(0, -1)} name`
+            }
             placeholderTextColor="#94a3b8"
           />
           <AppButton
-            label={creating ? "Adding..." : "Add"}
+            label={creating ? "..." : "+"}
+            variant="add"
+            circular
             disabled={creating || !itemName.trim() || !selectedProjectId}
             onPress={onCreate}
           />
@@ -103,55 +115,62 @@ export function ChecklistSection({
 
       <AppCard title={title} style={s.fillCard}>
         <View style={s.stack}>
-          <TextInput
-            style={s.input}
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            placeholder={`Search ${title.toLowerCase()}`}
-            placeholderTextColor="#94a3b8"
-          />
-          <View style={s.inlineRowWrap}>
-            <Pressable
-              style={[s.chip, visibilityFilter === "all" ? s.chipActive : null]}
-              onPress={() => setVisibilityFilter("all")}
-            >
-              <Text
-                style={[s.chipText, visibilityFilter === "all" ? s.chipTextActive : null]}
-              >
-                All ({sortedItems.length})
-              </Text>
-            </Pressable>
-            <Pressable
-              style={[s.chip, visibilityFilter === "pending" ? s.chipActive : null]}
-              onPress={() => setVisibilityFilter("pending")}
-            >
-              <Text
-                style={[s.chipText, visibilityFilter === "pending" ? s.chipTextActive : null]}
-              >
-                Pending ({pendingCount})
-              </Text>
-            </Pressable>
-            <Pressable
-              style={[s.chip, visibilityFilter === "done" ? s.chipActive : null]}
-              onPress={() => setVisibilityFilter("done")}
-            >
-              <Text
-                style={[s.chipText, visibilityFilter === "done" ? s.chipTextActive : null]}
-              >
-                Done ({doneCount})
-              </Text>
-            </Pressable>
-            <AppButton
-              label="Clear Done"
-              variant="secondary"
-              disabled={!doneCount}
-              onPress={onClearDone}
-            />
-          </View>
+          {showFiltersAndSearch ? (
+            <>
+              <TextInput
+                style={s.input}
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                placeholder={`Search ${title.toLowerCase()}`}
+                placeholderTextColor="#94a3b8"
+              />
+              <View style={s.inlineRowWrap}>
+                <Pressable
+                  style={[s.chip, visibilityFilter === "all" ? s.chipActive : null]}
+                  onPress={() => setVisibilityFilter("all")}
+                >
+                  <Text
+                    style={[s.chipText, visibilityFilter === "all" ? s.chipTextActive : null]}
+                  >
+                    All ({sortedItems.length})
+                  </Text>
+                </Pressable>
+                <Pressable
+                  style={[s.chip, visibilityFilter === "pending" ? s.chipActive : null]}
+                  onPress={() => setVisibilityFilter("pending")}
+                >
+                  <Text
+                    style={[
+                      s.chipText,
+                      visibilityFilter === "pending" ? s.chipTextActive : null,
+                    ]}
+                  >
+                    Pending ({pendingCount})
+                  </Text>
+                </Pressable>
+                <Pressable
+                  style={[s.chip, visibilityFilter === "done" ? s.chipActive : null]}
+                  onPress={() => setVisibilityFilter("done")}
+                >
+                  <Text
+                    style={[s.chipText, visibilityFilter === "done" ? s.chipTextActive : null]}
+                  >
+                    Done ({doneCount})
+                  </Text>
+                </Pressable>
+                <AppButton
+                  label="Clear Done"
+                  variant="secondary"
+                  disabled={!doneCount}
+                  onPress={onClearDone}
+                />
+              </View>
+            </>
+          ) : null}
         </View>
         {loading ? <ActivityIndicator /> : null}
         {error ? <Text style={s.errorText}>{error}</Text> : null}
-        {!canReorder ? (
+        {showFiltersAndSearch && !canReorder ? (
           <Text style={s.subtle}>Reorder is available only in All view with no search.</Text>
         ) : null}
         <FlatList
@@ -159,7 +178,12 @@ export function ChecklistSection({
           keyExtractor={(item) => item.id}
           contentContainerStyle={s.listContainer}
           renderItem={({ item, index }) => (
-            <View style={s.checklistItem}>
+            <View
+                style={[
+                  s.checklistItem,
+                  editingId === item.id ? s.checklistItemSelected : null,
+                ]}
+              >
               {editingId === item.id ? (
                 <View style={s.stack}>
                   <TextInput
@@ -177,7 +201,17 @@ export function ChecklistSection({
                 </View>
               ) : (
                 <>
-                  <Pressable style={s.checklistMain} onPress={() => onToggle(item)}>
+                  <Pressable
+                    style={[s.doneToggle, item.done ? s.doneToggleChecked : null]}
+                    onPress={() => onToggle(item)}
+                  >
+                    {item.done ? (
+                      <Text style={s.doneToggleCheck}>✓</Text>
+                    ) : (
+                      <View style={s.doneToggleEmptyDot} />
+                    )}
+                  </Pressable>
+                  <Pressable style={s.checklistMain} onPress={() => onStartEdit(item)}>
                     <Text style={[s.listItemTitle, item.done ? s.doneText : null]}>
                       {item.name}
                     </Text>

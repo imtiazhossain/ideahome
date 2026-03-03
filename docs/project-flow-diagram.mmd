@@ -1,0 +1,146 @@
+%% Idea Home — Full project flow: workspaces, shared packages, backend, web, app, and data flow
+%% View: GitHub (renders .mmd), VS Code (Mermaid extension), or https://mermaid.live
+
+flowchart TB
+  subgraph ROOT["pnpm monorepo (root)"]
+    direction TB
+    ROOT_SCRIPTS["scripts: dev:backend, dev:web, dev:app, db:*, test:e2e*"]
+  end
+
+  subgraph PACKAGES["packages/"]
+    direction TB
+    SHARED_CONFIG["@ideahome/shared-config<br/>types (User, Project, Issue, Expense...)<br/>path helpers (pathProjects, pathIssues...)<br/>constants (IDEAHOME_API_ORIGIN, AUTH_*...)"]
+    SHARED["@ideahome/shared<br/>re-exports shared-config + tabs, BUILT_IN_TABS, getTabLabel"]
+  end
+
+  subgraph BACKEND["backend (NestJS, port 3001)"]
+    direction TB
+    APP_MOD["AppModule"]
+    APP_MOD --> AUTH_M
+    APP_MOD --> PROJ_M
+    APP_MOD --> ISSUES_M
+    APP_MOD --> USERS_M
+    APP_MOD --> ORGS_M
+    APP_MOD --> TESTS_M
+    APP_MOD --> TODOS_M
+    APP_MOD --> IDEAS_M
+    APP_MOD --> BUGS_M
+    APP_MOD --> FEATURES_M
+    APP_MOD --> EXPENSES_M
+    APP_MOD --> PLAID_M
+    APP_MOD --> CODE_M
+
+    subgraph FEATURES["feature modules (controller → service)"]
+      AUTH_M["AuthModule"]
+      PROJ_M["ProjectsModule"]
+      ISSUES_M["IssuesModule"]
+      USERS_M["UsersModule"]
+      ORGS_M["OrganizationsModule"]
+      TESTS_M["TestsModule"]
+      TODOS_M["TodosModule"]
+      IDEAS_M["IdeasModule"]
+      BUGS_M["BugsModule"]
+      FEATURES_M["FeaturesModule"]
+      EXPENSES_M["ExpensesModule"]
+      PLAID_M["PlaidModule"]
+      CODE_M["CodeModule"]
+    end
+
+    PRISMA["PrismaService"]
+    FEATURES --> PRISMA
+    PRISMA --> PG["PostgreSQL (Docker)"]
+  end
+
+  subgraph WEB["web (Next.js, port 3000)"]
+    direction TB
+    APP["_app.tsx (Theme, SelectedProject, TabOrder)"]
+    APP --> PAGES
+    subgraph PAGES["pages/"]
+      INDEX["index (redirect)"]
+      CODE["code.tsx"]
+      FINANCES["finances.tsx"]
+      TESTS_P["tests.tsx"]
+      COVERAGE["coverage.tsx"]
+      API_TESTS["api-tests.tsx"]
+      LIST["list/[slug].tsx"]
+      TYPE["[type].tsx"]
+      LOGIN["login, login/callback"]
+      MOBILE_APP["mobile-app.tsx"]
+    end
+    subgraph LIB["lib/"]
+      API_TS["api.ts (createApi: fetch + shared paths)"]
+      STORAGE["storage (token, session)"]
+      API_SUB["api/ (assistant, issueMedia, checkable-entities)"]
+    end
+    subgraph COMPONENTS["components/"]
+      LAYOUT["AppLayout, ProjectNavBar"]
+      BOARD["Board, HomePage, IssueDetailModal"]
+      FORMS["AddItemForm, CheckableList, BulbyChatbox"]
+    end
+    subgraph FEATURES_WEB["features/board"]
+      HOMEPAGE["HomePage, useHomePageIssueDetail"]
+    end
+    PAGES --> API_TS
+    PAGES --> LIB
+    COMPONENTS --> API_TS
+    FEATURES_WEB --> API_TS
+  end
+
+  subgraph APP_RN["app (React Native, iOS/Android)"]
+    direction TB
+    APP_TSX["App.tsx (useAppState, auth)"]
+    APP_TSX --> APP_MAIN["AppMain"]
+    APP_MAIN --> DRAWER["AppDrawer"]
+    APP_MAIN --> TAB_CONTENT["AppTabContent"]
+    TAB_CONTENT --> SCREENS
+    subgraph SCREENS["screens/ (tabs)"]
+      HOME_TAB["HomeTab (board)"]
+      ISSUES_TAB["IssuesTab"]
+      PROJECTS_TAB["ProjectsTab"]
+      EXPENSES_TAB["ExpensesTab"]
+      TESTS_TAB["TestsTab"]
+      CUSTOM_LIST["CustomListTab"]
+      SETTINGS_TAB["SettingsTab"]
+    end
+    subgraph APP_API["src/api/"]
+      CLIENT["client.ts (fetch + shared-config paths)"]
+    end
+    subgraph APP_HOOKS["hooks/"]
+      USE_APP_STATE["useAppState (token, auth)"]
+      USE_CHECKLIST["useChecklistState"]
+      USE_TAB_ORDER["useTabOrder"]
+    end
+    SCREENS --> CLIENT
+    APP_TSX --> USE_APP_STATE
+  end
+
+  subgraph WEB_API["web/pages/api/ (Next.js API routes)"]
+    PROXY["[[...path]] proxy to backend"]
+    RUN_UI["ui-tests, run-token-audit"]
+    COVERAGE_API["run-coverage, coverage-gaps"]
+    CODE_FILE["code-file"]
+  end
+
+  %% Shared usage
+  SHARED_CONFIG --> SHARED
+  SHARED --> API_TS
+  SHARED --> LIB
+  SHARED_CONFIG --> CLIENT
+  PACKAGES --> WEB
+  PACKAGES --> APP_RN
+
+  %% Client → Backend
+  API_TS -->|"HTTP + JWT (Bearer)"| BACKEND
+  CLIENT -->|"HTTP + JWT"| BACKEND
+  WEB_API -->|"server-side to 3001"| BACKEND
+
+  %% Styling
+  classDef pkg fill:#e1f5fe
+  classDef backend fill:#f3e5f5
+  classDef web fill:#e8f5e9
+  classDef app fill:#fff3e0
+  classDef db fill:#eceff1
+  classDef SHARED_CONFIG,SHARED,PRISMA,PG pkg,backend,db
+  classDef BACKEND,FEATURES backend
+  classDef WEB,PAGES,LIB,COMPONENTS web
+  classDef APP_RN,SCREENS,CLIENT app

@@ -22,7 +22,14 @@ function resolveAllowedOrigins(): CorsOrigin[] {
           "http://localhost:3001",
           "http://127.0.0.1:3001",
         ];
-  return [...new Set([...fromEnv, ...frontend, ...localDefaults])];
+  // In dev, allow LAN origins (e.g. mobile WebView loading from http://192.168.x.x:3000)
+  const lanOriginRegex =
+    process.env.NODE_ENV === "production"
+      ? null
+      : /^https?:\/\/(192\.168\.\d{1,3}\.\d{1,3}|10\.\d{1,3}\.\d{1,3}\.\d{1,3}|172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3})(:\d+)?$/;
+  const origins = [...new Set([...fromEnv, ...frontend, ...localDefaults])];
+  if (lanOriginRegex) return [...origins, lanOriginRegex];
+  return origins;
 }
 
 export function getCorsOptions() {

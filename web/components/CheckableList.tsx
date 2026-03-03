@@ -15,7 +15,6 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { SectionLoadingSpinner } from "./SectionLoadingSpinner";
 import { IconCheck } from "./IconCheck";
 import { IconGrip } from "./IconGrip";
 import { IconTrash } from "./IconTrash";
@@ -530,8 +529,29 @@ export function CheckableList({
         className="features-list"
         style={{ listStyle: "none", padding: 0, margin: "8px 0 0" }}
       >
-        <li className="tests-page-section-loading">
-          <SectionLoadingSpinner />
+        <li className="features-list-item features-list-item--loading">
+          <div className="features-list-item-body">
+            <div className="features-list-item-main">
+              <span
+                className="features-list-done-toggle features-list-done-toggle--placeholder"
+                aria-hidden
+              />
+              <span className="features-list-label features-list-label--placeholder">
+                Loading…
+              </span>
+              <div className="features-list-row-actions">
+                <span
+                  className="idea-plan-generate-btn idea-plan-generate-btn--loading-spinner"
+                  aria-label="Loading"
+                >
+                  <span
+                    className="bulby-thinking-spinner bulby-thinking-spinner--btn"
+                    aria-hidden
+                  />
+                </span>
+              </div>
+            </div>
+          </div>
         </li>
       </ul>
     );

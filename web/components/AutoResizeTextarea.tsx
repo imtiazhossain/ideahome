@@ -6,6 +6,7 @@ export interface AutoResizeTextareaProps {
   placeholder?: string;
   className?: string;
   rows?: number;
+  id?: string;
 }
 
 export function AutoResizeTextarea({
@@ -14,6 +15,7 @@ export function AutoResizeTextarea({
   placeholder,
   className,
   rows = 1,
+  id,
 }: AutoResizeTextareaProps) {
   const ref = useRef<HTMLTextAreaElement>(null);
   const adjustHeight = () => {
@@ -27,6 +29,7 @@ export function AutoResizeTextarea({
   return (
     <textarea
       ref={ref}
+      id={id}
       value={value}
       onChange={(e) => {
         onChange(e);

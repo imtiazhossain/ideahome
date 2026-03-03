@@ -32,10 +32,8 @@ function RedirectToFirstTab({ children }: { children: React.ReactNode }) {
     }
     if (!router.isReady) return;
     try {
-      if (sessionStorage.getItem(EXPLICIT_BOARD_SESSION_KEY)) {
-        sessionStorage.removeItem(EXPLICIT_BOARD_SESSION_KEY);
-        return;
-      }
+      // Keep key set while on Board so we don't redirect when effect re-runs (e.g. selectedProjectId update)
+      if (sessionStorage.getItem(EXPLICIT_BOARD_SESSION_KEY)) return;
     } catch {
       /* ignore */
     }
@@ -54,6 +52,10 @@ export default function App({ Component, pageProps }: AppProps) {
   return (
     <ThemeProvider>
       <Head>
+        <meta
+          name="viewport"
+          content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"
+        />
         <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
         <link rel="shortcut icon" href="/favicon.svg" />
       </Head>

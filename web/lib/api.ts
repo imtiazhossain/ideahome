@@ -1,3 +1,4 @@
+import { pathExpensesDeleteImported } from "@ideahome/shared-config";
 import {
   API_REQUEST_HEADER as SHARED_API_REQUEST_HEADER,
   ASSISTANT_VOICE_CHANGE_EVENT as SHARED_ASSISTANT_VOICE_CHANGE_EVENT,
@@ -5,6 +6,7 @@ import {
   AUTH_TOKEN_COOKIE_KEY as SHARED_AUTH_TOKEN_COOKIE_KEY,
   AUTH_TOKEN_KEY as SHARED_AUTH_TOKEN_KEY,
   AUTH_TOKEN_SESSION_KEY as SHARED_AUTH_TOKEN_SESSION_KEY,
+  NATIVE_BRIDGE_AUTH_CHANGE,
   STATUS_OPTIONS,
   pathCommentAttachmentById,
   pathCommentAttachments,
@@ -252,7 +254,7 @@ function buildRequestInit(options: RequestOptions): RequestInit {
   };
 }
 
-async function requestJson<T>(
+export async function requestJson<T>(
   path: string,
   options: RequestOptions
 ): Promise<T> {
@@ -261,7 +263,7 @@ async function requestJson<T>(
   return r.json();
 }
 
-async function requestBlob(
+export async function requestBlob(
   path: string,
   options: RequestOptions
 ): Promise<Blob> {
@@ -270,7 +272,7 @@ async function requestBlob(
   return r.blob();
 }
 
-async function requestVoid(
+export async function requestVoid(
   path: string,
   options: RequestOptions
 ): Promise<void> {
@@ -326,6 +328,17 @@ export function clearStoredToken(): void {
   safeSessionStorageRemove(AUTH_TOKEN_SESSION_KEY);
   clearCookie(AUTH_TOKEN_COOKIE_KEY);
   dispatchAuthChange();
+  // Notify native app (WebView) so it can clear its token and show auth screen
+  try {
+    const w = window as Window & { ReactNativeWebView?: { postMessage: (m: string) => void } };
+    if (w.ReactNativeWebView) {
+      w.ReactNativeWebView.postMessage(
+        JSON.stringify({ type: NATIVE_BRIDGE_AUTH_CHANGE, token: "" })
+      );
+    }
+  } catch {
+    // ignore
+  }
 }
 
 type JwtPayload = {
@@ -456,16 +469,32 @@ export function logout(redirectTo: string = "/login"): void {
 }
 
 /**
+ * When the web app is loaded in the mobile WebView from a LAN URL (e.g. http://192.168.68.106:3000),
+ * use the same host with port 3001 so API requests reach the Mac's backend. Otherwise the device
+ * would request localhost:3001 (its own loopback) and fail.
+ */
+function getMobileDevApiBase(): string | null {
+  if (typeof window === "undefined") return null;
+  const hostname = window.location.hostname;
+  if (hostname === "localhost" || hostname === "127.0.0.1") return null;
+  // Private/LAN IP ranges
+  if (/^192\.168\.\d{1,3}\.\d{1,3}$/.test(hostname)) return `http://${hostname}:3001`;
+  if (/^10\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(hostname)) return `http://${hostname}:3001`;
+  if (/^172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}$/.test(hostname)) return `http://${hostname}:3001`;
+  return null;
+}
+
+/**
  * Backend base URL. In the browser, if the configured API URL is the same as the current page origin,
  * we use "" (same-origin) so Next.js rewrites can proxy /issues, /projects, etc. to the backend.
+ * When loaded from a LAN URL (mobile WebView dev), we use the same host with port 3001.
  * Otherwise we use the resolved backend URL (e.g. http://localhost:3001).
  */
 export function getApiBase(): string {
-  if (
-    typeof window !== "undefined" &&
-    window.location.origin === API_BASE_RESOLVED
-  ) {
-    return "";
+  if (typeof window !== "undefined") {
+    const mobileBase = getMobileDevApiBase();
+    if (mobileBase) return mobileBase;
+    if (window.location.origin === API_BASE_RESOLVED) return "";
   }
   return API_BASE_RESOLVED;
 }
@@ -482,6 +511,48 @@ export type IssueFile = SharedIssueFile;
 export type Issue = SharedIssue;
 
 export const STATUSES = STATUS_OPTIONS;
+
+export type ProjectCodeRepository = {
+  id: string;
+  projectId: string;
+  provider: string;
+  repoFullName: string;
+  defaultBranch: string | null;
+  createdAt: string;
+};
+
+export type ProjectCodeAnalysisRun = {
+  id: string;
+  codeRepositoryId: string;
+  payload: unknown;
+  createdAt: string;
+};
+
+export async function fetchProjectCodeRepositories(
+  projectId: string
+): Promise<ProjectCodeRepository[]> {
+  return requestJson<ProjectCodeRepository[]>(
+    `/code/projects/${encodeURIComponent(projectId)}/repositories`,
+    {
+      errorMessage: "Failed to load project repositories",
+    }
+  );
+}
+
+export async function createGithubRepositoryForProject(
+  projectId: string,
+  body: { repoFullName: string; defaultBranch?: string }
+): Promise<ProjectCodeRepository> {
+  return requestJson<ProjectCodeRepository>(
+    `/code/projects/${encodeURIComponent(projectId)}/repositories/github`,
+    {
+      method: "POST",
+      body,
+      errorMessage: "Failed to connect repository",
+    }
+  );
+}
+
 
 export async function fetchOrganizations(): Promise<Organization[]> {
   return requestJson<Organization[]>(pathOrganizations(), {
@@ -642,6 +713,106 @@ export async function deleteExpense(id: string): Promise<void> {
   });
 }
 
+/** Delete all imported (Plaid) expenses for a project. Returns { deleted: number }. */
+export async function deleteAllImportedExpenses(
+  projectId: string
+): Promise<{ deleted: number }> {
+  return requestJson<{ deleted: number }>(
+    pathExpensesDeleteImported(projectId),
+    {
+      method: "DELETE",
+      errorMessage: "Failed to delete imported expenses",
+    }
+  );
+}
+
+/** Plaid: get a link token to open Plaid Link. */
+export async function getPlaidLinkToken(): Promise<{ linkToken: string }> {
+  return requestJson<{ linkToken: string }>("/plaid/link-token", {
+    method: "POST",
+    errorMessage: "Failed to get Plaid link",
+  });
+}
+
+/** Plaid: exchange public token after user connects an account. */
+export async function exchangePlaidToken(publicToken: string): Promise<{
+  itemId: string;
+  institutionName?: string;
+}> {
+  return requestJson<{ itemId: string; institutionName?: string }>(
+    "/plaid/exchange",
+    {
+      method: "POST",
+      body: { public_token: publicToken },
+      errorMessage: "Failed to connect account",
+    }
+  );
+}
+
+/** Plaid: list linked bank/credit accounts. */
+export type PlaidLinkedAccount = {
+  id: string;
+  itemId: string;
+  institutionName: string | null;
+  createdAt: string;
+};
+
+export async function fetchPlaidLinkedAccounts(): Promise<PlaidLinkedAccount[]> {
+  return requestJson<PlaidLinkedAccount[]>("/plaid/linked-accounts", {
+    errorMessage: "Failed to load linked accounts",
+  });
+}
+
+/** Plaid: rename a linked bank/credit account (user-editable display name). */
+export async function renamePlaidLinkedAccount(
+  plaidItemId: string,
+  institutionName: string | null
+): Promise<PlaidLinkedAccount> {
+  return requestJson<PlaidLinkedAccount>(
+    `/plaid/linked-accounts/${encodeURIComponent(plaidItemId)}`,
+    {
+      method: "PATCH",
+      body: { institutionName },
+      errorMessage: "Failed to rename account",
+    }
+  );
+}
+
+/** Plaid: sync transactions into expenses for the given project. */
+export async function syncPlaidTransactions(projectId: string): Promise<{
+  added: number;
+  lastSyncedAt: string | null;
+}> {
+  return requestJson<{ added: number; lastSyncedAt: string | null }>(
+    `/plaid/sync?projectId=${encodeURIComponent(projectId)}`,
+    {
+      method: "POST",
+      errorMessage: "Failed to sync transactions",
+    }
+  );
+}
+
+/** Plaid: get last sync time for a project. */
+export async function getPlaidLastSync(projectId: string): Promise<{
+  lastSyncedAt: string | null;
+}> {
+  return requestJson<{ lastSyncedAt: string | null }>(
+    `/plaid/last-sync?projectId=${encodeURIComponent(projectId)}`,
+    { errorMessage: "Failed to load last sync" }
+  );
+}
+
+/** Plaid: disconnect a linked account (removes link only; imported expenses remain). */
+export async function disconnectPlaidLinkedAccount(plaidItemId: string): Promise<void> {
+  return requestVoid(
+    `/plaid/linked-accounts/${encodeURIComponent(plaidItemId)}`,
+    {
+      method: "DELETE",
+      errorMessage: "Failed to disconnect account",
+    }
+  );
+}
+
 export async function fetchUsers(): Promise<User[]> {
   return requestJson<User[]>(pathUsers(), {
     errorMessage: "Failed to fetch users",
@@ -748,234 +919,23 @@ export type IssueCommentEditHistoryEntry = SharedIssueCommentEditHistoryEntry;
 export type CommentAttachmentType = SharedCommentAttachmentType;
 export type CommentAttachment = SharedCommentAttachment;
 export type IssueComment = SharedIssueComment;
-
-export async function fetchIssueComments(
-  issueId: string
-): Promise<IssueComment[]> {
-  try {
-    const r = await apiFetch(`${getApiBase()}${pathIssueComments(issueId)}`);
-    if (!r.ok) {
-      const detail = await readResponseMessage(r);
-      throw new Error(
-        `Failed to fetch comments (${r.status}${detail ? `: ${detail}` : ""}). Is the backend running on port 3001?`
-      );
-    }
-    return r.json();
-  } catch (e) {
-    if (isLikelyNetworkFetchError(e)) {
-      throw new Error(
-        "Failed to fetch comments. Is the backend running? Start it with: pnpm dev:backend"
-      );
-    }
-    throw e;
-  }
-}
-
-export async function createIssueComment(
-  issueId: string,
-  body: string
-): Promise<IssueComment> {
-  const payload: CreateIssueCommentInput = { body };
-  return requestJson<IssueComment>(pathIssueComments(issueId), {
-    method: "POST",
-    body: payload,
-    errorMessage: "Failed to add comment",
-  });
-}
-
-export async function updateIssueComment(
-  issueId: string,
-  commentId: string,
-  body: string
-): Promise<IssueComment> {
-  const payload: UpdateIssueCommentInput = { body };
-  return requestJson<IssueComment>(pathIssueCommentById(issueId, commentId), {
-    method: "PATCH",
-    body: payload,
-    errorMessage: "Failed to update comment",
-  });
-}
-
-export async function deleteIssueComment(
-  issueId: string,
-  commentId: string
-): Promise<void> {
-  return requestVoid(pathIssueCommentById(issueId, commentId), {
-    method: "DELETE",
-    errorMessage: "Failed to delete comment",
-  });
-}
-
-export async function addCommentAttachment(
-  issueId: string,
-  commentId: string,
-  body: AddCommentAttachmentInput
-): Promise<IssueComment> {
-  return requestJson<IssueComment>(pathCommentAttachments(issueId, commentId), {
-    method: "POST",
-    body,
-    errorMessage: "Failed to add attachment to comment",
-  });
-}
-
-export async function deleteCommentAttachment(
-  issueId: string,
-  commentId: string,
-  attachmentId: string
-): Promise<IssueComment> {
-  return requestJson<IssueComment>(
-    pathCommentAttachmentById(issueId, commentId, attachmentId),
-    { method: "DELETE", errorMessage: "Failed to remove attachment" }
-  );
-}
-
-export type RunUiTestStep = { title: string; duration?: number };
-
-export type RunUiTestResult = SharedRunUiTestResult;
-
-export async function runUiTest(grep: string): Promise<RunUiTestResult> {
-  const body: RunUiTestInput = { grep };
-  return requestJson<RunUiTestResult>(pathTestsRunUi(), {
-    method: "POST",
-    body,
-    errorMessage: "Failed to run test",
-  });
-}
-
-export type RunApiTestResult = SharedRunApiTestResult;
-
-export async function runApiTest(
-  testNamePattern: string
-): Promise<RunApiTestResult> {
-  const body: RunApiTestInput = { testNamePattern };
-  return requestJson<RunApiTestResult>(pathTestsRunApi(), {
-    method: "POST",
-    body,
-    errorMessage: "Failed to run API test",
-  });
-}
-
-export async function uploadIssueRecording(
-  issueId: string,
-  videoBase64: string,
-  mediaType: "video" | "audio" = "video",
-  recordingType: "screen" | "camera" | "audio" = "screen",
-  fileName?: string
-): Promise<Issue> {
-  return requestJson<Issue>(pathIssueRecordings(issueId), {
-    method: "POST",
-    body: { videoBase64, mediaType, recordingType, fileName },
-    errorMessage: "Failed to upload recording",
-  });
-}
-
-export async function updateIssueRecording(
-  issueId: string,
-  recordingId: string,
-  data: {
-    mediaType?: "video" | "audio";
-    recordingType?: "screen" | "camera" | "audio";
-    name?: string | null;
-  }
-): Promise<Issue> {
-  return requestJson<Issue>(pathIssueRecordingById(issueId, recordingId), {
-    method: "PATCH",
-    body: data,
-    errorMessage: "Failed to update recording",
-  });
-}
-
-export async function deleteIssueRecording(
-  issueId: string,
-  recordingId: string
-): Promise<Issue> {
-  return requestJson<Issue>(pathIssueRecordingById(issueId, recordingId), {
-    method: "DELETE",
-    errorMessage: "Failed to delete recording",
-  });
-}
-
-/** Full URL to stream a recording file from the backend (uses stream endpoint with correct Content-Type). */
-export function getRecordingUrl(videoUrl: string): string {
-  const filename = videoUrl.replace(/^.*\//, "").split("?")[0] ?? "";
-  return `${getApiBase()}${pathRecordingStream(filename)}`;
-}
-
-export async function uploadIssueScreenshot(
-  issueId: string,
-  imageBase64: string,
-  fileName?: string
-): Promise<Issue> {
-  return requestJson<Issue>(pathIssueScreenshots(issueId), {
-    method: "POST",
-    body: { imageBase64, fileName: fileName ?? undefined },
-    errorMessage: "Failed to upload screenshot",
-  });
-}
-
-export async function updateIssueScreenshot(
-  issueId: string,
-  screenshotId: string,
-  data: { name?: string | null }
-): Promise<Issue> {
-  return requestJson<Issue>(pathIssueScreenshotById(issueId, screenshotId), {
-    method: "PATCH",
-    body: data,
-    errorMessage: "Failed to update screenshot",
-  });
-}
-
-export async function deleteIssueScreenshot(
-  issueId: string,
-  screenshotId: string
-): Promise<Issue> {
-  return requestJson<Issue>(pathIssueScreenshotById(issueId, screenshotId), {
-    method: "DELETE",
-    errorMessage: "Failed to delete screenshot",
-  });
-}
-
-/** Full URL to load a screenshot image from the backend through authenticated stream endpoint. */
-export function getScreenshotUrl(imageUrl: string): string {
-  const filename = imageUrl.replace(/^.*\//, "").split("?")[0] ?? "";
-  return `${getApiBase()}${pathScreenshotStream(filename)}`;
-}
-
-export async function uploadIssueFile(
-  issueId: string,
-  fileBase64: string,
-  fileName: string
-): Promise<Issue> {
-  return requestJson<Issue>(pathIssueFiles(issueId), {
-    method: "POST",
-    body: { fileBase64, fileName },
-    errorMessage: "Failed to upload file",
-  });
-}
-
-export async function updateIssueFile(
-  issueId: string,
-  fileId: string,
-  data: { fileName?: string }
-): Promise<Issue> {
-  return requestJson<Issue>(pathIssueFileById(issueId, fileId), {
-    method: "PATCH",
-    body: data,
-    errorMessage: "Failed to update file",
-  });
-}
-
-export async function deleteIssueFile(
-  issueId: string,
-  fileId: string
-): Promise<Issue> {
-  return requestJson<Issue>(pathIssueFileById(issueId, fileId), {
-    method: "DELETE",
-    errorMessage: "Failed to delete file",
-  });
-}
-
-/** Full URL to download an issue file (stream endpoint sets Content-Disposition). */
-export function getIssueFileUrl(issueId: string, fileId: string): string {
-  return `${getApiBase()}${pathIssueFileStream(issueId, fileId)}`;
-}
+export {
+  fetchIssueComments,
+  createIssueComment,
+  updateIssueComment,
+  deleteIssueComment,
+  addCommentAttachment,
+  deleteCommentAttachment,
+  uploadIssueRecording,
+  updateIssueRecording,
+  deleteIssueRecording,
+  getRecordingUrl,
+  uploadIssueScreenshot,
+  updateIssueScreenshot,
+  deleteIssueScreenshot,
+  getScreenshotUrl,
+  uploadIssueFile,
+  updateIssueFile,
+  deleteIssueFile,
+  getIssueFileUrl,
+} from "./api/issueMedia";

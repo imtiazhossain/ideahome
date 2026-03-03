@@ -50,6 +50,7 @@ export type Expense = {
   date: string;
   category: string;
   projectId: string;
+  source?: string; // "manual" | "plaid"
   createdAt: string;
 };
 
@@ -239,6 +240,7 @@ export declare function pathTestsRunApi(): string;
 export declare function pathUsers(): string;
 export declare function pathExpenses(projectId?: string): string;
 export declare function pathExpenseById(expenseId: string): string;
+export declare function pathExpensesDeleteImported(projectId: string): string;
 export declare function pathIssueRecordings(issueId: string): string;
 export declare function pathIssueRecordingById(issueId: string, recordingId: string): string;
 export declare function pathIssueScreenshots(issueId: string): string;

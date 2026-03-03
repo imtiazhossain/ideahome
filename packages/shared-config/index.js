@@ -127,6 +127,10 @@ function pathExpenseById(expenseId) {
   return `/expenses/${enc(expenseId)}`;
 }
 
+function pathExpensesDeleteImported(projectId) {
+  return `/expenses/imported?projectId=${enc(projectId)}`;
+}
+
 function pathIssueRecordings(issueId) {
   return `/issues/${enc(issueId)}/recordings`;
 }
@@ -293,6 +297,7 @@ const sharedConfig = {
   pathCommentAttachments,
   pathExpenseById,
   pathExpenses,
+  pathExpensesDeleteImported,
   pathIssueFileById,
   pathIssueFiles,
   pathIssueFileStream,

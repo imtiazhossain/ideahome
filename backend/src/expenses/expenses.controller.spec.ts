@@ -10,6 +10,7 @@ describe("ExpensesController", () => {
     create: jest.fn(),
     update: jest.fn(),
     remove: jest.fn(),
+    removeAllImported: jest.fn(),
   };
 
   beforeEach(async () => {
@@ -73,5 +74,12 @@ describe("ExpensesController", () => {
     mockSvc.remove.mockResolvedValue({});
     await controller.remove("e1", req as any);
     expect(mockSvc.remove).toHaveBeenCalledWith("e1", "u1");
+  });
+
+  it("deleteAllImported delegates to service", async () => {
+    mockSvc.removeAllImported.mockResolvedValue({ deleted: 3 });
+    const result = await controller.deleteAllImported("p1", req as any);
+    expect(mockSvc.removeAllImported).toHaveBeenCalledWith("p1", "u1");
+    expect(result).toEqual({ deleted: 3 });
   });
 });

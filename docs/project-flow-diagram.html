@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Idea Home — Project flow</title>
+  <script type="module">
+    import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+    mermaid.initialize({ startOnLoad: true, theme: "neutral", flowchart: { useMaxWidth: true, htmlLabels: true } });
+  </script>
+  <style>
+    body { margin: 0; padding: 16px; font-family: system-ui, sans-serif; background: #fafafa; }
+    h1 { font-size: 1.25rem; margin-bottom: 8px; }
+    .mermaid { background: #fff; padding: 16px; border-radius: 8px; overflow: auto; }
+  </style>
+</head>
+<body>
+  <h1>Idea Home — Project flow (workspaces, shared packages, backend, web, app)</h1>
+  <pre class="mermaid">
+flowchart TB
+  subgraph ROOT["pnpm monorepo"]
+    ROOT_SCRIPTS["dev:backend, dev:web, dev:app, db:*, test:e2e*"]
+  end
+
+  subgraph PACKAGES["packages/"]
+    SHARED_CONFIG["shared-config: types, path helpers, constants"]
+    SHARED["shared: re-exports + tabs"]
+  end
+
+  subgraph BACKEND["backend (NestJS :3001)"]
+    APP_MOD["AppModule"]
+    APP_MOD --> AUTH_M["Auth"]
+    APP_MOD --> PROJ_M["Projects"]
+    APP_MOD --> ISSUES_M["Issues"]
+    APP_MOD --> USERS_M["Users"]
+    APP_MOD --> ORGS_M["Organizations"]
+    APP_MOD --> TESTS_M["Tests"]
+    APP_MOD --> TODOS_M["Todos"]
+    APP_MOD --> IDEAS_M["Ideas"]
+    APP_MOD --> BUGS_M["Bugs"]
+    APP_MOD --> FEATURES_M["Features"]
+    APP_MOD --> EXPENSES_M["Expenses"]
+    APP_MOD --> PLAID_M["Plaid"]
+    APP_MOD --> CODE_M["Code"]
+    PRISMA["PrismaService"]
+    AUTH_M --> PRISMA
+    PROJ_M --> PRISMA
+    ISSUES_M --> PRISMA
+    USERS_M --> PRISMA
+    ORGS_M --> PRISMA
+    TESTS_M --> PRISMA
+    TODOS_M --> PRISMA
+    IDEAS_M --> PRISMA
+    BUGS_M --> PRISMA
+    FEATURES_M --> PRISMA
+    EXPENSES_M --> PRISMA
+    PLAID_M --> PRISMA
+    CODE_M --> PRISMA
+    PRISMA --> PG["PostgreSQL"]
+  end
+
+  subgraph WEB["web (Next.js :3000)"]
+    APP["_app: Theme, SelectedProject, TabOrder"]
+    PAGES["pages: index, code, finances, tests, coverage, list, login, mobile-app"]
+    LIB["lib: api.ts, storage, api/"]
+    COMP["components + features/board"]
+    APP --> PAGES
+    PAGES --> LIB
+    COMP --> LIB
+  end
+
+  subgraph APP_RN["app (React Native)"]
+    APP_TSX["App.tsx, useAppState"]
+    APP_MAIN["AppMain, AppDrawer, AppTabContent"]
+    SCREENS["screens: Home, Issues, Projects, Expenses, Tests, CustomList, Settings"]
+    CLIENT["api/client.ts"]
+    APP_TSX --> APP_MAIN
+    APP_MAIN --> SCREENS
+    SCREENS --> CLIENT
+  end
+
+  subgraph WEB_API["web/pages/api"]
+    PROXY["proxy, ui-tests, run-token-audit, coverage, code-file"]
+  end
+
+  SHARED_CONFIG --> SHARED
+  SHARED --> LIB
+  SHARED_CONFIG --> CLIENT
+  LIB -->|"HTTP + JWT"| BACKEND
+  CLIENT -->|"HTTP + JWT"| BACKEND
+  WEB_API -->|"server"| BACKEND
+  </pre>
+</body>
+</html>

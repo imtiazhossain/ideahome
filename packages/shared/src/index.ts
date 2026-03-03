@@ -48,6 +48,7 @@ export {
   pathCommentAttachments,
   pathExpenseById,
   pathExpenses,
+  pathExpensesDeleteImported,
   pathIssueCommentById,
   pathIssueComments,
   pathIssueFileById,

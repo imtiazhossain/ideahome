@@ -16,6 +16,8 @@ const REWRITE_ROUTE_DEFS = [
   { base: "bugs", apiOnly: true },
   { base: "features", apiOnly: true },
   { base: "expenses", apiOnly: true },
+  { base: "plaid", apiOnly: true },
+  { base: "code", apiOnly: true },
 ];
 
 function buildRewrites(targetBase) {
@@ -48,7 +50,7 @@ const nextConfig = {
     const backend = process.env.BACKEND_URL || "http://localhost:3001";
     return buildRewrites(backend);
   },
-  transpilePackages: ["backend"],
+  transpilePackages: ["backend", "@ideahome/shared"],
   experimental: {
     serverComponentsExternalPackages: ["backend"],
   },

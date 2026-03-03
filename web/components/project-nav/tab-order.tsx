@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/router";
 import { AUTH_CHANGE_EVENT } from "../../lib/api/auth";
 import {
   safeLocalStorageGet,
@@ -19,7 +20,6 @@ import {
   IconFeatures,
   IconGlobe,
   IconGoals,
-  IconHealth,
   IconHomeBulby,
   IconIdeas,
   IconPages,
@@ -51,7 +51,6 @@ export type ProjectNavTabId =
   | "list"
   | "forms"
   | "goals"
-  | "development"
   | "expenses"
   | "code"
   | "pages"
@@ -101,16 +100,10 @@ export const TABS: {
   { id: "forms", label: "Bugs", icon: <IconBug />, href: "/bugs" },
   { id: "goals", label: "Goals", icon: <IconGoals /> },
   {
-    id: "development",
-    label: "Code Health",
-    icon: <IconHealth />,
-    href: "/coverage",
-  },
-  {
     id: "expenses",
-    label: "Expenses",
+    label: "Finances",
     icon: <IconExpenses />,
-    href: "/expenses",
+    href: "/finances",
   },
   {
     id: "code",
@@ -287,6 +280,7 @@ export function DrawerCollapsedNav({
   activeTab,
   onExpand,
 }: DrawerCollapsedNavProps) {
+  const router = useRouter();
   const { tabOrder, hiddenTabIds } = useTabOrder();
   const isMobile = useIsMobile();
   const hiddenSet = new Set(hiddenTabIds);
@@ -313,19 +307,40 @@ export function DrawerCollapsedNav({
         </span>
       </button>
       <nav className="drawer-collapsed-nav" aria-label="App navigation">
-        {drawerTabs.map((tab) => (
-          <Link
-            key={tab.id}
-            href={tab.href!}
-            prefetch={false}
-            className={`drawer-collapsed-item ${activeTab === tab.id ? "is-selected" : ""}`}
-            title={tab.label}
-            aria-label={tab.label}
-            aria-current={activeTab === tab.id ? "page" : undefined}
-          >
-            {tab.icon}
-          </Link>
-        ))}
+        {drawerTabs.map((tab) =>
+          tab.href === "/" ? (
+            <button
+              key={tab.id}
+              type="button"
+              className={`drawer-collapsed-item ${activeTab === tab.id ? "is-selected" : ""}`}
+              title={tab.label}
+              aria-label={tab.label}
+              aria-current={activeTab === tab.id ? "page" : undefined}
+              onClick={() => {
+                try {
+                  sessionStorage.setItem(EXPLICIT_BOARD_SESSION_KEY, "1");
+                } catch {
+                  /* ignore */
+                }
+                void router.push("/");
+              }}
+            >
+              {tab.icon}
+            </button>
+          ) : (
+            <Link
+              key={tab.id}
+              href={tab.href!}
+              prefetch={false}
+              className={`drawer-collapsed-item ${activeTab === tab.id ? "is-selected" : ""}`}
+              title={tab.label}
+              aria-label={tab.label}
+              aria-current={activeTab === tab.id ? "page" : undefined}
+            >
+              {tab.icon}
+            </Link>
+          )
+        )}
       </nav>
     </div>
   );

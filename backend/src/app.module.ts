@@ -12,6 +12,8 @@ import { IdeasModule } from "./ideas/ideas.module";
 import { BugsModule } from "./bugs/bugs.module";
 import { FeaturesModule } from "./features/features.module";
 import { ExpensesModule } from "./expenses/expenses.module";
+import { PlaidModule } from "./plaid/plaid.module";
+import { CodeModule } from "./code/code.module";
 import { PrismaService } from "./prisma.service";
 
 @Module({
@@ -27,6 +29,8 @@ import { PrismaService } from "./prisma.service";
     BugsModule,
     FeaturesModule,
     ExpensesModule,
+    PlaidModule,
+    CodeModule,
   ],
   controllers: [AppController],
   providers: [AppService, PrismaService],

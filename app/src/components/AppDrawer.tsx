@@ -65,7 +65,6 @@ export function AppDrawer({
       onRequestClose={onClose}
     >
       <View style={drawerStyles.overlay}>
-        <Pressable style={drawerStyles.backdrop} onPress={onClose} />
         <View style={drawerStyles.panel}>
           <View style={drawerStyles.header}>
             <Text style={drawerStyles.title}>Idea Home</Text>
@@ -144,6 +143,7 @@ export function AppDrawer({
             </View>
           </ScrollView>
         </View>
+        <Pressable style={drawerStyles.backdrop} onPress={onClose} />
       </View>
     </Modal>
   );
@@ -160,10 +160,9 @@ const drawerStyles = {
   },
   panel: {
     width: 280,
-    flex: 1,
     backgroundColor: colors.bgCard,
-    borderLeftWidth: 1,
-    borderLeftColor: colors.border,
+    borderRightWidth: 1,
+    borderRightColor: colors.border,
     padding: spacing.md,
   },
   header: {

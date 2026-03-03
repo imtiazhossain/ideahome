@@ -12,13 +12,20 @@ describe("ExpensesService", () => {
 
   const mockPrisma = {
     user: { findUnique: jest.fn() },
-    project: { findUnique: jest.fn() },
+    project: {
+      findUnique: jest.fn(),
+      updateMany: jest.fn(),
+    },
     expense: {
       findMany: jest.fn(),
       findUnique: jest.fn(),
       create: jest.fn(),
       update: jest.fn(),
       delete: jest.fn(),
+      deleteMany: jest.fn(),
+    },
+    plaidItem: {
+      updateMany: jest.fn(),
     },
   };
 
@@ -307,6 +314,48 @@ describe("ExpensesService", () => {
 
       const result = await service.remove("e1", "user-1");
       expect(result).toEqual({ id: "e1" });
+    });
+  });
+
+  describe("removeAllImported", () => {
+    it("should delete all plaid expenses for project", async () => {
+      mockPrisma.expense.deleteMany.mockResolvedValue({ count: 5 });
+
+      const result = await service.removeAllImported("p1", "user-1");
+      expect(mockPrisma.expense.deleteMany).toHaveBeenCalledWith({
+        where: { projectId: "p1", source: "plaid" },
+      });
+      expect(mockPrisma.plaidItem.updateMany).toHaveBeenCalledWith({
+        where: { userId: "user-1" },
+        data: { transactionsCursor: null },
+      });
+      expect(mockPrisma.project.updateMany).toHaveBeenCalledWith({
+        where: { id: "p1" },
+        data: { lastPlaidSyncAt: null },
+      });
+      expect(result).toEqual({ deleted: 5 });
+    });
+
+    it("should throw when projectId is invalid", async () => {
+      await expect(
+        service.removeAllImported(123 as unknown as string, "user-1")
+      ).rejects.toThrow(BadRequestException);
+      expect(mockPrisma.expense.deleteMany).not.toHaveBeenCalled();
+    });
+
+    it("should reset cursor and lastPlaidSyncAt even when no plaid expenses to delete", async () => {
+      mockPrisma.expense.deleteMany.mockResolvedValue({ count: 0 });
+
+      const result = await service.removeAllImported("p1", "user-1");
+      expect(result).toEqual({ deleted: 0 });
+      expect(mockPrisma.plaidItem.updateMany).toHaveBeenCalledWith({
+        where: { userId: "user-1" },
+        data: { transactionsCursor: null },
+      });
+      expect(mockPrisma.project.updateMany).toHaveBeenCalledWith({
+        where: { id: "p1" },
+        data: { lastPlaidSyncAt: null },
+      });
     });
   });
 });

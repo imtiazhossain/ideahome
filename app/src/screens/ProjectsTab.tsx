@@ -73,6 +73,8 @@ export const ProjectsTab = memo(function ProjectsTab({
       </AppCard>
       <AppCard title="Project Settings">
         {selectedProject ? (
+          <View style={s.editModeWrap}>
+            <View style={s.editModeWrapInner}>
           <View style={s.stack}>
             <TextInput
               style={s.input}
@@ -99,6 +101,8 @@ export const ProjectsTab = memo(function ProjectsTab({
               />
             </View>
           </View>
+          </View>
+        </View>
         ) : (
           <Text style={s.subtle}>Select a project to edit or delete it.</Text>
         )}

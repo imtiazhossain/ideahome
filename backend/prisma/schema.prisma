@@ -38,17 +38,19 @@ model Account {
 }
 
 model Project {
-  id             String   @id @default(cuid())
-  name           String
-  organization   Organization @relation(fields: [organizationId], references: [id])
-  organizationId String
-  issues         Issue[]
-  todos          Todo[]
-  ideas          Idea[]
-  bugs           Bug[]
-  features       Feature[]
-  expenses       Expense[]
-  createdAt      DateTime @default(now())
+  id               String    @id @default(cuid())
+  name             String
+  organization     Organization @relation(fields: [organizationId], references: [id])
+  organizationId   String
+  lastPlaidSyncAt  DateTime?
+  issues           Issue[]
+  todos            Todo[]
+  ideas            Idea[]
+  bugs             Bug[]
+  features         Feature[]
+  expenses         Expense[]
+  codeRepositories CodeRepository[]
+  createdAt        DateTime  @default(now())
 }
 
 model Todo {
@@ -101,7 +103,38 @@ model Expense {
   category    String   @default("Other")
   project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
   projectId   String
+  source      String?  @default("manual") // "manual" | "plaid"
+  externalId  String?  // Plaid transaction_id for deduplication
   createdAt   DateTime @default(now())
+}
+
+model CodeRepository {
+  id          String   @id @default(cuid())
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectId   String
+  provider    String   // e.g. "github"
+  repoFullName String  // e.g. "owner/repo"
+  defaultBranch String?
+  createdAt   DateTime @default(now())
+  analysisRuns CodeAnalysisRun[]
+}
+
+model CodeAnalysisRun {
+  id              String         @id @default(cuid())
+  codeRepository  CodeRepository @relation(fields: [codeRepositoryId], references: [id], onDelete: Cascade)
+  codeRepositoryId String
+  payload         Json           // stored AuditPayload / analysis result
+  createdAt       DateTime       @default(now())
+}
+
+model PlaidItem {
+  id               String   @id @default(cuid())
+  userId           String
+  accessToken      String   // Plaid access_token; store securely in production
+  itemId           String   // Plaid item_id
+  transactionsCursor String? // cursor for transactions/sync
+  institutionName  String?
+  createdAt        DateTime @default(now())
 }
 
 model Issue {

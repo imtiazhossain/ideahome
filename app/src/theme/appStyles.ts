@@ -18,8 +18,8 @@ export const appStyles = StyleSheet.create({
   },
   brand: {
     color: colors.accentStrong,
-    fontSize: 24,
-    fontWeight: "700",
+    fontSize: 19,
+    fontWeight: "600",
   },
   content: {
     flex: 1,
@@ -91,12 +91,27 @@ export const appStyles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 10,
   },
+  addFormWrap: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    borderWidth: 1,
+    borderColor: "rgba(96, 165, 250, 0.8)",
+    borderRadius: radii.card,
+    padding: spacing.sm,
+    backgroundColor: "rgba(37, 99, 235, 0.08)",
+  },
+  addFormInput: {
+    flex: 1,
+    borderWidth: 0,
+    backgroundColor: "transparent",
+  },
   multilineInput: {
     minHeight: 92,
     textAlignVertical: "top",
   },
   sectionLabel: {
-    color: colors.accentStrong,
+    color: colors.text,
     fontSize: 12,
     fontWeight: "700",
     textTransform: "uppercase",
@@ -113,7 +128,7 @@ export const appStyles = StyleSheet.create({
     paddingVertical: 6,
   },
   chipActive: {
-    backgroundColor: colors.accentStrong,
+    backgroundColor: colors.accentDark,
   },
   chipText: {
     color: colors.text,
@@ -141,7 +156,24 @@ export const appStyles = StyleSheet.create({
     paddingVertical: 10,
   },
   listItemSelected: {
-    borderColor: colors.accent,
+    borderWidth: 2.5,
+    borderColor: colors.editModeBorder,
+  },
+  editModeWrap: {
+    borderWidth: 2.5,
+    borderColor: colors.editModeBorder,
+    borderRadius: radii.control,
+    padding: 1,
+  },
+  editModeWrapInner: {
+    borderWidth: 1,
+    borderColor: colors.editModeBorderInner,
+    borderRadius: radii.control - 1,
+    padding: spacing.sm,
+  },
+  checklistItemSelected: {
+    borderWidth: 2.5,
+    borderColor: colors.editModeBorder,
   },
   listItemTitle: {
     color: colors.text,
@@ -363,14 +395,40 @@ export const appStyles = StyleSheet.create({
   },
   checklistItem: {
     alignItems: "center",
-    backgroundColor: "#f9fafb",
+    backgroundColor: colors.bgCard,
     borderColor: colors.border,
-    borderRadius: radii.control,
+    borderRadius: radii.card,
     borderWidth: 1,
     flexDirection: "row",
     gap: spacing.sm,
     justifyContent: "space-between",
-    padding: spacing.sm,
+    padding: spacing.md,
+    marginBottom: spacing.sm,
+  },
+  doneToggle: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    borderWidth: 1.5,
+    borderColor: "rgba(96, 165, 250, 0.8)",
+    backgroundColor: "rgba(37, 99, 235, 0.08)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  doneToggleChecked: {
+    borderColor: "#93c5fd",
+    backgroundColor: "rgba(59, 130, 246, 0.34)",
+  },
+  doneToggleCheck: {
+    color: "#93c5fd",
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  doneToggleEmptyDot: {
+    width: 9,
+    height: 9,
+    borderRadius: 4.5,
+    backgroundColor: "rgba(191, 219, 254, 0.5)",
   },
   checklistMain: {
     flex: 1,

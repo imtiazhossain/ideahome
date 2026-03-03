@@ -1,39 +1,9 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import fs from "fs";
 import path from "path";
+import type { AuditFinding, AuditPayload } from "../../lib/codePageUtils";
 import { ensureInternalApiAccess } from "../../lib/server/internal-api-access";
 import { getMonorepoRoot } from "../../lib/server/monorepo-root";
-
-type AuditSeverity = "high" | "medium" | "low";
-type AuditEffort = "small" | "medium" | "large";
-
-type AuditFinding = {
-  id: string;
-  title: string;
-  severity: AuditSeverity;
-  effort: AuditEffort;
-  why: string;
-  action: string;
-  file?: string;
-  line?: number;
-  lines?: number;
-};
-
-type AuditResponse = {
-  ok: boolean;
-  runId: string;
-  generatedAt: string;
-  durationMs: number;
-  summary: {
-    sourceFiles: number;
-    sourceLines: number;
-    high: number;
-    medium: number;
-    low: number;
-  };
-  findings: AuditFinding[];
-  error?: string;
-};
 
 const INCLUDED_EXTENSIONS = new Set([
   ".ts",
@@ -193,7 +163,7 @@ function toMb(bytes: number): string {
 
 export default function handler(
   req: NextApiRequest,
-  res: NextApiResponse<AuditResponse>
+  res: NextApiResponse<AuditPayload>
 ) {
   const startedAt = Date.now();
   const runId = `${startedAt}-${Math.floor(Math.random() * 1_000_000)}`;
@@ -216,9 +186,8 @@ export default function handler(
   }
 
   const access = ensureInternalApiAccess(req, {
-    devOnlyError: "Token audit is only available in development",
-    localhostError:
-      "Token audit requires localhost access or RUN_COVERAGE_TOKEN configuration.",
+    devOnlyError: "Token audit available in development only",
+    localhostError: "Localhost or RUN_COVERAGE_TOKEN required",
   });
   if (!access.allowed) {
     return res.status(access.status).json({
@@ -351,14 +320,14 @@ export default function handler(
     const topFile = largest[0];
     if (topFile && topFile.lines > thresholds.largestFileMax) {
       const topList = largest
-        .slice(0, 5)
-        .map((f) => `${f.relPath} (${f.lines} lines)`);
+        .slice(0, 2)
+        .map((f) => `${f.relPath} (${f.lines})`);
       findings.push({
         id: "largest-files",
         title: "Top large files dominate context budget",
         severity: "low",
         effort: "small",
-        why: `Largest files: ${topList.join(", ")}. Files over ${thresholds.largestFileMax} lines increase prompt size.`,
+        why: `Largest: ${topList.join(", ")}. Over ${thresholds.largestFileMax} lines increases prompt size.`,
         action:
           "Decompose the largest file(s) into smaller modules (e.g. extract hooks or components) until under threshold.",
       });

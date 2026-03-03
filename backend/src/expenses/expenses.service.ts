@@ -164,4 +164,24 @@ export class ExpensesService {
     await this.verifyExpenseAccess(id, userId);
     return this.prisma.expense.delete({ where: { id } });
   }
+
+  /** Delete all expenses with source "plaid" for the given project. Returns count deleted. */
+  async removeAllImported(projectId: string, userId: string): Promise<{ deleted: number }> {
+    const safeProjectId = this.normalizeProjectId(projectId);
+    await this.verifyProjectAccess(safeProjectId, userId);
+    const result = await this.prisma.expense.deleteMany({
+      where: { projectId: safeProjectId, source: "plaid" },
+    });
+    // Reset Plaid sync cursor and last sync time so future syncs can re-import
+    // transactions that were previously imported and then deleted.
+    await this.prisma.plaidItem.updateMany({
+      where: { userId },
+      data: { transactionsCursor: null },
+    });
+    await this.prisma.project.updateMany({
+      where: { id: safeProjectId },
+      data: { lastPlaidSyncAt: null },
+    });
+    return { deleted: result.count };
+  }
 }
