@@ -1,7 +1,15 @@
 node_modules
 dist
 .next
+.next.*
 coverage
 **/coverage
+web/public/coverage-report
+app/android/.cxx
+app/android/.gradle
+app/android/build
+app/android/app/build
+app/ios/Pods
+app/ios/build
 *.min.js
 pnpm-lock.yaml

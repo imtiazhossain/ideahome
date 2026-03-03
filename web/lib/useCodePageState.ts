@@ -9,6 +9,7 @@ import {
   buildTokenAuditPrompt,
   buildWireframe,
   computeAuditRating,
+  deriveCodeRating,
   describeRating,
   readJsonIfAvailable,
   STAFF_CODE_RATING,
@@ -19,6 +20,7 @@ import {
 export const CODE_PAGE_SECTION_IDS = [
   "code-repos",
   "code-audit",
+  "code-security",
   "code-rating",
   "code-health",
   "code-wireframe",
@@ -87,28 +89,17 @@ export function useCodePageState(
   >({ "code-project-flow": false }); // project flow diagram starts expanded
 
   const sectionOrderStorageKey = `ideahome-code-section-order${selectedProjectId ? `-${selectedProjectId}` : ""}`;
-  const [sectionOrder, setSectionOrderState] = useState<string[]>(() => {
-    if (typeof window === "undefined") return [...CODE_PAGE_SECTION_IDS];
-    try {
-      const raw = localStorage.getItem(sectionOrderStorageKey);
-      if (!raw) return [...CODE_PAGE_SECTION_IDS];
-      const parsed = JSON.parse(raw) as unknown;
-      if (!Array.isArray(parsed) || parsed.length === 0) return [...CODE_PAGE_SECTION_IDS];
-      const valid = CODE_PAGE_SECTION_IDS as unknown as string[];
-      const ordered = parsed.filter((id: unknown) =>
-        typeof id === "string" && valid.includes(id)
-      ) as string[];
-      const missing = valid.filter((id) => !ordered.includes(id));
-      return ordered.length ? [...ordered, ...missing] : [...CODE_PAGE_SECTION_IDS];
-    } catch {
-      return [...CODE_PAGE_SECTION_IDS];
-    }
-  });
+  const [sectionOrder, setSectionOrderState] = useState<string[]>([
+    ...CODE_PAGE_SECTION_IDS,
+  ]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
     try {
-      localStorage.setItem(sectionOrderStorageKey, JSON.stringify(sectionOrder));
+      localStorage.setItem(
+        sectionOrderStorageKey,
+        JSON.stringify(sectionOrder)
+      );
     } catch {
       /* ignore */
     }
@@ -125,7 +116,9 @@ export function useCodePageState(
       const valid = CODE_PAGE_SECTION_IDS as unknown as string[];
       const ordered = (parsed as string[]).filter((id) => valid.includes(id));
       const missing = valid.filter((id) => !ordered.includes(id));
-      setSectionOrderState(ordered.length ? [...ordered, ...missing] : [...CODE_PAGE_SECTION_IDS]);
+      setSectionOrderState(
+        ordered.length ? [...ordered, ...missing] : [...CODE_PAGE_SECTION_IDS]
+      );
     } catch {
       /* ignore */
     }
@@ -152,9 +145,7 @@ export function useCodePageState(
       .catch((error: unknown) => {
         if (cancelled) return;
         setReposError(
-          error instanceof Error
-            ? error.message
-            : "Failed to load repositories"
+          error instanceof Error ? error.message : "Failed to load repositories"
         );
       })
       .finally(() => {
@@ -198,6 +189,7 @@ export function useCodePageState(
       setWireframe(buildWireframe(data));
       const nextAuditRating = computeAuditRating(data);
       setAuditRating(nextAuditRating);
+      setCodeRating(deriveCodeRating(STAFF_CODE_RATING, nextAuditRating));
       if (!response.ok || data.ok !== true) {
         setRequestError(data.error ?? `Audit failed (${response.status})`);
       }
@@ -218,19 +210,12 @@ export function useCodePageState(
   const codeRatingStorageKey = (prefix: string) =>
     `ideahome-code-${prefix}${selectedProjectId ? `-${selectedProjectId}` : ""}`;
 
-  const [ratingQuestion, setRatingQuestion] = useState(() => {
-    if (typeof window === "undefined")
-      return "How would you rate the current codebase?";
-    const key = `ideahome-code-rating-question${selectedProjectId ? `-${selectedProjectId}` : ""}`;
-    return localStorage.getItem(key) ?? "How would you rate the current codebase?";
-  });
-  const [staffPromptText, setStaffPromptText] = useState(() => {
-    if (typeof window === "undefined")
-      return buildStaffRatingPrompt(STAFF_CODE_RATING);
-    const key = `ideahome-code-staff-prompt${selectedProjectId ? `-${selectedProjectId}` : ""}`;
-    const saved = localStorage.getItem(key);
-    return saved ?? buildStaffRatingPrompt(STAFF_CODE_RATING);
-  });
+  const [ratingQuestion, setRatingQuestion] = useState(
+    "How would you rate the current codebase?"
+  );
+  const [staffPromptText, setStaffPromptText] = useState(
+    buildStaffRatingPrompt(STAFF_CODE_RATING)
+  );
 
   // Load persisted values when switching project
   useEffect(() => {
@@ -239,8 +224,8 @@ export function useCodePageState(
     const pKey = codeRatingStorageKey("staff-prompt");
     const savedQ = localStorage.getItem(qKey);
     const savedP = localStorage.getItem(pKey);
-    if (savedQ != null) setRatingQuestion(savedQ);
-    if (savedP != null) setStaffPromptText(savedP);
+    setRatingQuestion(savedQ ?? "How would you rate the current codebase?");
+    setStaffPromptText(savedP ?? buildStaffRatingPrompt(STAFF_CODE_RATING));
   }, [selectedProjectId]);
 
   // Persist edits so code-block and other changes save (key uses current selectedProjectId)
@@ -304,11 +289,7 @@ export function useCodePageState(
     } finally {
       setConnectSubmitting(false);
     }
-  }, [
-    selectedProjectId,
-    connectRepoName,
-    connectRepoBranch,
-  ]);
+  }, [selectedProjectId, connectRepoName, connectRepoBranch]);
 
   const toggleSection = useCallback((sectionId: string) => {
     setSectionCollapsed((prev) => ({

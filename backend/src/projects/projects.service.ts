@@ -100,6 +100,7 @@ export class ProjectsService {
         await tx.bug.deleteMany({ where: { projectId: id } });
         await tx.feature.deleteMany({ where: { projectId: id } });
         await tx.expense.deleteMany({ where: { projectId: id } });
+        await tx.taxDocument.deleteMany({ where: { projectId: id } });
         return tx.project.delete({ where: { id } });
       });
     } catch (e) {

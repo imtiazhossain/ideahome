@@ -6,6 +6,7 @@ import {
   getCustomListTabId,
   getCustomLists,
 } from "../lib/customLists";
+import { AUTH_CHANGE_EVENT } from "../lib/api/auth";
 import { useProjectOrder } from "../lib/useProjectOrder";
 import { useAssistantSettings } from "../lib/useAssistantSettings";
 import { AppDrawer } from "./AppDrawer";
@@ -127,8 +128,22 @@ export function AppLayout({
   const [creatingProjectName, setCreatingProjectName] = React.useState("");
   const [creatingSection, setCreatingSection] = React.useState(false);
   const [creatingSectionName, setCreatingSectionName] = React.useState("");
+  const [customLists, setCustomLists] = React.useState<
+    ReturnType<typeof getCustomLists>
+  >([]);
   const creatingProjectInputRef = React.useRef<HTMLInputElement>(null);
   const creatingSectionInputRef = React.useRef<HTMLInputElement>(null);
+
+  React.useEffect(() => {
+    const syncCustomLists = () => setCustomLists(getCustomLists());
+    syncCustomLists();
+    window.addEventListener("storage", syncCustomLists);
+    window.addEventListener(AUTH_CHANGE_EVENT, syncCustomLists);
+    return () => {
+      window.removeEventListener("storage", syncCustomLists);
+      window.removeEventListener(AUTH_CHANGE_EVENT, syncCustomLists);
+    };
+  }, []);
 
   const { orderedProjects, moveProject } = useProjectOrder(projects);
 
@@ -147,7 +162,7 @@ export function AppLayout({
     const customById = new Map<
       string,
       ReturnType<typeof getCustomLists>[number]
-    >(getCustomLists().map((l) => [getCustomListTabId(l.slug), l]));
+    >(customLists.map((l) => [getCustomListTabId(l.slug), l]));
     const ordered = tabOrder
       .map((id) => {
         const builtIn = byId.get(id);
@@ -170,7 +185,7 @@ export function AppLayout({
       (link) => !ordered.some((item) => item.tabId === link.tabId)
     );
     return [...ordered, ...missing];
-  }, [tabOrder]);
+  }, [customLists, tabOrder]);
 
   const visibleOrderedNavLinks = React.useMemo(
     () =>
@@ -275,6 +290,9 @@ export function AppLayout({
       return;
     }
     const list = addCustomList(name);
+    setCustomLists((prev) =>
+      [...prev.filter((entry) => entry.slug !== list.slug), list]
+    );
     const id = getCustomListTabId(list.slug);
     if (!tabOrder.includes(id)) {
       setTabOrder([...tabOrder, id]);

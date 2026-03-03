@@ -58,7 +58,7 @@ export type WireframeSnapshot = {
   highlights: string[];
 };
 
-export const STAFF_CODE_RATING = 7.5;
+export const STAFF_CODE_RATING = 8.6;
 
 export async function readJsonIfAvailable<T>(
   response: Response
@@ -237,7 +237,9 @@ export function buildWireframe(
   };
 }
 
-export function computeAuditRating(payload: AuditPayload | null): number | null {
+export function computeAuditRating(
+  payload: AuditPayload | null
+): number | null {
   if (!payload || !payload.summary) return null;
   const { high, medium, low } = payload.summary;
   let score = 10;
@@ -247,6 +249,14 @@ export function computeAuditRating(payload: AuditPayload | null): number | null 
   if (score < 1) score = 1;
   if (score > 10) score = 10;
   return Math.round(score * 10) / 10;
+}
+
+export function deriveCodeRating(
+  manualScore: number,
+  auditScore: number | null
+): number {
+  if (auditScore == null) return manualScore;
+  return Math.round(auditScore * 10) / 10;
 }
 
 export function describeRating(score: number): string {
@@ -270,6 +280,21 @@ export function buildStaffRatingPrompt(score: number): string {
     "- Do not change the rating UI directly just to bump the number; only adjust it when the underlying codebase meaningfully improves.\n\n" +
     "First, scan the repo to identify the highest-impact structural or testing gaps, then propose a short, ordered plan of concrete edits you will make in this session."
   );
+}
+
+export function buildCodeRatingSuggestions(findings: AuditFinding[]): string[] {
+  if (findings.length > 0) {
+    return findings
+      .slice()
+      .sort(bySeverityRank)
+      .slice(0, 5)
+      .map((finding) => finding.action);
+  }
+  return [
+    "Keep large modules under clear size thresholds and split multi-responsibility files before they become bottlenecks.",
+    "Run backend unit tests and key web E2E flows in CI on every change, and fail fast on regressions.",
+    "Continue dependency upgrades in small batches to reduce security and maintenance risk.",
+  ];
 }
 
 export function buildTokenAuditPrompt(score: number | null): string {

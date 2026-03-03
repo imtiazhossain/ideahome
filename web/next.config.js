@@ -50,10 +50,8 @@ const nextConfig = {
     const backend = process.env.BACKEND_URL || "http://localhost:3001";
     return buildRewrites(backend);
   },
-  transpilePackages: ["backend", "@ideahome/shared"],
-  experimental: {
-    serverComponentsExternalPackages: ["backend"],
-  },
+  transpilePackages: ["@ideahome/shared"],
+  serverExternalPackages: ["backend"],
   webpack: (config, { isServer }) => {
     if (isServer) {
       config.externals = config.externals || [];

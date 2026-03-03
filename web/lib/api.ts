@@ -71,10 +71,7 @@ import {
   safeSessionStorageRemove,
   safeSessionStorageSet,
 } from "./storage";
-import {
-  createAssistantApi,
-  type ElevenLabsVoice,
-} from "./api/assistant";
+import { createAssistantApi, type ElevenLabsVoice } from "./api/assistant";
 import {
   createCheckableApis,
   type Bug,
@@ -330,7 +327,9 @@ export function clearStoredToken(): void {
   dispatchAuthChange();
   // Notify native app (WebView) so it can clear its token and show auth screen
   try {
-    const w = window as Window & { ReactNativeWebView?: { postMessage: (m: string) => void } };
+    const w = window as Window & {
+      ReactNativeWebView?: { postMessage: (m: string) => void };
+    };
     if (w.ReactNativeWebView) {
       w.ReactNativeWebView.postMessage(
         JSON.stringify({ type: NATIVE_BRIDGE_AUTH_CHANGE, token: "" })
@@ -478,9 +477,12 @@ function getMobileDevApiBase(): string | null {
   const hostname = window.location.hostname;
   if (hostname === "localhost" || hostname === "127.0.0.1") return null;
   // Private/LAN IP ranges
-  if (/^192\.168\.\d{1,3}\.\d{1,3}$/.test(hostname)) return `http://${hostname}:3001`;
-  if (/^10\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(hostname)) return `http://${hostname}:3001`;
-  if (/^172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}$/.test(hostname)) return `http://${hostname}:3001`;
+  if (/^192\.168\.\d{1,3}\.\d{1,3}$/.test(hostname))
+    return `http://${hostname}:3001`;
+  if (/^10\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(hostname))
+    return `http://${hostname}:3001`;
+  if (/^172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}$/.test(hostname))
+    return `http://${hostname}:3001`;
   return null;
 }
 
@@ -555,7 +557,6 @@ export async function createGithubRepositoryForProject(
   );
 }
 
-
 export async function fetchOrganizations(): Promise<Organization[]> {
   return requestJson<Organization[]>(pathOrganizations(), {
     errorMessage: "Failed to fetch organizations",
@@ -587,7 +588,9 @@ export async function fetchProjects(): Promise<Project[]> {
 }
 
 /** Create a project in the current user's workspace. Backend assigns the user's org. */
-export async function createProject(body: CreateProjectInput): Promise<Project> {
+export async function createProject(
+  body: CreateProjectInput
+): Promise<Project> {
   return requestJson<Project>(pathProjects(), {
     method: "POST",
     body,
@@ -682,6 +685,19 @@ export const deleteEnhancement = checkableApis.deleteEnhancement;
 export const reorderEnhancements = checkableApis.reorderEnhancements;
 
 export type Expense = SharedExpense;
+export type TaxDocument = {
+  id: string;
+  fileUrl: string;
+  fileName: string;
+  sizeBytes: number;
+  kind: string;
+  taxYear: number | null;
+  notes: string | null;
+  textPreview: string | null;
+  projectId: string;
+  createdAt: string;
+  updatedAt: string;
+};
 
 export async function fetchExpenses(projectId: string): Promise<Expense[]> {
   return requestJson<Expense[]>(pathExpenses(projectId), {
@@ -689,7 +705,9 @@ export async function fetchExpenses(projectId: string): Promise<Expense[]> {
   });
 }
 
-export async function createExpense(body: CreateExpenseInput): Promise<Expense> {
+export async function createExpense(
+  body: CreateExpenseInput
+): Promise<Expense> {
   return requestJson<Expense>(pathExpenses(), {
     method: "POST",
     body,
@@ -712,6 +730,62 @@ export async function deleteExpense(id: string): Promise<void> {
   return requestVoid(pathExpenseById(id), {
     method: "DELETE",
     errorMessage: "Failed to delete expense",
+  });
+}
+
+export async function fetchTaxDocuments(
+  projectId: string
+): Promise<TaxDocument[]> {
+  return requestJson<TaxDocument[]>(
+    `/tax-documents?projectId=${encodeURIComponent(projectId)}`,
+    {
+      errorMessage: "Failed to fetch tax documents",
+    }
+  );
+}
+
+export async function createTaxDocument(input: {
+  projectId: string;
+  fileName: string;
+  fileBase64: string;
+  kind?: string;
+  taxYear?: number | null;
+  notes?: string | null;
+  textPreview?: string | null;
+}): Promise<TaxDocument> {
+  return requestJson<TaxDocument>("/tax-documents", {
+    method: "POST",
+    body: input,
+    errorMessage: "Failed to upload tax document",
+  });
+}
+
+export async function updateTaxDocument(
+  id: string,
+  input: {
+    kind?: string;
+    taxYear?: number | null;
+    notes?: string | null;
+    textPreview?: string | null;
+  }
+): Promise<TaxDocument> {
+  return requestJson<TaxDocument>(`/tax-documents/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    body: input,
+    errorMessage: "Failed to update tax document",
+  });
+}
+
+export async function deleteTaxDocument(id: string): Promise<void> {
+  return requestVoid(`/tax-documents/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+    errorMessage: "Failed to delete tax document",
+  });
+}
+
+export async function downloadTaxDocument(id: string): Promise<Blob> {
+  return requestBlob(`/tax-documents/${encodeURIComponent(id)}/download`, {
+    errorMessage: "Failed to download tax document",
   });
 }
 
@@ -759,7 +833,9 @@ export type PlaidLinkedAccount = {
   createdAt: string;
 };
 
-export async function fetchPlaidLinkedAccounts(): Promise<PlaidLinkedAccount[]> {
+export async function fetchPlaidLinkedAccounts(): Promise<
+  PlaidLinkedAccount[]
+> {
   return requestJson<PlaidLinkedAccount[]>("/plaid/linked-accounts", {
     errorMessage: "Failed to load linked accounts",
   });
@@ -805,7 +881,9 @@ export async function getPlaidLastSync(projectId: string): Promise<{
 }
 
 /** Plaid: disconnect a linked account (removes link only; imported expenses remain). */
-export async function disconnectPlaidLinkedAccount(plaidItemId: string): Promise<void> {
+export async function disconnectPlaidLinkedAccount(
+  plaidItemId: string
+): Promise<void> {
   return requestVoid(
     `/plaid/linked-accounts/${encodeURIComponent(plaidItemId)}`,
     {

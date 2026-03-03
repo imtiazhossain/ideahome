@@ -12,7 +12,7 @@
   },
   "scripts": {
     "postinstall": "prisma generate",
-    "dev": "ts-node-dev --respawn --transpile-only src/main.ts",
+    "dev": "prisma migrate deploy && ts-node-dev --respawn --transpile-only src/main.ts",
     "build": "tsc -p tsconfig.json",
     "start": "node dist/main.js",
     "prisma:generate": "prisma generate",
@@ -26,9 +26,9 @@
   },
   "dependencies": {
     "@ideahome/shared-config": "workspace:*",
-    "@nestjs/common": "^9.0.0",
-    "@nestjs/core": "^9.0.0",
-    "@nestjs/platform-express": "^9.0.0",
+    "@nestjs/common": "^11.1.15",
+    "@nestjs/core": "^11.1.15",
+    "@nestjs/platform-express": "^11.1.15",
     "@prisma/client": "^4.0.0",
     "@vercel/blob": "^0.25.0",
     "firebase-admin": "^13.6.1",
@@ -39,7 +39,7 @@
     "rxjs": "^7.0.0"
   },
   "devDependencies": {
-    "@nestjs/testing": "^9.0.0",
+    "@nestjs/testing": "^11.1.15",
     "@types/express": "^4.17.0",
     "@types/jest": "^29.0.0",
     "@types/jsonwebtoken": "^9.0.0",

@@ -1,24 +1,46 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import { usePlaidLink } from "react-plaid-link";
 import { useRouter } from "next/router";
 import { EXPENSE_CATEGORIES } from "@ideahome/shared";
 import {
+  createTaxDocument,
   createExpense,
   deleteAllImportedExpenses,
+  deleteTaxDocument,
   deleteExpense,
+  downloadTaxDocument,
   disconnectPlaidLinkedAccount,
   exchangePlaidToken,
   fetchExpenses,
   fetchPlaidLinkedAccounts,
+  fetchTaxDocuments,
   renamePlaidLinkedAccount,
   getPlaidLastSync,
   getPlaidLinkToken,
   getUserScopedStorageKey,
   isAuthenticated,
   syncPlaidTransactions,
+  updateTaxDocument,
   updateExpense,
   type Expense,
   type PlaidLinkedAccount,
+  type TaxDocument as ApiTaxDocument,
 } from "../lib/api";
 import { formatCurrency, formatRelativeTime, toYYYYMMDD } from "../lib/utils";
 import { useProjectLayout } from "../lib/useProjectLayout";
@@ -36,6 +58,7 @@ import { ProjectSectionGuard } from "../components/ProjectSectionGuard";
 import { SectionLoadingSpinner } from "../components/SectionLoadingSpinner";
 import { CollapsibleSection } from "../components/CollapsibleSection";
 import { useTheme } from "./_app";
+import { IconGrip } from "../components/IconGrip";
 
 const EXPENSES_STORAGE_PREFIX = "ideahome-expenses";
 const LEGACY_EXPENSES_KEY = "ideahome-expenses";
@@ -102,7 +125,12 @@ function clearStoredExpensesLegacy(): void {
 }
 
 function saveStoredExpensesLegacy(
-  items: { amount: number; description: string; date: string; category: string }[]
+  items: {
+    amount: number;
+    description: string;
+    date: string;
+    category: string;
+  }[]
 ): void {
   if (typeof window === "undefined") return;
   try {
@@ -124,9 +152,239 @@ function formatExpenseDateDisplay(value: string): string {
 }
 
 const MONTH_NAMES = [
-  "January", "February", "March", "April", "May", "June",
-  "July", "August", "September", "October", "November", "December",
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
 ];
+
+const TAX_DOCS_STORAGE_PREFIX = "ideahome-tax-docs";
+const TAX_CHECKLIST_STORAGE_PREFIX = "ideahome-tax-checklist";
+const FINANCES_DRAGGABLE_SECTION_IDS = [
+  "expenses-summary",
+  "expenses-financials",
+  "expenses-taxes",
+  "expenses-add-and-list",
+] as const;
+
+type TaxDocumentKind =
+  | "w2"
+  | "1099"
+  | "1098"
+  | "deduction"
+  | "identity"
+  | "prior_return"
+  | "property"
+  | "medical"
+  | "retirement"
+  | "crypto"
+  | "business"
+  | "payment"
+  | "other";
+
+type TaxDocument = ApiTaxDocument & {
+  id: string;
+  fileName: string;
+  sizeBytes: number;
+  kind: TaxDocumentKind;
+  taxYear: number | null;
+  notes: string;
+  textPreview: string | null;
+};
+
+const TAX_CHECKLIST_ITEMS = [
+  {
+    id: "confirm-identity",
+    label: "Confirm legal name, SSN, and address match tax records.",
+  },
+  {
+    id: "collect-income-docs",
+    label:
+      "Collect all income forms (W-2, 1099, K-1, retirement distributions).",
+  },
+  {
+    id: "collect-deduction-docs",
+    label:
+      "Collect deduction docs (mortgage interest, donations, medical, property taxes).",
+  },
+  {
+    id: "collect-payment-docs",
+    label: "Gather estimated tax payment and withholding records.",
+  },
+  {
+    id: "review-last-return",
+    label: "Review last year's return for carryovers and recurring items.",
+  },
+] as const;
+
+type TaxChecklistState = Record<
+  (typeof TAX_CHECKLIST_ITEMS)[number]["id"],
+  boolean
+>;
+
+function getTaxDocsStorageKey(projectId: string | null): string {
+  const suffix = projectId ? `-${projectId}` : "-none";
+  return getUserScopedStorageKey(
+    `${TAX_DOCS_STORAGE_PREFIX}${suffix}`,
+    `${TAX_DOCS_STORAGE_PREFIX}${suffix}`
+  );
+}
+
+function getTaxChecklistStorageKey(projectId: string | null): string {
+  const suffix = projectId ? `-${projectId}` : "-none";
+  return getUserScopedStorageKey(
+    `${TAX_CHECKLIST_STORAGE_PREFIX}${suffix}`,
+    `${TAX_CHECKLIST_STORAGE_PREFIX}${suffix}`
+  );
+}
+
+function defaultTaxChecklistState(): TaxChecklistState {
+  return {
+    "confirm-identity": false,
+    "collect-income-docs": false,
+    "collect-deduction-docs": false,
+    "collect-payment-docs": false,
+    "review-last-return": false,
+  };
+}
+
+function inferTaxDocumentKind(fileName: string): TaxDocumentKind {
+  const n = fileName.toLowerCase();
+  if (n.includes("w-2") || n.includes("w2")) return "w2";
+  if (n.includes("1099")) return "1099";
+  if (n.includes("1098")) return "1098";
+  if (n.includes("ssn") || n.includes("passport") || n.includes("driver")) {
+    return "identity";
+  }
+  if (n.includes("prior") || n.includes("last-year") || n.includes("1040")) {
+    return "prior_return";
+  }
+  if (
+    n.includes("donation") ||
+    n.includes("charity") ||
+    n.includes("receipt") ||
+    n.includes("expense")
+  ) {
+    return "deduction";
+  }
+  if (n.includes("property") || n.includes("tax-bill")) return "property";
+  if (n.includes("medical") || n.includes("hsa")) return "medical";
+  if (n.includes("401k") || n.includes("ira") || n.includes("pension")) {
+    return "retirement";
+  }
+  if (n.includes("crypto") || n.includes("coinbase") || n.includes("kraken")) {
+    return "crypto";
+  }
+  if (
+    n.includes("schedule-c") ||
+    n.includes("business") ||
+    n.includes("invoice")
+  ) {
+    return "business";
+  }
+  if (
+    n.includes("estimated") ||
+    n.includes("payment") ||
+    n.includes("voucher")
+  ) {
+    return "payment";
+  }
+  return "other";
+}
+
+function inferTaxYear(fileName: string): number | null {
+  const match = fileName.match(/\b(20\d{2})\b/);
+  if (!match) return null;
+  const year = Number(match[1]);
+  if (!Number.isFinite(year)) return null;
+  if (year < 2000 || year > 2100) return null;
+  return year;
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function taxKindLabel(kind: TaxDocumentKind): string {
+  if (kind === "w2") return "W-2";
+  if (kind === "1099") return "1099";
+  if (kind === "1098") return "1098";
+  if (kind === "prior_return") return "Prior Return";
+  if (kind === "deduction") return "Deductions";
+  if (kind === "identity") return "Identity";
+  if (kind === "property") return "Property";
+  if (kind === "medical") return "Medical";
+  if (kind === "retirement") return "Retirement";
+  if (kind === "crypto") return "Crypto";
+  if (kind === "business") return "Business";
+  if (kind === "payment") return "Payments";
+  return "Other";
+}
+
+function taxDocInsight(kind: TaxDocumentKind): string {
+  if (kind === "w2" || kind === "1099") {
+    return "Income form detected. Confirm payer info, withholding, and totals.";
+  }
+  if (kind === "1098") {
+    return "Potential deduction form. Verify deductible interest and amounts.";
+  }
+  if (kind === "deduction" || kind === "medical" || kind === "property") {
+    return "Potential deduction support doc. Keep this with your receipts backup.";
+  }
+  if (kind === "payment") {
+    return "Payment record detected. Reconcile with estimated tax payments made.";
+  }
+  if (kind === "prior_return") {
+    return "Prior return found. Use it to compare carryovers and recurring forms.";
+  }
+  if (kind === "identity") {
+    return "Identity document found. Ensure filer and dependent identity details match.";
+  }
+  if (kind === "retirement" || kind === "crypto" || kind === "business") {
+    return "Special-case tax document detected. Review for additional forms and schedules.";
+  }
+  return "Review and categorize this document before filing.";
+}
+
+async function readTaxTextPreview(file: File): Promise<string | null> {
+  const name = file.name.toLowerCase();
+  const isTextLike =
+    file.type.startsWith("text/") ||
+    name.endsWith(".txt") ||
+    name.endsWith(".csv") ||
+    name.endsWith(".json") ||
+    name.endsWith(".md");
+  if (!isTextLike) return null;
+  try {
+    const raw = await file.text();
+    const compact = raw.replace(/\s+/g, " ").trim();
+    if (!compact) return null;
+    return compact.slice(0, 320);
+  } catch {
+    return null;
+  }
+}
+
+async function fileToBase64(file: File): Promise<string> {
+  const buffer = await file.arrayBuffer();
+  let binary = "";
+  const bytes = new Uint8Array(buffer);
+  const chunk = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunk) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
+  }
+  return btoa(binary);
+}
 
 function expenseInDateFilter(
   expenseDate: string | undefined,
@@ -187,6 +445,44 @@ function PlaidLinkLauncher({
   return null;
 }
 
+function SortableFinancesSection({
+  sectionId,
+  children,
+}: {
+  sectionId: string;
+  children: (dragHandle: React.ReactNode) => React.ReactNode;
+}) {
+  const {
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+    attributes,
+    listeners,
+  } = useSortable({ id: sectionId });
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+  const dragHandle = (
+    <span
+      className="code-page-section-drag-handle features-list-drag-handle"
+      {...attributes}
+      {...listeners}
+      aria-label="Drag to reorder"
+      title="Drag to reorder"
+    >
+      <IconGrip />
+    </span>
+  );
+  return (
+    <div ref={setNodeRef} style={style}>
+      {children(dragHandle)}
+    </div>
+  );
+}
+
 export default function FinancialsPage() {
   const router = useRouter();
   const layout = useProjectLayout();
@@ -226,7 +522,9 @@ export default function FinancialsPage() {
   const [editingCategoryId, setEditingCategoryId] = useState<string | null>(
     null
   );
-  const [editingDescriptionId, setEditingDescriptionId] = useState<string | null>(null);
+  const [editingDescriptionId, setEditingDescriptionId] = useState<
+    string | null
+  >(null);
   const [editingDescriptionValue, setEditingDescriptionValue] = useState("");
   const [expenseSearchQuery, setExpenseSearchQuery] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
@@ -242,10 +540,45 @@ export default function FinancialsPage() {
   const [filterDayOfMonth, setFilterDayOfMonth] = useState(now.getDate());
   const [filterMonth, setFilterMonth] = useState(now.getMonth() + 1);
   const [filterYear, setFilterYear] = useState(now.getFullYear());
-  const [rangeStart, setRangeStart] = useState(toYYYYMMDD(new Date(now.getFullYear(), now.getMonth(), 1)));
+  const [rangeStart, setRangeStart] = useState(
+    toYYYYMMDD(new Date(now.getFullYear(), now.getMonth(), 1))
+  );
   const [rangeEnd, setRangeEnd] = useState(toYYYYMMDD(now));
   const [dateFilterOpen, setDateFilterOpen] = useState(false);
-  const [sectionCollapsed, setSectionCollapsed] = useState<Record<string, boolean>>({});
+  const [sectionCollapsed, setSectionCollapsed] = useState<
+    Record<string, boolean>
+  >({});
+  const financesSectionOrderStorageKey = `ideahome-finances-section-order${selectedProjectId ? `-${selectedProjectId}` : ""}`;
+  const [financesSectionOrder, setFinancesSectionOrder] = useState<string[]>(
+    () => {
+      if (typeof window === "undefined")
+        return [...FINANCES_DRAGGABLE_SECTION_IDS];
+      try {
+        const raw = localStorage.getItem(financesSectionOrderStorageKey);
+        if (!raw) return [...FINANCES_DRAGGABLE_SECTION_IDS];
+        const parsed = JSON.parse(raw) as unknown;
+        if (!Array.isArray(parsed) || parsed.length === 0)
+          return [...FINANCES_DRAGGABLE_SECTION_IDS];
+        const valid = FINANCES_DRAGGABLE_SECTION_IDS as unknown as string[];
+        const ordered = parsed.filter(
+          (id: unknown) => typeof id === "string" && valid.includes(id)
+        ) as string[];
+        const missing = valid.filter((id) => !ordered.includes(id));
+        return ordered.length
+          ? [...ordered, ...missing]
+          : [...FINANCES_DRAGGABLE_SECTION_IDS];
+      } catch {
+        return [...FINANCES_DRAGGABLE_SECTION_IDS];
+      }
+    }
+  );
+  const [taxDocuments, setTaxDocuments] = useState<TaxDocument[]>([]);
+  const [taxChecklist, setTaxChecklist] = useState<TaxChecklistState>(
+    defaultTaxChecklistState
+  );
+  const [taxUploadError, setTaxUploadError] = useState("");
+  const [taxUploading, setTaxUploading] = useState(false);
+  const taxUploadInputRef = useRef<HTMLInputElement>(null);
 
   const toggleSection = useCallback((sectionId: string) => {
     setSectionCollapsed((prev) => ({
@@ -257,46 +590,91 @@ export default function FinancialsPage() {
     (sectionId: string) => sectionCollapsed[sectionId] ?? false,
     [sectionCollapsed]
   );
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
 
-  const [linkedAccounts, setLinkedAccounts] = useState<PlaidLinkedAccount[]>([]);
+  const openTaxFilePicker = useCallback(() => {
+    taxUploadInputRef.current?.click();
+  }, []);
+
+  const [linkedAccounts, setLinkedAccounts] = useState<PlaidLinkedAccount[]>(
+    []
+  );
   const [plaidLinkToken, setPlaidLinkToken] = useState<string | null>(null);
   const [plaidError, setPlaidError] = useState("");
   const [plaidLoading, setPlaidLoading] = useState(false);
   const [syncLoading, setSyncLoading] = useState(false);
   const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null);
   const [deleteImportedLoading, setDeleteImportedLoading] = useState(false);
-  const [deleteImportedConfirming, setDeleteImportedConfirming] = useState(false);
+  const [deleteImportedConfirming, setDeleteImportedConfirming] =
+    useState(false);
   const prefetchedLinkTokenRef = useRef<string | null>(null);
   const plaidPendingOpenRef = useRef(false);
   const [plaidOpenTriggered, setPlaidOpenTriggered] = useState(false);
-  const [editingLinkedAccountId, setEditingLinkedAccountId] = useState<string | null>(
-    null
-  );
+  const [editingLinkedAccountId, setEditingLinkedAccountId] = useState<
+    string | null
+  >(null);
   const [editingLinkedAccountName, setEditingLinkedAccountName] = useState("");
-  const [renamingLinkedAccountId, setRenamingLinkedAccountId] = useState<string | null>(
-    null
-  );
+  const [renamingLinkedAccountId, setRenamingLinkedAccountId] = useState<
+    string | null
+  >(null);
   const [linkedAccountsCollapsed, setLinkedAccountsCollapsed] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      localStorage.setItem(
+        financesSectionOrderStorageKey,
+        JSON.stringify(financesSectionOrder)
+      );
+    } catch {
+      // ignore
+    }
+  }, [financesSectionOrder, financesSectionOrderStorageKey]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const key = `ideahome-finances-section-order${selectedProjectId ? `-${selectedProjectId}` : ""}`;
+    try {
+      const raw = localStorage.getItem(key);
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as unknown;
+      if (!Array.isArray(parsed) || parsed.length === 0) return;
+      const valid = FINANCES_DRAGGABLE_SECTION_IDS as unknown as string[];
+      const ordered = (parsed as string[]).filter((id) => valid.includes(id));
+      const missing = valid.filter((id) => !ordered.includes(id));
+      setFinancesSectionOrder(
+        ordered.length
+          ? [...ordered, ...missing]
+          : [...FINANCES_DRAGGABLE_SECTION_IDS]
+      );
+    } catch {
+      // ignore
+    }
+  }, [selectedProjectId]);
 
   const importedCount = expenses.filter((e) => e.source === "plaid").length;
   const plaidConnectButtonLoading =
     plaidLoading || (plaidLinkToken != null && !plaidOpenTriggered);
 
-  const onPlaidSuccess = useCallback(
-    async (publicToken: string) => {
-      setPlaidError("");
-      setPlaidLinkToken(null);
-      setPlaidOpenTriggered(false);
-      try {
-        await exchangePlaidToken(publicToken);
-        const list = await fetchPlaidLinkedAccounts();
-        setLinkedAccounts(list);
-      } catch (err) {
-        setPlaidError(err instanceof Error ? err.message : "Failed to connect account");
-      }
-    },
-    []
-  );
+  const onPlaidSuccess = useCallback(async (publicToken: string) => {
+    setPlaidError("");
+    setPlaidLinkToken(null);
+    setPlaidOpenTriggered(false);
+    try {
+      await exchangePlaidToken(publicToken);
+      const list = await fetchPlaidLinkedAccounts();
+      setLinkedAccounts(list);
+    } catch (err) {
+      setPlaidError(
+        err instanceof Error ? err.message : "Failed to connect account"
+      );
+    }
+  }, []);
 
   const onPlaidExit = useCallback(() => {
     plaidPendingOpenRef.current = false;
@@ -310,13 +688,20 @@ export default function FinancialsPage() {
   }, []);
 
   useEffect(() => {
-    if (!plaidPendingOpenRef.current || plaidLinkToken != null || !isAuthenticated()) return;
+    if (
+      !plaidPendingOpenRef.current ||
+      plaidLinkToken != null ||
+      !isAuthenticated()
+    )
+      return;
     plaidPendingOpenRef.current = false;
     setPlaidLoading(true);
     getPlaidLinkToken()
       .then(({ linkToken }) => setPlaidLinkToken(linkToken))
       .catch((err) => {
-        setPlaidError(err instanceof Error ? err.message : "Could not start connection");
+        setPlaidError(
+          err instanceof Error ? err.message : "Could not start connection"
+        );
         setPlaidOpenTriggered(false);
       })
       .finally(() => setPlaidLoading(false));
@@ -333,7 +718,11 @@ export default function FinancialsPage() {
   }, []);
 
   useEffect(() => {
-    if (!selectedProjectId || linkedAccounts.length === 0 || !isAuthenticated()) {
+    if (
+      !selectedProjectId ||
+      linkedAccounts.length === 0 ||
+      !isAuthenticated()
+    ) {
       setLastSyncedAt(null);
       return;
     }
@@ -344,7 +733,9 @@ export default function FinancialsPage() {
 
   useEffect(() => {
     if (lastSyncedAt != null) return;
-    const plaidExpenses = expenses.filter((e) => e.source === "plaid" && e.createdAt);
+    const plaidExpenses = expenses.filter(
+      (e) => e.source === "plaid" && e.createdAt
+    );
     if (plaidExpenses.length === 0) return;
     const latest = plaidExpenses.reduce((max, e) =>
       new Date(e.createdAt) > new Date(max.createdAt) ? e : max
@@ -355,7 +746,13 @@ export default function FinancialsPage() {
   }, [expenses, lastSyncedAt]);
 
   const prefetchPlaidLinkToken = useCallback(() => {
-    if (!isAuthenticated() || plaidLinkToken || plaidLoading || prefetchedLinkTokenRef.current) return;
+    if (
+      !isAuthenticated() ||
+      plaidLinkToken ||
+      plaidLoading ||
+      prefetchedLinkTokenRef.current
+    )
+      return;
     getPlaidLinkToken()
       .then(({ linkToken }) => {
         prefetchedLinkTokenRef.current = linkToken;
@@ -381,7 +778,8 @@ export default function FinancialsPage() {
     setPlaidError("");
     setSyncLoading(true);
     try {
-      const { added, lastSyncedAt: next } = await syncPlaidTransactions(selectedProjectId);
+      const { added, lastSyncedAt: next } =
+        await syncPlaidTransactions(selectedProjectId);
       if (next != null) setLastSyncedAt(next);
       if (added > 0) {
         const data = await fetchExpenses(selectedProjectId);
@@ -401,7 +799,9 @@ export default function FinancialsPage() {
       const list = await fetchPlaidLinkedAccounts();
       setLinkedAccounts(list);
     } catch (err) {
-      setPlaidError(err instanceof Error ? err.message : "Failed to disconnect");
+      setPlaidError(
+        err instanceof Error ? err.message : "Failed to disconnect"
+      );
     }
   }, []);
 
@@ -468,7 +868,11 @@ export default function FinancialsPage() {
         setPlaidError("");
       }
     } catch (err) {
-      setPlaidError(err instanceof Error ? err.message : "Failed to delete imported expenses");
+      setPlaidError(
+        err instanceof Error
+          ? err.message
+          : "Failed to delete imported expenses"
+      );
     } finally {
       setDeleteImportedLoading(false);
     }
@@ -593,6 +997,259 @@ export default function FinancialsPage() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [editingCategoryId]);
 
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (!selectedProjectId) {
+      setTaxDocuments([]);
+      setTaxChecklist(defaultTaxChecklistState());
+      return;
+    }
+    if (isAuthenticated()) {
+      fetchTaxDocuments(selectedProjectId)
+        .then((docs) => {
+          const normalized = docs.map((doc) => ({
+            ...doc,
+            kind: (doc.kind as TaxDocumentKind) ?? "other",
+            taxYear: doc.taxYear ?? null,
+            notes: typeof doc.notes === "string" ? doc.notes : "",
+            textPreview:
+              typeof doc.textPreview === "string" ? doc.textPreview : null,
+          }));
+          setTaxDocuments(normalized);
+        })
+        .catch(() => setTaxDocuments([]));
+    } else {
+      try {
+        const docsRaw = localStorage.getItem(
+          getTaxDocsStorageKey(selectedProjectId)
+        );
+        const docsParsed = docsRaw ? (JSON.parse(docsRaw) as unknown) : [];
+        if (Array.isArray(docsParsed)) {
+          const normalized = docsParsed
+            .filter((value): value is TaxDocument => {
+              if (!value || typeof value !== "object") return false;
+              const rec = value as Record<string, unknown>;
+              return (
+                typeof rec.id === "string" &&
+                typeof rec.fileName === "string" &&
+                typeof rec.sizeBytes === "number" &&
+                typeof rec.kind === "string"
+              );
+            })
+            .map((doc) => ({
+              ...doc,
+              notes: typeof doc.notes === "string" ? doc.notes : "",
+              textPreview:
+                typeof doc.textPreview === "string" ? doc.textPreview : null,
+              createdAt:
+                typeof doc.createdAt === "string"
+                  ? doc.createdAt
+                  : new Date().toISOString(),
+              updatedAt:
+                typeof doc.updatedAt === "string"
+                  ? doc.updatedAt
+                  : new Date().toISOString(),
+              fileUrl:
+                typeof doc.fileUrl === "string"
+                  ? doc.fileUrl
+                  : `local://${doc.fileName}`,
+              projectId:
+                typeof doc.projectId === "string"
+                  ? doc.projectId
+                  : selectedProjectId,
+            }));
+          setTaxDocuments(normalized);
+        } else {
+          setTaxDocuments([]);
+        }
+      } catch {
+        setTaxDocuments([]);
+      }
+    }
+
+    try {
+      const checklistRaw = localStorage.getItem(
+        getTaxChecklistStorageKey(selectedProjectId)
+      );
+      const parsed = checklistRaw
+        ? (JSON.parse(checklistRaw) as unknown)
+        : null;
+      const next = defaultTaxChecklistState();
+      if (parsed && typeof parsed === "object") {
+        for (const item of TAX_CHECKLIST_ITEMS) {
+          const value = (parsed as Record<string, unknown>)[item.id];
+          next[item.id] = value === true;
+        }
+      }
+      setTaxChecklist(next);
+    } catch {
+      setTaxChecklist(defaultTaxChecklistState());
+    }
+  }, [selectedProjectId]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (isAuthenticated()) return;
+    if (!selectedProjectId) return;
+    try {
+      localStorage.setItem(
+        getTaxDocsStorageKey(selectedProjectId),
+        JSON.stringify(taxDocuments)
+      );
+    } catch {
+      // best effort local persistence
+    }
+  }, [selectedProjectId, taxDocuments]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (!selectedProjectId) return;
+    try {
+      localStorage.setItem(
+        getTaxChecklistStorageKey(selectedProjectId),
+        JSON.stringify(taxChecklist)
+      );
+    } catch {
+      // best effort local persistence
+    }
+  }, [selectedProjectId, taxChecklist]);
+
+  const handleTaxChecklistToggle = useCallback(
+    (id: keyof TaxChecklistState) => {
+      setTaxChecklist((prev) => ({ ...prev, [id]: !prev[id] }));
+    },
+    []
+  );
+
+  const updateTaxDocumentNotes = useCallback(
+    async (id: string, notes: string) => {
+      const previous = taxDocuments;
+      setTaxDocuments((prev) =>
+        prev.map((doc) => (doc.id === id ? { ...doc, notes } : doc))
+      );
+      if (!isAuthenticated()) return;
+      try {
+        const updated = await updateTaxDocument(id, { notes });
+        setTaxDocuments((prev) =>
+          prev.map((doc) =>
+            doc.id === id
+              ? {
+                  ...doc,
+                  ...updated,
+                  kind: updated.kind as TaxDocumentKind,
+                  notes: updated.notes ?? "",
+                  textPreview: updated.textPreview ?? null,
+                  taxYear: updated.taxYear ?? null,
+                }
+              : doc
+          )
+        );
+      } catch {
+        setTaxDocuments(previous);
+      }
+    },
+    [taxDocuments]
+  );
+
+  const removeTaxDocument = useCallback(
+    async (id: string) => {
+      const previous = taxDocuments;
+      setTaxDocuments((prev) => prev.filter((doc) => doc.id !== id));
+      if (!isAuthenticated()) return;
+      try {
+        await deleteTaxDocument(id);
+      } catch {
+        setTaxDocuments(previous);
+      }
+    },
+    [taxDocuments]
+  );
+
+  const handleTaxDownload = useCallback(async (doc: TaxDocument) => {
+    if (!isAuthenticated()) return;
+    try {
+      const blob = await downloadTaxDocument(doc.id);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = doc.fileName;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setTaxUploadError(
+        err instanceof Error ? err.message : "Failed to download tax document."
+      );
+    }
+  }, []);
+
+  const handleTaxUpload = useCallback(
+    async (event: React.ChangeEvent<HTMLInputElement>) => {
+      setTaxUploadError("");
+      const files = Array.from(event.target.files ?? []);
+      if (files.length === 0) return;
+      if (!selectedProjectId) {
+        setTaxUploadError("Select a project before uploading tax documents.");
+        event.target.value = "";
+        return;
+      }
+
+      setTaxUploading(true);
+      try {
+        const created = await Promise.all(
+          files.map(async (file) => {
+            const kind = inferTaxDocumentKind(file.name);
+            const taxYear = inferTaxYear(file.name);
+            const textPreview = await readTaxTextPreview(file);
+            if (isAuthenticated()) {
+              const fileBase64 = await fileToBase64(file);
+              const saved = await createTaxDocument({
+                projectId: selectedProjectId,
+                fileName: file.name,
+                fileBase64,
+                kind,
+                taxYear,
+                textPreview,
+              });
+              return {
+                ...saved,
+                kind: saved.kind as TaxDocumentKind,
+                taxYear: saved.taxYear ?? null,
+                notes: saved.notes ?? "",
+                textPreview: saved.textPreview ?? null,
+              } as TaxDocument;
+            }
+            return {
+              id: `tax-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+              fileName: file.name,
+              sizeBytes: file.size,
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
+              fileUrl: `local://${file.name}`,
+              projectId: selectedProjectId,
+              kind,
+              taxYear,
+              notes: "",
+              textPreview,
+            } as TaxDocument;
+          })
+        );
+        setTaxDocuments((prev) => [...created, ...prev]);
+      } catch (err) {
+        setTaxUploadError(
+          err instanceof Error
+            ? err.message
+            : "Failed to process uploaded documents."
+        );
+      } finally {
+        setTaxUploading(false);
+        event.target.value = "";
+      }
+    },
+    [selectedProjectId]
+  );
+
   const addExpense = async (e: React.FormEvent) => {
     e.preventDefault();
     setAddExpenseError("");
@@ -619,7 +1276,9 @@ export default function FinancialsPage() {
     } catch (err) {
       if (isAuthenticated()) {
         setAddExpenseError(
-          err instanceof Error ? err.message : "Failed to save expense to server. Check your connection and try again."
+          err instanceof Error
+            ? err.message
+            : "Failed to save expense to server. Check your connection and try again."
         );
         return;
       }
@@ -717,16 +1376,20 @@ export default function FinancialsPage() {
 
   const expenseSearchLower = expenseSearchQuery.trim().toLowerCase();
   const filteredExpensesRaw = expenses.filter((e) => {
-    if (!expenseInDateFilter(
-      e.date,
-      dateFilterMode,
-      dateFilterMode === "day" ? filterDay : undefined,
-      dateFilterMode === "dayOfMonth" ? filterDayOfMonth : undefined,
-      dateFilterMode === "month" ? filterMonth : undefined,
-      dateFilterMode === "month" || dateFilterMode === "year" ? filterYear : undefined,
-      dateFilterMode === "range" ? rangeStart : undefined,
-      dateFilterMode === "range" ? rangeEnd : undefined
-    )) {
+    if (
+      !expenseInDateFilter(
+        e.date,
+        dateFilterMode,
+        dateFilterMode === "day" ? filterDay : undefined,
+        dateFilterMode === "dayOfMonth" ? filterDayOfMonth : undefined,
+        dateFilterMode === "month" ? filterMonth : undefined,
+        dateFilterMode === "month" || dateFilterMode === "year"
+          ? filterYear
+          : undefined,
+        dateFilterMode === "range" ? rangeStart : undefined,
+        dateFilterMode === "range" ? rangeEnd : undefined
+      )
+    ) {
       return false;
     }
     if (categoryFilter !== null && (e.category || "Other") !== categoryFilter) {
@@ -754,11 +1417,17 @@ export default function FinancialsPage() {
       const db = new Date(`${b.date ?? ""}T00:00:00`).getTime();
       cmp = da - db;
     } else if (sortBy === "description") {
-      cmp = (a.description ?? "").localeCompare(b.description ?? "", undefined, { sensitivity: "base" });
+      cmp = (a.description ?? "").localeCompare(
+        b.description ?? "",
+        undefined,
+        { sensitivity: "base" }
+      );
     } else if (sortBy === "amount") {
       cmp = a.amount - b.amount;
     } else {
-      cmp = (a.category ?? "").localeCompare(b.category ?? "", undefined, { sensitivity: "base" });
+      cmp = (a.category ?? "").localeCompare(b.category ?? "", undefined, {
+        sensitivity: "base",
+      });
     }
     return sortDir === "asc" ? cmp : -cmp;
   });
@@ -773,67 +1442,87 @@ export default function FinancialsPage() {
             dateFilterMode === "day" ? filterDay : undefined,
             dateFilterMode === "dayOfMonth" ? filterDayOfMonth : undefined,
             dateFilterMode === "month" ? filterMonth : undefined,
-            dateFilterMode === "month" || dateFilterMode === "year" ? filterYear : undefined,
+            dateFilterMode === "month" || dateFilterMode === "year"
+              ? filterYear
+              : undefined,
             dateFilterMode === "range" ? rangeStart : undefined,
             dateFilterMode === "range" ? rangeEnd : undefined
           )
         );
   const total = expensesForSummary.reduce((sum, e) => sum + e.amount, 0);
-  const byCategory = expensesForSummary.reduce<Record<string, number>>((acc, e) => {
-    const c = e.category || "Other";
-    acc[c] = (acc[c] ?? 0) + e.amount;
-    return acc;
-  }, {});
+  const byCategory = expensesForSummary.reduce<Record<string, number>>(
+    (acc, e) => {
+      const c = e.category || "Other";
+      acc[c] = (acc[c] ?? 0) + e.amount;
+      return acc;
+    },
+    {}
+  );
   const parsedAmount = parseFloat(amount.replace(/,/g, ""));
   const canAddExpense =
     Boolean(selectedProjectId) &&
     Number.isFinite(parsedAmount) &&
     parsedAmount > 0;
-
-  return (
-    <AppLayout
-      title="Finances · Idea Home"
-      activeTab="expenses"
-      projectName={projectDisplayName}
-      projectId={selectedProjectId || undefined}
-      searchPlaceholder="Search project"
-      drawerOpen={drawerOpen}
-      setDrawerOpen={setDrawerOpen}
-      projects={projects}
-      selectedProjectId={selectedProjectId ?? ""}
-      setSelectedProjectId={setSelectedProjectId}
-      editingProjectId={editingProjectId}
-      setEditingProjectId={setEditingProjectId}
-      editingProjectName={editingProjectName}
-      setEditingProjectName={setEditingProjectName}
-      saveProjectName={saveProjectName}
-      cancelEditProjectName={cancelEditProjectName}
-      projectNameInputRef={projectNameInputRef}
-      theme={theme}
-      toggleTheme={toggleTheme}
-      projectToDelete={projectToDelete}
-      setProjectToDelete={setProjectToDelete}
-      projectDeleting={projectDeleting}
-      handleDeleteProject={handleDeleteProject}
-      onCreateProject={layout.createProjectByName}
-    >
-      {!projectsLoaded || (Boolean(selectedProjectId) && expensesLoading) ? (
-        <div className="tests-page-single-loading">
-          <SectionLoadingSpinner />
-        </div>
-      ) : (
-      <div className="tests-page-content expenses-page-content">
-        {plaidLinkToken != null && (
-          <PlaidLinkLauncher
-            key={plaidLinkToken}
-            token={plaidLinkToken}
-            onSuccess={onPlaidSuccess}
-            onExit={onPlaidExit}
-            onOpened={onPlaidOpened}
-          />
-        )}
-        <h1 className="tests-page-title">Finances</h1>
-
+  const taxChecklistCompleted = TAX_CHECKLIST_ITEMS.filter(
+    (item) => taxChecklist[item.id]
+  ).length;
+  const taxCoverage = {
+    income: taxDocuments.some((doc) =>
+      ["w2", "1099", "retirement", "business", "crypto"].includes(doc.kind)
+    ),
+    deductions: taxDocuments.some((doc) =>
+      ["1098", "deduction", "property", "medical"].includes(doc.kind)
+    ),
+    payments: taxDocuments.some((doc) => doc.kind === "payment"),
+    identity: taxDocuments.some((doc) => doc.kind === "identity"),
+    priorReturn: taxDocuments.some((doc) => doc.kind === "prior_return"),
+  };
+  const taxCoverageCompleteCount =
+    Object.values(taxCoverage).filter(Boolean).length;
+  const taxReadinessScore = Math.max(
+    0,
+    Math.min(
+      100,
+      Math.round(
+        Math.min(40, taxDocuments.length * 8) +
+          (taxCoverageCompleteCount / 5) * 40 +
+          (taxChecklistCompleted / TAX_CHECKLIST_ITEMS.length) * 20
+      )
+    )
+  );
+  const taxReadinessLabel =
+    taxReadinessScore >= 85
+      ? "Ready to file"
+      : taxReadinessScore >= 60
+        ? "Almost ready"
+        : "Needs more prep";
+  const missingTaxCoverageLabels = [
+    !taxCoverage.income ? "income docs (W-2/1099/etc.)" : null,
+    !taxCoverage.deductions ? "deduction docs" : null,
+    !taxCoverage.payments ? "payment records" : null,
+    !taxCoverage.identity ? "identity verification docs" : null,
+    !taxCoverage.priorReturn ? "last year's return" : null,
+  ].filter((value): value is string => value != null);
+  const handleFinancesSectionDragEnd = useCallback(
+    (event: DragEndEvent) => {
+      const { active, over } = event;
+      if (!over || active.id === over.id) return;
+      const oldIndex = financesSectionOrder.indexOf(String(active.id));
+      const newIndex = financesSectionOrder.indexOf(String(over.id));
+      if (oldIndex === -1 || newIndex === -1) return;
+      const next = [...financesSectionOrder];
+      const [removed] = next.splice(oldIndex, 1);
+      next.splice(newIndex, 0, removed);
+      setFinancesSectionOrder(next);
+    },
+    [financesSectionOrder]
+  );
+  const renderFinancesSection = (
+    sectionId: string,
+    dragHandle: React.ReactNode
+  ) => {
+    if (sectionId === "expenses-summary") {
+      return (
         <CollapsibleSection
           sectionId="expenses-summary"
           title={
@@ -842,8 +1531,10 @@ export default function FinancialsPage() {
               {dateFilterMode !== "all" && (
                 <span className="expenses-summary-period" aria-hidden="true">
                   {dateFilterMode === "day" && formatExpenseDateDisplay(filterDay)}
-                  {dateFilterMode === "dayOfMonth" && `${dayOfMonthOrdinal(filterDayOfMonth)} of every month`}
-                  {dateFilterMode === "month" && `${MONTH_NAMES[filterMonth - 1]} ${filterYear}`}
+                  {dateFilterMode === "dayOfMonth" &&
+                    `${dayOfMonthOrdinal(filterDayOfMonth)} of every month`}
+                  {dateFilterMode === "month" &&
+                    `${MONTH_NAMES[filterMonth - 1]} ${filterYear}`}
                   {dateFilterMode === "year" && String(filterYear)}
                   {dateFilterMode === "range" && `${rangeStart} – ${rangeEnd}`}
                 </span>
@@ -859,6 +1550,7 @@ export default function FinancialsPage() {
           collapsed={isSectionCollapsed("expenses-summary")}
           onToggle={() => toggleSection("expenses-summary")}
           sectionClassName="expenses-summary-section"
+          headerTrailing={dragHandle}
         >
           <div className="expenses-summary-total" aria-label="Total amount">
             {formatCurrency(total)}
@@ -897,211 +1589,390 @@ export default function FinancialsPage() {
             </ul>
           )}
         </CollapsibleSection>
+      );
+    }
 
-        {!isAuthenticated() && (
+    if (sectionId === "expenses-financials") {
+      if (!isAuthenticated()) {
+        return (
           <CollapsibleSection
             sectionId="expenses-auth-notice"
             title="Sync notice"
             collapsed={isSectionCollapsed("expenses-auth-notice")}
             onToggle={() => toggleSection("expenses-auth-notice")}
             sectionClassName="expenses-auth-notice"
+            headerTrailing={dragHandle}
           >
             <p className="expenses-auth-notice-text" role="status">
-              Expenses are stored on this device only. Sign in to save them to your account and sync across devices.
+              Expenses are stored on this device only. Sign in to save them to
+              your account and sync across devices.
             </p>
           </CollapsibleSection>
-        )}
-        {isAuthenticated() && (
-          <CollapsibleSection
-            sectionId="expenses-plaid"
-            title="Link Financials"
-            collapsed={isSectionCollapsed("expenses-plaid")}
-            onToggle={() => toggleSection("expenses-plaid")}
-            sectionClassName="expenses-plaid-section"
-            headingId="expenses-plaid-heading"
-          >
-            <p className="expenses-plaid-desc">
-              Connect a bank or credit card to import transactions as expenses.
+        );
+      }
+
+      return (
+        <CollapsibleSection
+          sectionId="expenses-plaid"
+          title="Link Financials"
+          collapsed={isSectionCollapsed("expenses-plaid")}
+          onToggle={() => toggleSection("expenses-plaid")}
+          sectionClassName="expenses-plaid-section"
+          headingId="expenses-plaid-heading"
+          headerTrailing={dragHandle}
+        >
+          <p className="expenses-plaid-desc">
+            Connect a bank or credit card to import transactions as expenses.
+          </p>
+          {plaidError && (
+            <p className="expenses-error-notice-text" role="alert">
+              {plaidError}
             </p>
-            {plaidError && (
-              <p className="expenses-error-notice-text" role="alert">{plaidError}</p>
-            )}
-            <div className="expenses-plaid-actions">
-              <button
-                type="button"
-                className="project-nav-add expenses-plaid-connect-btn"
-                onClick={handleConnectPlaid}
-                onMouseEnter={prefetchPlaidLinkToken}
-                onFocus={prefetchPlaidLinkToken}
-                disabled={plaidConnectButtonLoading}
-                aria-label="Connect bank or card"
-                aria-busy={plaidConnectButtonLoading}
-              >
-                {plaidConnectButtonLoading && (
-                  <span className="upload-spinner upload-spinner--btn" aria-hidden="true" />
-                )}
-                <span className="expenses-plaid-connect-btn-text">
-                  {plaidConnectButtonLoading ? "Connecting…" : "Connect bank or card"}
-                </span>
-              </button>
-              {linkedAccounts.length > 0 && selectedProjectId && (
-                <div className="expenses-plaid-action">
-                  <button
-                    type="button"
-                    className="project-nav-add expenses-plaid-sync-btn"
-                    onClick={handleSyncPlaid}
-                    disabled={syncLoading}
-                    aria-label="Sync transactions into expenses"
-                    aria-busy={syncLoading}
-                  >
-                    {syncLoading ? "Syncing…" : "Sync transactions"}
-                  </button>
-                  {lastSyncedAt != null && (
-                    <span className="expenses-plaid-last-synced" role="status">
-                      Last synced {formatRelativeTime(lastSyncedAt)}
-                    </span>
-                  )}
-                </div>
+          )}
+          <div className="expenses-plaid-actions">
+            <button
+              type="button"
+              className="project-nav-add expenses-plaid-connect-btn"
+              onClick={handleConnectPlaid}
+              onMouseEnter={prefetchPlaidLinkToken}
+              onFocus={prefetchPlaidLinkToken}
+              disabled={plaidConnectButtonLoading}
+              aria-label="Connect bank or card"
+              aria-busy={plaidConnectButtonLoading}
+            >
+              {plaidConnectButtonLoading && (
+                <span
+                  className="upload-spinner upload-spinner--btn"
+                  aria-hidden="true"
+                />
               )}
-            </div>
-            {linkedAccounts.length > 0 && (
-              <div className="expenses-plaid-linked-wrap">
+              <span className="expenses-plaid-connect-btn-text">
+                {plaidConnectButtonLoading ? "Connecting…" : "Connect bank or card"}
+              </span>
+            </button>
+            {linkedAccounts.length > 0 && selectedProjectId && (
+              <div className="expenses-plaid-action">
                 <button
                   type="button"
-                  className={
-                    "expenses-plaid-linked-toggle" +
-                    (linkedAccountsCollapsed ? " is-collapsed" : "")
-                  }
-                  onClick={() =>
-                    setLinkedAccountsCollapsed((prev) => !prev)
-                  }
-                  aria-expanded={!linkedAccountsCollapsed}
-                  aria-controls="expenses-plaid-linked-list"
+                  className="project-nav-add expenses-plaid-sync-btn"
+                  onClick={handleSyncPlaid}
+                  disabled={syncLoading}
+                  aria-label="Sync transactions into expenses"
+                  aria-busy={syncLoading}
                 >
-                  <span
-                    className="expenses-plaid-linked-toggle-chevron"
-                    aria-hidden="true"
-                  >
-                    ▶
-                  </span>
-                  <span className="expenses-plaid-linked-toggle-label">
-                    Linked accounts
-                  </span>
-                  <span className="tests-page-section-count">
-                    {linkedAccounts.length}
-                  </span>
+                  {syncLoading ? "Syncing…" : "Sync transactions"}
                 </button>
-                {!linkedAccountsCollapsed && (
-                  <ul
-                    id="expenses-plaid-linked-list"
-                    className="expenses-plaid-linked-list"
-                    aria-label="Linked accounts"
-                  >
-                    {linkedAccounts.map((acc) => (
-                      <li key={acc.id} className="expenses-plaid-linked-item">
-                        {editingLinkedAccountId === acc.id ? (
-                          <input
-                            type="text"
-                            value={editingLinkedAccountName}
-                            onChange={(e) =>
-                              setEditingLinkedAccountName(e.target.value)
+                {lastSyncedAt != null && (
+                  <span className="expenses-plaid-last-synced" role="status">
+                    Last synced {formatRelativeTime(lastSyncedAt)}
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
+          {linkedAccounts.length > 0 && (
+            <div className="expenses-plaid-linked-wrap">
+              <button
+                type="button"
+                className={
+                  "expenses-plaid-linked-toggle" +
+                  (linkedAccountsCollapsed ? " is-collapsed" : "")
+                }
+                onClick={() => setLinkedAccountsCollapsed((prev) => !prev)}
+                aria-expanded={!linkedAccountsCollapsed}
+                aria-controls="expenses-plaid-linked-list"
+              >
+                <span
+                  className="expenses-plaid-linked-toggle-chevron"
+                  aria-hidden="true"
+                >
+                  ▶
+                </span>
+                <span className="expenses-plaid-linked-toggle-label">
+                  Linked accounts
+                </span>
+                <span className="tests-page-section-count">
+                  {linkedAccounts.length}
+                </span>
+              </button>
+              {!linkedAccountsCollapsed && (
+                <ul
+                  id="expenses-plaid-linked-list"
+                  className="expenses-plaid-linked-list"
+                  aria-label="Linked accounts"
+                >
+                  {linkedAccounts.map((acc) => (
+                    <li key={acc.id} className="expenses-plaid-linked-item">
+                      {editingLinkedAccountId === acc.id ? (
+                        <input
+                          type="text"
+                          value={editingLinkedAccountName}
+                          onChange={(e) => setEditingLinkedAccountName(e.target.value)}
+                          onBlur={() =>
+                            saveLinkedAccountName(acc.id, editingLinkedAccountName)
+                          }
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.currentTarget.blur();
+                            } else if (e.key === "Escape") {
+                              e.preventDefault();
+                              cancelEditingLinkedAccount();
                             }
-                            onBlur={() =>
-                              saveLinkedAccountName(acc.id, editingLinkedAccountName)
+                          }}
+                          autoFocus
+                          aria-label="Edit linked account name"
+                          className="expenses-item-description-input"
+                        />
+                      ) : (
+                        <span
+                          className="expenses-plaid-linked-name expenses-item-description-editable"
+                          role="button"
+                          tabIndex={0}
+                          onClick={() => startEditingLinkedAccount(acc)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" || e.key === " ") {
+                              e.preventDefault();
+                              startEditingLinkedAccount(acc);
                             }
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter") {
-                                e.currentTarget.blur();
-                              } else if (e.key === "Escape") {
-                                e.preventDefault();
-                                cancelEditingLinkedAccount();
-                              }
-                            }}
-                            autoFocus
-                            aria-label="Edit linked account name"
-                            className="expenses-item-description-input"
-                          />
-                        ) : (
-                          <span
-                            className="expenses-plaid-linked-name expenses-item-description-editable"
-                            role="button"
-                            tabIndex={0}
-                            onClick={() => startEditingLinkedAccount(acc)}
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter" || e.key === " ") {
-                                e.preventDefault();
-                                startEditingLinkedAccount(acc);
-                              }
-                            }}
-                            title="Click to rename account"
-                            aria-label={`Rename ${acc.institutionName ?? "account"}`}
+                          }}
+                          title="Click to rename account"
+                          aria-label={`Rename ${acc.institutionName ?? "account"}`}
+                        >
+                          {acc.institutionName ?? "Bank or card"}
+                        </span>
+                      )}
+                      <button
+                        type="button"
+                        className="expenses-plaid-disconnect-btn"
+                        onClick={() => handleDisconnectPlaid(acc.id)}
+                        disabled={renamingLinkedAccountId === acc.id}
+                        aria-label={`Disconnect ${acc.institutionName ?? "account"}`}
+                      >
+                        Disconnect
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+          {importedCount > 0 && selectedProjectId && (
+            <div className="expenses-plaid-delete-imported-wrap">
+              {deleteImportedConfirming ? (
+                <>
+                  <span className="expenses-plaid-delete-imported-prompt">
+                    Delete all {importedCount} imported? Cannot be undone.
+                  </span>
+                  <div className="expenses-plaid-delete-imported-actions">
+                    <button
+                      type="button"
+                      className="expenses-plaid-delete-imported-btn expenses-plaid-delete-imported-cancel"
+                      onClick={handleDeleteAllImportedCancel}
+                      disabled={deleteImportedLoading}
+                      aria-label="Cancel"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      className="expenses-plaid-delete-imported-btn"
+                      onClick={handleDeleteAllImportedSubmit}
+                      disabled={deleteImportedLoading}
+                      aria-label={`Delete all ${importedCount} imported expenses`}
+                    >
+                      {deleteImportedLoading ? "Deleting…" : "Delete"}
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <button
+                  type="button"
+                  className="expenses-plaid-delete-imported-btn"
+                  onClick={handleDeleteAllImportedConfirm}
+                  disabled={deleteImportedLoading}
+                  aria-label={`Delete all ${importedCount} imported expenses`}
+                >
+                  Delete all imported expenses ({importedCount})
+                </button>
+              )}
+            </div>
+          )}
+        </CollapsibleSection>
+      );
+    }
+
+    if (sectionId === "expenses-taxes") {
+      return (
+        <CollapsibleSection
+          sectionId="expenses-taxes"
+          title={
+            <>
+              Taxes{" "}
+              <span className="tests-page-section-count" aria-label="Tax documents count">
+                {taxDocuments.length} Docs
+              </span>
+            </>
+          }
+          collapsed={isSectionCollapsed("expenses-taxes")}
+          onToggle={() => toggleSection("expenses-taxes")}
+          sectionClassName="expenses-taxes-section"
+          headingId="expenses-taxes-heading"
+          headerTrailing={dragHandle}
+        >
+          <p className="expenses-taxes-desc">
+            Upload tax documents, organize what they likely mean, and track
+            filing readiness for this project.
+          </p>
+          <ProjectSectionGuard
+            projectsLoaded={projectsLoaded}
+            selectedProjectId={selectedProjectId}
+            message="Select a project to manage tax documents."
+            variant="list"
+          >
+            <div className="expenses-taxes-actions">
+              <input
+                ref={taxUploadInputRef}
+                type="file"
+                multiple
+                className="expenses-taxes-file-input"
+                onChange={handleTaxUpload}
+                accept=".pdf,.csv,.txt,.json,.jpg,.jpeg,.png,.webp,.heic,.doc,.docx,.xls,.xlsx"
+                aria-label="Upload tax documents"
+              />
+              <button
+                type="button"
+                className="project-nav-add expenses-taxes-upload-btn"
+                onClick={openTaxFilePicker}
+                disabled={taxUploading}
+                aria-busy={taxUploading}
+              >
+                {taxUploading ? "Processing…" : "Upload tax documents"}
+              </button>
+              {taxUploadError && (
+                <p className="expenses-error-notice-text" role="alert">
+                  {taxUploadError}
+                </p>
+              )}
+            </div>
+
+            <div className="expenses-taxes-readiness">
+              <p className="expenses-taxes-readiness-score">
+                <strong>{taxReadinessScore}%</strong> {taxReadinessLabel}
+              </p>
+              <p className="expenses-taxes-readiness-meta">
+                Checklist {taxChecklistCompleted}/{TAX_CHECKLIST_ITEMS.length}{" "}
+                complete
+              </p>
+              {missingTaxCoverageLabels.length > 0 ? (
+                <p className="expenses-taxes-readiness-missing">
+                  Missing: {missingTaxCoverageLabels.join(", ")}
+                </p>
+              ) : (
+                <p className="expenses-taxes-readiness-missing">
+                  Core document categories detected. Run a final review before
+                  filing.
+                </p>
+              )}
+            </div>
+
+            <ul className="expenses-taxes-checklist" aria-label="Tax filing checklist">
+              {TAX_CHECKLIST_ITEMS.map((item) => (
+                <li key={item.id} className="expenses-taxes-checklist-item">
+                  <label className="expenses-taxes-checklist-label">
+                    <input
+                      type="checkbox"
+                      checked={taxChecklist[item.id]}
+                      onChange={() => handleTaxChecklistToggle(item.id)}
+                    />{" "}
+                    {item.label}
+                  </label>
+                </li>
+              ))}
+            </ul>
+
+            {taxDocuments.length === 0 ? (
+              <p className="tests-page-section-desc finances-empty-state-msg">
+                No tax documents uploaded yet.
+              </p>
+            ) : (
+              <ul
+                className="expenses-taxes-doc-list"
+                aria-label="Uploaded tax documents"
+              >
+                {taxDocuments.map((doc) => (
+                  <li key={doc.id} className="expenses-taxes-doc-item">
+                    <div className="expenses-taxes-doc-header">
+                      <div>
+                        <p className="expenses-taxes-doc-name">{doc.fileName}</p>
+                        <p className="expenses-taxes-doc-meta">
+                          {taxKindLabel(doc.kind)} · {formatBytes(doc.sizeBytes)}
+                          {doc.taxYear != null ? ` · ${doc.taxYear}` : ""}
+                          {` · Uploaded ${new Date(doc.createdAt).toLocaleString()}`}
+                        </p>
+                      </div>
+                      <div className="expenses-taxes-doc-actions">
+                        {isAuthenticated() && (
+                          <button
+                            type="button"
+                            className="expenses-plaid-disconnect-btn"
+                            onClick={() => void handleTaxDownload(doc)}
+                            aria-label={`Download ${doc.fileName}`}
+                            title={`Download "${doc.fileName}"`}
                           >
-                            {acc.institutionName ?? "Bank or card"}
-                          </span>
+                            Download
+                          </button>
                         )}
                         <button
                           type="button"
-                          className="expenses-plaid-disconnect-btn"
-                          onClick={() => handleDisconnectPlaid(acc.id)}
-                          disabled={renamingLinkedAccountId === acc.id}
-                          aria-label={`Disconnect ${acc.institutionName ?? "account"}`}
+                          className="features-list-remove"
+                          onClick={() => void removeTaxDocument(doc.id)}
+                          aria-label={`Remove ${doc.fileName}`}
+                          title={`Remove "${doc.fileName}"`}
                         >
-                          Disconnect
+                          <IconTrash />
                         </button>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            )}
-            {importedCount > 0 && selectedProjectId && (
-              <div className="expenses-plaid-delete-imported-wrap">
-                {deleteImportedConfirming ? (
-                  <>
-                    <span className="expenses-plaid-delete-imported-prompt">
-                      Delete all {importedCount} imported? Cannot be undone.
-                    </span>
-                    <div className="expenses-plaid-delete-imported-actions">
-                      <button
-                        type="button"
-                        className="expenses-plaid-delete-imported-btn expenses-plaid-delete-imported-cancel"
-                        onClick={handleDeleteAllImportedCancel}
-                        disabled={deleteImportedLoading}
-                        aria-label="Cancel"
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        type="button"
-                        className="expenses-plaid-delete-imported-btn"
-                        onClick={handleDeleteAllImportedSubmit}
-                        disabled={deleteImportedLoading}
-                        aria-label={`Delete all ${importedCount} imported expenses`}
-                      >
-                        {deleteImportedLoading ? "Deleting…" : "Delete"}
-                      </button>
+                      </div>
                     </div>
-                  </>
-                ) : (
-                  <button
-                    type="button"
-                    className="expenses-plaid-delete-imported-btn"
-                    onClick={handleDeleteAllImportedConfirm}
-                    disabled={deleteImportedLoading}
-                    aria-label={`Delete all ${importedCount} imported expenses`}
-                  >
-                    Delete all imported expenses ({importedCount})
-                  </button>
-                )}
-              </div>
+                    <p className="expenses-taxes-doc-insight">
+                      {taxDocInsight(doc.kind)}
+                    </p>
+                    {doc.textPreview && (
+                      <p className="expenses-taxes-doc-preview">
+                        <strong>Text preview:</strong> {doc.textPreview}
+                      </p>
+                    )}
+                    <label className="expenses-taxes-notes-label">
+                      Notes for filing
+                      <textarea
+                        className="expenses-input expenses-taxes-notes"
+                        value={doc.notes}
+                        onChange={(e) =>
+                          setTaxDocuments((prev) =>
+                            prev.map((item) =>
+                              item.id === doc.id
+                                ? { ...item, notes: e.target.value }
+                                : item
+                            )
+                          )
+                        }
+                        onBlur={(e) =>
+                          void updateTaxDocumentNotes(doc.id, e.target.value)
+                        }
+                        placeholder="Add notes (what it is, where it belongs, follow-ups needed)."
+                        rows={2}
+                      />
+                    </label>
+                  </li>
+                ))}
+              </ul>
             )}
-          </CollapsibleSection>
-        )}
-        {addExpenseError && (
-          <section className="tests-page-section expenses-error-notice" role="alert">
-            <p className="expenses-error-notice-text">{addExpenseError}</p>
-          </section>
-        )}
+          </ProjectSectionGuard>
+        </CollapsibleSection>
+      );
+    }
+
+    if (sectionId === "expenses-add-and-list") {
+      return (
         <CollapsibleSection
           sectionId="expenses-add-and-list"
           title={
@@ -1156,259 +2027,356 @@ export default function FinancialsPage() {
               </div>
             ) : undefined
           }
+          headerTrailing={dragHandle}
         >
-            <ProjectSectionGuard
-              projectsLoaded={projectsLoaded}
-              selectedProjectId={selectedProjectId}
-              message="Select a project to add expenses."
-              variant="add"
-            >
-              <form onSubmit={addExpense} className="expenses-form">
-                <div
-                  className="expenses-field expenses-field-date"
-                  ref={datePickerRef}
-                >
-                  <label htmlFor="expenses-date-trigger">Date</label>
-                  <div className="expenses-date-control">
-                    <button
-                      type="button"
-                      id="expenses-date-trigger"
-                      className="expenses-input expenses-date-trigger"
-                      onClick={() => setDatePickerOpen((open) => !open)}
-                      aria-haspopup="dialog"
-                      aria-expanded={datePickerOpen}
-                      aria-label="Choose date"
-                    >
-                      {formatExpenseDateDisplay(date)}
-                    </button>
-                    {datePickerOpen && (
-                      <CalendarPickerPopup
-                        value={date}
-                        onChange={(dateStr) => {
-                          setDate(dateStr);
-                          setDatePickerOpen(false);
-                        }}
-                        onClose={() => setDatePickerOpen(false)}
-                        showClear
-                        showToday
-                      />
-                    )}
-                  </div>
+          <ProjectSectionGuard
+            projectsLoaded={projectsLoaded}
+            selectedProjectId={selectedProjectId}
+            message="Select a project to add expenses."
+            variant="add"
+          >
+            <form onSubmit={addExpense} className="expenses-form">
+              <div className="expenses-field expenses-field-date" ref={datePickerRef}>
+                <label htmlFor="expenses-date-trigger">Date</label>
+                <div className="expenses-date-control">
+                  <button
+                    type="button"
+                    id="expenses-date-trigger"
+                    className="expenses-input expenses-date-trigger"
+                    onClick={() => setDatePickerOpen((open) => !open)}
+                    aria-haspopup="dialog"
+                    aria-expanded={datePickerOpen}
+                    aria-label="Choose date"
+                  >
+                    {formatExpenseDateDisplay(date)}
+                  </button>
+                  {datePickerOpen && (
+                    <CalendarPickerPopup
+                      value={date}
+                      onChange={(dateStr) => {
+                        setDate(dateStr);
+                        setDatePickerOpen(false);
+                      }}
+                      onClose={() => setDatePickerOpen(false)}
+                      showClear
+                      showToday
+                    />
+                  )}
                 </div>
-                <div className="expenses-field expenses-field-description">
-                  <label htmlFor="expenses-description">Description</label>
-                  <input
-                    id="expenses-description"
-                    ref={descriptionInputRef}
-                    type="text"
-                    value={description}
-                    onChange={(e) => {
-                      setDescription(e.target.value);
+              </div>
+              <div className="expenses-field expenses-field-description">
+                <label htmlFor="expenses-description">Description</label>
+                <input
+                  id="expenses-description"
+                  ref={descriptionInputRef}
+                  type="text"
+                  value={description}
+                  onChange={(e) => {
+                    setDescription(e.target.value);
+                    setAddExpenseError("");
+                  }}
+                  placeholder="What was this for?"
+                  aria-label="Description"
+                  className="expenses-input"
+                />
+              </div>
+              <div className="expenses-field expenses-field-amount">
+                <label htmlFor="expenses-amount">Amount ($)</label>
+                <input
+                  id="expenses-amount"
+                  type="text"
+                  inputMode="decimal"
+                  value={amount}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    if (v === "" || /^-?\d*\.?\d*$/.test(v)) {
+                      setAmount(v);
                       setAddExpenseError("");
-                    }}
-                    placeholder="What was this for?"
-                    aria-label="Description"
-                    className="expenses-input"
-                  />
-                </div>
-                <div className="expenses-field expenses-field-amount">
-                  <label htmlFor="expenses-amount">Amount ($)</label>
-                  <input
-                    id="expenses-amount"
-                    type="text"
-                    inputMode="decimal"
-                    value={amount}
-                    onChange={(e) => {
-                      const v = e.target.value;
-                      if (v === "" || /^-?\d*\.?\d*$/.test(v)) {
-                        setAmount(v);
-                        setAddExpenseError("");
+                    }
+                  }}
+                  placeholder="0.00"
+                  aria-label="Amount"
+                  className="expenses-input"
+                />
+              </div>
+              <div className="expenses-field expenses-field-category">
+                <label htmlFor="expenses-category-trigger">Category</label>
+                <ExpenseCategoryDropdown
+                  ref={categoryDropdownRef}
+                  value={category}
+                  onChange={setCategory}
+                  categories={EXPENSE_CATEGORIES}
+                  open={categoryDropdownOpen}
+                  onOpenChange={setCategoryDropdownOpen}
+                  variant="form"
+                  listboxId="expenses-category-listbox"
+                  triggerAriaLabel="Category"
+                  triggerId="expenses-category-trigger"
+                />
+              </div>
+              <button
+                type="submit"
+                className="project-nav-add expenses-add-btn"
+                aria-label="Add Expense"
+                title="Add Expense"
+                disabled={!canAddExpense}
+              >
+                <IconPlus />
+              </button>
+            </form>
+          </ProjectSectionGuard>
+          <ProjectSectionGuard
+            projectsLoaded={projectsLoaded}
+            selectedProjectId={selectedProjectId}
+            message="Select a project to see and manage expenses."
+            variant="list"
+          >
+            {expenses.length === 0 ? (
+              <p className="tests-page-section-desc finances-empty-state-msg">
+                No expenses yet. Add one above.
+              </p>
+            ) : filteredExpenses.length === 0 ? (
+              <p className="tests-page-section-desc finances-empty-state-msg">
+                No expenses match your filters.
+              </p>
+            ) : (
+              <>
+                <div className="expenses-list-table">
+                  <div className="expenses-list-header" role="presentation">
+                    <button
+                      type="button"
+                      className={
+                        "expenses-list-header-label" +
+                        (sortBy === "date" ? " is-active" : "")
                       }
-                    }}
-                    placeholder="0.00"
-                    aria-label="Amount"
-                    className="expenses-input"
-                  />
-                </div>
-                <div className="expenses-field expenses-field-category">
-                  <label htmlFor="expenses-category-trigger">Category</label>
-                  <ExpenseCategoryDropdown
-                    ref={categoryDropdownRef}
-                    value={category}
-                    onChange={setCategory}
-                    categories={EXPENSE_CATEGORIES}
-                    open={categoryDropdownOpen}
-                    onOpenChange={setCategoryDropdownOpen}
-                    variant="form"
-                    listboxId="expenses-category-listbox"
-                    triggerAriaLabel="Category"
-                    triggerId="expenses-category-trigger"
-                  />
-                </div>
-                <button
-                  type="submit"
-                  className="project-nav-add expenses-add-btn"
-                  aria-label="Add Expense"
-                  title="Add Expense"
-                  disabled={!canAddExpense}
-                >
-                  <IconPlus />
-                </button>
-              </form>
-            </ProjectSectionGuard>
-            <ProjectSectionGuard
-              projectsLoaded={projectsLoaded}
-              selectedProjectId={selectedProjectId}
-              message="Select a project to see and manage expenses."
-              variant="list"
-            >
-              {expenses.length === 0 ? (
-                <p className="tests-page-section-desc">
-                  No expenses yet. Add one above.
-                </p>
-              ) : filteredExpenses.length === 0 ? (
-                <p className="tests-page-section-desc">
-                  No expenses match your filters.
-                </p>
-              ) : (
-                <>
-                  <div className="expenses-list-table">
-                <div className="expenses-list-header" role="presentation">
-                  <button
-                    type="button"
-                    className={"expenses-list-header-label" + (sortBy === "date" ? " is-active" : "")}
-                    onClick={() => handleSort("date")}
-                    aria-label={`Sort by date ${sortBy === "date" ? (sortDir === "asc" ? "ascending" : "descending") : ""}`}
-                    title="Sort by date"
-                  >
-                    Date{sortBy === "date" ? (sortDir === "asc" ? " ↑" : " ↓") : ""}
-                  </button>
-                  <button
-                    type="button"
-                    className={"expenses-list-header-label" + (sortBy === "description" ? " is-active" : "")}
-                    onClick={() => handleSort("description")}
-                    aria-label={`Sort by description ${sortBy === "description" ? (sortDir === "asc" ? "ascending" : "descending") : ""}`}
-                    title="Sort by description"
-                  >
-                    Description{sortBy === "description" ? (sortDir === "asc" ? " ↑" : " ↓") : ""}
-                  </button>
-                    <button
-                      type="button"
-                      className={"expenses-list-header-label expenses-list-header-amount" + (sortBy === "amount" ? " is-active" : "")}
-                      onClick={() => handleSort("amount")}
-                    aria-label={`Sort by amount ${sortBy === "amount" ? (sortDir === "asc" ? "ascending" : "descending") : ""}`}
-                    title="Sort by amount"
-                  >
-                    Amount{sortBy === "amount" ? (sortDir === "asc" ? " ↑" : " ↓") : ""}
-                  </button>
-                    <button
-                      type="button"
-                      className={"expenses-list-header-label expenses-list-header-category" + (sortBy === "category" ? " is-active" : "")}
-                      onClick={() => handleSort("category")}
-                    aria-label={`Sort by category ${sortBy === "category" ? (sortDir === "asc" ? "ascending" : "descending") : ""}`}
-                    title="Sort by category"
-                  >
-                    Category{sortBy === "category" ? (sortDir === "asc" ? " ↑" : " ↓") : ""}
-                  </button>
-                  <span className="expenses-list-header-spacer" aria-hidden="true" />
-                </div>
-                <ul className="expenses-list" role="list">
-                {filteredExpenses.map((item) => (
-                  <li key={item.id} className="expenses-item">
-                    <span className="expenses-item-date">
-                      {formatExpenseDateDisplay(item.date)}
-                    </span>
-                    {editingDescriptionId === item.id ? (
-                      <input
-                        type="text"
-                        value={editingDescriptionValue}
-                        onChange={(e) =>
-                          setEditingDescriptionValue(e.target.value)
-                        }
-                        onBlur={() =>
-                          saveExpenseDescription(item.id, editingDescriptionValue)
-                        }
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") {
-                            e.currentTarget.blur();
-                          } else if (e.key === "Escape") {
-                            cancelEditingDescription();
-                          }
-                        }}
-                        autoFocus
-                        aria-label="Edit description for expense"
-                        className="expenses-item-description-input"
-                      />
-                    ) : (
-                      <span
-                        className="expenses-item-description expenses-item-description-editable"
-                        role="button"
-                        tabIndex={0}
-                        onClick={() => startEditingDescription(item)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter" || e.key === " ") {
-                            e.preventDefault();
-                            startEditingDescription(item);
-                          }
-                        }}
-                        title="Click to edit description"
-                        aria-label={`Edit description: ${item.description ?? ""}`}
-                      >
-                        {item.description}
-                      </span>
-                    )}
-                    <span className="expenses-item-amount">
-                      {formatCurrency(item.amount)}
-                    </span>
-                    {editingCategoryId === item.id ? (
-                      <ExpenseCategoryDropdown
-                        ref={listCategoryDropdownRef}
-                        value={item.category}
-                        onChange={(c) => {
-                          updateExpenseCategory(item.id, c);
-                          setEditingCategoryId(null);
-                        }}
-                        categories={EXPENSE_CATEGORIES}
-                        open={true}
-                        onOpenChange={(open) => {
-                          if (!open) setEditingCategoryId(null);
-                        }}
-                        variant="inline"
-                        listboxId={`expenses-list-category-listbox-${item.id}`}
-                        triggerAriaLabel={`Edit category: ${item.category}`}
-                        title="Click to edit category"
-                      />
-                    ) : (
-                      <button
-                        type="button"
-                        className="expenses-category-btn"
-                        onClick={() => setEditingCategoryId(item.id)}
-                        title="Click to edit category"
-                        aria-label={`Edit category: ${item.category}`}
-                      >
-                        {item.category}
-                      </button>
-                    )}
-                    <button
-                      type="button"
-                      className="features-list-remove"
-                      onClick={() => removeExpense(item.id)}
-                      aria-label={`Remove ${item.description}`}
-                      title={`Remove "${item.description}"`}
+                      onClick={() => handleSort("date")}
+                      aria-label={`Sort by date ${sortBy === "date" ? (sortDir === "asc" ? "ascending" : "descending") : ""}`}
+                      title="Sort by date"
                     >
-                      <IconTrash />
+                      Date
+                      {sortBy === "date" ? (sortDir === "asc" ? " ↑" : " ↓") : ""}
                     </button>
-                  </li>
-                ))}
-                </ul>
+                    <button
+                      type="button"
+                      className={
+                        "expenses-list-header-label" +
+                        (sortBy === "description" ? " is-active" : "")
+                      }
+                      onClick={() => handleSort("description")}
+                      aria-label={`Sort by description ${sortBy === "description" ? (sortDir === "asc" ? "ascending" : "descending") : ""}`}
+                      title="Sort by description"
+                    >
+                      Description
+                      {sortBy === "description"
+                        ? sortDir === "asc"
+                          ? " ↑"
+                          : " ↓"
+                        : ""}
+                    </button>
+                    <button
+                      type="button"
+                      className={
+                        "expenses-list-header-label expenses-list-header-amount" +
+                        (sortBy === "amount" ? " is-active" : "")
+                      }
+                      onClick={() => handleSort("amount")}
+                      aria-label={`Sort by amount ${sortBy === "amount" ? (sortDir === "asc" ? "ascending" : "descending") : ""}`}
+                      title="Sort by amount"
+                    >
+                      Amount
+                      {sortBy === "amount"
+                        ? sortDir === "asc"
+                          ? " ↑"
+                          : " ↓"
+                        : ""}
+                    </button>
+                    <button
+                      type="button"
+                      className={
+                        "expenses-list-header-label expenses-list-header-category" +
+                        (sortBy === "category" ? " is-active" : "")
+                      }
+                      onClick={() => handleSort("category")}
+                      aria-label={`Sort by category ${sortBy === "category" ? (sortDir === "asc" ? "ascending" : "descending") : ""}`}
+                      title="Sort by category"
+                    >
+                      Category
+                      {sortBy === "category"
+                        ? sortDir === "asc"
+                          ? " ↑"
+                          : " ↓"
+                        : ""}
+                    </button>
+                    <span className="expenses-list-header-spacer" aria-hidden="true" />
                   </div>
-                </>
-              )}
-            </ProjectSectionGuard>
+                  <ul className="expenses-list" role="list">
+                    {filteredExpenses.map((item) => (
+                      <li key={item.id} className="expenses-item">
+                        <span className="expenses-item-date">
+                          {formatExpenseDateDisplay(item.date)}
+                        </span>
+                        {editingDescriptionId === item.id ? (
+                          <input
+                            type="text"
+                            value={editingDescriptionValue}
+                            onChange={(e) => setEditingDescriptionValue(e.target.value)}
+                            onBlur={() =>
+                              saveExpenseDescription(item.id, editingDescriptionValue)
+                            }
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                e.currentTarget.blur();
+                              } else if (e.key === "Escape") {
+                                cancelEditingDescription();
+                              }
+                            }}
+                            autoFocus
+                            aria-label="Edit description for expense"
+                            className="expenses-item-description-input"
+                          />
+                        ) : (
+                          <span
+                            className="expenses-item-description expenses-item-description-editable"
+                            role="button"
+                            tabIndex={0}
+                            onClick={() => startEditingDescription(item)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter" || e.key === " ") {
+                                e.preventDefault();
+                                startEditingDescription(item);
+                              }
+                            }}
+                            title="Click to edit description"
+                            aria-label={`Edit description: ${item.description ?? ""}`}
+                          >
+                            {item.description}
+                          </span>
+                        )}
+                        <span className="expenses-item-amount">
+                          {formatCurrency(item.amount)}
+                        </span>
+                        {editingCategoryId === item.id ? (
+                          <ExpenseCategoryDropdown
+                            ref={listCategoryDropdownRef}
+                            value={item.category}
+                            onChange={(c) => {
+                              updateExpenseCategory(item.id, c);
+                              setEditingCategoryId(null);
+                            }}
+                            categories={EXPENSE_CATEGORIES}
+                            open={true}
+                            onOpenChange={(open) => {
+                              if (!open) setEditingCategoryId(null);
+                            }}
+                            variant="inline"
+                            listboxId={`expenses-list-category-listbox-${item.id}`}
+                            triggerAriaLabel={`Edit category: ${item.category}`}
+                            title="Click to edit category"
+                          />
+                        ) : (
+                          <button
+                            type="button"
+                            className="expenses-category-btn"
+                            onClick={() => setEditingCategoryId(item.id)}
+                            title="Click to edit category"
+                            aria-label={`Edit category: ${item.category}`}
+                          >
+                            {item.category}
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          className="features-list-remove"
+                          onClick={() => removeExpense(item.id)}
+                          aria-label={`Remove ${item.description}`}
+                          title={`Remove "${item.description}"`}
+                        >
+                          <IconTrash />
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </>
+            )}
+          </ProjectSectionGuard>
         </CollapsibleSection>
-      </div>
+      );
+    }
+
+    return null;
+  };
+
+  return (
+    <AppLayout
+      title="Finances · Idea Home"
+      activeTab="expenses"
+      projectName={projectDisplayName}
+      projectId={selectedProjectId || undefined}
+      searchPlaceholder="Search project"
+      drawerOpen={drawerOpen}
+      setDrawerOpen={setDrawerOpen}
+      projects={projects}
+      selectedProjectId={selectedProjectId ?? ""}
+      setSelectedProjectId={setSelectedProjectId}
+      editingProjectId={editingProjectId}
+      setEditingProjectId={setEditingProjectId}
+      editingProjectName={editingProjectName}
+      setEditingProjectName={setEditingProjectName}
+      saveProjectName={saveProjectName}
+      cancelEditProjectName={cancelEditProjectName}
+      projectNameInputRef={projectNameInputRef}
+      theme={theme}
+      toggleTheme={toggleTheme}
+      projectToDelete={projectToDelete}
+      setProjectToDelete={setProjectToDelete}
+      projectDeleting={projectDeleting}
+      handleDeleteProject={handleDeleteProject}
+      onCreateProject={layout.createProjectByName}
+    >
+      {!projectsLoaded || (Boolean(selectedProjectId) && expensesLoading) ? (
+        <div className="tests-page-single-loading">
+          <SectionLoadingSpinner />
+        </div>
+      ) : (
+        <div className="tests-page-content expenses-page-content">
+          {plaidLinkToken != null && (
+            <PlaidLinkLauncher
+              key={plaidLinkToken}
+              token={plaidLinkToken}
+              onSuccess={onPlaidSuccess}
+              onExit={onPlaidExit}
+              onOpened={onPlaidOpened}
+            />
+          )}
+          <h1 className="tests-page-title">Finances</h1>
+
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragEnd={handleFinancesSectionDragEnd}
+          >
+            <SortableContext
+              items={financesSectionOrder}
+              strategy={verticalListSortingStrategy}
+            >
+              {financesSectionOrder.map((sectionId) => (
+                <SortableFinancesSection key={sectionId} sectionId={sectionId}>
+                  {(dragHandle) => renderFinancesSection(sectionId, dragHandle)}
+                </SortableFinancesSection>
+              ))}
+            </SortableContext>
+          </DndContext>
+          {addExpenseError && (
+            <section
+              className="tests-page-section expenses-error-notice"
+              role="alert"
+            >
+              <p className="expenses-error-notice-text">{addExpenseError}</p>
+            </section>
+          )}
+        </div>
       )}
     </AppLayout>
   );
 }
-

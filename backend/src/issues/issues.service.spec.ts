@@ -13,6 +13,7 @@ const mockStorageService = {
   upload: jest.fn().mockResolvedValue({ url: "uploads/test/file" }),
   delete: jest.fn().mockResolvedValue(undefined),
   isFullUrl: jest.fn().mockReturnValue(false),
+  resolveLocalUploadPath: jest.fn().mockReturnValue("/tmp/uploads/test/file"),
   download: jest.fn().mockResolvedValue({
     buffer: Buffer.from("mock"),
     contentType: "application/octet-stream",
@@ -1019,7 +1020,7 @@ describe("IssuesService", () => {
         .mockResolvedValueOnce({ id: "i1" })
         .mockResolvedValueOnce({ id: "i1" });
 
-      const result = await service.addScreenshot("i1", "ZGF0YQ==");
+      const result = await service.addScreenshot("i1", "iVBORw0KGgo=");
       expect(mockPrisma.issueScreenshot.create).toHaveBeenCalled();
       expect(result).toEqual({ id: "i1" });
     });
@@ -1027,7 +1028,7 @@ describe("IssuesService", () => {
     it("should throw when issue not found", async () => {
       mockPrisma.issue.findUnique.mockResolvedValue(null);
       await expect(
-        service.addScreenshot("missing", "ZGF0YQ==")
+        service.addScreenshot("missing", "iVBORw0KGgo=")
       ).rejects.toThrow(NotFoundException);
     });
 
@@ -1170,6 +1171,14 @@ describe("IssuesService", () => {
       await expect(
         service.addFile("i1", "ZGF0YQ==", 123 as any)
       ).rejects.toThrow(BadRequestException);
+      expect(mockPrisma.issue.findUnique).not.toHaveBeenCalled();
+      expect(mockPrisma.issueFile.create).not.toHaveBeenCalled();
+    });
+
+    it("should block unsafe executable file types", async () => {
+      await expect(service.addFile("i1", "ZGF0YQ==", "payload.exe")).rejects.toThrow(
+        BadRequestException
+      );
       expect(mockPrisma.issue.findUnique).not.toHaveBeenCalled();
       expect(mockPrisma.issueFile.create).not.toHaveBeenCalled();
     });

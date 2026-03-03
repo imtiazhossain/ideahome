@@ -30,6 +30,13 @@ describe("AuthController", () => {
     consumeState: jest.fn(),
     getRedirectUri: jest.fn(),
     getFrontendCallbackUrl: jest.fn(),
+    getErrorRedirectUrl: jest
+      .fn()
+      .mockImplementation((error: string) =>
+        error
+          ? `http://frontend/error?error=${encodeURIComponent(error)}`
+          : "http://localhost:3000/login/callback"
+      ),
     findOrCreateUserBySso: jest.fn(),
     findOrCreateUserByFirebase: jest.fn(),
     ensureUserOrganization: jest.fn().mockResolvedValue(undefined),
@@ -365,7 +372,10 @@ describe("AuthController", () => {
 
   describe("googleCallback", () => {
     it("should redirect with token on success", async () => {
-      mockAuthService.consumeState.mockReturnValue("google");
+      mockAuthService.consumeState.mockReturnValue({
+        provider: "google",
+        mobileRedirectUri: null,
+      });
       mockAuthService.exchangeGoogleCode.mockResolvedValue({
         providerId: "g1",
         email: "u@x.com",
@@ -388,7 +398,7 @@ describe("AuthController", () => {
     });
 
     it("should redirect with error when state invalid", async () => {
-      mockAuthService.consumeState.mockReturnValue(null);
+      mockAuthService.consumeState.mockReturnValue(null as any);
       mockAuthService.getFrontendCallbackUrl.mockReturnValue(
         "http://localhost:3000/login/callback"
       );
@@ -400,7 +410,10 @@ describe("AuthController", () => {
     });
 
     it("should redirect with error when exchangeCode throws", async () => {
-      mockAuthService.consumeState.mockReturnValue("google");
+      mockAuthService.consumeState.mockReturnValue({
+        provider: "google",
+        mobileRedirectUri: null,
+      });
       mockAuthService.exchangeGoogleCode.mockRejectedValue(
         new Error("OAuth failed")
       );
@@ -415,7 +428,10 @@ describe("AuthController", () => {
     });
 
     it("should redirect with error when code is not a string", async () => {
-      mockAuthService.consumeState.mockReturnValue("google");
+      mockAuthService.consumeState.mockReturnValue({
+        provider: "google",
+        mobileRedirectUri: null,
+      });
       mockAuthService.getFrontendCallbackUrl.mockReturnValue(
         "http://localhost:3000/login/callback"
       );
@@ -457,7 +473,10 @@ describe("AuthController", () => {
 
   describe("githubCallback", () => {
     it("should redirect with token on success", async () => {
-      mockAuthService.consumeState.mockReturnValue("github");
+      mockAuthService.consumeState.mockReturnValue({
+        provider: "github",
+        mobileRedirectUri: null,
+      });
       mockAuthService.exchangeGitHubCode.mockResolvedValue({
         providerId: "gh1",
         email: "u@gh.com",
@@ -480,7 +499,10 @@ describe("AuthController", () => {
     });
 
     it("should redirect with error when code is blank", async () => {
-      mockAuthService.consumeState.mockReturnValue("github");
+      mockAuthService.consumeState.mockReturnValue({
+        provider: "github",
+        mobileRedirectUri: null,
+      });
       mockAuthService.getFrontendCallbackUrl.mockReturnValue(
         "http://localhost:3000/login/callback"
       );
@@ -522,7 +544,10 @@ describe("AuthController", () => {
 
   describe("appleCallback", () => {
     it("should redirect with token on success", async () => {
-      mockAuthService.consumeState.mockReturnValue("apple");
+      mockAuthService.consumeState.mockReturnValue({
+        provider: "apple",
+        mobileRedirectUri: null,
+      });
       mockAuthService.exchangeAppleCode.mockResolvedValue({
         providerId: "apple1",
         email: "u@apple.com",
@@ -545,7 +570,7 @@ describe("AuthController", () => {
     });
 
     it("should redirect with error when state is not a string", async () => {
-      mockAuthService.consumeState.mockReturnValue(null);
+      mockAuthService.consumeState.mockReturnValue(null as any);
       mockAuthService.getFrontendCallbackUrl.mockReturnValue(
         "http://localhost:3000/login/callback"
       );

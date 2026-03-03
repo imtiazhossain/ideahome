@@ -1,6 +1,21 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/router";
+import {
+  DndContext,
+  PointerSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+  type DragStartEvent,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  horizontalListSortingStrategy,
+  useSortable,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import { AUTH_CHANGE_EVENT, getStoredToken } from "../lib/api/auth";
 import { logout } from "../lib/api/session";
 import {
@@ -317,7 +332,7 @@ function ProjectNavAuthMenu({
           {hasToken ? (
             <button
               type="button"
-              className="project-nav-auth-menu-item project-nav-auth-menu-item--icon"
+              className="project-nav-auth-menu-item project-nav-auth-menu-item--icon project-nav-auth-menu-item--logout"
               role="menuitem"
               onClick={handleLogout}
               aria-label="Log out"
@@ -340,6 +355,36 @@ function ProjectNavAuthMenu({
           )}
         </div>
       )}
+    </span>
+  );
+}
+
+function SortableNavTab({
+  id,
+  enabled,
+  children,
+}: {
+  id: ProjectNavTabId;
+  enabled: boolean;
+  children: React.ReactNode;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
+    useSortable({
+      id,
+      disabled: !enabled,
+    });
+  return (
+    <span
+      ref={setNodeRef}
+      style={{
+        transform: CSS.Transform.toString(transform),
+        transition,
+      }}
+      className={`project-nav-tab-sortable${isDragging ? " is-dragging" : ""}`}
+      {...(enabled ? attributes : {})}
+      {...(enabled ? listeners : {})}
+    >
+      {children}
     </span>
   );
 }
@@ -389,6 +434,9 @@ export function ProjectNavBar({
   const [showCreateProjectInput, setShowCreateProjectInput] = useState(false);
   const [newProjectName, setNewProjectName] = useState("");
   const createProjectInputRef = useRef<HTMLInputElement>(null);
+  const [customLists, setCustomLists] = useState<
+    ReturnType<typeof getCustomLists>
+  >([]);
 
   useEffect(() => {
     if (showCreateProjectInput) {
@@ -396,7 +444,21 @@ export function ProjectNavBar({
     }
   }, [showCreateProjectInput]);
 
+  useEffect(() => {
+    const syncCustomLists = () => setCustomLists(getCustomLists());
+    syncCustomLists();
+    window.addEventListener("storage", syncCustomLists);
+    window.addEventListener(AUTH_CHANGE_EVENT, syncCustomLists);
+    return () => {
+      window.removeEventListener("storage", syncCustomLists);
+      window.removeEventListener(AUTH_CHANGE_EVENT, syncCustomLists);
+    };
+  }, []);
+
   const [compactTabs, setCompactTabs] = useState(false);
+  const [draggingTabId, setDraggingTabId] = useState<ProjectNavTabId | null>(
+    null
+  );
   const [projectSearchOpen, setProjectSearchOpen] = useState(false);
   const [authMenuOpen, setAuthMenuOpen] = useState(false);
   const [hasToken, setHasToken] = useState<boolean | null>(null);
@@ -416,6 +478,7 @@ export function ProjectNavBar({
     media.addListener(sync);
     return () => media.removeListener(sync);
   }, []);
+  const tabsDragEnabled = !isMobile;
   useEffect(() => {
     const handler = () => setHasToken(!!getStoredToken());
     window.addEventListener(AUTH_CHANGE_EVENT, handler);
@@ -477,6 +540,12 @@ export function ProjectNavBar({
   }, [closeSettingsMenu]);
 
   const tabsScrollRef = useRef<HTMLDivElement>(null);
+  const suppressTabClickRef = useRef(false);
+  const dragSensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: { distance: 8 },
+    })
+  );
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -561,7 +630,6 @@ export function ProjectNavBar({
     setTabOrder(loadTabOrder([]));
   }, [deletedTabIds.length, setDeletedTabIds, setTabOrder]);
 
-  const customLists = getCustomLists();
   const hiddenSet = new Set(hiddenTabIds);
   const orderedTabs = tabOrder
     .filter((id) => !hiddenSet.has(id))
@@ -613,6 +681,49 @@ export function ProjectNavBar({
     [activeTab, compactTabs]
   );
 
+  const consumeDraggedClick = useCallback((e: React.MouseEvent<Element>) => {
+    if (!suppressTabClickRef.current) return false;
+    suppressTabClickRef.current = false;
+    e.preventDefault();
+    e.stopPropagation();
+    return true;
+  }, []);
+
+  const handleTabsDragStart = useCallback(
+    (event: DragStartEvent) => {
+      if (!tabsDragEnabled) return;
+      setDraggingTabId(event.active.id as ProjectNavTabId);
+    },
+    [tabsDragEnabled]
+  );
+
+  const handleTabsDragEnd = useCallback(
+    (event: DragEndEvent) => {
+      setDraggingTabId(null);
+      if (!tabsDragEnabled) return;
+      const { active, over } = event;
+      if (!over || active.id === over.id) return;
+      const activeId = active.id as ProjectNavTabId;
+      const overId = over.id as ProjectNavTabId;
+      const from = tabOrder.indexOf(activeId);
+      const to = tabOrder.indexOf(overId);
+      if (from === -1 || to === -1) return;
+      const next = [...tabOrder];
+      const [moved] = next.splice(from, 1);
+      next.splice(to, 0, moved);
+      setTabOrder(next);
+      suppressTabClickRef.current = true;
+      window.setTimeout(() => {
+        suppressTabClickRef.current = false;
+      }, 180);
+    },
+    [tabsDragEnabled, tabOrder, setTabOrder]
+  );
+
+  const handleTabsDragCancel = useCallback(() => {
+    setDraggingTabId(null);
+  }, []);
+
   return (
     <header className="project-nav">
       <div className="project-nav-top">
@@ -663,96 +774,121 @@ export function ProjectNavBar({
           </div>
         </div>
       </div>
-      <nav className="project-nav-tabs-wrap" aria-label="Project views">
+      <nav
+        className={`project-nav-tabs-wrap${draggingTabId ? " is-dragging" : ""}${tabsDragEnabled ? " is-draggable" : ""}`}
+        aria-label="Project views"
+      >
         <div ref={tabsScrollRef} className="project-nav-tabs-scroll">
-          <div className="project-nav-tabs">
-            <div className="project-nav-tabs-inner">
-              {orderedTabs.map((tab) =>
-                tab.href ? (
-                  tab.href === "/" ? (
-                    <button
+          <DndContext
+            id="project-nav-tabs-dnd"
+            sensors={tabsDragEnabled ? dragSensors : undefined}
+            collisionDetection={closestCenter}
+            onDragStart={tabsDragEnabled ? handleTabsDragStart : undefined}
+            onDragEnd={tabsDragEnabled ? handleTabsDragEnd : undefined}
+            onDragCancel={tabsDragEnabled ? handleTabsDragCancel : undefined}
+          >
+            <SortableContext
+              items={orderedTabs.map((tab) => tab.id)}
+              strategy={horizontalListSortingStrategy}
+            >
+              <div className="project-nav-tabs">
+                <div className="project-nav-tabs-inner">
+                  {orderedTabs.map((tab) => (
+                    <SortableNavTab
                       key={tab.id}
-                      type="button"
-                      className={`project-nav-tab ${activeTab === tab.id ? "is-active" : ""}`}
-                      aria-current={activeTab === tab.id ? "page" : undefined}
-                      data-tab-id={tab.id}
-                      title={tab.label}
-                      onClick={() => {
-                        setProjectSearchOpen(false);
-                        closeSettingsMenu();
-                        setAuthMenuOpen(false);
-                        setProjectSwitcherOpen(false);
-                        try {
-                          sessionStorage.setItem(
-                            EXPLICIT_BOARD_SESSION_KEY,
-                            "1"
-                          );
-                        } catch {
-                          /* ignore */
-                        }
-                        if (activeTab === tab.id) {
-                          const main = document.querySelector(".main-content");
-                          if (main) main.scrollTo({ top: 0, behavior: "smooth" });
-                        } else {
-                          void router.push("/");
-                        }
-                      }}
+                      id={tab.id}
+                      enabled={tabsDragEnabled}
                     >
-                      <span className="project-nav-tab-icon">{tab.icon}</span>
-                      <span className="project-nav-tab-label">
-                        {getTabLabel(tab.id, tab.label)}
-                      </span>
-                    </button>
-                  ) : (
-                  <Link
-                    key={tab.id}
-                    href={tab.href}
-                    prefetch={false}
-                    className={`project-nav-tab ${activeTab === tab.id ? "is-active" : ""}`}
-                    aria-current={activeTab === tab.id ? "page" : undefined}
-                    data-tab-id={tab.id}
-                    title={tab.label}
-                    onClick={() => {
-                      setProjectSearchOpen(false);
-                      closeSettingsMenu();
-                      setAuthMenuOpen(false);
-                      setProjectSwitcherOpen(false);
-                      if (activeTab === tab.id) {
-                        const main = document.querySelector(".main-content");
-                        if (main) main.scrollTo({ top: 0, behavior: "smooth" });
-                      }
-                    }}
-                  >
-                    <span className="project-nav-tab-icon">{tab.icon}</span>
-                    <span className="project-nav-tab-label">
-                      {getTabLabel(tab.id, tab.label)}
-                    </span>
-                  </Link>
-                  )
-                ) : (
-                  <button
-                    key={tab.id}
-                    type="button"
-                    className={`project-nav-tab ${activeTab === tab.id ? "is-active" : ""}`}
-                    onClick={() => onTabChange?.(tab.id)}
-                    aria-current={activeTab === tab.id ? "page" : undefined}
-                    data-tab-id={tab.id}
-                    title={tab.label}
-                  >
-                    <span className="project-nav-tab-icon">{tab.icon}</span>
-                    <span className="project-nav-tab-label">
-                      {getTabLabel(tab.id, tab.label)}
-                    </span>
-                    {tab.hasDropdown && (
-                      <span className="project-nav-tab-chevron" aria-hidden>
-                        <IconChevronDown />
-                      </span>
-                    )}
-                  </button>
-                )
-              )}
-            </div>
-          </div>
+                      {tab.href ? (
+                        tab.href === "/" ? (
+                          <button
+                            type="button"
+                            className={`project-nav-tab ${activeTab === tab.id ? "is-active" : ""}`}
+                            aria-current={activeTab === tab.id ? "page" : undefined}
+                            data-tab-id={tab.id}
+                            title={tab.label}
+                            onClick={(e) => {
+                              if (consumeDraggedClick(e)) return;
+                              setProjectSearchOpen(false);
+                              closeSettingsMenu();
+                              setAuthMenuOpen(false);
+                              setProjectSwitcherOpen(false);
+                              try {
+                                sessionStorage.setItem(
+                                  EXPLICIT_BOARD_SESSION_KEY,
+                                  "1"
+                                );
+                              } catch {
+                                /* ignore */
+                              }
+                              if (activeTab === tab.id) {
+                                const main = document.querySelector(".main-content");
+                                if (main) main.scrollTo({ top: 0, behavior: "smooth" });
+                              } else {
+                                void router.push("/");
+                              }
+                            }}
+                          >
+                            <span className="project-nav-tab-icon">{tab.icon}</span>
+                            <span className="project-nav-tab-label">
+                              {getTabLabel(tab.id, tab.label)}
+                            </span>
+                          </button>
+                        ) : (
+                          <Link
+                            href={tab.href}
+                            prefetch={false}
+                            className={`project-nav-tab ${activeTab === tab.id ? "is-active" : ""}`}
+                            aria-current={activeTab === tab.id ? "page" : undefined}
+                            data-tab-id={tab.id}
+                            title={tab.label}
+                            onClick={(e) => {
+                              if (consumeDraggedClick(e)) return;
+                              setProjectSearchOpen(false);
+                              closeSettingsMenu();
+                              setAuthMenuOpen(false);
+                              setProjectSwitcherOpen(false);
+                              if (activeTab === tab.id) {
+                                const main = document.querySelector(".main-content");
+                                if (main) main.scrollTo({ top: 0, behavior: "smooth" });
+                              }
+                            }}
+                          >
+                            <span className="project-nav-tab-icon">{tab.icon}</span>
+                            <span className="project-nav-tab-label">
+                              {getTabLabel(tab.id, tab.label)}
+                            </span>
+                          </Link>
+                        )
+                      ) : (
+                        <button
+                          type="button"
+                          className={`project-nav-tab ${activeTab === tab.id ? "is-active" : ""}`}
+                          onClick={(e) => {
+                            if (consumeDraggedClick(e)) return;
+                            onTabChange?.(tab.id);
+                          }}
+                          aria-current={activeTab === tab.id ? "page" : undefined}
+                          data-tab-id={tab.id}
+                          title={tab.label}
+                        >
+                          <span className="project-nav-tab-icon">{tab.icon}</span>
+                          <span className="project-nav-tab-label">
+                            {getTabLabel(tab.id, tab.label)}
+                          </span>
+                          {tab.hasDropdown && (
+                            <span className="project-nav-tab-chevron" aria-hidden>
+                              <IconChevronDown />
+                            </span>
+                          )}
+                        </button>
+                      )}
+                    </SortableNavTab>
+                  ))}
+                </div>
+              </div>
+            </SortableContext>
+          </DndContext>
         </div>
         {showSettingsButton && (
           <div ref={settingsMenuRef} className="project-nav-settings-wrap">
@@ -1040,6 +1176,9 @@ export function ProjectNavBar({
               return;
             }
             const list = addCustomList(name);
+            setCustomLists((prev) =>
+              [...prev.filter((entry) => entry.slug !== list.slug), list]
+            );
             const newTabId = getCustomListTabId(list.slug);
             setTabOrder([...tabOrder, newTabId]);
             setCreateListModalOpen(false);

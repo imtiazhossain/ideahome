@@ -16,7 +16,7 @@ test.describe("Code page", () => {
       ).toBeVisible();
       await expect(
         page.locator(".code-page-rating-score-value").first()
-      ).toHaveText("7.5/10");
+      ).toHaveText("8.6/10");
     });
   });
 
@@ -29,8 +29,15 @@ test.describe("Code page", () => {
     ).toBeVisible();
     await expect(page.locator("#code-rating-prompt")).toBeVisible();
     await expect(
-      page.locator(".code-page-rating").getByRole("button", { name: "Copy" }).first()
+      page.getByRole("heading", {
+        name: "Suggestions to improve and keep this score high",
+      })
+    ).toBeVisible();
+    await expect(
+      page
+        .locator(".code-page-rating")
+        .getByRole("button", { name: "Copy" })
+        .first()
     ).toBeVisible();
   });
 });
-

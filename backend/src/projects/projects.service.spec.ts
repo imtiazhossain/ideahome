@@ -36,6 +36,9 @@ describe("ProjectsService", () => {
     expense: {
       deleteMany: jest.fn(),
     },
+    taxDocument: {
+      deleteMany: jest.fn(),
+    },
     issue: {
       deleteMany: jest.fn(),
     },
@@ -257,6 +260,9 @@ describe("ProjectsService", () => {
       });
       expect(mockPrisma.commentAttachment.deleteMany).toHaveBeenCalledWith({
         where: { comment: { issue: { projectId: "1" } } },
+      });
+      expect(mockPrisma.taxDocument.deleteMany).toHaveBeenCalledWith({
+        where: { projectId: "1" },
       });
       expect(mockPrisma.issueCommentEdit.deleteMany).toHaveBeenCalledWith({
         where: { comment: { issue: { projectId: "1" } } },

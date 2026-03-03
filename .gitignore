@@ -11,6 +11,8 @@ out
 *.tsbuildinfo
 .next
 **/.next
+**/.next.*
+web/public/coverage-report
 
 # Environment and secrets
 .env
@@ -53,6 +55,12 @@ backend/firebase-service-account.json
 # Mobile (Expo / React Native)
 /android
 /ios
+app/android/.cxx
+app/android/.gradle
+app/android/build
+app/android/app/build
+app/ios/Pods
+app/ios/build
 .expo
 .expo-shared
 *.jks

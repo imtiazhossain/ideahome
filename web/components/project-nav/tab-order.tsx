@@ -60,14 +60,11 @@ export type ProjectNavTabId =
 const MOBILE_MAX_WIDTH = 768;
 
 export function useIsMobile(): boolean {
-  const [isMobile, setIsMobile] = useState(() =>
-    typeof window === "undefined"
-      ? false
-      : window.matchMedia(`(max-width: ${MOBILE_MAX_WIDTH}px)`).matches
-  );
+  const [isMobile, setIsMobile] = useState(false);
   useEffect(() => {
     const mql = window.matchMedia(`(max-width: ${MOBILE_MAX_WIDTH}px)`);
     const handler = () => setIsMobile(mql.matches);
+    handler();
     mql.addEventListener("change", handler);
     return () => mql.removeEventListener("change", handler);
   }, []);

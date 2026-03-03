@@ -17,6 +17,8 @@ const COMMENT_ATTACHMENT_TYPES = new Set([
   "screen_recording",
   "camera_recording",
 ]);
+const MAX_COMMENT_IMAGE_BYTES = 15 * 1024 * 1024; // 15MB
+const MAX_COMMENT_VIDEO_BYTES = 100 * 1024 * 1024; // 100MB
 
 @Injectable()
 export class IssueCommentsService {
@@ -27,7 +29,7 @@ export class IssueCommentsService {
   ) {}
 
   private decodeBase64(value: string, field: string): Buffer {
-    const normalized = value.replace(/\s+/g, "");
+    const normalized = this.stripDataUrlPrefix(value).replace(/\s+/g, "");
     if (
       normalized.length === 0 ||
       normalized.length % 4 !== 0 ||
@@ -36,6 +38,55 @@ export class IssueCommentsService {
       throw new BadRequestException(`${field} must be a valid base64 string`);
     }
     return Buffer.from(normalized, "base64");
+  }
+
+  private stripDataUrlPrefix(value: string): string {
+    const trimmed = value.trim();
+    if (!trimmed.toLowerCase().startsWith("data:")) return trimmed;
+    const commaIdx = trimmed.indexOf(",");
+    return commaIdx >= 0 ? trimmed.slice(commaIdx + 1) : trimmed;
+  }
+
+  private enforceMaxBytes(buffer: Buffer, maxBytes: number, field: string): void {
+    if (buffer.byteLength > maxBytes) {
+      throw new BadRequestException(
+        `${field} too large (max ${Math.floor(maxBytes / (1024 * 1024))}MB)`
+      );
+    }
+  }
+
+  private detectImageType(
+    buffer: Buffer
+  ): { extension: "png" | "jpg" | "webp"; contentType: string } | null {
+    if (
+      buffer.byteLength >= 8 &&
+      buffer[0] === 0x89 &&
+      buffer[1] === 0x50 &&
+      buffer[2] === 0x4e &&
+      buffer[3] === 0x47 &&
+      buffer[4] === 0x0d &&
+      buffer[5] === 0x0a &&
+      buffer[6] === 0x1a &&
+      buffer[7] === 0x0a
+    ) {
+      return { extension: "png", contentType: "image/png" };
+    }
+    if (
+      buffer.byteLength >= 3 &&
+      buffer[0] === 0xff &&
+      buffer[1] === 0xd8 &&
+      buffer[2] === 0xff
+    ) {
+      return { extension: "jpg", contentType: "image/jpeg" };
+    }
+    if (
+      buffer.byteLength >= 12 &&
+      buffer.subarray(0, 4).toString("ascii") === "RIFF" &&
+      buffer.subarray(8, 12).toString("ascii") === "WEBP"
+    ) {
+      return { extension: "webp", contentType: "image/webp" };
+    }
+    return null;
   }
 
   async list(issueId: string, userId: string) {
@@ -148,13 +199,20 @@ export class IssueCommentsService {
     }
 
     if (isImage) {
-      const filename = `comment-${commentId}-${Date.now()}.png`;
       const buffer = this.decodeBase64(imageB64, "imageBase64");
+      this.enforceMaxBytes(buffer, MAX_COMMENT_IMAGE_BYTES, "imageBase64");
+      const imageType = this.detectImageType(buffer);
+      if (!imageType) {
+        throw new BadRequestException(
+          "imageBase64 must be a PNG, JPEG, or WEBP image"
+        );
+      }
+      const filename = `comment-${commentId}-${Date.now()}.${imageType.extension}`;
       const { url: mediaUrl } = await this.storage.upload(
         "screenshots",
         filename,
         buffer,
-        "image/png"
+        imageType.contentType
       );
       await this.prisma.commentAttachment.create({
         data: { commentId, type, mediaUrl },
@@ -164,6 +222,7 @@ export class IssueCommentsService {
 
     const filename = `comment-${commentId}-${Date.now()}.webm`;
     const buffer = this.decodeBase64(videoB64!, "videoBase64");
+    this.enforceMaxBytes(buffer, MAX_COMMENT_VIDEO_BYTES, "videoBase64");
     const { url: mediaUrl } = await this.storage.upload(
       "recordings",
       filename,

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { BulbyCharacter } from "./BulbyCharacter";
 import {
@@ -279,7 +279,7 @@ export function BulbyChatbox({ projectId }: BulbyChatboxProps) {
   const lastPositionRef = useRef<DragPosition | null>(null);
 
   /* When open with explicit position: open below if not enough room above; nudge panel so it stays visible; never overlap Bulby. */
-  useLayoutEffect(() => {
+  useEffect(() => {
     if (!open || position == null) {
       setPanelOffset({ x: 0, y: 0 });
       setPanelOpensBelow(false);

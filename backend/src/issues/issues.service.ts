@@ -24,6 +24,36 @@ const ISSUE_INCLUDE = {
 const ISSUE_STATUSES = new Set(["backlog", "todo", "in_progress", "done"]);
 const ISSUE_MEDIA_TYPES = new Set(["video", "audio"]);
 const ISSUE_RECORDING_TYPES = new Set(["screen", "camera", "audio"]);
+const MAX_RECORDING_BYTES = 100 * 1024 * 1024; // 100MB
+const MAX_SCREENSHOT_BYTES = 15 * 1024 * 1024; // 15MB
+const MAX_FILE_BYTES = 25 * 1024 * 1024; // 25MB
+const BLOCKED_FILE_EXTENSIONS = new Set([
+  "apk",
+  "app",
+  "bat",
+  "cmd",
+  "com",
+  "cpl",
+  "dll",
+  "exe",
+  "hta",
+  "html",
+  "htm",
+  "jar",
+  "js",
+  "jse",
+  "mjs",
+  "msi",
+  "php",
+  "ps1",
+  "py",
+  "rb",
+  "scr",
+  "sh",
+  "svg",
+  "vbs",
+  "wsf",
+]);
 
 @Injectable()
 export class IssuesService {
@@ -409,7 +439,7 @@ export class IssuesService {
   }
 
   private decodeBase64(value: string, field: string): Buffer {
-    const normalized = value.replace(/\s+/g, "");
+    const normalized = this.stripDataUrlPrefix(value).replace(/\s+/g, "");
     if (
       normalized.length === 0 ||
       normalized.length % 4 !== 0 ||
@@ -418,6 +448,86 @@ export class IssuesService {
       throw new BadRequestException(`${field} must be a valid base64 string`);
     }
     return Buffer.from(normalized, "base64");
+  }
+
+  private stripDataUrlPrefix(value: string): string {
+    const trimmed = value.trim();
+    if (!trimmed.toLowerCase().startsWith("data:")) return trimmed;
+    const commaIdx = trimmed.indexOf(",");
+    return commaIdx >= 0 ? trimmed.slice(commaIdx + 1) : trimmed;
+  }
+
+  private enforceMaxBytes(buffer: Buffer, maxBytes: number, field: string): void {
+    if (buffer.byteLength > maxBytes) {
+      throw new BadRequestException(
+        `${field} too large (max ${Math.floor(maxBytes / (1024 * 1024))}MB)`
+      );
+    }
+  }
+
+  private detectImageType(
+    buffer: Buffer
+  ): { extension: "png" | "jpg" | "webp"; contentType: string } | null {
+    if (
+      buffer.byteLength >= 8 &&
+      buffer[0] === 0x89 &&
+      buffer[1] === 0x50 &&
+      buffer[2] === 0x4e &&
+      buffer[3] === 0x47 &&
+      buffer[4] === 0x0d &&
+      buffer[5] === 0x0a &&
+      buffer[6] === 0x1a &&
+      buffer[7] === 0x0a
+    ) {
+      return { extension: "png", contentType: "image/png" };
+    }
+    if (
+      buffer.byteLength >= 3 &&
+      buffer[0] === 0xff &&
+      buffer[1] === 0xd8 &&
+      buffer[2] === 0xff
+    ) {
+      return { extension: "jpg", contentType: "image/jpeg" };
+    }
+    if (
+      buffer.byteLength >= 12 &&
+      buffer.subarray(0, 4).toString("ascii") === "RIFF" &&
+      buffer.subarray(8, 12).toString("ascii") === "WEBP"
+    ) {
+      return { extension: "webp", contentType: "image/webp" };
+    }
+    return null;
+  }
+
+  private extensionFromName(fileName: string): string {
+    const match = fileName.toLowerCase().match(/\.([a-z0-9]{1,16})$/);
+    return match?.[1] ?? "";
+  }
+
+  private validateUploadableFileName(fileName: string): void {
+    const ext = this.extensionFromName(fileName);
+    if (ext && BLOCKED_FILE_EXTENSIONS.has(ext)) {
+      throw new BadRequestException(`.${ext} files are not allowed`);
+    }
+  }
+
+  private fileContentTypeFromName(fileName: string): string {
+    const ext = this.extensionFromName(fileName);
+    if (ext === "pdf") return "application/pdf";
+    if (ext === "txt") return "text/plain; charset=utf-8";
+    if (ext === "csv") return "text/csv; charset=utf-8";
+    if (ext === "json") return "application/json";
+    if (ext === "png") return "image/png";
+    if (ext === "jpg" || ext === "jpeg") return "image/jpeg";
+    if (ext === "webp") return "image/webp";
+    return "application/octet-stream";
+  }
+
+  private applySecureDownloadHeaders(res: Response): void {
+    res.setHeader("Cache-Control", "private, no-store");
+    res.setHeader("Pragma", "no-cache");
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    res.setHeader("Cross-Origin-Resource-Policy", "same-origin");
   }
 
   async delete(id: string, userId?: string) {
@@ -503,6 +613,7 @@ export class IssuesService {
         (filename.includes("-audio") ? "audio/webm" : "video/webm");
       res.setHeader("Content-Type", contentType ?? fallbackType);
       res.setHeader("Accept-Ranges", "bytes");
+      this.applySecureDownloadHeaders(res);
       res.send(buffer);
       return;
     }
@@ -519,6 +630,7 @@ export class IssuesService {
       (filename.includes("-audio") ? "audio/webm" : "video/webm");
     res.setHeader("Content-Type", contentType);
     res.setHeader("Accept-Ranges", "bytes");
+    this.applySecureDownloadHeaders(res);
     const stream = createReadStream(filePath);
     stream.on("error", () => {
       if (!res.headersSent) {
@@ -550,8 +662,10 @@ export class IssuesService {
       const { buffer, contentType } = await this.storage.download(
         screenshot.imageUrl
       );
-      res.setHeader("Content-Type", contentType ?? "image/png");
-      res.setHeader("Cache-Control", "private, no-store");
+      const fallbackType =
+        this.fileContentTypeFromName(screenshot.imageUrl) || "image/png";
+      res.setHeader("Content-Type", contentType ?? fallbackType);
+      this.applySecureDownloadHeaders(res);
       res.send(buffer);
       return;
     }
@@ -566,8 +680,11 @@ export class IssuesService {
     );
     if (!existsSync(filePath))
       throw new NotFoundException("Screenshot not found");
-    res.setHeader("Content-Type", "image/png");
-    res.setHeader("Cache-Control", "private, no-store");
+    res.setHeader(
+      "Content-Type",
+      this.fileContentTypeFromName(screenshotFilename) || "image/png"
+    );
+    this.applySecureDownloadHeaders(res);
     const stream = createReadStream(filePath);
     stream.on("error", () => {
       if (!res.headersSent) {
@@ -594,6 +711,7 @@ export class IssuesService {
     const safeMediaType = this.validateRecordingMediaType(mediaType);
     const safeRecordingType = this.validateRecordingType(recordingType);
     const buffer = this.decodeBase64(safeVideoBase64, "videoBase64");
+    this.enforceMaxBytes(buffer, MAX_RECORDING_BYTES, "Recording");
     if (userId) await this.verifyIssueBelongsToUser(issueId, userId);
     const issue = await this.prisma.issue.findUnique({
       where: { id: issueId },
@@ -707,18 +825,25 @@ export class IssuesService {
       "imageBase64"
     );
     const buffer = this.decodeBase64(safeImageBase64, "imageBase64");
+    this.enforceMaxBytes(buffer, MAX_SCREENSHOT_BYTES, "Screenshot");
+    const imageType = this.detectImageType(buffer);
+    if (!imageType) {
+      throw new BadRequestException(
+        "imageBase64 must be a PNG, JPEG, or WEBP image"
+      );
+    }
     if (userId) await this.verifyIssueBelongsToUser(issueId, userId);
     const issue = await this.prisma.issue.findUnique({
       where: { id: issueId },
     });
     if (!issue) throw new NotFoundException("Issue not found");
 
-    const filename = `${issueId}-${Date.now()}.png`;
+    const filename = `${issueId}-${Date.now()}.${imageType.extension}`;
     const { url: imageUrl } = await this.storage.upload(
       "screenshots",
       filename,
       buffer,
-      "image/png"
+      imageType.contentType
     );
     const name = fileName?.trim() || null;
     await this.prisma.issueScreenshot.create({
@@ -790,6 +915,8 @@ export class IssuesService {
       throw new BadRequestException("fileBase64 and fileName are required");
     }
     const buffer = this.decodeBase64(trimmedBase64, "fileBase64");
+    this.enforceMaxBytes(buffer, MAX_FILE_BYTES, "File");
+    this.validateUploadableFileName(trimmedName);
     const issue = await this.prisma.issue.findUnique({
       where: { id: issueId },
     });
@@ -800,11 +927,12 @@ export class IssuesService {
       : "bin";
     const safeExt = ext.replace(/[^a-zA-Z0-9]/g, "") || "bin";
     const filename = `${issueId}-${Date.now()}-${safeExt}`;
+    const contentType = this.fileContentTypeFromName(trimmedName);
     const { url: fileUrl } = await this.storage.upload(
       "files",
       filename,
       buffer,
-      "application/octet-stream"
+      contentType
     );
     await this.prisma.issueFile.create({
       data: { fileUrl, fileName: trimmedName, issueId },
@@ -862,11 +990,13 @@ export class IssuesService {
     if (!file) throw new NotFoundException("File not found");
     const safeName = file.fileName.replace(/[^\w.-]/g, "_");
     const isPdf = /\.pdf$/i.test(file.fileName);
+    const contentType = this.fileContentTypeFromName(file.fileName);
     if (this.storage.isFullUrl(file.fileUrl)) {
-      const { buffer, contentType } = await this.storage.download(file.fileUrl);
+      const { buffer, contentType: downloadedContentType } =
+        await this.storage.download(file.fileUrl);
       res.setHeader(
         "Content-Type",
-        contentType ?? (isPdf ? "application/pdf" : "application/octet-stream")
+        downloadedContentType ?? contentType
       );
       res.setHeader(
         "Content-Disposition",
@@ -874,7 +1004,7 @@ export class IssuesService {
           ? `inline; filename="${safeName}"`
           : `attachment; filename="${safeName}"`
       );
-      res.setHeader("Cache-Control", "private, no-store");
+      this.applySecureDownloadHeaders(res);
       res.send(buffer);
       return;
     }
@@ -885,16 +1015,14 @@ export class IssuesService {
     if (!localFileName) throw new NotFoundException("File not found");
     const filePath = this.storage.resolveLocalUploadPath("files", localFileName);
     if (!existsSync(filePath)) throw new NotFoundException("File not found");
-    res.setHeader(
-      "Content-Type",
-      isPdf ? "application/pdf" : "application/octet-stream"
-    );
+    res.setHeader("Content-Type", contentType);
     res.setHeader(
       "Content-Disposition",
       isPdf
         ? `inline; filename="${safeName}"`
         : `attachment; filename="${safeName}"`
     );
+    this.applySecureDownloadHeaders(res);
     const stream = createReadStream(filePath);
     stream.on("error", () => {
       if (!res.headersSent) {

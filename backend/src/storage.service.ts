@@ -1,6 +1,7 @@
-import { BadRequestException, Injectable } from "@nestjs/common";
+import { BadRequestException, Injectable, Optional } from "@nestjs/common";
 import { tmpdir } from "os";
 import { join } from "path";
+import { MalwareScannerService } from "./malware-scanner.service";
 
 export interface StorageResult {
   url: string;
@@ -13,10 +14,14 @@ export interface StorageResult {
 @Injectable()
 export class StorageService {
   private static readonly LOCAL_UPLOAD_PATH_RE =
-    /^uploads\/(recordings|screenshots|files)\/[a-zA-Z0-9_.-]+$/;
+    /^uploads\/(recordings|screenshots|files|taxes)\/[a-zA-Z0-9_.-]+$/;
   private static readonly LOCAL_UPLOAD_PATH_PARTS_RE =
-    /^uploads\/(recordings|screenshots|files)\/([a-zA-Z0-9_.-]+)$/;
+    /^uploads\/(recordings|screenshots|files|taxes)\/([a-zA-Z0-9_.-]+)$/;
   private static readonly SAFE_FILENAME_RE = /^[a-zA-Z0-9_.-]+$/;
+
+  constructor(
+    @Optional() private readonly malwareScanner?: MalwareScannerService
+  ) {}
 
   private useBlob(): boolean {
     return Boolean(process.env.BLOB_READ_WRITE_TOKEN);
@@ -33,12 +38,15 @@ export class StorageService {
   }
 
   async upload(
-    folder: "recordings" | "screenshots" | "files",
+    folder: "recordings" | "screenshots" | "files" | "taxes",
     filename: string,
     buffer: Buffer,
     contentType?: string
   ): Promise<StorageResult> {
     this.validateFilename(filename);
+    if (this.malwareScanner) {
+      await this.malwareScanner.scanOrThrow(buffer, { folder, filename });
+    }
     if (this.useBlob()) {
       return this.uploadToBlob(folder, filename, buffer, contentType);
     }
@@ -60,7 +68,7 @@ export class StorageService {
 
   /** Absolute filesystem path for a local upload file name. */
   resolveLocalUploadPath(
-    folder: "recordings" | "screenshots" | "files",
+    folder: "recordings" | "screenshots" | "files" | "taxes",
     filename: string
   ): string {
     this.validateFilename(filename);
@@ -158,7 +166,7 @@ export class StorageService {
     }
     const [, folder, filename] = match;
     return this.resolveLocalUploadPath(
-      folder as "recordings" | "screenshots" | "files",
+      folder as "recordings" | "screenshots" | "files" | "taxes",
       filename
     );
   }

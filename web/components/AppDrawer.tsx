@@ -173,11 +173,16 @@ export function AppDrawer({
   tabOrderLength,
   deleteSectionTab,
 }: AppDrawerProps) {
-  const [bulbyTriggerHidden, setBulbyTriggerHidden] = useState(() =>
-    typeof window !== "undefined"
-      ? window.localStorage.getItem(BULBY_TRIGGER_HIDDEN_KEY) === "1"
-      : false
-  );
+  const [bulbyTriggerHidden, setBulbyTriggerHidden] = useState(false);
+  useEffect(() => {
+    try {
+      setBulbyTriggerHidden(
+        window.localStorage.getItem(BULBY_TRIGGER_HIDDEN_KEY) === "1"
+      );
+    } catch {
+      /* ignore */
+    }
+  }, []);
   useEffect(() => {
     const handler = (e: Event) => {
       const ev = e as CustomEvent<{ hidden: boolean }>;

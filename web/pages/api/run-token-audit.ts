@@ -44,7 +44,10 @@ const DEFAULT_THRESHOLDS = {
   largestFileMax: 2000,
 } as const;
 
-function parseThreshold(envValue: string | undefined, defaultVal: number): number {
+function parseThreshold(
+  envValue: string | undefined,
+  defaultVal: number
+): number {
   if (envValue === undefined || envValue === "") return defaultVal;
   const n = parseInt(envValue, 10);
   return Number.isFinite(n) && n > 0 ? n : defaultVal;
@@ -60,11 +63,26 @@ function parseThreshold(envValue: string | undefined, defaultVal: number): numbe
  */
 function getThresholds(): typeof DEFAULT_THRESHOLDS {
   return {
-    appTsxMax: parseThreshold(process.env.TOKEN_AUDIT_APP_TSX_MAX, DEFAULT_THRESHOLDS.appTsxMax),
-    homePageMax: parseThreshold(process.env.TOKEN_AUDIT_HOME_PAGE_MAX, DEFAULT_THRESHOLDS.homePageMax),
-    apiClientMax: parseThreshold(process.env.TOKEN_AUDIT_API_CLIENT_MAX, DEFAULT_THRESHOLDS.apiClientMax),
-    navBarMax: parseThreshold(process.env.TOKEN_AUDIT_NAV_BAR_MAX, DEFAULT_THRESHOLDS.navBarMax),
-    largestFileMax: parseThreshold(process.env.TOKEN_AUDIT_LARGEST_FILE_MAX, DEFAULT_THRESHOLDS.largestFileMax),
+    appTsxMax: parseThreshold(
+      process.env.TOKEN_AUDIT_APP_TSX_MAX,
+      DEFAULT_THRESHOLDS.appTsxMax
+    ),
+    homePageMax: parseThreshold(
+      process.env.TOKEN_AUDIT_HOME_PAGE_MAX,
+      DEFAULT_THRESHOLDS.homePageMax
+    ),
+    apiClientMax: parseThreshold(
+      process.env.TOKEN_AUDIT_API_CLIENT_MAX,
+      DEFAULT_THRESHOLDS.apiClientMax
+    ),
+    navBarMax: parseThreshold(
+      process.env.TOKEN_AUDIT_NAV_BAR_MAX,
+      DEFAULT_THRESHOLDS.navBarMax
+    ),
+    largestFileMax: parseThreshold(
+      process.env.TOKEN_AUDIT_LARGEST_FILE_MAX,
+      DEFAULT_THRESHOLDS.largestFileMax
+    ),
   } as typeof DEFAULT_THRESHOLDS;
 }
 
@@ -82,7 +100,9 @@ function shouldIgnoreDirectory(name: string, relPath: string): boolean {
   return false;
 }
 
-function collectSourceFiles(root: string): Array<{ relPath: string; lines: number }> {
+function collectSourceFiles(
+  root: string
+): Array<{ relPath: string; lines: number }> {
   const collected: Array<{ relPath: string; lines: number }> = [];
   const stack = ["web", "backend", "app", "mobile", "packages", "docs"];
 
@@ -120,45 +140,6 @@ function collectSourceFiles(root: string): Array<{ relPath: string; lines: numbe
   }
 
   return collected;
-}
-
-function directoryFootprint(root: string, relDir: string): { files: number; bytes: number } {
-  const absDir = path.join(root, relDir);
-  if (!fs.existsSync(absDir)) return { files: 0, bytes: 0 };
-  let files = 0;
-  let bytes = 0;
-  const stack = [absDir];
-
-  while (stack.length > 0) {
-    const current = stack.pop() as string;
-    let entries: fs.Dirent[] = [];
-    try {
-      entries = fs.readdirSync(current, { withFileTypes: true });
-    } catch {
-      continue;
-    }
-    for (const entry of entries) {
-      const next = path.join(current, entry.name);
-      if (entry.isDirectory()) {
-        stack.push(next);
-        continue;
-      }
-      try {
-        const stat = fs.statSync(next);
-        if (!stat.isFile()) continue;
-        files += 1;
-        bytes += stat.size;
-      } catch {
-        // ignore
-      }
-    }
-  }
-
-  return { files, bytes };
-}
-
-function toMb(bytes: number): string {
-  return (bytes / (1024 * 1024)).toFixed(2);
 }
 
 export default function handler(
@@ -275,35 +256,9 @@ export default function handler(
       });
     }
 
-    const coverageDir = directoryFootprint(root, "web/public/coverage-report");
-    if (coverageDir.files > 0) {
-      findings.push({
-        id: "coverage-artifacts",
-        title: "Coverage report artifacts present in web/public",
-        severity: "medium",
-        effort: "small",
-        why: `${coverageDir.files} files (${toMb(coverageDir.bytes)} MB) can pollute context discovery.`,
-        action:
-          "Avoid tracking generated coverage HTML; regenerate on demand in CI/local.",
-        file: "web/public/coverage-report",
-      });
-    }
-
-    const uploadsDir = directoryFootprint(root, "backend/uploads");
-    if (uploadsDir.files > 0) {
-      findings.push({
-        id: "uploads-artifacts",
-        title: "Runtime upload files committed in repo",
-        severity: "medium",
-        effort: "small",
-        why: `${uploadsDir.files} files (${toMb(uploadsDir.bytes)} MB) add non-source noise to scans.`,
-        action:
-          "Keep uploads out of git and use storage volume or object storage for local/dev data.",
-        file: "backend/uploads",
-      });
-    }
-
-    const hasArchitectureDoc = fs.existsSync(path.join(root, "ARCHITECTURE.md"));
+    const hasArchitectureDoc = fs.existsSync(
+      path.join(root, "ARCHITECTURE.md")
+    );
     if (!hasArchitectureDoc) {
       findings.push({
         id: "missing-architecture-doc",

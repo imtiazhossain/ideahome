@@ -1,19 +1,17 @@
 import { Module } from "@nestjs/common";
-import { IssuesService } from "./issues.service";
-import { IssuesController } from "./issues.controller";
-import { IssueCommentsService } from "./issue-comments.service";
+import { TaxDocumentsController } from "./tax-documents.controller";
+import { TaxDocumentsService } from "./tax-documents.service";
 import { PrismaService } from "../prisma.service";
 import { StorageService } from "../storage.service";
 import { MalwareScannerService } from "../malware-scanner.service";
 
 @Module({
-  controllers: [IssuesController],
+  controllers: [TaxDocumentsController],
   providers: [
-    IssuesService,
-    IssueCommentsService,
+    TaxDocumentsService,
     PrismaService,
     StorageService,
     MalwareScannerService,
   ],
 })
-export class IssuesModule {}
+export class TaxDocumentsModule {}

@@ -14,7 +14,9 @@ import { FeaturesModule } from "./features/features.module";
 import { ExpensesModule } from "./expenses/expenses.module";
 import { PlaidModule } from "./plaid/plaid.module";
 import { CodeModule } from "./code/code.module";
+import { TaxDocumentsModule } from "./tax-documents/tax-documents.module";
 import { PrismaService } from "./prisma.service";
+import { MalwareScannerService } from "./malware-scanner.service";
 
 @Module({
   imports: [
@@ -29,10 +31,11 @@ import { PrismaService } from "./prisma.service";
     BugsModule,
     FeaturesModule,
     ExpensesModule,
+    TaxDocumentsModule,
     PlaidModule,
     CodeModule,
   ],
   controllers: [AppController],
-  providers: [AppService, PrismaService],
+  providers: [AppService, PrismaService, MalwareScannerService],
 })
 export class AppModule {}
