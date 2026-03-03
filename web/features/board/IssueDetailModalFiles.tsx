@@ -28,7 +28,7 @@ export function IssueDetailModalFiles({
   dragOverCount,
 }: IssueDetailModalFilesProps) {
   return (
-    <div className="form-group" ref={filesSectionRef}>
+    <div className="form-group issue-modal-field expenses-field" ref={filesSectionRef}>
       <label>
         Files
         {files.length > 0 ? ` (${files.length})` : ""}

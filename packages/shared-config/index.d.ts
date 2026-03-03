@@ -221,6 +221,7 @@ export declare function sanitizeAuthToken(rawValue: string): string;
 export declare function projectNameToAcronym(name: string): string;
 export declare function pathProjects(): string;
 export declare function pathProjectById(projectId: string): string;
+export declare function pathProjectMembers(projectId: string): string;
 export declare function pathOrganizations(): string;
 export declare function pathOrganizationsEnsure(): string;
 export declare function pathIssues(projectId?: string, search?: string): string;

@@ -6,6 +6,7 @@ import type {
 } from "../../lib/api/media";
 import { IconScreenshot, IconUpload, IconVideo } from "../../components/icons";
 import { getRecordingDisplayLabel, getRecordingKind } from "../../lib/utils";
+import { IconLabelButton } from "./IconLabelButton";
 
 /** Splits comment body into text and file-name segments for rendering (file names as buttons). */
 export function commentBodyWithFileButtons(
@@ -155,50 +156,47 @@ export function commentBodyWithFileButtons(
       const defaultLabel = getRecordingDisplayLabel(kind, recIdx);
       const displayLabel = rec ? (rec.name ?? defaultLabel) : label;
       nodes.push(
-        <button
+        <IconLabelButton
           key={`file-${i}-${raw}`}
-          type="button"
-          className="btn btn-secondary"
+          size="sm"
           style={buttonStyle}
           onClick={() => onScrollToRecording(recordingId!)}
           aria-label={`Go to recording: ${displayLabel}`}
           title={`Go to recording: ${displayLabel}`}
+          icon={<IconVideo size={12} />}
         >
-          <IconVideo size={12} />
           {displayLabel}
-        </button>
+        </IconLabelButton>
       );
     } else if (screenshotId && onScrollToScreenshot) {
       const shot = screenshots.find((s) => s.id === screenshotId);
       const displayLabel = shot ? (shot.name ?? label) : label;
       nodes.push(
-        <button
+        <IconLabelButton
           key={`file-${i}-${raw}`}
-          type="button"
-          className="btn btn-secondary"
+          size="sm"
           style={buttonStyle}
           onClick={() => onScrollToScreenshot(screenshotId!)}
           aria-label={`Go to ${displayLabel}`}
           title={`Go to ${displayLabel}`}
+          icon={<IconScreenshot size={12} />}
         >
-          <IconScreenshot size={12} />
           {displayLabel}
-        </button>
+        </IconLabelButton>
       );
     } else if (fileId && onScrollToFile) {
       nodes.push(
-        <button
+        <IconLabelButton
           key={`file-${i}-${raw}`}
-          type="button"
-          className="btn btn-secondary"
+          size="sm"
           style={buttonStyle}
           onClick={() => onScrollToFile(fileId!)}
           aria-label={`Go to file: ${label}`}
           title={`Go to file: ${label}`}
+          icon={<IconUpload size={12} />}
         >
-          <IconUpload size={12} />
           {label}
-        </button>
+        </IconLabelButton>
       );
     } else {
       nodes.push(

@@ -31,6 +31,7 @@ export function AutoResizeTextarea({
       ref={ref}
       id={id}
       value={value}
+      spellCheck
       onChange={(e) => {
         onChange(e);
         const el = e.target;

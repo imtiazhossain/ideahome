@@ -1,10 +1,9 @@
 import {
   BadRequestException,
-  ForbiddenException,
   Injectable,
   NotFoundException,
 } from "@nestjs/common";
-import { getOrgIdForUser, verifyProjectInOrg } from "../common/org-scope";
+import { verifyProjectForUser } from "../common/org-scope";
 import { PrismaService } from "../prisma.service";
 
 @Injectable()
@@ -70,22 +69,11 @@ export class ExpensesService {
     return trimmed || "Other";
   }
 
-  private async getOrgIdForUser(userId: string): Promise<string> {
-    return getOrgIdForUser(
-      this.prisma,
-      userId,
-      new ForbiddenException(
-        "User has no organization. Complete login again to create one."
-      )
-    );
-  }
-
   private async verifyProjectAccess(
     projectId: string,
     userId: string
   ): Promise<void> {
-    const orgId = await this.getOrgIdForUser(userId);
-    await verifyProjectInOrg(this.prisma, projectId, orgId);
+    await verifyProjectForUser(this.prisma, projectId, userId);
   }
 
   async list(projectId: string, userId: string) {
@@ -121,12 +109,22 @@ export class ExpensesService {
   }
 
   private async verifyExpenseAccess(expenseId: string, userId: string) {
-    const orgId = await this.getOrgIdForUser(userId);
     const expense = await this.prisma.expense.findUnique({
       where: { id: expenseId },
-      include: { project: true },
+      include: {
+        project: {
+          select: {
+            id: true,
+            memberships: {
+              where: { userId },
+              select: { id: true },
+              take: 1,
+            },
+          },
+        },
+      },
     });
-    if (!expense || expense.project.organizationId !== orgId) {
+    if (!expense || expense.project.memberships.length === 0) {
       throw new NotFoundException("Expense not found");
     }
     return expense;

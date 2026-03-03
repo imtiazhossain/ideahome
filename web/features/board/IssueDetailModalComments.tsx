@@ -144,24 +144,20 @@ export function IssueDetailModalComments(props: IssueDetailModalCommentsProps) {
   } = props;
 
   return (
-    <div className="form-group" ref={commentsSectionRef}>
+    <div className="form-group issue-modal-field expenses-field" ref={commentsSectionRef}>
       <label>Comments</label>
       {issueCommentsLoading ? (
         <SectionLoadingSpinner />
       ) : (
         <>
           <div
+            className="issue-comment-composer-wrap"
             style={{ display: editingCommentId ? "none" : undefined }}
           >
             <div
-              className="form-control"
+              className={`form-control issue-comment-composer${commentBoxError ? " is-error" : ""}`}
               style={{
                 padding: 10,
-                border: commentBoxError
-                  ? "2px solid var(--danger, #c53030)"
-                  : "1px solid var(--border-input)",
-                borderRadius: 6,
-                background: "var(--input-bg)",
                 cursor: "text",
                 minHeight: 80,
                 maxHeight: 480,
@@ -187,6 +183,7 @@ export function IssueDetailModalComments(props: IssueDetailModalCommentsProps) {
                         bi === 0 ? issueCommentTextareaRef : undefined
                       }
                       value={block.value}
+                      spellCheck
                       onFocus={() => {
                         activeCommentBlockRef.current = bi;
                       }}
@@ -379,6 +376,7 @@ export function IssueDetailModalComments(props: IssueDetailModalCommentsProps) {
                 );
               })()}
             <div
+              className="issue-comment-toolbar"
               style={{
                 display: "flex",
                 flexWrap: "wrap",
@@ -536,6 +534,7 @@ export function IssueDetailModalComments(props: IssueDetailModalCommentsProps) {
               onChange={handleCommentVideoFile}
             />
             <div
+              className="issue-comment-composer-actions"
               style={{ display: "flex", justifyContent: "flex-end" }}
             >
               {commentBlocks.some((b) => {
@@ -562,7 +561,7 @@ export function IssueDetailModalComments(props: IssueDetailModalCommentsProps) {
               }) && (
                 <button
                   type="button"
-                  className="btn btn-primary"
+                  className="expenses-add-btn issue-comment-add-btn"
                   onClick={handleAddComment}
                   disabled={issueCommentSubmitting}
                 >
@@ -572,54 +571,20 @@ export function IssueDetailModalComments(props: IssueDetailModalCommentsProps) {
             </div>
           </div>
           {issueComments.length > 0 && (
-            <ul
-              className="issue-comments-list"
-              style={{
-                listStyle: "none",
-                margin: "0 0 12px 0",
-                padding: 0,
-              }}
-            >
+            <ul className="issue-comments-list">
               {issueComments.map((c) => (
                 <li
                   key={c.id}
-                  className="issue-comment"
-                  style={{
-                    marginBottom: 10,
-                    padding:
-                      editingCommentId === c.id ? 10 : "8px 10px",
-                    background:
-                      editingCommentId === c.id
-                        ? "var(--input-bg)"
-                        : "var(--bg-muted)",
-                    border:
-                      editingCommentId === c.id
-                        ? "1px solid var(--border-input)"
-                        : undefined,
-                    borderRadius: 6,
-                    fontSize: 13,
-                  }}
+                  className={`issue-comment${editingCommentId === c.id ? " is-editing" : ""}`}
                 >
-                  <div
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      alignItems: "flex-start",
-                      gap: 8,
-                    }}
-                  >
-                    <div
-                      style={{ flex: 1, minWidth: 0, minHeight: 0 }}
-                    >
+                  <div className="issue-comment-row">
+                    <div className="issue-comment-body">
                       {editingCommentId === c.id ? (
                         <>
                           <div
-                            className="form-control"
+                            className="form-control issue-comment-editor"
                             style={{
                               padding: 10,
-                              border: "1px solid var(--border-input)",
-                              borderRadius: 6,
-                              background: "var(--input-bg)",
                               minHeight: 80,
                               maxHeight: 480,
                               resize: "vertical",
@@ -642,6 +607,7 @@ export function IssueDetailModalComments(props: IssueDetailModalCommentsProps) {
                                   <textarea
                                     key={`edit-text-${bi}`}
                                     value={block.value}
+                                    spellCheck
                                     onChange={(e) => {
                                       const val = e.target.value;
                                       setEditingCommentBlocks(
@@ -801,6 +767,7 @@ export function IssueDetailModalComments(props: IssueDetailModalCommentsProps) {
                             })}
                           </div>
                           <div
+                            className="issue-comment-toolbar"
                             style={{
                               display: "flex",
                               flexWrap: "wrap",
@@ -948,6 +915,7 @@ export function IssueDetailModalComments(props: IssueDetailModalCommentsProps) {
                               ))}
                           </div>
                           <div
+                            className="issue-comment-editor-actions"
                             style={{
                               display: "flex",
                               gap: 8,
@@ -957,7 +925,7 @@ export function IssueDetailModalComments(props: IssueDetailModalCommentsProps) {
                           >
                             <button
                               type="button"
-                              className="btn btn-primary"
+                              className="expenses-add-btn issue-comment-save-btn"
                               onClick={handleSaveComment}
                               disabled={
                                 updatingCommentId === c.id ||
@@ -1043,13 +1011,10 @@ export function IssueDetailModalComments(props: IssueDetailModalCommentsProps) {
                           </div>
                           {addingAttachmentToCommentId === c.id && (
                             <div
+                              className="issue-comment-attach-panel"
                               style={{
                                 marginTop: 8,
                                 padding: 8,
-                                background: "var(--input-bg)",
-                                borderRadius: 6,
-                                border:
-                                  "1px solid var(--border-input)",
                               }}
                             >
                               <div
@@ -1065,6 +1030,7 @@ export function IssueDetailModalComments(props: IssueDetailModalCommentsProps) {
                                   : ""}
                               </div>
                               <div
+                                className="issue-comment-toolbar"
                                 style={{
                                   display: "flex",
                                   flexWrap: "wrap",
@@ -1215,6 +1181,7 @@ export function IssueDetailModalComments(props: IssueDetailModalCommentsProps) {
                             </div>
                           )}
                           <div
+                            className="issue-comment-meta"
                             style={{
                               marginTop: 4,
                               fontSize: 11,
@@ -1257,13 +1224,10 @@ export function IssueDetailModalComments(props: IssueDetailModalCommentsProps) {
                           {commentHistoryOpenId === c.id &&
                             (c.editHistory?.length ?? 0) > 0 && (
                               <div
+                                className="issue-comment-history"
                                 style={{
                                   marginTop: 8,
                                   padding: "8px 10px",
-                                  background: "var(--input-bg)",
-                                  borderRadius: 4,
-                                  border:
-                                    "1px solid var(--border-input)",
                                   fontSize: 12,
                                 }}
                               >
@@ -1319,6 +1283,7 @@ export function IssueDetailModalComments(props: IssueDetailModalCommentsProps) {
                     </div>
                     {editingCommentId !== c.id && (
                       <div
+                        className="issue-comment-actions"
                         style={{
                           display: "flex",
                           gap: 4,
@@ -1328,7 +1293,6 @@ export function IssueDetailModalComments(props: IssueDetailModalCommentsProps) {
                         <button
                           type="button"
                           className="btn btn-icon"
-                          style={{ padding: "4px 6px", minWidth: 28 }}
                           onClick={() => handleStartEditComment(c)}
                           aria-label="Edit comment"
                           title="Edit comment"
@@ -1338,12 +1302,7 @@ export function IssueDetailModalComments(props: IssueDetailModalCommentsProps) {
                         <button
                           type="button"
                           className="btn btn-icon"
-                          style={{
-                            padding: "4px 6px",
-                            minWidth: 28,
-                            opacity:
-                              deletingCommentId === c.id ? 0.6 : 1,
-                          }}
+                          style={{ opacity: deletingCommentId === c.id ? 0.6 : 1 }}
                           onClick={() => handleDeleteComment(c.id)}
                           disabled={deletingCommentId === c.id}
                           aria-label={`Delete comment: ${c.body.slice(0, 30)}${c.body.length > 30 ? "…" : ""}`}

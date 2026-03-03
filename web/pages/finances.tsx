@@ -1946,6 +1946,7 @@ export default function FinancialsPage() {
                       <textarea
                         className="expenses-input expenses-taxes-notes"
                         value={doc.notes}
+                        spellCheck
                         onChange={(e) =>
                           setTaxDocuments((prev) =>
                             prev.map((item) =>

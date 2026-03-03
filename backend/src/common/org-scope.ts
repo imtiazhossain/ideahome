@@ -28,3 +28,25 @@ export async function verifyProjectInOrg(
     throw new NotFoundException("Project not found");
   }
 }
+
+export async function verifyProjectForUser(
+  prisma: PrismaService,
+  projectId: string,
+  userId: string
+): Promise<{ id: string; organizationId: string }> {
+  const project = await prisma.project.findUnique({
+    where: { id: projectId },
+    select: { id: true, organizationId: true },
+  });
+  if (!project) {
+    throw new NotFoundException("Project not found");
+  }
+  const member = await prisma.projectMembership.findUnique({
+    where: { projectId_userId: { projectId, userId } },
+    select: { id: true },
+  });
+  if (!member) {
+    throw new NotFoundException("Project not found");
+  }
+  return project;
+}

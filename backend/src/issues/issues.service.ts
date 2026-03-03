@@ -7,7 +7,7 @@ import {
 import { Prisma } from "@prisma/client";
 import { PrismaClientKnownRequestError } from "@prisma/client/runtime/library";
 import { projectNameToAcronym } from "@ideahome/shared-config";
-import { getOrgIdForUser, verifyProjectInOrg } from "../common/org-scope";
+import { verifyProjectForUser } from "../common/org-scope";
 import { PrismaService } from "../prisma.service";
 import { StorageService } from "../storage.service";
 import { existsSync } from "fs";
@@ -67,26 +67,25 @@ export class IssuesService {
     private readonly storage: StorageService
   ) {}
 
-  private async getOrgIdForUser(userId: string): Promise<string> {
-    return getOrgIdForUser(
-      this.prisma,
-      userId,
-      new NotFoundException(
-        "User has no organization. Complete login again to create one."
-      )
-    );
-  }
-
   private async verifyIssueBelongsToUser(
     issueId: string,
     userId: string
   ): Promise<void> {
-    const orgId = await this.getOrgIdForUser(userId);
     const issue = await this.prisma.issue.findUnique({
       where: { id: issueId },
-      include: { project: true },
+      include: {
+        project: {
+          select: {
+            memberships: {
+              where: { userId },
+              select: { id: true },
+              take: 1,
+            },
+          },
+        },
+      },
     });
-    if (!issue || issue.project.organizationId !== orgId) {
+    if (!issue || issue.project.memberships.length === 0) {
       throw new NotFoundException("Issue not found");
     }
   }
@@ -100,8 +99,7 @@ export class IssuesService {
     projectId: string,
     userId: string
   ): Promise<void> {
-    const orgId = await this.getOrgIdForUser(userId);
-    await verifyProjectInOrg(this.prisma, projectId, orgId);
+    await verifyProjectForUser(this.prisma, projectId, userId);
   }
 
   private normalizeRequiredTitle(value: unknown): string {
@@ -161,8 +159,7 @@ export class IssuesService {
     const safeProjectId = this.normalizeOptionalProjectId(projectId);
     const where: Prisma.IssueWhereInput = {};
     if (userId) {
-      const orgId = await this.getOrgIdForUser(userId);
-      where.project = { organizationId: orgId };
+      where.project = { memberships: { some: { userId } } };
     }
     if (safeProjectId) where.projectId = safeProjectId;
     if (typeof search === "string" && search.trim()) {
@@ -238,7 +235,7 @@ export class IssuesService {
     if (userId) await this.verifyProjectBelongsToUser(projectId, userId);
     this.validateStatus(data.status);
     this.validateQualityScore(data.qualityScore);
-    await this.validateAssigneeInProjectOrg(projectId, assigneeId);
+    await this.validateAssigneeInProject(projectId, assigneeId);
     const project = await this.prisma.project.findUnique({
       where: { id: projectId },
     });
@@ -343,7 +340,7 @@ export class IssuesService {
     if ("qualityScore" in payload)
       this.validateQualityScore(payload.qualityScore);
     if ("assigneeId" in payload) {
-      await this.validateAssigneeInProjectOrg(
+      await this.validateAssigneeInProject(
         existing.projectId,
         (payload.assigneeId as string | null | undefined) ?? undefined
       );
@@ -355,24 +352,19 @@ export class IssuesService {
     });
   }
 
-  private async validateAssigneeInProjectOrg(
+  private async validateAssigneeInProject(
     projectId: string,
     assigneeId?: string | null
   ): Promise<void> {
     if (assigneeId === undefined || assigneeId === null || assigneeId === "")
       return;
-    const project = await this.prisma.project.findUnique({
-      where: { id: projectId },
-      select: { organizationId: true },
+    const assigneeMembership = await this.prisma.projectMembership.findUnique({
+      where: { projectId_userId: { projectId, userId: assigneeId } },
+      select: { id: true },
     });
-    if (!project) throw new NotFoundException("Project not found");
-    const assignee = await this.prisma.user.findUnique({
-      where: { id: assigneeId },
-      select: { organizationId: true },
-    });
-    if (!assignee || assignee.organizationId !== project.organizationId) {
+    if (!assigneeMembership) {
       throw new BadRequestException(
-        "Assignee must belong to the issue project organization"
+        "Assignee must be invited to the issue project"
       );
     }
   }
@@ -545,9 +537,8 @@ export class IssuesService {
   /** Delete all issues, optionally scoped by projectId. Cleans up related files. Only deletes issues in user's org. */
   async deleteMany(projectId: string | undefined, userId: string) {
     const safeProjectId = this.normalizeOptionalProjectId(projectId);
-    const orgId = await this.getOrgIdForUser(userId);
     const where: Prisma.IssueWhereInput = {
-      project: { organizationId: orgId },
+      project: { memberships: { some: { userId } } },
     };
     if (safeProjectId) where.projectId = safeProjectId;
     const issues = await this.prisma.issue.findMany({
@@ -594,14 +585,11 @@ export class IssuesService {
   ): Promise<void> {
     const recording = await this.prisma.issueRecording.findFirst({
       where: { videoUrl: { endsWith: filename } },
-      include: { issue: { include: { project: true } } },
+      include: { issue: true },
     });
     if (!recording) throw new NotFoundException("Recording not found");
     if (userId) {
-      const orgId = await this.getOrgIdForUser(userId);
-      if (recording.issue.project.organizationId !== orgId) {
-        throw new NotFoundException("Recording not found");
-      }
+      await this.verifyIssueBelongsToUser(recording.issueId, userId);
     }
     if (this.storage.isFullUrl(recording.videoUrl)) {
       const { buffer, contentType } = await this.storage.download(
@@ -649,14 +637,11 @@ export class IssuesService {
   ): Promise<void> {
     const screenshot = await this.prisma.issueScreenshot.findFirst({
       where: { imageUrl: { endsWith: filename } },
-      include: { issue: { include: { project: true } } },
+      include: { issue: true },
     });
     if (!screenshot) throw new NotFoundException("Screenshot not found");
     if (userId) {
-      const orgId = await this.getOrgIdForUser(userId);
-      if (screenshot.issue.project.organizationId !== orgId) {
-        throw new NotFoundException("Screenshot not found");
-      }
+      await this.verifyIssueBelongsToUser(screenshot.issueId, userId);
     }
     if (this.storage.isFullUrl(screenshot.imageUrl)) {
       const { buffer, contentType } = await this.storage.download(

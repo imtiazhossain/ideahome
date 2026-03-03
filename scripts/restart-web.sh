@@ -37,8 +37,28 @@ if [[ -n "${PIDS_LEFT:-}" ]]; then
 fi
 
 echo "[web] Starting fresh web dev server..."
-nohup pnpm --filter web dev > "$LOG_FILE" 2>&1 &
-LAUNCHER_PID=$!
+rm -f "$LOG_FILE"
+# Start in a detached session (start_new_session) so the dev server doesn't die
+# when the launching shell exits.
+LAUNCHER_PID="$(
+  python3 - <<PY
+import subprocess
+from pathlib import Path
+
+root = Path("$ROOT_DIR")
+log = Path("$LOG_FILE")
+with log.open("ab", buffering=0) as f:
+    p = subprocess.Popen(
+        ["pnpm", "--filter", "web", "dev"],
+        cwd=str(root),
+        stdin=subprocess.DEVNULL,
+        stdout=f,
+        stderr=subprocess.STDOUT,
+        start_new_session=True,
+    )
+    print(p.pid)
+PY
+)"
 printf '%s\n' "$LAUNCHER_PID" > "$PID_FILE"
 
 for _ in {1..30}; do
@@ -50,6 +70,7 @@ done
 
 if lsof -iTCP:3000 -sTCP:LISTEN -n -P >/dev/null 2>&1; then
   LISTENER_PID="$(lsof -t -iTCP:3000 -sTCP:LISTEN -n -P | head -n1)"
+  printf '%s\n' "${LISTENER_PID:-$LAUNCHER_PID}" > "$PID_FILE"
   STATUS_CODE="$(curl -sS -o /dev/null -w "%{http_code}" http://localhost:3000/tests || true)"
   echo "[web] Running. launcher_pid=$LAUNCHER_PID listener_pid=${LISTENER_PID:-unknown} http_status=${STATUS_CODE:-n/a}"
   echo "[web] Log: $LOG_FILE"

@@ -34,23 +34,44 @@ export class OrganizationsService {
       where: { id: userId },
       select: { organizationId: true },
     });
-    if (!user?.organizationId) return [];
-    const org = await this.prisma.organization.findUnique({
-      where: { id: user.organizationId },
+    if (user?.organizationId) {
+      const org = await this.prisma.organization.findUnique({
+        where: { id: user.organizationId },
+      });
+      if (org) return [org];
+    }
+    const membership = await this.prisma.organizationMembership.findFirst({
+      where: { userId },
+      select: { organization: true },
+      orderBy: { createdAt: "asc" },
     });
-    return org ? [org] : [];
+    return membership ? [membership.organization] : [];
   }
 
   /** Create an organization and assign the current user to it. */
   async create(userId: string, data: { name?: unknown }) {
     const name = this.sanitizeName(data.name);
-    const org = await this.prisma.organization.create({
-      data: { name },
-    });
-    await this.prisma.user.update({
-      where: { id: userId },
-      data: { organizationId: org.id },
-    });
+    const org = await this.prisma.organization.create({ data: { name } });
+    await this.prisma.$transaction([
+      this.prisma.user.update({
+        where: { id: userId },
+        data: { organizationId: org.id },
+      }),
+      this.prisma.organizationMembership.upsert({
+        where: {
+          organizationId_userId: {
+            organizationId: org.id,
+            userId,
+          },
+        },
+        create: {
+          organizationId: org.id,
+          userId,
+          role: "OWNER",
+        },
+        update: { role: "OWNER" },
+      }),
+    ]);
     return org;
   }
 
@@ -65,6 +86,7 @@ export class OrganizationsService {
     const org = await this.prisma.organization.findUniqueOrThrow({
       where: { id: user.organizationId },
     });
+    await this.authService.ensureOrganizationMembership(org.id, userId, "MEMBER");
     return org;
   }
 }

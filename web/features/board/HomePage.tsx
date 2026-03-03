@@ -7,7 +7,17 @@ import React, {
 } from "react";
 import Link from "next/link";
 import { useRouter } from "next/router";
-import { closestCenter, DndContext } from "@dnd-kit/core";
+import {
+  closestCenter,
+  DndContext,
+  type DragEndEvent,
+  type DragOverEvent,
+  type DragStartEvent,
+} from "@dnd-kit/core";
+import {
+  horizontalListSortingStrategy,
+  SortableContext,
+} from "@dnd-kit/sortable";
 import {
   getStoredToken,
   isAuthenticated,
@@ -65,6 +75,10 @@ import { BoardColumn, IssueCard } from "./BoardDnd";
 import { useTheme } from "../../pages/_app";
 
 export default function Home() {
+  type CustomColumn = { id: string; label: string };
+  const CUSTOM_COLUMNS_STORAGE_KEY = "ideahome-custom-board-columns";
+  const COLUMN_ORDER_STORAGE_KEY = "ideahome-board-column-order";
+  const DEFAULT_COLUMN_ORDER = STATUSES.map((status) => status.id);
   const router = useRouter();
   const [authResolved, setAuthResolved] = useState(false);
   const {
@@ -89,6 +103,12 @@ export default function Home() {
   );
   const [projectSubmitting, setProjectSubmitting] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [customColumns, setCustomColumns] = useState<CustomColumn[]>([]);
+  const [columnOrder, setColumnOrder] = useState<string[]>(DEFAULT_COLUMN_ORDER);
+  const [addColumnModalOpen, setAddColumnModalOpen] = useState(false);
+  const [newColumnName, setNewColumnName] = useState("");
+  const [newColumnError, setNewColumnError] = useState<string | null>(null);
+  const [draggingColumnId, setDraggingColumnId] = useState<string | null>(null);
   const { theme, toggleTheme } = useTheme();
 
   const createIssueForm = useBoardCreateIssue({
@@ -187,6 +207,84 @@ export default function Home() {
     setAuthResolved(true);
     loadProjects();
   }, [router]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const raw = window.localStorage.getItem(CUSTOM_COLUMNS_STORAGE_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as unknown;
+      if (!Array.isArray(parsed)) return;
+      const sanitized = parsed
+        .filter(
+          (entry): entry is { id: string; label: string } =>
+            !!entry &&
+            typeof entry === "object" &&
+            typeof (entry as { id?: unknown }).id === "string" &&
+            typeof (entry as { label?: unknown }).label === "string"
+        )
+        .map((entry) => ({
+          id: entry.id.trim(),
+          label: entry.label.trim(),
+        }))
+        .filter((entry) => entry.id && entry.label);
+      setCustomColumns(sanitized);
+    } catch {
+      // Ignore malformed local data.
+    }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem(
+      CUSTOM_COLUMNS_STORAGE_KEY,
+      JSON.stringify(customColumns)
+    );
+  }, [customColumns]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const raw = window.localStorage.getItem(COLUMN_ORDER_STORAGE_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as unknown;
+      if (!Array.isArray(parsed)) return;
+      const sanitized = parsed.filter(
+        (entry): entry is string => typeof entry === "string" && !!entry.trim()
+      );
+      if (!sanitized.length) return;
+      setColumnOrder(sanitized);
+    } catch {
+      // Ignore malformed local data.
+    }
+  }, []);
+
+  useEffect(() => {
+    const availableIds = [
+      ...STATUSES.map((status) => status.id),
+      ...customColumns.map((column) => column.id),
+    ];
+    setColumnOrder((prev) => {
+      const filtered = prev.filter((id) => availableIds.includes(id));
+      const missing = availableIds.filter((id) => !filtered.includes(id));
+      const next = [...filtered, ...missing];
+      if (
+        next.length === prev.length &&
+        next.every((id, index) => id === prev[index])
+      ) {
+        return prev;
+      }
+      return next;
+    });
+  }, [customColumns]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem(
+      COLUMN_ORDER_STORAGE_KEY,
+      JSON.stringify(columnOrder)
+    );
+  }, [columnOrder]);
 
   // When token is cleared (e.g. logout in another tab), redirect to login
   useEffect(() => {
@@ -391,6 +489,59 @@ export default function Home() {
     }
   };
 
+  const createCustomColumn = useCallback(
+    (label: string) => {
+      const usedIds = new Set([
+        ...STATUSES.map((status) => status.id),
+        ...customColumns.map((column) => column.id),
+      ]);
+      const baseSlug =
+        label
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, "_")
+          .replace(/^_+|_+$/g, "") || "column";
+
+      let nextId = `custom_${baseSlug}`;
+      let suffix = 2;
+      while (usedIds.has(nextId)) {
+        nextId = `custom_${baseSlug}_${suffix}`;
+        suffix += 1;
+      }
+
+      setCustomColumns((prev) => [...prev, { id: nextId, label }]);
+    },
+    [customColumns]
+  );
+
+  const handleAddCustomColumn = useCallback(() => {
+    setNewColumnName("");
+    setNewColumnError(null);
+    setAddColumnModalOpen(true);
+  }, []);
+
+  const handleSubmitNewColumn = useCallback(
+    (e: React.FormEvent) => {
+      e.preventDefault();
+      const label = newColumnName.trim();
+      if (!label) {
+        setNewColumnError("Enter a column name.");
+        return;
+      }
+      const duplicate = customColumns.some(
+        (column) => column.label.toLowerCase() === label.toLowerCase()
+      );
+      if (duplicate) {
+        setNewColumnError("That column already exists.");
+        return;
+      }
+      createCustomColumn(label);
+      setAddColumnModalOpen(false);
+      setNewColumnName("");
+      setNewColumnError(null);
+    },
+    [createCustomColumn, customColumns, newColumnName]
+  );
+
   const handleDeleteProject = async (project?: Project | null) => {
     const target = project ?? projectToDelete;
     if (!target) return;
@@ -507,6 +658,87 @@ export default function Home() {
   };
 
   const boardDnd = useBoardDnd(issues, handleStatusChange);
+  const orderedColumns = useMemo(() => {
+    type BoardColumnDef = { id: string; label: string; type: "status" | "custom" };
+    const allMap = new Map<string, BoardColumnDef>();
+    for (const status of STATUSES) {
+      allMap.set(status.id, {
+        id: status.id,
+        label: status.label,
+        type: "status",
+      });
+    }
+    for (const customColumn of customColumns) {
+      allMap.set(customColumn.id, {
+        id: customColumn.id,
+        label: customColumn.label,
+        type: "custom",
+      });
+    }
+    const ordered: BoardColumnDef[] = [];
+    for (const id of columnOrder) {
+      const column = allMap.get(id);
+      if (column) {
+        ordered.push(column);
+      }
+    }
+    return ordered;
+  }, [columnOrder, customColumns]);
+
+  const handleBoardDragStart = useCallback(
+    (event: DragStartEvent) => {
+      const dragType = (event.active.data.current as { type?: string } | undefined)
+        ?.type;
+      if (dragType === "column") {
+        const columnId = (
+          event.active.data.current as { columnId?: string } | undefined
+        )?.columnId;
+        setDraggingColumnId(columnId ?? null);
+        return;
+      }
+      boardDnd.handleBoardDragStart(event);
+    },
+    [boardDnd]
+  );
+
+  const handleBoardDragOver = useCallback(
+    (event: DragOverEvent) => {
+      const dragType = (event.active.data.current as { type?: string } | undefined)
+        ?.type;
+      if (dragType === "column") return;
+      boardDnd.handleBoardDragOver(event);
+    },
+    [boardDnd]
+  );
+
+  const handleBoardDragEnd = useCallback(
+    (event: DragEndEvent) => {
+      const dragType = (event.active.data.current as { type?: string } | undefined)
+        ?.type;
+      if (dragType === "column") {
+        setDraggingColumnId(null);
+        const { active, over } = event;
+        if (!over || active.id === over.id) return;
+        const activeColumnId = (active.id as string).replace(/^column-/, "");
+        const overColumnId = (over.id as string).replace(/^column-/, "");
+        const from = columnOrder.indexOf(activeColumnId);
+        const to = columnOrder.indexOf(overColumnId);
+        if (from === -1 || to === -1) return;
+        const next = [...columnOrder];
+        const [moved] = next.splice(from, 1);
+        next.splice(to, 0, moved);
+        setColumnOrder(next);
+        return;
+      }
+      boardDnd.handleBoardDragEnd(event);
+    },
+    [boardDnd, columnOrder]
+  );
+
+  const handleBoardDragCancel = useCallback(() => {
+    setDraggingColumnId(null);
+    boardDnd.handleBoardDragCancel();
+  }, [boardDnd]);
 
   if (!authResolved || !isAuthenticated()) {
     return null;
@@ -563,42 +795,130 @@ export default function Home() {
           <DndContext
             sensors={boardDnd.boardSensors}
             collisionDetection={closestCenter}
-            onDragStart={boardDnd.handleBoardDragStart}
-            onDragOver={boardDnd.handleBoardDragOver}
-            onDragEnd={boardDnd.handleBoardDragEnd}
-            onDragCancel={boardDnd.handleBoardDragCancel}
+            onDragStart={handleBoardDragStart}
+            onDragOver={handleBoardDragOver}
+            onDragEnd={handleBoardDragEnd}
+            onDragCancel={handleBoardDragCancel}
           >
-            <div className="board-columns">
-              {STATUSES.map(({ id, label }) => {
-                const columnIssues = boardDnd.issuesByStatusForDisplay[id] ?? [];
-                const isPreviewColumn =
-                  boardDnd.dragOverColumnId === id && boardDnd.draggingIssueId;
-                return (
-                  <BoardColumn
-                    key={id}
-                    id={id}
-                    label={label}
-                    count={columnIssues.length}
-                    isDropTarget={boardDnd.dragOverColumnId === id}
+            <SortableContext
+              items={orderedColumns.map((column) => `column-${column.id}`)}
+              strategy={horizontalListSortingStrategy}
+            >
+              <div className="board-columns">
+                {orderedColumns.map((column) => {
+                  if (column.type === "status") {
+                    const columnIssues =
+                      boardDnd.issuesByStatusForDisplay[column.id] ?? [];
+                    const isPreviewColumn =
+                      boardDnd.dragOverColumnId === column.id &&
+                      boardDnd.draggingIssueId;
+                    return (
+                      <BoardColumn
+                        key={column.id}
+                        id={column.id}
+                        label={column.label}
+                        count={columnIssues.length}
+                        isDropTarget={boardDnd.dragOverColumnId === column.id}
+                        droppableStatus={column.id}
+                        isSorting={draggingColumnId === column.id}
+                      >
+                        {columnIssues.map((issue) => (
+                          <IssueCard
+                            key={issue.id}
+                            issue={issue}
+                            onSelect={setSelectedIssue}
+                            draggingIssueId={boardDnd.draggingIssueId}
+                            isPreview={
+                              !!(
+                                isPreviewColumn &&
+                                issue.id === boardDnd.draggingIssueId
+                              )
+                            }
+                          />
+                        ))}
+                      </BoardColumn>
+                    );
+                  }
+
+                  return (
+                    <BoardColumn
+                      key={column.id}
+                      id={column.id}
+                      label={column.label}
+                      count={0}
+                      isDropTarget={false}
+                      isSorting={draggingColumnId === column.id}
+                    >
+                      <div />
+                    </BoardColumn>
+                  );
+                })}
+                <div className="board-add-column">
+                  <button
+                    type="button"
+                    className="board-add-column-button"
+                    onClick={handleAddCustomColumn}
+                    aria-label="Add a column"
                   >
-                    {columnIssues.map((issue) => (
-                      <IssueCard
-                        key={issue.id}
-                        issue={issue}
-                        onSelect={setSelectedIssue}
-                        draggingIssueId={boardDnd.draggingIssueId}
-                        isPreview={
-                          !!(isPreviewColumn && issue.id === boardDnd.draggingIssueId)
-                        }
-                      />
-                    ))}
-                  </BoardColumn>
-                );
-              })}
-            </div>
+                    <span className="board-add-column-plus" aria-hidden="true">
+                      +
+                    </span>
+                  </button>
+                </div>
+              </div>
+            </SortableContext>
           </DndContext>
         )}
       </div>
+
+      {addColumnModalOpen && (
+        <div
+          className="modal-overlay board-add-column-overlay"
+          onClick={() => setAddColumnModalOpen(false)}
+        >
+          <div className="modal board-add-column-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>Add column</h2>
+              <button
+                type="button"
+                className="modal-close"
+                onClick={() => setAddColumnModalOpen(false)}
+                aria-label="Close"
+              >
+                ×
+              </button>
+            </div>
+            <form onSubmit={handleSubmitNewColumn}>
+              <div className="form-group board-add-column-field">
+                <label htmlFor="new-column-name">Column name</label>
+                <input
+                  id="new-column-name"
+                  value={newColumnName}
+                  onChange={(e) => {
+                    setNewColumnName(e.target.value);
+                    if (newColumnError) setNewColumnError(null);
+                  }}
+                  placeholder="e.g. Blocked"
+                  autoFocus
+                />
+                {newColumnError && <div className="board-add-column-error">{newColumnError}</div>}
+              </div>
+              <div className="modal-actions board-add-column-actions">
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => setAddColumnModalOpen(false)}
+                >
+                  Cancel
+                </button>
+                <button type="submit" className="btn btn-primary">
+                  Create
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       <CreateIssueModal
         open={createOpen}

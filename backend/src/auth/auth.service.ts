@@ -219,15 +219,61 @@ export class AuthService {
       where: { id: userId },
       select: { id: true, email: true, name: true, organizationId: true },
     });
-    if (user.organizationId) return user;
+    if (user.organizationId) {
+      await this.prisma.organizationMembership.upsert({
+        where: {
+          organizationId_userId: {
+            organizationId: user.organizationId,
+            userId: user.id,
+          },
+        },
+        create: {
+          organizationId: user.organizationId,
+          userId: user.id,
+          role: "MEMBER",
+        },
+        update: {},
+      });
+      return user;
+    }
     const org = await this.prisma.organization.create({
       data: { name: "My Workspace" },
     });
-    await this.prisma.user.update({
-      where: { id: userId },
-      data: { organizationId: org.id },
-    });
+    await this.prisma.$transaction([
+      this.prisma.user.update({
+        where: { id: userId },
+        data: { organizationId: org.id },
+      }),
+      this.prisma.organizationMembership.create({
+        data: {
+          organizationId: org.id,
+          userId,
+          role: "OWNER",
+        },
+      }),
+    ]);
     return { ...user, organizationId: org.id };
+  }
+
+  async ensureOrganizationMembership(
+    organizationId: string,
+    userId: string,
+    role: "OWNER" | "MEMBER" = "MEMBER"
+  ): Promise<void> {
+    await this.prisma.organizationMembership.upsert({
+      where: {
+        organizationId_userId: {
+          organizationId,
+          userId,
+        },
+      },
+      create: {
+        organizationId,
+        userId,
+        role,
+      },
+      update: {},
+    });
   }
 
   async findOrCreateUserByFirebase(

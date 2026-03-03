@@ -3,6 +3,7 @@ import { getScreenshotUrl, type IssueScreenshot } from "../../lib/api/media";
 import { ErrorBanner } from "../../components/ErrorBanner";
 import { IconScreenshot } from "../../components/icons";
 import { IconTrash } from "../../components/IconTrash";
+import { IconLabelButton } from "./IconLabelButton";
 
 export type IssueDetailModalScreenshotsProps = {
   screenshots: IssueScreenshot[];
@@ -44,7 +45,7 @@ export function IssueDetailModalScreenshots({
   screenshotsSectionRef,
 }: IssueDetailModalScreenshotsProps) {
   return (
-    <div className="form-group" ref={screenshotsSectionRef}>
+    <div className="form-group issue-modal-field expenses-field" ref={screenshotsSectionRef}>
       <label>
         Screenshots
         {screenshots.length > 0 ? ` (${screenshots.length})` : ""}
@@ -178,8 +179,6 @@ export function IssueDetailModalScreenshots({
                       position: "absolute",
                       top: 4,
                       right: 4,
-                      minWidth: 28,
-                      padding: "4px 6px",
                     }}
                     onClick={() => handleDeleteScreenshot(shot.id)}
                     aria-label="Delete screenshot"
@@ -194,14 +193,15 @@ export function IssueDetailModalScreenshots({
         )}
         {!screenshotUploading && !screenshotTaking && (
           <>
-            <button
-              type="button"
-              className="btn btn-secondary"
+            <IconLabelButton
+              variant="primary"
+              className="issue-modal-action-btn"
               onClick={handleTakeScreenshot}
               disabled={!canScreenRecord}
+              icon={<IconScreenshot size={14} />}
             >
-              <IconScreenshot size={14} /> Take Screenshot
-            </button>
+              Take Screenshot
+            </IconLabelButton>
             <input
               ref={screenshotFileInputRef}
               type="file"

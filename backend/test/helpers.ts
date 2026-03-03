@@ -22,6 +22,13 @@ export async function createTestUserWithOrg(prisma: PrismaClient) {
       organizationId: org.id,
     },
   });
+  await prisma.organizationMembership.create({
+    data: {
+      organizationId: org.id,
+      userId: user.id,
+      role: "OWNER",
+    },
+  });
   const token = createTestToken({ sub: user.id, email: user.email });
   return { token, userId: user.id, orgId: org.id };
 }

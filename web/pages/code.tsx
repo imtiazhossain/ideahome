@@ -652,6 +652,7 @@ function renderCodeSectionInner(
             id="code-audit-prompt"
             className="code-page-rating-prompt"
             readOnly
+            spellCheck={false}
             rows={8}
             value={auditPromptText}
           />

@@ -20,9 +20,10 @@ export function IssueDetailModalFormFields({
 }: IssueDetailModalFormFieldsProps) {
   return (
     <>
-      <div className="form-group">
+      <div className="form-group issue-modal-field expenses-field">
         <label>Project</label>
         <input
+          className="expenses-input"
           type="text"
           value={selectedIssue.project?.name ?? ""}
           readOnly
@@ -33,9 +34,10 @@ export function IssueDetailModalFormFields({
           }}
         />
       </div>
-      <div className="form-group">
+      <div className="form-group issue-modal-field expenses-field">
         <label>Title</label>
         <input
+          className="expenses-input"
           value={selectedIssue.title ?? ""}
           onChange={(e) =>
             setSelectedIssue({
@@ -46,10 +48,12 @@ export function IssueDetailModalFormFields({
           placeholder="Summary"
         />
       </div>
-      <div className="form-group">
+      <div className="form-group issue-modal-field expenses-field">
         <label>Description</label>
         <textarea
+          className="expenses-input"
           value={selectedIssue.description ?? ""}
+          spellCheck
           onChange={(e) =>
             setSelectedIssue({
               ...selectedIssue,
@@ -60,10 +64,12 @@ export function IssueDetailModalFormFields({
           rows={3}
         />
       </div>
-      <div className="form-group">
+      <div className="form-group issue-modal-field expenses-field">
         <label>Acceptance Criteria</label>
         <textarea
+          className="expenses-input"
           value={selectedIssue.acceptanceCriteria ?? ""}
+          spellCheck
           onChange={(e) =>
             setSelectedIssue({
               ...selectedIssue,
@@ -74,9 +80,10 @@ export function IssueDetailModalFormFields({
           rows={3}
         />
       </div>
-      <div className="form-group">
+      <div className="form-group issue-modal-field expenses-field">
         <label>Database</label>
         <input
+          className="expenses-input"
           value={selectedIssue.database ?? ""}
           onChange={(e) => {
             const value = e.target.value;
@@ -88,9 +95,10 @@ export function IssueDetailModalFormFields({
           placeholder="Input Database Information..."
         />
       </div>
-      <div className="form-group">
+      <div className="form-group issue-modal-field expenses-field">
         <label>API</label>
         <input
+          className="expenses-input"
           value={selectedIssue.api ?? ""}
           onChange={(e) => {
             const value = e.target.value;
@@ -99,7 +107,7 @@ export function IssueDetailModalFormFields({
           placeholder="API"
         />
       </div>
-      <div className="form-group">
+      <div className="form-group issue-modal-field expenses-field">
         <label>Test Cases</label>
         {(() => {
           const lines = parseTestCasesFn(selectedIssue.testCases);
@@ -123,13 +131,13 @@ export function IssueDetailModalFormFields({
                       }}
                       placeholder="e.g. Given X when Y then Z"
                       className={
-                        idx > 0 ? "test-case-input-with-action" : ""
+                        `expenses-input${idx > 0 ? " test-case-input-with-action" : ""}`
                       }
                     />
                     {idx > 0 && (
                       <button
                         type="button"
-                        className="btn btn-icon test-case-remove"
+                        className="project-nav-add test-case-remove"
                         onClick={() => {
                           const next = lines.filter(
                             (_, i) => i !== idx
@@ -145,7 +153,7 @@ export function IssueDetailModalFormFields({
                   </div>
                   <button
                     type="button"
-                    className="btn btn-icon test-case-add"
+                    className="project-nav-add test-case-add"
                     onClick={() =>
                       updateCases([
                         ...lines.slice(0, idx + 1),
@@ -164,10 +172,10 @@ export function IssueDetailModalFormFields({
           );
         })()}
       </div>
-      <div className="form-group">
+      <div className="form-group issue-modal-field expenses-field">
         <label>Assigned To</label>
         <select
-          className="form-select"
+          className="form-select expenses-input"
           value={selectedIssue.assigneeId ?? ""}
           onChange={(e) =>
             setSelectedIssue({

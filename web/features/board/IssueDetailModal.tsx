@@ -294,7 +294,7 @@ export function IssueDetailModal(props: IssueDetailModalProps) {
     >
       <div
         ref={issueDetailModalScrollRef}
-        className={`modal modal--fit-screen modal--issue-detail${dragOverCount > 0 ? " is-drag-over" : ""}`}
+        className={`modal modal--fit-screen modal--issue-detail issue-detail-modal-finance${dragOverCount > 0 ? " is-drag-over" : ""}`}
         onClick={(e) => e.stopPropagation()}
         onDragOver={handleDragOver}
         onDragEnter={handleDragEnter}
@@ -315,229 +315,231 @@ export function IssueDetailModal(props: IssueDetailModalProps) {
           computeQualityScoreFn={computeQualityScoreFn}
           onClose={onClose}
         />
-        <div className="modal-body modal-body--scrollable">
-          <IssueDetailModalFormFields
-            selectedIssue={selectedIssue}
-            setSelectedIssue={setSelectedIssue}
-            users={users}
-            parseTestCasesFn={parseTestCasesFn}
-            serializeTestCasesFn={serializeTestCasesFn}
-          />
-          <IssueDetailModalAutomatedTests
-            selectedIssue={selectedIssue}
-            setSelectedIssue={setSelectedIssue}
-            parseAutomatedTestsFn={parseAutomatedTestsFn}
-            serializeAutomatedTestsFn={serializeAutomatedTestsFn}
-            automatedTestDropdownRef={automatedTestDropdownRef}
-            automatedTestDropdownOpen={automatedTestDropdownOpen}
-            setAutomatedTestDropdownOpen={setAutomatedTestDropdownOpen}
-            automatedTestRunResults={automatedTestRunResults}
-            setAutomatedTestRunResults={setAutomatedTestRunResults}
-            runUiTestFn={runUiTestFn}
-          />
-          {!isRecording && (
-            <div className="form-group">
-              <div className="recording-section">
-                <div className="recording-action-section">
-                  <div className="recording-action-section-label">
-                    Upload
-                  </div>
-                  <div className="recording-actions">
-                    <button
-                      type="button"
-                      className="btn btn-secondary"
-                      onClick={() => fileInputRef.current?.click()}
-                      disabled={
-                        uploadButtonBusy ||
-                        recordingUploading ||
-                        screenshotUploading ||
-                        fileUploading
-                      }
-                      aria-label={
-                        uploadButtonBusy ||
+        <div className="modal-body modal-body--scrollable issue-detail-modal-body">
+          <section className="tests-page-section expenses-add-section issue-detail-modal-main-section">
+            <IssueDetailModalFormFields
+              selectedIssue={selectedIssue}
+              setSelectedIssue={setSelectedIssue}
+              users={users}
+              parseTestCasesFn={parseTestCasesFn}
+              serializeTestCasesFn={serializeTestCasesFn}
+            />
+            <IssueDetailModalAutomatedTests
+              selectedIssue={selectedIssue}
+              setSelectedIssue={setSelectedIssue}
+              parseAutomatedTestsFn={parseAutomatedTestsFn}
+              serializeAutomatedTestsFn={serializeAutomatedTestsFn}
+              automatedTestDropdownRef={automatedTestDropdownRef}
+              automatedTestDropdownOpen={automatedTestDropdownOpen}
+              setAutomatedTestDropdownOpen={setAutomatedTestDropdownOpen}
+              automatedTestRunResults={automatedTestRunResults}
+              setAutomatedTestRunResults={setAutomatedTestRunResults}
+              runUiTestFn={runUiTestFn}
+            />
+            {!isRecording && (
+              <div className="form-group issue-modal-field expenses-field">
+                <div className="recording-section">
+                  <div className="recording-action-section">
+                    <div className="recording-action-section-label">
+                      Upload
+                    </div>
+                    <div className="recording-actions">
+                      <button
+                        type="button"
+                        className="expenses-add-btn issue-modal-upload-btn"
+                        onClick={() => fileInputRef.current?.click()}
+                        disabled={
+                          uploadButtonBusy ||
+                          recordingUploading ||
+                          screenshotUploading ||
+                          fileUploading
+                        }
+                        aria-label={
+                          uploadButtonBusy ||
+                          fileUploading ||
+                          recordingUploading ||
+                          screenshotUploading
+                            ? "Uploading…"
+                            : "Upload file (image, video, audio, PDF, or any file)"
+                        }
+                        title={
+                          uploadButtonBusy ||
+                          fileUploading ||
+                          recordingUploading ||
+                          screenshotUploading
+                            ? "Uploading…"
+                            : "Upload file (image, video, audio, PDF, or any file)"
+                        }
+                      >
+                        {uploadButtonBusy ||
                         fileUploading ||
                         recordingUploading ||
-                        screenshotUploading
-                          ? "Uploading…"
-                          : "Upload file (image, video, audio, PDF, or any file)"
-                      }
-                      title={
-                        uploadButtonBusy ||
-                        fileUploading ||
-                        recordingUploading ||
-                        screenshotUploading
-                          ? "Uploading…"
-                          : "Upload file (image, video, audio, PDF, or any file)"
-                      }
-                    >
-                      {uploadButtonBusy ||
-                      fileUploading ||
-                      recordingUploading ||
-                      screenshotUploading ? (
-                        <span
-                          className="upload-spinner upload-spinner--btn"
-                          aria-hidden="true"
-                        />
-                      ) : (
-                        <IconUpload size={14} />
-                      )}
-                    </button>
+                        screenshotUploading ? (
+                          <span
+                            className="upload-spinner upload-spinner--btn"
+                            aria-hidden="true"
+                          />
+                        ) : (
+                          <IconUpload size={14} />
+                        )}
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
-          )}
-          <IssueDetailModalScreenshots
-            screenshots={selectedIssue.screenshots ?? []}
-            screenshotNameFromComments={screenshotNameFromComments}
-            editingScreenshotId={editingScreenshotId}
-            editingScreenshotName={editingScreenshotName}
-            setEditingScreenshotId={setEditingScreenshotId}
-            setEditingScreenshotName={setEditingScreenshotName}
-            handleSaveScreenshotName={handleSaveScreenshotName}
-            handleDeleteScreenshot={handleDeleteScreenshot}
-            handleTakeScreenshot={handleTakeScreenshot}
-            handleScreenshotUpload={handleScreenshotUpload}
-            screenshotFileInputRef={screenshotFileInputRef}
-            canScreenRecord={canScreenRecord}
-            screenshotTaking={screenshotTaking}
-            screenshotUploading={screenshotUploading}
-            screenshotError={screenshotError}
-            setScreenshotError={setScreenshotError}
-            screenshotsSectionRef={screenshotsSectionRef}
-          />
-          <IssueDetailModalRecordings
-            recordings={selectedIssue.recordings ?? []}
-            recordingsSectionRef={recordingsSectionRef}
-            editingRecordingId={editingRecordingId}
-            editingRecordingName={editingRecordingName}
-            setEditingRecordingId={setEditingRecordingId}
-            setEditingRecordingName={setEditingRecordingName}
-            handleSaveRecordingName={handleSaveRecordingName}
-            handleDeleteRecording={handleDeleteRecording}
-            playingRecordingId={playingRecordingId}
-            setPlayingRecordingId={setPlayingRecordingId}
-            recordingPlayerWrapRef={recordingPlayerWrapRef}
-            recordingPlaybackError={recordingPlaybackError}
-            setRecordingPlaybackError={setRecordingPlaybackError}
-            recordingFor={recordingFor}
-            recordingMode={recordingMode}
-            stopRecording={stopRecording}
-            startRecording={startRecording}
-            startAudioRecording={startAudioRecording}
-            startCameraRecording={startCameraRecording}
-            canScreenRecord={canScreenRecord}
-            canCameraRecord={canCameraRecord}
-            canAudioRecord={canAudioRecord}
-            isRecording={isRecording}
-            recordingUploading={recordingUploading}
-            recordingError={recordingError}
-            setRecordingError={setRecordingError}
-            fileInputRef={fileInputRef}
-            handleUnifiedFileUpload={handleUnifiedFileUpload}
-          />
-          <IssueDetailModalFiles
-            issueId={selectedIssue.id}
-            files={selectedIssue.files ?? []}
-            filesSectionRef={filesSectionRef}
-            handleDeleteFile={handleDeleteFile}
-            uploadButtonBusy={uploadButtonBusy}
-            fileUploading={fileUploading}
-            fileError={fileError}
-            setFileError={setFileError}
-            dragOverCount={dragOverCount}
-          />
-          <IssueDetailModalComments
-            commentsSectionRef={commentsSectionRef}
-            issueDetailModalScrollRef={issueDetailModalScrollRef}
-            issueComments={issueComments}
-            issueCommentsLoading={issueCommentsLoading}
-            issueCommentsError={issueCommentsError}
-            setIssueCommentsError={setIssueCommentsError}
-            editingCommentId={editingCommentId}
-            commentBoxError={commentBoxError}
-            commentBlocks={commentBlocks}
-            setCommentBlocks={setCommentBlocks}
-            activeCommentBlockRef={activeCommentBlockRef}
-            issueCommentTextareaRef={issueCommentTextareaRef}
-            setCommentBoxError={setCommentBoxError}
-            viewingBlockIndex={viewingBlockIndex}
-            setViewingBlockIndex={setViewingBlockIndex}
-            removeCommentBlock={removeCommentBlock}
-            commentVideoFileInputRef={commentVideoFileInputRef}
-            commentScreenshotFileInputRef={commentScreenshotFileInputRef}
-            handleCommentVideoFile={handleCommentVideoFile}
-            handleCommentScreenshotFile={handleCommentScreenshotFile}
-            handleTakeScreenshotAndAddToComment={handleTakeScreenshotAndAddToComment}
-            issueCommentSubmitting={issueCommentSubmitting}
-            commentAttachmentUploading={commentAttachmentUploading}
-            handleAddComment={handleAddComment}
-            editingCommentDraft={editingCommentDraft}
-            editingCommentBlocks={editingCommentBlocks}
-            setEditingCommentBlocks={setEditingCommentBlocks}
-            removeEditingCommentBlock={removeEditingCommentBlock}
-            handleSaveComment={handleSaveComment}
-            handleCancelEditComment={handleCancelEditComment}
-            updatingCommentId={updatingCommentId}
-            addingAttachmentToCommentId={addingAttachmentToCommentId}
-            setAddingAttachmentToCommentId={setAddingAttachmentToCommentId}
-            commentHistoryOpenId={commentHistoryOpenId}
-            setCommentHistoryOpenId={setCommentHistoryOpenId}
-            handleStartEditComment={handleStartEditComment}
-            handleDeleteComment={handleDeleteComment}
-            deletingCommentId={deletingCommentId}
-            selectedIssue={selectedIssue}
-            isRecording={isRecording}
-            recordingError={recordingError}
-            setRecordingError={setRecordingError}
-            recordingFor={recordingFor}
-            recordingMode={recordingMode}
-            stopRecording={stopRecording}
-            startRecording={startRecording}
-            startAudioRecording={startAudioRecording}
-            startCameraRecording={startCameraRecording}
-            canScreenRecord={canScreenRecord}
-            canCameraRecord={canCameraRecord}
-            canAudioRecord={canAudioRecord}
-            recordingUploading={recordingUploading}
-            screenshotUploading={screenshotUploading}
-            screenshotTaking={screenshotTaking}
-          />
-
-          <div
-            style={{
-              marginTop: 16,
-              fontSize: 12,
-              color: "var(--text-muted)",
-            }}
-          >
-            Status:{" "}
-            {STATUSES.find((s) => s.id === selectedIssue.status)?.label ??
-              selectedIssue.status}
-          </div>
-          {issueSaveError && (
-            <ErrorBanner
-              message={issueSaveError}
-              onDismiss={() => setIssueSaveError(null)}
-              style={{ marginTop: 12 }}
-            />
-          )}
-          {issueSaveSuccess &&
-            !hasIssueDetailChangesFn(selectedIssue, issueDetailOriginal) && (
-              <div
-                style={{
-                  marginTop: 12,
-                  padding: "8px 12px",
-                  borderRadius: 4,
-                  background: "rgba(72,187,120,0.15)",
-                  color: "#48bb78",
-                  fontSize: 13,
-                  fontWeight: 500,
-                }}
-              >
-                Saved successfully
-              </div>
             )}
+            <IssueDetailModalScreenshots
+              screenshots={selectedIssue.screenshots ?? []}
+              screenshotNameFromComments={screenshotNameFromComments}
+              editingScreenshotId={editingScreenshotId}
+              editingScreenshotName={editingScreenshotName}
+              setEditingScreenshotId={setEditingScreenshotId}
+              setEditingScreenshotName={setEditingScreenshotName}
+              handleSaveScreenshotName={handleSaveScreenshotName}
+              handleDeleteScreenshot={handleDeleteScreenshot}
+              handleTakeScreenshot={handleTakeScreenshot}
+              handleScreenshotUpload={handleScreenshotUpload}
+              screenshotFileInputRef={screenshotFileInputRef}
+              canScreenRecord={canScreenRecord}
+              screenshotTaking={screenshotTaking}
+              screenshotUploading={screenshotUploading}
+              screenshotError={screenshotError}
+              setScreenshotError={setScreenshotError}
+              screenshotsSectionRef={screenshotsSectionRef}
+            />
+            <IssueDetailModalRecordings
+              recordings={selectedIssue.recordings ?? []}
+              recordingsSectionRef={recordingsSectionRef}
+              editingRecordingId={editingRecordingId}
+              editingRecordingName={editingRecordingName}
+              setEditingRecordingId={setEditingRecordingId}
+              setEditingRecordingName={setEditingRecordingName}
+              handleSaveRecordingName={handleSaveRecordingName}
+              handleDeleteRecording={handleDeleteRecording}
+              playingRecordingId={playingRecordingId}
+              setPlayingRecordingId={setPlayingRecordingId}
+              recordingPlayerWrapRef={recordingPlayerWrapRef}
+              recordingPlaybackError={recordingPlaybackError}
+              setRecordingPlaybackError={setRecordingPlaybackError}
+              recordingFor={recordingFor}
+              recordingMode={recordingMode}
+              stopRecording={stopRecording}
+              startRecording={startRecording}
+              startAudioRecording={startAudioRecording}
+              startCameraRecording={startCameraRecording}
+              canScreenRecord={canScreenRecord}
+              canCameraRecord={canCameraRecord}
+              canAudioRecord={canAudioRecord}
+              isRecording={isRecording}
+              recordingUploading={recordingUploading}
+              recordingError={recordingError}
+              setRecordingError={setRecordingError}
+              fileInputRef={fileInputRef}
+              handleUnifiedFileUpload={handleUnifiedFileUpload}
+            />
+            <IssueDetailModalFiles
+              issueId={selectedIssue.id}
+              files={selectedIssue.files ?? []}
+              filesSectionRef={filesSectionRef}
+              handleDeleteFile={handleDeleteFile}
+              uploadButtonBusy={uploadButtonBusy}
+              fileUploading={fileUploading}
+              fileError={fileError}
+              setFileError={setFileError}
+              dragOverCount={dragOverCount}
+            />
+            <IssueDetailModalComments
+              commentsSectionRef={commentsSectionRef}
+              issueDetailModalScrollRef={issueDetailModalScrollRef}
+              issueComments={issueComments}
+              issueCommentsLoading={issueCommentsLoading}
+              issueCommentsError={issueCommentsError}
+              setIssueCommentsError={setIssueCommentsError}
+              editingCommentId={editingCommentId}
+              commentBoxError={commentBoxError}
+              commentBlocks={commentBlocks}
+              setCommentBlocks={setCommentBlocks}
+              activeCommentBlockRef={activeCommentBlockRef}
+              issueCommentTextareaRef={issueCommentTextareaRef}
+              setCommentBoxError={setCommentBoxError}
+              viewingBlockIndex={viewingBlockIndex}
+              setViewingBlockIndex={setViewingBlockIndex}
+              removeCommentBlock={removeCommentBlock}
+              commentVideoFileInputRef={commentVideoFileInputRef}
+              commentScreenshotFileInputRef={commentScreenshotFileInputRef}
+              handleCommentVideoFile={handleCommentVideoFile}
+              handleCommentScreenshotFile={handleCommentScreenshotFile}
+              handleTakeScreenshotAndAddToComment={handleTakeScreenshotAndAddToComment}
+              issueCommentSubmitting={issueCommentSubmitting}
+              commentAttachmentUploading={commentAttachmentUploading}
+              handleAddComment={handleAddComment}
+              editingCommentDraft={editingCommentDraft}
+              editingCommentBlocks={editingCommentBlocks}
+              setEditingCommentBlocks={setEditingCommentBlocks}
+              removeEditingCommentBlock={removeEditingCommentBlock}
+              handleSaveComment={handleSaveComment}
+              handleCancelEditComment={handleCancelEditComment}
+              updatingCommentId={updatingCommentId}
+              addingAttachmentToCommentId={addingAttachmentToCommentId}
+              setAddingAttachmentToCommentId={setAddingAttachmentToCommentId}
+              commentHistoryOpenId={commentHistoryOpenId}
+              setCommentHistoryOpenId={setCommentHistoryOpenId}
+              handleStartEditComment={handleStartEditComment}
+              handleDeleteComment={handleDeleteComment}
+              deletingCommentId={deletingCommentId}
+              selectedIssue={selectedIssue}
+              isRecording={isRecording}
+              recordingError={recordingError}
+              setRecordingError={setRecordingError}
+              recordingFor={recordingFor}
+              recordingMode={recordingMode}
+              stopRecording={stopRecording}
+              startRecording={startRecording}
+              startAudioRecording={startAudioRecording}
+              startCameraRecording={startCameraRecording}
+              canScreenRecord={canScreenRecord}
+              canCameraRecord={canCameraRecord}
+              canAudioRecord={canAudioRecord}
+              recordingUploading={recordingUploading}
+              screenshotUploading={screenshotUploading}
+              screenshotTaking={screenshotTaking}
+            />
+
+            <div
+              style={{
+                marginTop: 16,
+                fontSize: 12,
+                color: "var(--text-muted)",
+              }}
+            >
+              Status:{" "}
+              {STATUSES.find((s) => s.id === selectedIssue.status)?.label ??
+                selectedIssue.status}
+            </div>
+            {issueSaveError && (
+              <ErrorBanner
+                message={issueSaveError}
+                onDismiss={() => setIssueSaveError(null)}
+                style={{ marginTop: 12 }}
+              />
+            )}
+            {issueSaveSuccess &&
+              !hasIssueDetailChangesFn(selectedIssue, issueDetailOriginal) && (
+                <div
+                  style={{
+                    marginTop: 12,
+                    padding: "8px 12px",
+                    borderRadius: 4,
+                    background: "rgba(72,187,120,0.15)",
+                    color: "#48bb78",
+                    fontSize: 13,
+                    fontWeight: 500,
+                  }}
+                >
+                  Saved successfully
+                </div>
+              )}
+          </section>
         </div>
         <IssueDetailModalActions
           selectedIssue={selectedIssue}

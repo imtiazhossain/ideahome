@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
 import type { Prisma } from "@prisma/client";
+import { verifyProjectForUser } from "../common/org-scope";
 import { ProjectScopedListService } from "../common/project-scoped-list.service";
 import { PrismaService } from "../prisma.service";
 import { IdeaPlanService } from "./idea-plan.service";
@@ -65,15 +66,15 @@ export class IdeasService {
     preferredModel?: string,
     requesterEmail?: string
   ) {
-    const orgId = await this.getOrgIdForUser(userId);
     const idea = await this.prisma.idea.findUnique({
       where: { id },
-      include: { project: { select: { name: true, organizationId: true } } },
+      include: { project: { select: { id: true, name: true } } },
     });
 
-    if (!idea || idea.project.organizationId !== orgId) {
+    if (!idea) {
       throw new NotFoundException("Idea not found");
     }
+    await verifyProjectForUser(this.prisma, idea.project.id, userId);
 
     const plan = await this.ideaPlanService.generatePlan({
       ideaName: idea.name,
@@ -100,17 +101,17 @@ export class IdeasService {
     requesterEmail?: string,
     includeWeb?: boolean
   ) {
-    const orgId = await this.getOrgIdForUser(userId);
     const idea = await this.prisma.idea.findUnique({
       where: { id },
       include: {
-        project: { select: { name: true, organizationId: true } },
+        project: { select: { id: true, name: true } },
       },
     });
 
-    if (!idea || idea.project.organizationId !== orgId) {
+    if (!idea) {
       throw new NotFoundException("Idea not found");
     }
+    await verifyProjectForUser(this.prisma, idea.project.id, userId);
 
     const action = await this.ideaPlanService.generateActionResponse({
       ideaName: idea.name,
@@ -146,15 +147,15 @@ export class IdeasService {
     if (!itemName.trim()) {
       throw new BadRequestException("Item name is required");
     }
-    const orgId = await this.getOrgIdForUser(userId);
     const project = await this.prisma.project.findUnique({
       where: { id: projectId },
-      select: { name: true, organizationId: true },
+      select: { id: true, name: true },
     });
 
-    if (!project || project.organizationId !== orgId) {
+    if (!project) {
       throw new NotFoundException("Project not found");
     }
+    await verifyProjectForUser(this.prisma, project.id, userId);
 
     const action = await this.ideaPlanService.generateActionResponse({
       ideaName: itemName,
@@ -190,13 +191,5 @@ export class IdeasService {
       return "https://media.giphy.com/media/mlvseq9yvZhba/giphy.gif";
     }
     return null;
-  }
-
-  private async getOrgIdForUser(userId: string): Promise<string> {
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-      select: { organizationId: true },
-    });
-    return user?.organizationId ?? "";
   }
 }

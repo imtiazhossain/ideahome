@@ -17,15 +17,17 @@ export function IssueDetailModalHeader({
   return (
     <>
       <div className="modal-header">
-        <h2>{issueKeyFn(selectedIssue)}</h2>
+        <h2 className="tests-page-section-title issue-detail-modal-title">
+          {issueKeyFn(selectedIssue)}
+        </h2>
         <div className="modal-header-actions">
           <button
             type="button"
-            className="modal-close"
+            className="expenses-plaid-disconnect-btn issue-detail-modal-close"
             onClick={onClose}
             aria-label="Close"
           >
-            ×
+            Close
           </button>
         </div>
       </div>

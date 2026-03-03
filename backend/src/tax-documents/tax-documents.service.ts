@@ -1,12 +1,11 @@
 import {
   BadRequestException,
-  ForbiddenException,
   Injectable,
   NotFoundException,
 } from "@nestjs/common";
 import { Response } from "express";
 import { createReadStream, existsSync } from "fs";
-import { getOrgIdForUser, verifyProjectInOrg } from "../common/org-scope";
+import { verifyProjectForUser } from "../common/org-scope";
 import { PrismaService } from "../prisma.service";
 import { StorageService } from "../storage.service";
 
@@ -48,16 +47,6 @@ export class TaxDocumentsService {
     private readonly prisma: PrismaService,
     private readonly storage: StorageService
   ) {}
-
-  private async getOrgIdForUser(userId: string): Promise<string> {
-    return getOrgIdForUser(
-      this.prisma,
-      userId,
-      new ForbiddenException(
-        "User has no organization. Complete login again to create one."
-      )
-    );
-  }
 
   private normalizeProjectId(value: unknown): string {
     if (typeof value !== "string" || !value.trim()) {
@@ -178,19 +167,18 @@ export class TaxDocumentsService {
     projectId: string,
     userId: string
   ): Promise<void> {
-    const orgId = await this.getOrgIdForUser(userId);
-    await verifyProjectInOrg(this.prisma, projectId, orgId);
+    await verifyProjectForUser(this.prisma, projectId, userId);
   }
 
   private async getByIdAndUser(id: string, userId: string) {
-    const orgId = await this.getOrgIdForUser(userId);
     const doc = await this.prisma.taxDocument.findUnique({
       where: { id },
-      include: { project: true },
+      select: { id: true, fileUrl: true, fileName: true, projectId: true },
     });
-    if (!doc || doc.project.organizationId !== orgId) {
+    if (!doc) {
       throw new NotFoundException("Tax document not found");
     }
+    await this.verifyProjectAccess(doc.projectId, userId);
     return doc;
   }
 

@@ -27,6 +27,7 @@ import {
   pathIssueStatus,
   pathIssues,
   pathIssuesBulk,
+  pathProjectMembers,
   pathRecordingStream,
   pathScreenshotStream,
   pathProjectById,
@@ -514,6 +515,12 @@ export const API_BASE = API_BASE_RESOLVED;
 export type User = SharedUser;
 export type Organization = SharedOrganization;
 export type Project = SharedProject;
+export type ProjectMember = {
+  userId: string;
+  role: string;
+  createdAt: string;
+  user: User;
+};
 export type IssueRecording = SharedIssueRecording;
 export type IssueScreenshot = SharedIssueScreenshot;
 export type IssueFile = SharedIssueFile;
@@ -620,6 +627,25 @@ export async function deleteProject(id: string): Promise<void> {
   return requestVoid(pathProjectById(id), {
     method: "DELETE",
     errorMessage: "Failed to delete project",
+  });
+}
+
+export async function fetchProjectMembers(
+  projectId: string
+): Promise<ProjectMember[]> {
+  return requestJson<ProjectMember[]>(pathProjectMembers(projectId), {
+    errorMessage: "Failed to fetch project members",
+  });
+}
+
+export async function inviteProjectMember(
+  projectId: string,
+  userId: string
+): Promise<ProjectMember[]> {
+  return requestJson<ProjectMember[]>(pathProjectMembers(projectId), {
+    method: "POST",
+    body: { userId },
+    errorMessage: "Failed to invite project member",
   });
 }
 

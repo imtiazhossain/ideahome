@@ -10,9 +10,23 @@ export class UsersService {
       where: { id: userId },
       select: { organizationId: true },
     });
-    if (!me?.organizationId) return [];
+    let orgId = me?.organizationId ?? null;
+    if (!orgId) {
+      const membership = await this.prisma.organizationMembership.findFirst({
+        where: { userId },
+        select: { organizationId: true },
+        orderBy: { createdAt: "asc" },
+      });
+      orgId = membership?.organizationId ?? null;
+    }
+    if (!orgId) return [];
     return this.prisma.user.findMany({
-      where: { organizationId: me.organizationId },
+      where: {
+        OR: [
+          { organizationId: orgId },
+          { organizationMemberships: { some: { organizationId: orgId } } },
+        ],
+      },
       orderBy: { email: "asc" },
       select: { id: true, email: true, name: true },
     });

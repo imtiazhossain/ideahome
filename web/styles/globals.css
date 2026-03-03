@@ -732,6 +732,75 @@ textarea {
   color: var(--text);
 }
 
+.drawer-project-collab {
+  margin: 8px 0 12px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: rgba(30, 41, 59, 0.28);
+}
+
+.drawer-project-collab-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.drawer-project-collab-select {
+  flex: 1;
+  min-width: 0;
+  padding: 7px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--input-bg, var(--bg-card));
+  color: var(--text);
+  font-size: 12px;
+}
+
+.drawer-project-collab-invite {
+  border: 1px solid #60a5fa;
+  border-radius: 6px;
+  background: rgba(37, 99, 235, 0.15);
+  color: #dbeafe;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 7px 10px;
+  cursor: pointer;
+}
+
+.drawer-project-collab-invite:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.drawer-project-collab-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 8px;
+}
+
+.drawer-project-collab-chip {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid rgba(96, 165, 250, 0.5);
+  border-radius: 999px;
+  padding: 3px 8px;
+  font-size: 11px;
+  color: #dbeafe;
+}
+
+.drawer-project-collab-empty {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.drawer-project-collab-error {
+  margin-top: 6px;
+  font-size: 11px;
+  color: #fca5a5;
+}
+
 .drawer-bottom-settings {
   margin-top: auto;
   padding: 12px 10px calc(12px + env(safe-area-inset-bottom, 0px));
@@ -2857,11 +2926,13 @@ textarea {
   display: flex;
   gap: 20px;
   min-height: 70vh;
-  align-items: flex-start;
+  align-items: stretch;
 }
 
 .column {
   flex: 0 0 280px;
+  display: flex;
+  flex-direction: column;
   background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: var(--card-radius);
@@ -2876,6 +2947,15 @@ textarea {
   justify-content: space-between;
   margin-bottom: 12px;
   padding: 0 4px;
+}
+
+.column-header-sortable {
+  cursor: grab;
+  touch-action: none;
+}
+
+.column-header-sortable.is-sorting {
+  cursor: grabbing;
 }
 
 .column-title {
@@ -2905,6 +2985,77 @@ textarea {
 }
 .column.column-done .column-title {
   color: var(--done);
+}
+
+.column.column-custom .column-title {
+  color: var(--text-muted);
+}
+
+.board-add-column {
+  flex: 0 0 280px;
+  display: flex;
+}
+
+.board-add-column-button {
+  width: 100%;
+  min-height: 120px;
+  border-radius: var(--card-radius);
+  border: 1px dashed var(--border-input);
+  background: color-mix(in srgb, var(--column-bg) 68%, transparent);
+  color: var(--text-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease,
+    color 0.15s ease;
+}
+
+.board-add-column-button:hover {
+  border-color: var(--text);
+  background: color-mix(in srgb, var(--column-bg) 82%, transparent);
+  color: var(--text);
+}
+
+.board-add-column-plus {
+  font-size: 34px;
+  line-height: 1;
+  font-weight: 300;
+}
+
+.board-add-column-overlay {
+  z-index: 150;
+}
+
+.board-add-column-modal {
+  max-width: 560px;
+  width: min(92vw, 560px);
+}
+
+.board-add-column-field label {
+  margin-bottom: 8px;
+}
+
+.board-add-column-field input {
+  border: 1px solid color-mix(in srgb, var(--border-input) 88%, transparent);
+  background: color-mix(in srgb, var(--column-bg) 88%, transparent);
+}
+
+.board-add-column-field input:focus {
+  border-color: var(--todo);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--todo) 24%, transparent);
+}
+
+.board-add-column-error {
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--danger, #ef4444);
+}
+
+.board-add-column-actions {
+  margin-top: 18px;
 }
 
 .column-drop-target {
@@ -3116,6 +3267,449 @@ textarea {
 }
 .modal--issue-detail .modal-body--scrollable::-webkit-scrollbar {
   display: none;
+}
+
+/* Issue detail modal: reuse Finances page visual language */
+.issue-detail-modal-finance {
+  max-width: 1120px;
+  width: min(96vw, 1120px);
+}
+
+.issue-detail-modal-finance .modal-body--scrollable {
+  padding-right: 2px;
+}
+
+.issue-detail-modal-finance .modal-header {
+  margin-bottom: 12px;
+}
+
+.issue-detail-modal-finance .issue-detail-modal-title {
+  margin: 0;
+  color: var(--text);
+}
+
+.issue-detail-modal-finance .issue-detail-modal-close {
+  min-height: 32px;
+  padding: 6px 12px;
+}
+
+.issue-detail-modal-finance .issue-detail-modal-main-section {
+  margin: 0;
+  border-left: 3px solid var(--todo);
+  background: linear-gradient(
+    to right,
+    rgba(59, 130, 246, 0.06),
+    transparent 24px
+  );
+}
+
+[data-theme="dark"] .issue-detail-modal-finance .issue-detail-modal-main-section {
+  background: linear-gradient(
+    to right,
+    rgba(96, 165, 250, 0.08),
+    transparent 24px
+  );
+}
+
+.issue-detail-modal-finance .issue-modal-field {
+  margin-bottom: 14px;
+}
+
+.issue-detail-modal-finance .issue-modal-field label,
+.issue-detail-modal-finance .recording-action-section-label {
+  color: var(--todo);
+}
+
+.issue-detail-modal-finance .expenses-input {
+  border-radius: var(--card-radius);
+}
+
+.issue-detail-modal-finance .automated-tests-trigger {
+  min-height: 38px;
+  justify-content: space-between;
+  text-align: left;
+}
+
+.issue-detail-modal-finance .automated-tests-dropdown {
+  border-radius: var(--card-radius);
+}
+
+.issue-detail-modal-finance .modal-actions {
+  margin-top: 16px;
+}
+
+.issue-detail-modal-finance .issue-modal-save-btn,
+.issue-detail-modal-finance .issue-modal-upload-btn,
+.issue-detail-modal-finance .issue-modal-action-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: auto;
+  min-width: 0;
+  padding: 8px 14px;
+}
+
+.issue-detail-modal-finance .issue-modal-delete-btn {
+  min-height: 38px;
+  padding: 8px 12px;
+  color: var(--error, #b91c1c);
+  border-color: rgba(239, 68, 68, 0.45);
+  background: rgba(127, 29, 29, 0.14);
+}
+
+.issue-detail-modal-finance .issue-modal-delete-btn:hover {
+  color: #f87171;
+  border-color: rgba(239, 68, 68, 0.7);
+  background: rgba(239, 68, 68, 0.2);
+}
+
+.issue-detail-modal-finance .test-case-add {
+  margin-left: 8px;
+  align-self: center;
+  height: 38px;
+  min-height: 38px;
+}
+
+.issue-detail-modal-finance .test-case-add,
+.issue-detail-modal-finance .test-case-remove {
+  border: 1px solid rgba(96, 165, 250, 0.65);
+  background: rgba(37, 99, 235, 0.08);
+  color: #bfdbfe;
+}
+
+.issue-detail-modal-finance .test-case-add:hover,
+.issue-detail-modal-finance .test-case-remove:hover {
+  border-color: #93c5fd;
+  background: rgba(59, 130, 246, 0.24);
+  color: #eff6ff;
+}
+
+.issue-detail-modal-finance .test-case-row {
+  align-items: center;
+  gap: 8px;
+}
+
+.issue-detail-modal-finance .recording-actions,
+.issue-detail-modal-finance .recording-item-actions,
+.issue-detail-modal-finance .issue-comment-toolbar,
+.issue-detail-modal-finance .issue-comment-actions,
+.issue-detail-modal-finance .modal-actions {
+  align-items: center;
+}
+
+.issue-detail-modal-finance .recording-item,
+.issue-detail-modal-finance .issue-file-row,
+.issue-detail-modal-finance .screenshot-item {
+  border: 1px solid rgba(59, 130, 246, 0.25);
+  border-radius: 12px;
+  background: rgba(59, 130, 246, 0.04);
+  border-color: rgba(59, 130, 246, 0.25);
+}
+
+.issue-detail-modal-finance .issue-file-row:hover,
+.issue-detail-modal-finance .recording-item:hover,
+.issue-detail-modal-finance .screenshot-item:hover {
+  border-color: rgba(59, 130, 246, 0.4);
+  background: rgba(59, 130, 246, 0.08);
+}
+
+.issue-detail-modal-finance .recording-item-header {
+  background: transparent;
+}
+
+.issue-detail-modal-finance .btn.btn-secondary,
+.issue-detail-modal-finance .btn.btn-danger-outline {
+  border: 1px solid var(--border);
+  border-radius: var(--card-radius);
+  background: var(--column-bg);
+  color: var(--text);
+}
+
+.issue-detail-modal-finance .btn.btn-secondary:hover {
+  border-color: rgba(96, 165, 250, 0.55);
+  background: rgba(59, 130, 246, 0.12);
+  color: var(--text);
+}
+
+.issue-detail-modal-finance .btn.btn-danger-outline:hover {
+  color: var(--error, #b91c1c);
+  border-color: var(--error, #b91c1c);
+  background: rgba(185, 28, 28, 0.06);
+}
+
+.issue-detail-modal-finance .issue-file-link {
+  color: var(--todo);
+}
+
+.issue-icon-label-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  line-height: 1.2;
+}
+
+.issue-icon-label-btn__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.issue-icon-label-btn__label {
+  display: inline-block;
+}
+
+.issue-icon-label-btn.btn-sm {
+  gap: 6px;
+}
+
+.issue-detail-modal-finance .btn {
+  border-radius: 10px;
+}
+
+.issue-detail-modal-finance .btn.btn-secondary,
+.issue-detail-modal-finance .btn.btn-danger-outline,
+.issue-detail-modal-finance .btn.btn-icon,
+.issue-detail-modal-finance .project-nav-add,
+.issue-detail-modal-finance .automated-tests-chip-remove {
+  border: 1px solid rgba(59, 130, 246, 0.35);
+  background: rgba(37, 99, 235, 0.08);
+  color: #bfdbfe;
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease,
+    color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.issue-detail-modal-finance .btn.btn-secondary:hover,
+.issue-detail-modal-finance .btn.btn-icon:hover,
+.issue-detail-modal-finance .project-nav-add:hover,
+.issue-detail-modal-finance .automated-tests-chip-remove:hover {
+  border-color: #93c5fd;
+  background: rgba(59, 130, 246, 0.24);
+  color: #eff6ff;
+  box-shadow: 0 0 0 1px rgba(147, 197, 253, 0.25) inset;
+}
+
+.issue-detail-modal-finance .btn.btn-danger-outline,
+.issue-detail-modal-finance .issue-modal-delete-btn {
+  border-color: rgba(239, 68, 68, 0.45);
+  background: rgba(127, 29, 29, 0.14);
+  color: #fca5a5;
+}
+
+.issue-detail-modal-finance .btn.btn-danger-outline:hover,
+.issue-detail-modal-finance .issue-modal-delete-btn:hover {
+  border-color: rgba(248, 113, 113, 0.8);
+  background: rgba(239, 68, 68, 0.22);
+  color: #fee2e2;
+}
+
+.issue-detail-modal-finance .btn.btn-icon,
+.issue-detail-modal-finance .project-nav-add {
+  width: 32px;
+  min-width: 32px;
+  height: 32px;
+  min-height: 32px;
+  padding: 0 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.issue-detail-modal-finance .btn.btn-icon svg,
+.issue-detail-modal-finance .project-nav-add svg,
+.issue-detail-modal-finance .automated-tests-chip-remove svg,
+.issue-detail-modal-finance .issue-file-link svg {
+  width: 14px;
+  height: 14px;
+  color: currentColor;
+}
+
+.issue-detail-modal-finance .btn:not(.btn-icon) svg {
+  display: block;
+  position: static;
+  top: auto;
+}
+
+.issue-detail-modal-finance .btn:not(.btn-icon) {
+  align-items: center;
+  line-height: 1.2;
+}
+
+.issue-detail-modal-finance .screenshot-item-delete {
+  width: 32px;
+  min-width: 32px;
+  height: 32px;
+  min-height: 32px;
+  padding: 0 8px;
+}
+
+.issue-detail-modal-finance .test-run-control {
+  border: 1px solid rgba(59, 130, 246, 0.4);
+  background: rgba(37, 99, 235, 0.1);
+}
+
+.issue-detail-modal-finance .test-run-control--play:hover {
+  border-color: #93c5fd;
+  background: rgba(59, 130, 246, 0.24);
+}
+
+.issue-detail-modal-finance .automated-tests-trigger-arrow {
+  color: #93c5fd;
+}
+
+.issue-detail-modal-finance .automated-tests-chip {
+  border-color: rgba(59, 130, 246, 0.35);
+  background: rgba(37, 99, 235, 0.08);
+}
+
+[data-theme="light"] .issue-detail-modal-finance .btn.btn-secondary,
+[data-theme="light"] .issue-detail-modal-finance .btn.btn-icon,
+[data-theme="light"] .issue-detail-modal-finance .project-nav-add,
+[data-theme="light"] .issue-detail-modal-finance .automated-tests-chip-remove,
+[data-theme="light"] .issue-detail-modal-finance .automated-tests-chip {
+  border-color: rgba(37, 99, 235, 0.35);
+  background: rgba(37, 99, 235, 0.06);
+  color: #1d4ed8;
+}
+
+[data-theme="light"] .issue-detail-modal-finance .btn.btn-secondary:hover,
+[data-theme="light"] .issue-detail-modal-finance .btn.btn-icon:hover,
+[data-theme="light"] .issue-detail-modal-finance .project-nav-add:hover,
+[data-theme="light"]
+  .issue-detail-modal-finance
+  .automated-tests-chip-remove:hover {
+  border-color: #1d4ed8;
+  background: rgba(37, 99, 235, 0.12);
+  color: #1e3a8a;
+}
+
+[data-theme="light"] .issue-detail-modal-finance .btn.btn-danger-outline,
+[data-theme="light"] .issue-detail-modal-finance .issue-modal-delete-btn {
+  border-color: rgba(220, 38, 38, 0.4);
+  background: rgba(239, 68, 68, 0.08);
+  color: #dc2626;
+}
+
+[data-theme="light"] .issue-detail-modal-finance .btn.btn-danger-outline:hover,
+[data-theme="light"] .issue-detail-modal-finance .issue-modal-delete-btn:hover {
+  border-color: rgba(220, 38, 38, 0.65);
+  background: rgba(239, 68, 68, 0.14);
+  color: #991b1b;
+}
+
+.issue-detail-modal-finance .issue-comment-composer,
+.issue-detail-modal-finance .issue-comment-editor,
+.issue-detail-modal-finance .issue-comment-attach-panel,
+.issue-detail-modal-finance .issue-comment-history {
+  border: 1px solid rgba(59, 130, 246, 0.3);
+  border-radius: 10px;
+  background: rgba(59, 130, 246, 0.05);
+}
+
+.issue-detail-modal-finance .issue-comment-composer.is-error {
+  border-color: var(--error, #b91c1c);
+  box-shadow: 0 0 0 1px rgba(239, 68, 68, 0.25);
+}
+
+.issue-detail-modal-finance .issue-comment-toolbar {
+  margin-top: 8px;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+}
+
+.issue-detail-modal-finance .issue-comment-toolbar .btn.btn-secondary,
+.issue-detail-modal-finance .issue-comment-toolbar .btn.btn-danger-outline,
+.issue-detail-modal-finance .issue-comment-toolbar .btn.btn-icon {
+  min-width: 32px;
+  min-height: 32px;
+  padding: 0 8px;
+}
+
+.issue-detail-modal-finance .issue-comment-composer-actions,
+.issue-detail-modal-finance .issue-comment-editor-actions {
+  margin-top: 8px;
+}
+
+.issue-detail-modal-finance .issue-comment-composer-wrap {
+  margin-bottom: 10px;
+}
+
+.issue-detail-modal-finance .issue-comment-add-btn,
+.issue-detail-modal-finance .issue-comment-save-btn {
+  width: auto;
+  min-width: 84px;
+  padding: 8px 14px;
+}
+
+.issue-detail-modal-finance .issue-comments-list {
+  list-style: none;
+  margin: 8px 0 12px !important;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.issue-detail-modal-finance .issue-comment {
+  margin: 0;
+  padding: 12px;
+  font-size: 13px;
+  border: 1px solid rgba(59, 130, 246, 0.25);
+  border-radius: 12px;
+  background: rgba(59, 130, 246, 0.04);
+}
+
+.issue-detail-modal-finance .issue-comment-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.issue-detail-modal-finance .issue-comment-body {
+  min-width: 0;
+  min-height: 0;
+}
+
+.issue-detail-modal-finance .issue-comment:hover {
+  border-color: rgba(59, 130, 246, 0.4);
+  background: rgba(59, 130, 246, 0.08);
+}
+
+.issue-detail-modal-finance .issue-comment.is-editing {
+  border-color: rgba(96, 165, 250, 0.55);
+  background: rgba(59, 130, 246, 0.1);
+}
+
+.issue-detail-modal-finance .issue-comment-meta {
+  border-top: 1px solid rgba(59, 130, 246, 0.2);
+  padding-top: 8px;
+  margin-top: 8px !important;
+}
+
+.issue-detail-modal-finance .issue-comment-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.issue-detail-modal-finance .issue-comment-actions .btn.btn-icon {
+  min-width: 32px;
+  min-height: 32px;
+  padding: 0 8px;
+}
+
+.issue-detail-modal-finance .issue-comment-actions .btn.btn-icon:hover {
+  border-color: #93c5fd;
+  background: rgba(59, 130, 246, 0.24);
+  color: #eff6ff;
 }
 
 .modal-header {
@@ -3342,29 +3936,49 @@ textarea {
 }
 
 .quality-score-bar-wrap {
-  margin-bottom: 4px;
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
 }
 
 .quality-score-bar-label {
   display: flex;
   justify-content: space-between;
-  font-size: 12px;
-  color: var(--text-muted);
-  margin-bottom: 6px;
+  align-items: center;
+  margin-bottom: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #0f172a;
 }
 
 .quality-score-bar {
-  height: 8px;
-  background: var(--bg-muted, #e2e8f0);
-  border-radius: 4px;
+  height: 10px;
+  background: #e2e8f0;
+  border-radius: 999px;
   overflow: hidden;
 }
 
 .quality-score-bar-fill {
   height: 100%;
   background: linear-gradient(to right, #e53e3e, #ecc94b 50%, #38a169);
-  border-radius: 4px;
-  transition: width 0.2s ease;
+  border-radius: inherit;
+  transition: width 320ms ease;
+}
+
+[data-theme="dark"] .quality-score-bar-wrap {
+  background: #0f172a;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+}
+
+[data-theme="dark"] .quality-score-bar-label {
+  color: #e2e8f0;
+}
+
+[data-theme="dark"] .quality-score-bar {
+  background: rgba(148, 163, 184, 0.25);
 }
 
 .modal-actions {
@@ -8674,6 +9288,15 @@ html[data-theme="dark"] .calendar-picker-popup {
     padding: 12px;
   }
 
+  .board-add-column {
+    flex: 1 1 auto;
+    width: 100%;
+  }
+
+  .board-add-column-button {
+    min-height: 64px;
+  }
+
   .column-header {
     margin-bottom: 10px;
     padding: 0 2px;
@@ -9063,10 +9686,112 @@ html[data-theme="dark"] .calendar-picker-popup {
   }
 
   .features-list-done-toggle {
+    position: relative;
+    width: 36px;
+    height: 36px;
+    min-width: 36px;
+    min-height: 36px;
+    border: none;
+    background: transparent;
+    box-shadow: none;
+    overflow: visible;
+  }
+
+  .features-list-done-toggle::before {
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: 50%;
     width: 18px;
     height: 18px;
-    min-width: 18px;
-    min-height: 18px;
+    transform: translate(-50%, -50%);
+    border-radius: 50%;
+    box-sizing: border-box;
+    border: 1px solid rgba(96, 165, 250, 0.8);
+    background: rgba(37, 99, 235, 0.08);
+    transition:
+      border-color 0.15s ease,
+      background 0.15s ease,
+      box-shadow 0.15s ease;
+  }
+
+  .features-list-done-toggle:hover {
+    border: none;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .features-list-done-toggle:hover::before {
+    border-color: #93c5fd;
+    background: rgba(59, 130, 246, 0.24);
+    box-shadow:
+      0 0 0 1px rgba(147, 197, 253, 0.35) inset,
+      0 0 14px rgba(59, 130, 246, 0.35);
+  }
+
+  .features-list-done-toggle:has(.features-list-done-check) {
+    border: none;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .features-list-done-toggle:has(.features-list-done-check)::before {
+    border-color: #93c5fd;
+    background: rgba(59, 130, 246, 0.34);
+    box-shadow:
+      0 0 0 1px rgba(147, 197, 253, 0.5) inset,
+      0 0 18px rgba(96, 165, 250, 0.55),
+      0 0 28px rgba(59, 130, 246, 0.35);
+  }
+
+  .features-list-done-toggle:has(.features-list-done-check):hover {
+    border: none;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .features-list-done-toggle:has(.features-list-done-check):hover::before {
+    border-color: #93c5fd;
+    background: rgba(59, 130, 246, 0.4);
+    box-shadow:
+      0 0 0 1px rgba(147, 197, 253, 0.55) inset,
+      0 0 20px rgba(96, 165, 250, 0.6),
+      0 0 30px rgba(59, 130, 246, 0.4);
+  }
+
+  [data-theme="light"] .features-list-done-toggle::before {
+    border-color: #2563eb;
+    background: rgba(37, 99, 235, 0.06);
+  }
+
+  [data-theme="light"] .features-list-done-toggle:hover::before {
+    border-color: #1d4ed8;
+    background: rgba(37, 99, 235, 0.12);
+    box-shadow:
+      0 0 0 1px rgba(29, 78, 216, 0.18) inset,
+      0 0 8px rgba(37, 99, 235, 0.2);
+  }
+
+  [data-theme="light"] .features-list-done-toggle:has(.features-list-done-check)::before {
+    border-color: #1d4ed8;
+    background: rgba(37, 99, 235, 0.22);
+    box-shadow:
+      0 0 0 1px rgba(29, 78, 216, 0.22) inset,
+      0 0 9px rgba(37, 99, 235, 0.24);
+  }
+
+  [data-theme="light"] .features-list-done-toggle:has(.features-list-done-check):hover::before {
+    border-color: #1e40af;
+    background: rgba(37, 99, 235, 0.28);
+    box-shadow:
+      0 0 0 1px rgba(30, 64, 175, 0.26) inset,
+      0 0 10px rgba(37, 99, 235, 0.28);
+  }
+
+  .features-list-done-empty,
+  .features-list-done-check {
+    position: relative;
+    z-index: 1;
   }
 
   .features-list-edit,

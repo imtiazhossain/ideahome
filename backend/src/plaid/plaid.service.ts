@@ -11,7 +11,7 @@ import {
   PlaidEnvironments,
   Products,
 } from "plaid";
-import { getOrgIdForUser, verifyProjectInOrg } from "../common/org-scope";
+import { getOrgIdForUser, verifyProjectForUser } from "../common/org-scope";
 import { PrismaService } from "../prisma.service";
 
 const PLAID_ENV_MAP: Record<string, string> = {
@@ -64,8 +64,7 @@ export class PlaidService {
     projectId: string,
     userId: string
   ): Promise<void> {
-    const orgId = await this.getOrgIdForUser(userId);
-    await verifyProjectInOrg(this.prisma, projectId, orgId);
+    await verifyProjectForUser(this.prisma, projectId, userId);
   }
 
   async createLinkToken(userId: string): Promise<{ linkToken: string }> {

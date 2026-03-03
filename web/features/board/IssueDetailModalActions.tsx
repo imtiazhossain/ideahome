@@ -24,7 +24,7 @@ export function IssueDetailModalActions({
       {hasIssueDetailChangesFn(selectedIssue, issueDetailOriginal) && (
         <button
           type="button"
-          className="btn btn-primary"
+          className="expenses-add-btn issue-modal-save-btn"
           onClick={handleSaveIssue}
           disabled={issueSaving}
         >
@@ -33,7 +33,7 @@ export function IssueDetailModalActions({
       )}
       <button
         type="button"
-        className="btn btn-icon"
+        className="expenses-plaid-disconnect-btn issue-modal-delete-btn"
         onClick={() => setIssueToDelete(selectedIssue)}
         aria-label={`Delete ${selectedIssue.title || "issue"}`}
         title="Delete issue"

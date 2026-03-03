@@ -76,13 +76,13 @@ export function IssueDetailModalAutomatedTests({
   };
 
   return (
-    <div className="form-group">
+    <div className="form-group issue-modal-field expenses-field">
       <label>Automated Tests</label>
       <div className="automated-tests-select">
         <div ref={automatedTestDropdownRef}>
           <button
             type="button"
-            className="automated-tests-trigger"
+            className="automated-tests-trigger expenses-input"
             onClick={() =>
               setAutomatedTestDropdownOpen((o) => !o)
             }

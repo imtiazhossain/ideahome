@@ -1,5 +1,6 @@
 import React from "react";
-import { useDraggable, useDroppable } from "@dnd-kit/core";
+import { useDraggable } from "@dnd-kit/core";
+import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import type { Issue } from "../../lib/api";
 import { issueKey } from "./issue-key";
@@ -104,24 +105,57 @@ export function BoardColumn({
   count,
   isDropTarget,
   children,
+  isSortable = true,
+  droppableStatus,
+  isSorting,
 }: {
   id: string;
   label: string;
   count: number;
   isDropTarget: boolean;
   children: React.ReactNode;
+  isSortable?: boolean;
+  droppableStatus?: string;
+  isSorting?: boolean;
 }) {
-  const { setNodeRef } = useDroppable({
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    setActivatorNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({
     id: `column-${id}`,
-    data: { status: id },
+    disabled: !isSortable,
+    data: {
+      type: "column",
+      columnId: id,
+      ...(droppableStatus ? { status: droppableStatus } : {}),
+    },
   });
+  const columnStyle = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    zIndex: isDragging ? 8 : undefined,
+    opacity: isDragging ? 0.75 : undefined,
+  };
 
   return (
     <div
       ref={setNodeRef}
+      style={columnStyle}
       className={`column column-${id}${isDropTarget ? " column-drop-target" : ""}`}
     >
-      <div className="column-header">
+      <div
+        ref={isSortable ? setActivatorNodeRef : undefined}
+        className={`column-header${isSortable ? " column-header-sortable" : ""}${
+          isSorting ? " is-sorting" : ""
+        }`}
+        {...(isSortable ? attributes : {})}
+        {...(isSortable ? listeners : {})}
+      >
         <span className="column-title">{label}</span>
         <span className="column-count">{count}</span>
       </div>

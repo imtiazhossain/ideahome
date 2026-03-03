@@ -13,6 +13,12 @@ import {
   setStoredAssistantVoiceUri,
   setStoredOpenRouterModel,
 } from "../lib/api/auth";
+import {
+  fetchProjectMembers,
+  inviteProjectMember,
+  type ProjectMember,
+} from "../lib/api/projects";
+import { fetchUsers, type User } from "../lib/api/users";
 import { IconTrash } from "./IconTrash";
 import {
   IconBulbyHide,
@@ -174,6 +180,12 @@ export function AppDrawer({
   deleteSectionTab,
 }: AppDrawerProps) {
   const [bulbyTriggerHidden, setBulbyTriggerHidden] = useState(false);
+  const [projectMembers, setProjectMembers] = useState<ProjectMember[]>([]);
+  const [orgUsers, setOrgUsers] = useState<User[]>([]);
+  const [inviteUserId, setInviteUserId] = useState("");
+  const [collabLoading, setCollabLoading] = useState(false);
+  const [collabError, setCollabError] = useState<string | null>(null);
+  const [inviteSubmitting, setInviteSubmitting] = useState(false);
   useEffect(() => {
     try {
       setBulbyTriggerHidden(
@@ -183,6 +195,58 @@ export function AppDrawer({
       /* ignore */
     }
   }, []);
+
+  useEffect(() => {
+    if (!drawerOpen || !selectedProjectId) {
+      setProjectMembers([]);
+      setInviteUserId("");
+      setCollabError(null);
+      return;
+    }
+    let cancelled = false;
+    setCollabLoading(true);
+    setCollabError(null);
+    Promise.all([fetchUsers(), fetchProjectMembers(selectedProjectId)])
+      .then(([users, members]) => {
+        if (cancelled) return;
+        setOrgUsers(users);
+        setProjectMembers(members);
+      })
+      .catch((e) => {
+        if (cancelled) return;
+        setCollabError(
+          e instanceof Error ? e.message : "Failed to load project members"
+        );
+      })
+      .finally(() => {
+        if (!cancelled) setCollabLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [drawerOpen, selectedProjectId]);
+
+  const inviteableUsers = React.useMemo(() => {
+    const memberIds = new Set(projectMembers.map((member) => member.userId));
+    return orgUsers.filter((user) => !memberIds.has(user.id));
+  }, [orgUsers, projectMembers]);
+
+  const handleInvite = async () => {
+    if (!selectedProjectId || !inviteUserId.trim()) return;
+    setInviteSubmitting(true);
+    setCollabError(null);
+    try {
+      const members = await inviteProjectMember(selectedProjectId, inviteUserId);
+      setProjectMembers(members);
+      setInviteUserId("");
+    } catch (e) {
+      setCollabError(
+        e instanceof Error ? e.message : "Failed to invite project member"
+      );
+    } finally {
+      setInviteSubmitting(false);
+    }
+  };
   useEffect(() => {
     const handler = (e: Event) => {
       const ev = e as CustomEvent<{ hidden: boolean }>;
@@ -369,6 +433,65 @@ export function AppDrawer({
                   )}
                 </div>
               ))}
+              <div className="drawer-project-collab" aria-live="polite">
+                <div className="drawer-nav-label drawer-nav-label-indent">
+                  Project Members
+                </div>
+                {selectedProjectId ? (
+                  <>
+                    <div className="drawer-project-collab-row">
+                      <select
+                        className="drawer-project-collab-select"
+                        value={inviteUserId}
+                        onChange={(e) => setInviteUserId(e.target.value)}
+                        disabled={collabLoading || inviteSubmitting}
+                      >
+                        <option value="">Invite user…</option>
+                        {inviteableUsers.map((user) => (
+                          <option key={user.id} value={user.id}>
+                            {user.name?.trim() || user.email}
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        type="button"
+                        className="drawer-project-collab-invite"
+                        onClick={() => {
+                          void handleInvite();
+                        }}
+                        disabled={
+                          collabLoading || inviteSubmitting || !inviteUserId.trim()
+                        }
+                      >
+                        {inviteSubmitting ? "Inviting…" : "Invite"}
+                      </button>
+                    </div>
+                    {collabError ? (
+                      <div className="drawer-project-collab-error">{collabError}</div>
+                    ) : null}
+                    <div className="drawer-project-collab-list">
+                      {projectMembers.map((member) => (
+                        <span
+                          key={member.userId}
+                          className="drawer-project-collab-chip"
+                        >
+                          {(member.user.name?.trim() || member.user.email) +
+                            (member.role === "OWNER" ? " (Owner)" : "")}
+                        </span>
+                      ))}
+                      {!collabLoading && projectMembers.length === 0 ? (
+                        <span className="drawer-project-collab-empty">
+                          No members yet.
+                        </span>
+                      ) : null}
+                    </div>
+                  </>
+                ) : (
+                  <div className="drawer-project-collab-empty">
+                    Select a project to manage members.
+                  </div>
+                )}
+              </div>
               <div className="drawer-nav-label-row drawer-nav-label-row-sections">
                 <div className="drawer-nav-label">Sections</div>
                 <button

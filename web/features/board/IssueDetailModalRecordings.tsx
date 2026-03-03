@@ -12,6 +12,7 @@ import {
   getRecordingDisplayLabel,
   getRecordingKind,
 } from "../../lib/utils";
+import { IconLabelButton } from "./IconLabelButton";
 
 export type IssueDetailModalRecordingsProps = {
   recordings: Array<{
@@ -82,7 +83,7 @@ export function IssueDetailModalRecordings({
   handleUnifiedFileUpload,
 }: IssueDetailModalRecordingsProps) {
   return (
-    <div className="form-group" ref={recordingsSectionRef}>
+    <div className="form-group issue-modal-field expenses-field" ref={recordingsSectionRef}>
       <div className="recording-section">
         {!isRecording && !recordingUploading && (
           <div
@@ -312,33 +313,30 @@ export function IssueDetailModalRecordings({
                   ) : (
                     <>
                       {canAudioRecord && (
-                        <button
-                          type="button"
-                          className="btn btn-secondary"
+                        <IconLabelButton
                           onClick={() => startAudioRecording()}
                           aria-label="Record Audio"
                           title="Record Audio"
+                          icon={<IconMic size={14} />}
                         >
-                          <IconMic size={14} /> Record Audio
-                        </button>
+                          Record Audio
+                        </IconLabelButton>
                       )}
                       {canScreenRecord && (
-                        <button
-                          type="button"
-                          className="btn btn-secondary"
+                        <IconLabelButton
                           onClick={() => startRecording()}
+                          icon={<IconRecordScreen size={14} />}
                         >
-                          <IconRecordScreen size={14} /> Record Screen
-                        </button>
+                          Record Screen
+                        </IconLabelButton>
                       )}
                       {canCameraRecord && (
-                        <button
-                          type="button"
-                          className="btn btn-secondary"
+                        <IconLabelButton
                           onClick={() => startCameraRecording()}
+                          icon={<IconRecordCamera size={14} />}
                         >
-                          <IconRecordCamera size={14} /> Record with Camera
-                        </button>
+                          Record with Camera
+                        </IconLabelButton>
                       )}
                     </>
                   )}

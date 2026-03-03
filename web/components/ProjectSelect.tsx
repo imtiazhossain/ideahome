@@ -8,6 +8,8 @@ export interface ProjectSelectProps {
   required?: boolean;
   emptyOptionLabel?: string;
   emptyHint?: string;
+  className?: string;
+  selectClassName?: string;
 }
 
 export function ProjectSelect({
@@ -18,13 +20,15 @@ export function ProjectSelect({
   required = true,
   emptyOptionLabel = "Select a project",
   emptyHint = "No projects yet. Create one via the API or add seed data.",
+  className,
+  selectClassName = "form-select",
 }: ProjectSelectProps) {
   return (
-    <div className="form-group">
+    <div className={`form-group${className ? ` ${className}` : ""}`}>
       <label htmlFor={id}>Project</label>
       <select
         id={id}
-        className="form-select"
+        className={selectClassName}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         required={required}

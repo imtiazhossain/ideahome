@@ -91,6 +91,7 @@ export function IdeaAssistantPanel({
           className="idea-chat-input"
           ref={onInputRef}
           value={inputValue}
+          spellCheck
           onChange={(e) => onInputChange(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === "Enter" && !e.shiftKey) {

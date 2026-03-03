@@ -621,6 +621,7 @@ export function BulbyChatbox({ projectId }: BulbyChatboxProps) {
               ref={inputRef}
               className="idea-chat-input"
               value={inputValue}
+              spellCheck
               onChange={(e) => setInputValue(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === "Enter" && !e.shiftKey) {

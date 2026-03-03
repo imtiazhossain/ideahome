@@ -95,6 +95,7 @@ function SortableItem({
 }: SortableItemProps) {
   const disabled = isItemDisabled?.(item) ?? false;
   const itemRef = useRef<HTMLLIElement | null>(null);
+  const editingInputRef = useRef<HTMLInputElement | null>(null);
   const [swipeOffset, setSwipeOffset] = useState(0);
   const [isPointerTracking, setIsPointerTracking] = useState(false);
   const [isSwiping, setIsSwiping] = useState(false);
@@ -220,6 +221,33 @@ function SortableItem({
     };
   }, [swipeOffset]);
 
+  React.useEffect(() => {
+    if (!isEditing) return;
+    const input = editingInputRef.current;
+    if (!input) return;
+
+    const doc = input.ownerDocument;
+    const scroller = doc.scrollingElement;
+    const startX = window.scrollX;
+    const startY = window.scrollY;
+    const scrollerTop = scroller?.scrollTop ?? null;
+
+    try {
+      input.focus({ preventScroll: true });
+    } catch {
+      input.focus();
+    }
+
+    const raf = window.requestAnimationFrame(() => {
+      if (typeof scrollerTop === "number" && scroller) {
+        scroller.scrollTop = scrollerTop;
+      }
+      window.scrollTo(startX, startY);
+    });
+
+    return () => window.cancelAnimationFrame(raf);
+  }, [isEditing]);
+
   const dragHandle = (
     <span
       className="features-list-drag-handle"
@@ -319,6 +347,7 @@ function SortableItem({
                 {editingValue || "\u00A0"}
               </span>
               <input
+                ref={editingInputRef}
                 type="text"
                 value={editingValue}
                 onChange={(e) => onEditingValueChange(e.target.value)}
@@ -340,7 +369,6 @@ function SortableItem({
                 }}
                 className="features-list-input"
                 aria-label={`Edit ${itemLabel}`}
-                autoFocus
               />
             </span>
             {item.done && (

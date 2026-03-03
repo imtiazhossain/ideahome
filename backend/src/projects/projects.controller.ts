@@ -23,11 +23,6 @@ export class ProjectsController {
     return this.svc.list(requireUserId(req));
   }
 
-  @Get(":id")
-  get(@Param("id") id: string, @Req() req: AuthenticatedRequest) {
-    return this.svc.get(id, requireUserId(req));
-  }
-
   @Post()
   create(
     @Body() body: { name: string; organizationId?: string },
@@ -36,6 +31,25 @@ export class ProjectsController {
     return this.svc.create(requireUserId(req), {
       name: body?.name,
     });
+  }
+
+  @Get(":id/members")
+  listMembers(@Param("id") id: string, @Req() req: AuthenticatedRequest) {
+    return this.svc.listMembers(id, requireUserId(req));
+  }
+
+  @Post(":id/members")
+  inviteMember(
+    @Param("id") id: string,
+    @Body() body: { userId?: string },
+    @Req() req: AuthenticatedRequest
+  ) {
+    return this.svc.inviteMember(id, requireUserId(req), body ?? {});
+  }
+
+  @Get(":id")
+  get(@Param("id") id: string, @Req() req: AuthenticatedRequest) {
+    return this.svc.get(id, requireUserId(req));
   }
 
   @Put(":id")

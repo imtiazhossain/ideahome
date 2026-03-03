@@ -1,10 +1,10 @@
 import {
   BadRequestException,
-  ForbiddenException,
   InternalServerErrorException,
   NotFoundException,
 } from "@nestjs/common";
 import type { Prisma } from "@prisma/client";
+import { verifyProjectForUser } from "./org-scope";
 import { PrismaService } from "../prisma.service";
 
 type ListEntityDelegate = {
@@ -40,44 +40,25 @@ export class ProjectScopedListService {
     return delegate;
   }
 
-  private async getOrgIdForUser(userId: string): Promise<string> {
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-      select: { organizationId: true },
-    });
-    if (!user?.organizationId) {
-      throw new ForbiddenException(
-        "User has no organization. Complete login again to create one."
-      );
-    }
-    return user.organizationId;
-  }
-
   private async verifyProjectAccess(
     projectId: string,
     userId: string
   ): Promise<void> {
-    const orgId = await this.getOrgIdForUser(userId);
-    const project = await this.prisma.project.findUnique({
-      where: { id: projectId },
-    });
-    if (!project || project.organizationId !== orgId) {
-      throw new NotFoundException("Project not found");
-    }
+    await verifyProjectForUser(this.prisma, projectId, userId);
   }
 
   private async verifyItemAccess(
     itemId: string,
     userId: string
   ): Promise<void> {
-    const orgId = await this.getOrgIdForUser(userId);
     const item = (await this.delegate.findUnique({
       where: { id: itemId },
-      include: { project: true },
-    })) as { project?: { organizationId?: string } } | null;
-    if (!item || item.project?.organizationId !== orgId) {
+      select: { projectId: true },
+    })) as { projectId?: string } | null;
+    if (!item?.projectId) {
       throw new NotFoundException(`${this.entityName} not found`);
     }
+    await this.verifyProjectAccess(item.projectId, userId);
   }
 
   private normalizeName(value: unknown): string {

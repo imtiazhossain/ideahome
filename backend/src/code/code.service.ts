@@ -3,39 +3,15 @@ import {
   Injectable,
   NotFoundException,
 } from "@nestjs/common";
-import { AuthService } from "../auth/auth.service";
+import { verifyProjectForUser } from "../common/org-scope";
 import { PrismaService } from "../prisma.service";
 
 @Injectable()
 export class CodeService {
-  constructor(
-    private readonly prisma: PrismaService,
-    private readonly authService: AuthService
-  ) {}
-
-  private async getOrgIdForUser(userId: string): Promise<string> {
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-      select: { organizationId: true },
-    });
-    if (!user) throw new NotFoundException("User not found");
-    if (user.organizationId) return user.organizationId;
-    const withOrg = await this.authService.ensureUserOrganization(userId);
-    if (!withOrg.organizationId) {
-      throw new NotFoundException("Organization not found for user");
-    }
-    return withOrg.organizationId;
-  }
+  constructor(private readonly prisma: PrismaService) {}
 
   private async ensureProjectAccess(projectId: string, userId: string) {
-    const organizationId = await this.getOrgIdForUser(userId);
-    const project = await this.prisma.project.findUnique({
-      where: { id: projectId },
-    });
-    if (!project || project.organizationId !== organizationId) {
-      throw new NotFoundException("Project not found");
-    }
-    return project;
+    await verifyProjectForUser(this.prisma, projectId, userId);
   }
 
   private sanitizeRepoFullName(value: unknown): string {
@@ -135,4 +111,3 @@ export class CodeService {
     });
   }
 }
-
