@@ -21,7 +21,12 @@ import { CodeHealthSection } from "../components/CodeHealthSection";
 import { CollapsibleSection } from "../components/CollapsibleSection";
 import { IconGrip } from "../components/IconGrip";
 import { ProjectFlowDiagram } from "../components/ProjectFlowDiagram";
-import { severityLabel } from "../lib/codePageUtils";
+import {
+  severityLabel,
+  type AuditPayload,
+  type AuditFinding,
+  type WireframeSnapshot,
+} from "../lib/codePageUtils";
 import { useCodePageState } from "../lib/useCodePageState";
 import { useProjectLayout } from "../lib/useProjectLayout";
 import { useTheme } from "./_app";
@@ -331,8 +336,8 @@ function renderCodeSectionInner(
     handleCopyAuditPrompt: () => Promise<void>;
     auditPromptCopied: boolean;
     auditPromptText: string;
-    payload: unknown;
-    findings: unknown[];
+    payload: AuditPayload | null;
+    findings: AuditFinding[];
     requestError: string | null;
     codeRating: number;
     codeRatingLabel: string;
@@ -344,7 +349,7 @@ function renderCodeSectionInner(
     setStaffPromptText: (s: string) => void;
     promptCopied: boolean;
     handleCopyPrompt: () => Promise<void>;
-    wireframe: unknown;
+    wireframe: WireframeSnapshot | null;
     generateWireframe: () => void;
   }
 ) {

@@ -509,6 +509,8 @@ export type IssueRecording = SharedIssueRecording;
 export type IssueScreenshot = SharedIssueScreenshot;
 export type IssueFile = SharedIssueFile;
 export type Issue = SharedIssue;
+export type RunUiTestResult = SharedRunUiTestResult;
+export type RunApiTestResult = SharedRunApiTestResult;
 
 export const STATUSES = STATUS_OPTIONS;
 
@@ -912,6 +914,26 @@ export async function deleteAllIssues(projectId?: string): Promise<void> {
   return requestVoid(pathIssuesBulk(projectId), {
     method: "DELETE",
     errorMessage: "Failed to delete issues",
+  });
+}
+
+export async function runUiTest(grep: string): Promise<RunUiTestResult> {
+  const body: RunUiTestInput = { grep };
+  return requestJson<RunUiTestResult>(pathTestsRunUi(), {
+    method: "POST",
+    body,
+    errorMessage: "Failed to run UI test",
+  });
+}
+
+export async function runApiTest(
+  testNamePattern: string
+): Promise<RunApiTestResult> {
+  const body: RunApiTestInput = { testNamePattern };
+  return requestJson<RunApiTestResult>(pathTestsRunApi(), {
+    method: "POST",
+    body,
+    errorMessage: "Failed to run API test",
   });
 }
 

@@ -266,7 +266,7 @@ function ProjectNavSearch({
 interface ProjectNavAuthMenuProps {
   hasToken: boolean | null;
   authMenuOpen: boolean;
-  setAuthMenuOpen: (open: boolean) => void;
+  setAuthMenuOpen: (open: boolean | ((prev: boolean) => boolean)) => void;
 }
 
 function ProjectNavAuthMenu({

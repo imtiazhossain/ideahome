@@ -1,7 +1,6 @@
 import React from "react";
 import Head from "next/head";
 import { useRouter } from "next/router";
-import { fetchOpenRouterModels } from "../lib/api";
 import {
   addCustomList,
   getCustomListTabId,
@@ -351,26 +350,6 @@ export function AppLayout({
   React.useEffect(() => {
     if (creatingSection) creatingSectionInputRef.current?.focus();
   }, [creatingSection]);
-
-  React.useEffect(() => {
-    if (!canManageOpenRouterModel) return;
-    let active = true;
-    (async () => {
-      try {
-        const models = await fetchOpenRouterModels();
-        if (!active || models.length === 0) return;
-        setOpenRouterModelOptions((prev) => {
-          const merged = Array.from(new Set([...models, ...prev]));
-          return merged;
-        });
-      } catch {
-        // Keep env/default list when live fetch fails.
-      }
-    })();
-    return () => {
-      active = false;
-    };
-  }, [canManageOpenRouterModel]);
 
   return (
     <>
