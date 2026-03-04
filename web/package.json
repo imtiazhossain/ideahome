@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "next dev -H 0.0.0.0",
     "build": "next build",
+    "build:fast": "next build --no-lint",
     "start": "next start",
     "test:e2e": "env -u NO_COLOR -u FORCE_COLOR playwright test",
     "test:e2e:one": "node scripts/verify-record.js"
