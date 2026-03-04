@@ -1,5 +1,5 @@
 {
   "framework": "nextjs",
-  "installCommand": "cd .. && PRISMA_SKIP_POSTINSTALL_GENERATE=true pnpm install --filter backend --filter web --frozen-lockfile",
-  "buildCommand": "cd .. && NODE_OPTIONS=--max-old-space-size=6144 pnpm build"
+  "installCommand": "cd .. && pnpm install --filter web... --frozen-lockfile",
+  "buildCommand": "cd .. && NODE_OPTIONS=--max-old-space-size=6144 pnpm --filter web build"
 }

@@ -323,9 +323,6 @@ importers:
       '@ideahome/shared-config':
         specifier: workspace:*
         version: link:../packages/shared-config
-      backend:
-        specifier: workspace:*
-        version: link:../backend
       mermaid:
         specifier: ^11.0.0
         version: 11.12.3

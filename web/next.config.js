@@ -1,4 +1,6 @@
 /** @type {import('next').NextConfig} */
+const path = require("path");
+const USE_BUILTIN_API = process.env.USE_BUILTIN_API === "true";
 
 // Only proxy to API when this header is present (avoids rewriting page navigation for /bugs, /features, etc.)
 const API_REWRITE_HAS = [{ type: "header", key: "X-Ideahome-Api", value: "1" }];
@@ -44,19 +46,27 @@ function buildRewrites(targetBase) {
 
 const nextConfig = {
   async rewrites() {
-    const useBuiltinApi = process.env.USE_BUILTIN_API === "true";
-    if (useBuiltinApi) {
+    if (USE_BUILTIN_API) {
       return buildRewrites("/api");
     }
     const backend = process.env.BACKEND_URL || "http://localhost:3001";
     return buildRewrites(backend);
   },
   transpilePackages: ["@ideahome/shared"],
-  serverExternalPackages: ["backend"],
+  serverExternalPackages: USE_BUILTIN_API ? ["backend"] : [],
   webpack: (config, { isServer }) => {
     if (isServer) {
-      config.externals = config.externals || [];
-      config.externals.push("backend", "backend/serverless");
+      if (USE_BUILTIN_API) {
+        config.externals = config.externals || [];
+        config.externals.push("backend", "backend/serverless");
+      } else {
+        config.resolve = config.resolve || {};
+        config.resolve.alias = config.resolve.alias || {};
+        config.resolve.alias["backend/serverless"] = path.resolve(
+          __dirname,
+          "lib/backend-serverless-stub.ts"
+        );
+      }
     }
     return config;
   },
