@@ -12,7 +12,7 @@ import {
   Res,
   UseGuards,
 } from "@nestjs/common";
-import type { Response } from "express";
+import type { Request, Response } from "express";
 import { JwtAuthGuard } from "../auth/jwt.guard";
 import { AuthenticatedRequest, requireUserId } from "../auth/request-user";
 import { CalendarService } from "./calendar.service";
@@ -20,6 +20,22 @@ import { CalendarService } from "./calendar.service";
 @Controller("calendar")
 export class CalendarController {
   constructor(private readonly calendar: CalendarService) {}
+
+  private inferFrontendBaseFromRequest(req: Request): string | null {
+    const forwardedHost = req.header("x-forwarded-host")?.split(",")[0]?.trim();
+    const host = forwardedHost || req.header("host")?.trim();
+    if (!host) return null;
+
+    const forwardedProto = req
+      .header("x-forwarded-proto")
+      ?.split(",")[0]
+      ?.trim()
+      .replace(/:$/, "");
+    const protocol = (forwardedProto || req.protocol || "https").toLowerCase();
+    if (protocol !== "http" && protocol !== "https") return null;
+
+    return `${protocol}://${host}`;
+  }
 
   @Get("google/status")
   @UseGuards(JwtAuthGuard)
@@ -49,9 +65,19 @@ export class CalendarController {
   async googleCallback(
     @Query("state") state: string,
     @Query("code") code: string,
+    @Query("error") error: string,
+    @Req() req: Request,
     @Res() res: Response
   ) {
-    const redirectUrl = await this.calendar.handleGoogleCallback(state ?? "", code ?? "");
+    const frontendBaseUrl = this.inferFrontendBaseFromRequest(req);
+    const redirectUrl = await this.calendar.handleGoogleCallback(
+      state ?? "",
+      code ?? "",
+      {
+        frontendBaseUrl,
+        oauthError: error ?? "",
+      }
+    );
     return res.redirect(redirectUrl);
   }
 

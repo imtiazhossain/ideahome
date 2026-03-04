@@ -127,8 +127,26 @@ export class CalendarService {
     return `${backendBase}/calendar/google/callback`;
   }
 
-  private getFrontendCalendarUrl(projectId?: string): string {
+  private getFrontendCalendarUrl(
+    projectId?: string,
+    frontendBaseOverride?: string | null
+  ): string {
+    const override = frontendBaseOverride?.trim();
+    const normalizedOverride = override
+      ? (() => {
+          try {
+            const parsed = new URL(override);
+            if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+              return "";
+            }
+            return parsed.toString().replace(/\/$/, "");
+          } catch {
+            return "";
+          }
+        })()
+      : "";
     const frontendBase = (
+      normalizedOverride ||
       process.env.FRONTEND_URL ??
       process.env.NEXT_PUBLIC_APP_URL ??
       "http://localhost:3000"
@@ -530,10 +548,19 @@ export class CalendarService {
     return { url: url.toString() };
   }
 
-  async handleGoogleCallback(state: string, code: string): Promise<string> {
+  async handleGoogleCallback(
+    state: string,
+    code: string,
+    options?: { frontendBaseUrl?: string | null; oauthError?: string }
+  ): Promise<string> {
     const consumed = this.consumeState(state);
     if (!consumed || !code?.trim()) {
-      return `${this.getFrontendCalendarUrl()}?google_error=invalid_callback`;
+      const redirect = new URL(
+        this.getFrontendCalendarUrl(undefined, options?.frontendBaseUrl ?? null)
+      );
+      const oauthError = options?.oauthError?.trim();
+      redirect.searchParams.set("google_error", oauthError || "invalid_callback");
+      return redirect.toString();
     }
     const { userId, projectId } = consumed;
     await this.verifyProjectAccess(projectId, userId);
@@ -541,7 +568,9 @@ export class CalendarService {
     try {
       const token = await this.exchangeCodeForTokens(code.trim());
       if (!token.access_token || !token.refresh_token) {
-        const redirect = new URL(this.getFrontendCalendarUrl(projectId));
+        const redirect = new URL(
+          this.getFrontendCalendarUrl(projectId, options?.frontendBaseUrl ?? null)
+        );
         redirect.searchParams.set("google_error", "missing_tokens");
         redirect.searchParams.set("projectId", projectId);
         return redirect.toString();
@@ -587,12 +616,16 @@ export class CalendarService {
         },
       });
 
-      const redirect = new URL(this.getFrontendCalendarUrl(projectId));
+      const redirect = new URL(
+        this.getFrontendCalendarUrl(projectId, options?.frontendBaseUrl ?? null)
+      );
       redirect.searchParams.set("google_connected", "1");
       redirect.searchParams.set("projectId", projectId);
       return redirect.toString();
     } catch {
-      const redirect = new URL(this.getFrontendCalendarUrl(projectId));
+      const redirect = new URL(
+        this.getFrontendCalendarUrl(projectId, options?.frontendBaseUrl ?? null)
+      );
       redirect.searchParams.set("google_error", "oauth_failed");
       redirect.searchParams.set("projectId", projectId);
       return redirect.toString();
