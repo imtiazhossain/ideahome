@@ -8,6 +8,7 @@ import { IconTrash } from "./IconTrash";
 import { IconCopy } from "./icons";
 import { SectionLoadingSpinner } from "./SectionLoadingSpinner";
 import { ErrorBanner } from "./ErrorBanner";
+import type { CheckableSortMode } from "../lib/utils";
 
 export interface CheckableListPageShellProps {
   appLayoutProps: Omit<React.ComponentProps<typeof AppLayout>, "children">;
@@ -18,6 +19,8 @@ export interface CheckableListPageShellProps {
   canUndo: boolean;
   onUndo: () => void;
   onCopyList?: () => void;
+  onSort?: (mode: CheckableSortMode) => void;
+  sortDisabled?: boolean;
   copyListAriaLabel?: string;
   copyListTitle?: string;
   canBulkDelete?: boolean;
@@ -46,6 +49,8 @@ export function CheckableListPageShell({
   canUndo,
   onUndo,
   onCopyList,
+  onSort,
+  sortDisabled = false,
   copyListAriaLabel = "Copy list",
   copyListTitle = "Copy list as bullet points",
   canBulkDelete = false,
@@ -102,7 +107,7 @@ export function CheckableListPageShell({
               ) : (
                 listContent
               )}
-              {(onCopyList || canUndo || canBulkDelete) && (
+              {(onCopyList || onSort || canUndo || canBulkDelete) && (
                 <div className="tests-page-section-footer">
                   <div className="tests-page-section-footer-right">
                     {onCopyList ? (
@@ -115,6 +120,29 @@ export function CheckableListPageShell({
                       >
                         <IconCopy />
                       </button>
+                    ) : null}
+                    {onSort ? (
+                      <select
+                        className="app-select tests-page-section-sort-select"
+                        defaultValue=""
+                        onChange={(e) => {
+                          const mode = e.currentTarget.value as
+                            | CheckableSortMode
+                            | "";
+                          if (!mode) return;
+                          onSort(mode);
+                          e.currentTarget.value = "";
+                        }}
+                        aria-label="Sort list"
+                        title="Sort list"
+                        disabled={sortDisabled}
+                      >
+                        <option value="">Sort</option>
+                        <option value="name-asc">A to Z</option>
+                        <option value="name-desc">Z to A</option>
+                        <option value="created-desc">Newest first</option>
+                        <option value="created-asc">Oldest first</option>
+                      </select>
                     ) : null}
                     {canUndo ? (
                       <button

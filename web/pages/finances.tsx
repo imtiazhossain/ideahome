@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   DndContext,
   closestCenter,
@@ -16,6 +16,11 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { usePlaidLink } from "react-plaid-link";
+import type {
+  PlaidLinkError,
+  PlaidLinkOnEventMetadata,
+  PlaidLinkOnExitMetadata,
+} from "react-plaid-link";
 import { useRouter } from "next/router";
 import { EXPENSE_CATEGORIES } from "@ideahome/shared";
 import {
@@ -426,14 +431,36 @@ function PlaidLinkLauncher({
   token,
   onSuccess,
   onExit,
+  onEvent,
   onOpened,
 }: {
   token: string;
   onSuccess: (publicToken: string) => void;
-  onExit: () => void;
+  onExit: (
+    error: PlaidLinkError | null,
+    metadata: PlaidLinkOnExitMetadata
+  ) => void;
+  onEvent: (eventName: string, metadata: PlaidLinkOnEventMetadata) => void;
   onOpened: () => void;
 }) {
-  const { open, ready } = usePlaidLink({ token, onSuccess, onExit });
+  const receivedRedirectUri = useMemo(() => {
+    if (typeof window === "undefined") return undefined;
+    try {
+      const current = new URL(window.location.href);
+      return current.searchParams.has("oauth_state_id")
+        ? window.location.href
+        : undefined;
+    } catch {
+      return undefined;
+    }
+  }, []);
+  const { open, ready } = usePlaidLink({
+    token,
+    onSuccess,
+    onExit,
+    onEvent,
+    receivedRedirectUri,
+  });
   const openedRef = useRef(false);
   useEffect(() => {
     if (ready && !openedRef.current) {
@@ -676,16 +703,47 @@ export default function FinancialsPage() {
     }
   }, []);
 
-  const onPlaidExit = useCallback(() => {
-    plaidPendingOpenRef.current = false;
-    setPlaidLinkToken(null);
-    setPlaidOpenTriggered(false);
-    prefetchedLinkTokenRef.current = null;
-  }, []);
+  const onPlaidExit = useCallback(
+    (error: PlaidLinkError | null, metadata: PlaidLinkOnExitMetadata) => {
+      if (error) {
+        const code = error.error_code?.trim();
+        const message =
+          error.display_message?.trim() ||
+          error.error_message?.trim() ||
+          "Plaid Link exited with an error";
+        const requestId = metadata?.request_id?.trim();
+        setPlaidError(
+          code
+            ? `Plaid ${code}: ${message}${requestId ? ` (request: ${requestId})` : ""}`
+            : `${message}${requestId ? ` (request: ${requestId})` : ""}`
+        );
+      }
+      plaidPendingOpenRef.current = false;
+      setPlaidLinkToken(null);
+      setPlaidOpenTriggered(false);
+      prefetchedLinkTokenRef.current = null;
+    },
+    [setPlaidError]
+  );
 
   const onPlaidOpened = useCallback(() => {
     setPlaidOpenTriggered(true);
   }, []);
+
+  const onPlaidEvent = useCallback(
+    (eventName: string, metadata: PlaidLinkOnEventMetadata) => {
+      if (eventName !== "ERROR") return;
+      const code = metadata.error_code?.trim();
+      const message = metadata.error_message?.trim() || "Plaid Link error";
+      const requestId = metadata.request_id?.trim();
+      setPlaidError(
+        code
+          ? `Plaid ${code}: ${message}${requestId ? ` (request: ${requestId})` : ""}`
+          : `${message}${requestId ? ` (request: ${requestId})` : ""}`
+      );
+    },
+    []
+  );
 
   useEffect(() => {
     if (
@@ -2347,6 +2405,7 @@ export default function FinancialsPage() {
               token={plaidLinkToken}
               onSuccess={onPlaidSuccess}
               onExit={onPlaidExit}
+              onEvent={onPlaidEvent}
               onOpened={onPlaidOpened}
             />
           )}

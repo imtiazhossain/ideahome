@@ -27,6 +27,7 @@ import {
   pathIssueStatus,
   pathIssues,
   pathIssuesBulk,
+  pathProjectInvites,
   pathProjectMembers,
   pathRecordingStream,
   pathScreenshotStream,
@@ -535,6 +536,12 @@ export type ProjectMember = {
   createdAt: string;
   user: User;
 };
+export type ProjectInvite = {
+  id: string;
+  email: string;
+  createdAt: string;
+  invitedByUserId: string | null;
+};
 export type IssueRecording = SharedIssueRecording;
 export type IssueScreenshot = SharedIssueScreenshot;
 export type IssueFile = SharedIssueFile;
@@ -660,6 +667,25 @@ export async function inviteProjectMember(
     method: "POST",
     body: { userId },
     errorMessage: "Failed to invite project member",
+  });
+}
+
+export async function fetchProjectInvites(
+  projectId: string
+): Promise<ProjectInvite[]> {
+  return requestJson<ProjectInvite[]>(pathProjectInvites(projectId), {
+    errorMessage: "Failed to fetch project invites",
+  });
+}
+
+export async function inviteProjectByEmail(
+  projectId: string,
+  email: string
+): Promise<ProjectInvite[]> {
+  return requestJson<ProjectInvite[]>(pathProjectInvites(projectId), {
+    method: "POST",
+    body: { email },
+    errorMessage: "Failed to send project invite",
   });
 }
 

@@ -109,7 +109,7 @@ export const TABS: {
     href: "/code",
     desktopOnly: true,
   },
-  { id: "pages", label: "Pages", icon: <IconPages /> },
+  { id: "pages", label: "Pages", icon: <IconPages />, href: "/pages" },
 ];
 
 function loadHiddenTabIds(): ProjectNavTabId[] {
@@ -192,7 +192,9 @@ function migrateStoredTabPreferencesToNewDefaults() {
     const preferredPresent = preferredOrder.filter((id) =>
       loadedOrder.includes(id)
     );
-    const remaining = loadedOrder.filter((id) => !preferredPresent.includes(id));
+    const remaining = loadedOrder.filter(
+      (id) => !preferredPresent.includes(id)
+    );
     const nextOrder = [...preferredPresent, ...remaining];
 
     const nextHidden = loadHiddenTabIds().filter(
@@ -295,11 +297,7 @@ export function DrawerCollapsedNav({
         aria-label="Expand sidebar"
         title="Expand sidebar"
       >
-        <span
-          className="drawer-logo-mark"
-          role="img"
-          aria-hidden="true"
-        >
+        <span className="drawer-logo-mark" role="img" aria-hidden="true">
           <IconHomeBulby />
         </span>
       </button>

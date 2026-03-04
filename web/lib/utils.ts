@@ -200,6 +200,49 @@ export function reorder<T>(arr: T[], from: number, to: number): T[] {
   return copy;
 }
 
+export type CheckableSortMode =
+  | "name-asc"
+  | "name-desc"
+  | "created-desc"
+  | "created-asc";
+
+/**
+ * Sort checkable items while keeping unchecked items above checked items.
+ */
+export function sortCheckableItems<
+  T extends { name: string; done: boolean; createdAt?: string },
+>(items: T[], mode: CheckableSortMode): T[] {
+  const collator = new Intl.Collator(undefined, {
+    sensitivity: "base",
+    numeric: true,
+  });
+  const factor = mode === "name-asc" ? 1 : mode === "name-desc" ? -1 : 0;
+  const withIndex = items.map((item, index) => ({ item, index }));
+  return withIndex
+    .sort((a, b) => {
+      if (a.item.done !== b.item.done) return a.item.done ? 1 : -1;
+      if (mode === "created-desc" || mode === "created-asc") {
+        const aTime = Date.parse(a.item.createdAt ?? "");
+        const bTime = Date.parse(b.item.createdAt ?? "");
+        const aValid = Number.isFinite(aTime);
+        const bValid = Number.isFinite(bTime);
+        if (aValid && bValid) {
+          if (aTime !== bTime) {
+            return mode === "created-desc" ? bTime - aTime : aTime - bTime;
+          }
+        } else if (aValid !== bValid) {
+          return aValid ? -1 : 1;
+        }
+      }
+      if (factor !== 0) {
+        const byName = collator.compare(a.item.name, b.item.name);
+        if (byName !== 0) return byName * factor;
+      }
+      return a.index - b.index;
+    })
+    .map((entry) => entry.item);
+}
+
 /**
  * Move an unchecked item to the bottom of the unchecked section.
  * Use when toggling done from true to false — item goes to end of unchecked, not top.

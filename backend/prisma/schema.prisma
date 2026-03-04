@@ -25,6 +25,8 @@ model User {
   organizationMemberships OrganizationMembership[]
   projectMemberships ProjectMembership[] @relation("ProjectMembershipUser")
   invitedProjectMemberships ProjectMembership[] @relation("ProjectMembershipInviter")
+  invitedProjectInvites  ProjectInvite[] @relation("ProjectInviteInviter")
+  acceptedProjectInvites ProjectInvite[] @relation("ProjectInviteAccepter")
   assignedIssues  Issue[]
   accounts        Account[]
   createdAt       DateTime  @default(now())
@@ -47,6 +49,7 @@ model Project {
   organization     Organization @relation(fields: [organizationId], references: [id])
   organizationId   String
   memberships      ProjectMembership[]
+  invites          ProjectInvite[]
   lastPlaidSyncAt  DateTime?
   issues           Issue[]
   todos            Todo[]
@@ -57,6 +60,21 @@ model Project {
   taxDocuments     TaxDocument[]
   codeRepositories CodeRepository[]
   createdAt        DateTime  @default(now())
+}
+
+model ProjectInvite {
+  id               String   @id @default(cuid())
+  project          Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectId        String
+  email            String
+  invitedBy        User?    @relation("ProjectInviteInviter", fields: [invitedByUserId], references: [id], onDelete: SetNull)
+  invitedByUserId  String?
+  acceptedBy       User?    @relation("ProjectInviteAccepter", fields: [acceptedByUserId], references: [id], onDelete: SetNull)
+  acceptedByUserId String?
+  acceptedAt       DateTime?
+  createdAt        DateTime @default(now())
+
+  @@unique([projectId, email])
 }
 
 model OrganizationMembership {

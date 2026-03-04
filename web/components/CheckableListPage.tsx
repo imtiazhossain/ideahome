@@ -149,6 +149,10 @@ export function CheckableListPage({
       canUndo={list.canUndo}
       onUndo={list.undo}
       onCopyList={handleCopyList}
+      onSort={list.sortItems}
+      sortDisabled={
+        list.loading || list.items.some((item) => isOptimisticId(item.id))
+      }
       copyListAriaLabel={`Copy ${def.listTitle}`}
       copyListTitle={`Copy ${def.listTitle} as bullet points`}
       canBulkDelete={canBulkDelete}

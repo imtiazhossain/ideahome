@@ -7,6 +7,8 @@ import {
   indexForNewUncheckedItem,
   insertUncheckedItem,
   isOptimisticId,
+  sortCheckableItems,
+  type CheckableSortMode,
 } from "./utils";
 import { useCheckableUiState } from "./useCheckableUiState";
 
@@ -323,6 +325,19 @@ export function useCheckableProjectList<T extends CheckableProjectItem>({
     [projectId, syncReorderOrRefresh, applyReorder]
   );
 
+  const sortItems = useCallback(
+    (mode: CheckableSortMode) => {
+      if (!projectId) return;
+      if (items.length < 2) return;
+      if (items.some((item) => isOptimisticId(item.id))) return;
+      pushHistory();
+      const sorted = sortCheckableItems(items, mode);
+      setItems(sorted);
+      void syncReorderOrRefresh(sorted.map((item) => item.id));
+    },
+    [items, projectId, pushHistory, setItems, syncReorderOrRefresh]
+  );
+
   const patchItemById = useCallback(
     (id: string, patch: Partial<T>) => {
       setItems((prev: T[]) =>
@@ -447,6 +462,7 @@ export function useCheckableProjectList<T extends CheckableProjectItem>({
     saveEdit,
     cancelEdit,
     handleReorder,
+    sortItems,
     patchItemById,
     removeDoneItems,
     pushHistory,

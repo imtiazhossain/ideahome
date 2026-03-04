@@ -47,6 +47,20 @@ export class ProjectsController {
     return this.svc.inviteMember(id, requireUserId(req), body ?? {});
   }
 
+  @Get(":id/invites")
+  listInvites(@Param("id") id: string, @Req() req: AuthenticatedRequest) {
+    return this.svc.listInvites(id, requireUserId(req));
+  }
+
+  @Post(":id/invites")
+  inviteByEmail(
+    @Param("id") id: string,
+    @Body() body: { email?: string },
+    @Req() req: AuthenticatedRequest
+  ) {
+    return this.svc.inviteByEmail(id, requireUserId(req), body ?? {});
+  }
+
   @Get(":id")
   get(@Param("id") id: string, @Req() req: AuthenticatedRequest) {
     return this.svc.get(id, requireUserId(req));

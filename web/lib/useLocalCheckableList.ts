@@ -4,6 +4,8 @@ import {
   createOptimisticId,
   indexForNewUncheckedItem,
   insertUncheckedItem,
+  sortCheckableItems,
+  type CheckableSortMode,
 } from "./utils";
 import { useCheckableUiState } from "./useCheckableUiState";
 
@@ -112,6 +114,15 @@ export function useLocalCheckableList<T extends LocalCheckableItem>({
     [applyReorder]
   );
 
+  const sortItems = useCallback(
+    (mode: CheckableSortMode) => {
+      if (items.length < 2) return;
+      pushHistory();
+      setItems(sortCheckableItems(items, mode));
+    },
+    [items, pushHistory, setItems]
+  );
+
   return {
     items,
     newItem,
@@ -126,6 +137,7 @@ export function useLocalCheckableList<T extends LocalCheckableItem>({
     saveEdit,
     cancelEdit,
     handleReorder,
+    sortItems,
     undo,
     canUndo,
   };

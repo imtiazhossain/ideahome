@@ -67,6 +67,10 @@ function pathProjectMembers(projectId) {
   return `/projects/${enc(projectId)}/members`;
 }
 
+function pathProjectInvites(projectId) {
+  return `/projects/${enc(projectId)}/invites`;
+}
+
 function pathOrganizations() {
   return "/organizations";
 }
@@ -334,6 +338,7 @@ const sharedConfig = {
   pathOrganizations,
   pathOrganizationsEnsure,
   pathProjectById,
+  pathProjectInvites,
   pathProjectMembers,
   pathProjects,
   pathTestsRunApi,

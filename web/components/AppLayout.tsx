@@ -32,7 +32,7 @@ const SECTION_LINKS: {
   { tabId: "goals", label: "Goals" },
   { tabId: "expenses", label: "Finances", href: "/finances" },
   { tabId: "code", label: "Code", href: "/code" },
-  { tabId: "pages", label: "Pages" },
+  { tabId: "pages", label: "Pages", href: "/pages" },
 ];
 
 export interface AppLayoutProps {
@@ -191,17 +191,12 @@ export function AppLayout({
     () =>
       orderedNavLinks
         .filter((link) => !hiddenTabIds.includes(link.tabId))
-        .filter(
-          (link) =>
-            !(isMobile && link.tabId === "code")
-        ),
+        .filter((link) => !(isMobile && link.tabId === "code")),
     [hiddenTabIds, isMobile, orderedNavLinks]
   );
   const drawerOrderedNavLinks = React.useMemo(
     () =>
-      orderedNavLinks.filter(
-        (link) => !(isMobile && link.tabId === "code")
-      ),
+      orderedNavLinks.filter((link) => !(isMobile && link.tabId === "code")),
     [isMobile, orderedNavLinks]
   );
   const sortedFilterSections = React.useMemo(
@@ -220,10 +215,7 @@ export function AppLayout({
     [hiddenTabIds, orderedNavLinks]
   );
   const drawerSortedFilterSections = React.useMemo(
-    () =>
-      sortedFilterSections.filter(
-        (s) => !(isMobile && s.tabId === "code")
-      ),
+    () => sortedFilterSections.filter((s) => !(isMobile && s.tabId === "code")),
     [isMobile, sortedFilterSections]
   );
 
@@ -290,9 +282,10 @@ export function AppLayout({
       return;
     }
     const list = addCustomList(name);
-    setCustomLists((prev) =>
-      [...prev.filter((entry) => entry.slug !== list.slug), list]
-    );
+    setCustomLists((prev) => [
+      ...prev.filter((entry) => entry.slug !== list.slug),
+      list,
+    ]);
     const id = getCustomListTabId(list.slug);
     if (!tabOrder.includes(id)) {
       setTabOrder([...tabOrder, id]);
@@ -484,11 +477,7 @@ export function AppLayout({
         </main>
       </div>
       <BulbyChatbox
-        projectId={
-          selectedProjectId ||
-          orderedProjects[0]?.id ||
-          ""
-        }
+        projectId={selectedProjectId || orderedProjects[0]?.id || ""}
       />
     </>
   );

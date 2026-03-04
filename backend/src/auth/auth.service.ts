@@ -276,6 +276,53 @@ export class AuthService {
     });
   }
 
+  private async acceptPendingProjectInvitesByEmail(
+    userId: string,
+    email: string
+  ): Promise<void> {
+    const normalizedEmail = email.trim().toLowerCase();
+    if (!normalizedEmail) return;
+
+    const pendingInvites = await this.prisma.projectInvite.findMany({
+      where: { email: normalizedEmail, acceptedAt: null },
+      select: {
+        id: true,
+        projectId: true,
+        project: { select: { organizationId: true } },
+      },
+    });
+    if (pendingInvites.length === 0) return;
+
+    for (const invite of pendingInvites) {
+      await this.ensureOrganizationMembership(
+        invite.project.organizationId,
+        userId,
+        "MEMBER"
+      );
+      await this.prisma.projectMembership.upsert({
+        where: {
+          projectId_userId: {
+            projectId: invite.projectId,
+            userId,
+          },
+        },
+        create: {
+          projectId: invite.projectId,
+          userId,
+          role: "MEMBER",
+        },
+        update: {},
+      });
+      await this.prisma.projectInvite.update({
+        where: { id: invite.id },
+        data: {
+          acceptedByUserId: userId,
+          acceptedAt: new Date(),
+        },
+      });
+    }
+  }
+
   async findOrCreateUserByFirebase(
     uid: string,
     email: string,
@@ -338,6 +385,10 @@ export class AuthService {
         },
       });
       await this.ensureUserOrganization(existing.userId);
+      await this.acceptPendingProjectInvitesByEmail(
+        existing.userId,
+        normalized.email
+      );
       const user = await this.prisma.user.findUniqueOrThrow({
         where: { id: existing.userId },
       });
@@ -358,6 +409,7 @@ export class AuthService {
       },
     });
     await this.ensureUserOrganization(user.id);
+    await this.acceptPendingProjectInvitesByEmail(user.id, normalized.email);
     return { id: user.id, email: user.email, name: user.name };
   }
 

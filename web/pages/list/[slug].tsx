@@ -130,6 +130,8 @@ export default function CustomListPage() {
       canUndo={listState.canUndo}
       onUndo={listState.undo}
       onCopyList={handleCopyList}
+      onSort={listState.sortItems}
+      sortDisabled={!hydrated || listState.items.length < 2}
       copyListAriaLabel={`Copy ${list.name}`}
       copyListTitle={`Copy ${list.name} as bullet points`}
       toastMessage={toastMessage}

@@ -15,7 +15,10 @@ import {
 } from "../lib/api/auth";
 import {
   fetchProjectMembers,
+  fetchProjectInvites,
+  inviteProjectByEmail,
   inviteProjectMember,
+  type ProjectInvite,
   type ProjectMember,
 } from "../lib/api/projects";
 import { fetchUsers, type User } from "../lib/api/users";
@@ -181,8 +184,10 @@ export function AppDrawer({
 }: AppDrawerProps) {
   const [bulbyTriggerHidden, setBulbyTriggerHidden] = useState(false);
   const [projectMembers, setProjectMembers] = useState<ProjectMember[]>([]);
+  const [projectInvites, setProjectInvites] = useState<ProjectInvite[]>([]);
   const [orgUsers, setOrgUsers] = useState<User[]>([]);
   const [inviteUserId, setInviteUserId] = useState("");
+  const [inviteEmail, setInviteEmail] = useState("");
   const [collabLoading, setCollabLoading] = useState(false);
   const [collabError, setCollabError] = useState<string | null>(null);
   const [inviteSubmitting, setInviteSubmitting] = useState(false);
@@ -199,18 +204,25 @@ export function AppDrawer({
   useEffect(() => {
     if (!drawerOpen || !selectedProjectId) {
       setProjectMembers([]);
+      setProjectInvites([]);
       setInviteUserId("");
+      setInviteEmail("");
       setCollabError(null);
       return;
     }
     let cancelled = false;
     setCollabLoading(true);
     setCollabError(null);
-    Promise.all([fetchUsers(), fetchProjectMembers(selectedProjectId)])
-      .then(([users, members]) => {
+    Promise.all([
+      fetchUsers(),
+      fetchProjectMembers(selectedProjectId),
+      fetchProjectInvites(selectedProjectId),
+    ])
+      .then(([users, members, invites]) => {
         if (cancelled) return;
         setOrgUsers(users);
         setProjectMembers(members);
+        setProjectInvites(invites);
       })
       .catch((e) => {
         if (cancelled) return;
@@ -238,10 +250,29 @@ export function AppDrawer({
     try {
       const members = await inviteProjectMember(selectedProjectId, inviteUserId);
       setProjectMembers(members);
+      setProjectInvites(await fetchProjectInvites(selectedProjectId));
       setInviteUserId("");
     } catch (e) {
       setCollabError(
         e instanceof Error ? e.message : "Failed to invite project member"
+      );
+    } finally {
+      setInviteSubmitting(false);
+    }
+  };
+
+  const handleInviteEmail = async () => {
+    if (!selectedProjectId || !inviteEmail.trim()) return;
+    setInviteSubmitting(true);
+    setCollabError(null);
+    try {
+      const invites = await inviteProjectByEmail(selectedProjectId, inviteEmail);
+      setProjectInvites(invites);
+      setProjectMembers(await fetchProjectMembers(selectedProjectId));
+      setInviteEmail("");
+    } catch (e) {
+      setCollabError(
+        e instanceof Error ? e.message : "Failed to send email invite"
       );
     } finally {
       setInviteSubmitting(false);
@@ -440,13 +471,37 @@ export function AppDrawer({
                 {selectedProjectId ? (
                   <>
                     <div className="drawer-project-collab-row">
+                      <input
+                        className="drawer-project-collab-email"
+                        type="email"
+                        value={inviteEmail}
+                        onChange={(e) => setInviteEmail(e.target.value)}
+                        placeholder="Invite by email"
+                        disabled={collabLoading || inviteSubmitting}
+                      />
+                      <button
+                        type="button"
+                        className="drawer-project-collab-invite"
+                        onClick={() => {
+                          void handleInviteEmail();
+                        }}
+                        disabled={
+                          collabLoading ||
+                          inviteSubmitting ||
+                          !inviteEmail.trim()
+                        }
+                      >
+                        {inviteSubmitting ? "Sending…" : "Send"}
+                      </button>
+                    </div>
+                    <div className="drawer-project-collab-row">
                       <select
                         className="drawer-project-collab-select"
                         value={inviteUserId}
                         onChange={(e) => setInviteUserId(e.target.value)}
                         disabled={collabLoading || inviteSubmitting}
                       >
-                        <option value="">Invite user…</option>
+                        <option value="">Invite member…</option>
                         {inviteableUsers.map((user) => (
                           <option key={user.id} value={user.id}>
                             {user.name?.trim() || user.email}
@@ -463,7 +518,7 @@ export function AppDrawer({
                           collabLoading || inviteSubmitting || !inviteUserId.trim()
                         }
                       >
-                        {inviteSubmitting ? "Inviting…" : "Invite"}
+                        {inviteSubmitting ? "Inviting…" : "Add"}
                       </button>
                     </div>
                     {collabError ? (
@@ -485,6 +540,15 @@ export function AppDrawer({
                         </span>
                       ) : null}
                     </div>
+                    {projectInvites.length > 0 ? (
+                      <div className="drawer-project-collab-list">
+                        {projectInvites.map((invite) => (
+                          <span key={invite.id} className="drawer-project-collab-chip is-pending">
+                            {invite.email} (pending)
+                          </span>
+                        ))}
+                      </div>
+                    ) : null}
                   </>
                 ) : (
                   <div className="drawer-project-collab-empty">

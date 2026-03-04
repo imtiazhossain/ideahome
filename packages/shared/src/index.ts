@@ -65,6 +65,7 @@ export {
   pathOrganizations,
   pathOrganizationsEnsure,
   pathProjectById,
+  pathProjectInvites,
   pathProjectMembers,
   pathProjects,
   pathRecordingStream,

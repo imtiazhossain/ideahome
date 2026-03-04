@@ -70,13 +70,18 @@ export class PlaidService {
   async createLinkToken(userId: string): Promise<{ linkToken: string }> {
     await this.getOrgIdForUser(userId);
     const client = this.getClient();
-    const response = await client.linkTokenCreate({
+    const redirectUri = process.env.PLAID_REDIRECT_URI?.trim();
+    const request: Parameters<PlaidApi["linkTokenCreate"]>[0] = {
       user: { client_user_id: userId },
       client_name: "Idea Home",
       language: "en",
       country_codes: [CountryCode.Us],
       products: [Products.Transactions],
-    });
+    };
+    if (redirectUri) {
+      request.redirect_uri = redirectUri;
+    }
+    const response = await client.linkTokenCreate(request);
     const linkToken = response.data.link_token;
     if (!linkToken) {
       throw new BadRequestException("Plaid did not return a link token");
