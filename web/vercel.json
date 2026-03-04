@@ -1,5 +1,5 @@
 {
   "framework": "nextjs",
   "installCommand": "cd .. && pnpm install --filter web... --frozen-lockfile --ignore-scripts",
-  "buildCommand": "cd .. && pnpm --filter @ideahome/shared build && NEXT_DEPLOY_FAST=1 NODE_OPTIONS=--max-old-space-size=6144 pnpm --filter web build:fast"
+  "buildCommand": "cd .. && pnpm --filter @ideahome/shared build && pnpm --filter backend exec prisma migrate deploy && NEXT_DEPLOY_FAST=1 NODE_OPTIONS=--max-old-space-size=6144 pnpm --filter web build:fast"
 }

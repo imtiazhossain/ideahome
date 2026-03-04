@@ -419,9 +419,8 @@ export class IdeaPlanService {
   async listElevenLabsVoices(): Promise<ElevenLabsVoice[]> {
     const apiKey = process.env.ELEVENLABS_API_KEY?.trim();
     if (!apiKey) {
-      throw new BadRequestException(
-        "ElevenLabs is not configured. Set ELEVENLABS_API_KEY in backend/.env."
-      );
+      // Voice listing is optional for chat UX; return empty when not configured.
+      return [];
     }
 
     const response = await this.fetchElevenLabsVoices(apiKey);
