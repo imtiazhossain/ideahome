@@ -77,6 +77,27 @@ const DELETE_BUTTON_WIDTH = 80;
 const SWIPE_THRESHOLD = 40;
 const SWIPE_START_THRESHOLD = 10;
 
+function IconFlashlight() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.1"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <path d="M9 8h6l-1.2 6H10.2L9 8z" />
+      <path d="M10 14h4l1 8H9l1-8z" />
+      <path d="M8 8h8" />
+      <path d="M12 0.4V7" />
+      <path d="M6 1.8l3.8 5" />
+      <path d="M18 1.8l-3.8 5" />
+    </svg>
+  );
+}
+
 function SortableItem({
   item,
   index,
@@ -585,7 +606,21 @@ export function CheckableList({
     );
   }
   if (items.length === 0) {
-    return <p className="features-list-empty-message">{emptyMessage}</p>;
+    const [firstLine, ...restLines] = emptyMessage.split("\n");
+    const secondLine = restLines.join("\n");
+    return (
+      <div className="features-list-empty-state">
+        <p className="features-list-empty-message">
+          <span className="features-list-empty-line">{firstLine}</span>
+          <span className="features-list-empty-icon" aria-hidden>
+            <IconFlashlight />
+          </span>
+          {secondLine ? (
+            <span className="features-list-empty-line">{secondLine}</span>
+          ) : null}
+        </p>
+      </div>
+    );
   }
 
   const itemIds = items.map((i) => i.id);

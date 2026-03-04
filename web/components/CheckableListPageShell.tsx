@@ -47,7 +47,7 @@ export function CheckableListPageShell({
   pageTitle: _pageTitle,
   addFormProps,
   listTitle: _listTitle,
-  itemCount: _itemCount,
+  itemCount,
   canUndo,
   onUndo,
   onCopyList,
@@ -91,6 +91,7 @@ export function CheckableListPageShell({
   const addContent = <AddItemForm {...addFormProps} />;
 
   const listContent = <CheckableList {...checkableListProps} />;
+  const hasListItems = itemCount > 0;
 
   return (
     <AppLayout {...appLayoutProps}>
@@ -137,7 +138,7 @@ export function CheckableListPageShell({
               ) : (
                 listContent
               )}
-              {(onCopyList || onSort || canUndo || canBulkDelete) && (
+              {hasListItems && (onCopyList || onSort || canUndo || canBulkDelete) && (
                 <div className="tests-page-section-footer">
                   <div className="tests-page-section-footer-right">
                     {onCopyList ? (
