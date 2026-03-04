@@ -640,7 +640,6 @@ export default function FinancialsPage() {
   const [deleteImportedConfirming, setDeleteImportedConfirming] =
     useState(false);
   const prefetchedLinkTokenRef = useRef<string | null>(null);
-  const plaidPendingOpenRef = useRef(false);
   const [plaidOpenTriggered, setPlaidOpenTriggered] = useState(false);
   const [editingLinkedAccountId, setEditingLinkedAccountId] = useState<
     string | null
@@ -718,7 +717,6 @@ export default function FinancialsPage() {
             : `${message}${requestId ? ` (request: ${requestId})` : ""}`
         );
       }
-      plaidPendingOpenRef.current = false;
       setPlaidLinkToken(null);
       setPlaidOpenTriggered(false);
       prefetchedLinkTokenRef.current = null;
@@ -744,26 +742,6 @@ export default function FinancialsPage() {
     },
     []
   );
-
-  useEffect(() => {
-    if (
-      !plaidPendingOpenRef.current ||
-      plaidLinkToken != null ||
-      !isAuthenticated()
-    )
-      return;
-    plaidPendingOpenRef.current = false;
-    setPlaidLoading(true);
-    getPlaidLinkToken()
-      .then(({ linkToken }) => setPlaidLinkToken(linkToken))
-      .catch((err) => {
-        setPlaidError(
-          err instanceof Error ? err.message : "Could not start connection"
-        );
-        setPlaidOpenTriggered(false);
-      })
-      .finally(() => setPlaidLoading(false));
-  }, [plaidLinkToken]);
 
   useEffect(() => {
     if (!isAuthenticated()) {
@@ -827,8 +805,16 @@ export default function FinancialsPage() {
       setPlaidLinkToken(prefetched);
       return;
     }
-    plaidPendingOpenRef.current = true;
+    setPlaidLoading(true);
     setPlaidLinkToken(null);
+    getPlaidLinkToken()
+      .then(({ linkToken }) => setPlaidLinkToken(linkToken))
+      .catch((err) => {
+        setPlaidError(
+          err instanceof Error ? err.message : "Could not start connection"
+        );
+      })
+      .finally(() => setPlaidLoading(false));
   }, []);
 
   const handleSyncPlaid = useCallback(async () => {
