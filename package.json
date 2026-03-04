@@ -68,7 +68,7 @@
   },
   "scripts": {
     "install": "node -e \"process.exit(0)\"",
-    "build:vercel:web": "pnpm --filter @ideahome/shared build && pnpm --filter backend run prisma:generate && pnpm --filter backend build && pnpm --filter backend exec prisma migrate deploy && NEXT_DEPLOY_FAST=1 NODE_OPTIONS=--max-old-space-size=6144 pnpm --filter web build:fast",
+    "build:vercel:web": "pnpm --filter @ideahome/shared build && pnpm --filter backend run prisma:generate && pnpm --filter backend build && pnpm run db:migrate:vercel:optional && NEXT_DEPLOY_FAST=1 NODE_OPTIONS=--max-old-space-size=6144 pnpm --filter web build:fast",
     "build": "pnpm build:shared && pnpm build:backend && pnpm build:web",
     "build:shared": "pnpm --filter @ideahome/shared build",
     "build:backend": "pnpm --filter backend run prisma:generate && pnpm --filter backend build",
@@ -82,6 +82,7 @@
     "db:down": "docker compose down -v || docker-compose down -v",
     "db:reset": "pnpm db:down; pnpm db:up; sleep 4; pnpm db:migrate",
     "db:migrate": "pnpm --filter backend exec prisma migrate deploy",
+    "db:migrate:vercel:optional": "bash ./scripts/vercel-migrate-if-enabled.sh",
     "test:e2e": "pnpm --filter backend test:e2e",
     "test:e2e:web": "pnpm --filter web run test:e2e",
     "test:e2e:one": "pnpm --filter web run test:e2e:one",
