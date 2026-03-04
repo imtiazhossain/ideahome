@@ -6,7 +6,13 @@ import {
 } from "@nestjs/common";
 import { Prisma } from "@prisma/client";
 import { PrismaClientKnownRequestError } from "@prisma/client/runtime/library";
-import { projectNameToAcronym } from "@ideahome/shared-config";
+import {
+  computeQualityScorePercent,
+  createDefaultQualityScoreConfig,
+  normalizeQualityScoreConfig,
+  projectNameToAcronym,
+  type ProjectQualityScoreConfig,
+} from "@ideahome/shared-config";
 import { verifyProjectForUser } from "../common/org-scope";
 import { PrismaService } from "../prisma.service";
 import { StorageService } from "../storage.service";
@@ -54,6 +60,24 @@ const BLOCKED_FILE_EXTENSIONS = new Set([
   "vbs",
   "wsf",
 ]);
+
+type IssueScoreInput = {
+  id?: string;
+  title?: string | null;
+  description?: string | null;
+  acceptanceCriteria?: string | null;
+  database?: string | null;
+  api?: string | null;
+  testCases?: string | null;
+  automatedTest?: string | null;
+  assigneeId?: string | null;
+  _count?: {
+    comments?: number;
+    screenshots?: number;
+    recordings?: number;
+    files?: number;
+  };
+};
 
 @Injectable()
 export class IssuesService {
@@ -230,17 +254,34 @@ export class IssuesService {
     );
     const assigneeId = this.normalizeOptionalAssigneeId(data.assigneeId);
     const status = typeof data.status === "string" ? data.status : undefined;
-    const qualityScore =
-      typeof data.qualityScore === "number" ? data.qualityScore : undefined;
     if (userId) await this.verifyProjectBelongsToUser(projectId, userId);
     this.validateStatus(data.status);
     this.validateQualityScore(data.qualityScore);
     await this.validateAssigneeInProject(projectId, assigneeId);
     const project = await this.prisma.project.findUnique({
       where: { id: projectId },
+      select: {
+        name: true,
+        qualityScoreConfig: true,
+      },
     });
     if (!project) throw new NotFoundException("Project not found");
     const acronym = projectNameToAcronym(project.name);
+    const projectConfig = this.projectQualityScoreConfig(project.qualityScoreConfig);
+    const computedQualityScore = this.computeIssueQualityScore(
+      {
+        title,
+        description,
+        acceptanceCriteria,
+        database,
+        api,
+        testCases,
+        automatedTest,
+        assigneeId,
+        _count: { comments: 0, screenshots: 0, recordings: 0, files: 0 },
+      },
+      projectConfig
+    );
 
     // Generate project-local keys safely under concurrent creates.
     for (let attempt = 0; attempt < 5; attempt++) {
@@ -257,7 +298,7 @@ export class IssuesService {
             testCases,
             automatedTest,
             status,
-            qualityScore,
+            qualityScore: computedQualityScore,
             assigneeId,
             key,
           },
@@ -299,7 +340,26 @@ export class IssuesService {
     if (userId) await this.verifyIssueBelongsToUser(id, userId);
     const existing = await this.prisma.issue.findUnique({
       where: { id },
-      select: { projectId: true },
+      select: {
+        projectId: true,
+        title: true,
+        description: true,
+        acceptanceCriteria: true,
+        database: true,
+        api: true,
+        testCases: true,
+        automatedTest: true,
+        assigneeId: true,
+        project: { select: { qualityScoreConfig: true } },
+        _count: {
+          select: {
+            comments: true,
+            screenshots: true,
+            recordings: true,
+            files: true,
+          },
+        },
+      },
     });
     if (!existing) throw new NotFoundException("Issue not found");
     const allowed = [
@@ -339,12 +399,52 @@ export class IssuesService {
     if ("status" in payload) this.validateStatus(payload.status);
     if ("qualityScore" in payload)
       this.validateQualityScore(payload.qualityScore);
+    if ("qualityScore" in payload) delete payload.qualityScore;
     if ("assigneeId" in payload) {
       await this.validateAssigneeInProject(
         existing.projectId,
         (payload.assigneeId as string | null | undefined) ?? undefined
       );
     }
+    const projectConfig = this.projectQualityScoreConfig(
+      existing.project?.qualityScoreConfig ?? null
+    );
+    const mergedForScore: IssueScoreInput = {
+      title: ("title" in payload
+        ? payload.title
+        : existing.title) as string | null | undefined,
+      description: ("description" in payload
+        ? payload.description
+        : existing.description) as string | null | undefined,
+      acceptanceCriteria: ("acceptanceCriteria" in payload
+        ? payload.acceptanceCriteria
+        : existing.acceptanceCriteria) as string | null | undefined,
+      database: ("database" in payload
+        ? payload.database
+        : existing.database) as string | null | undefined,
+      api: ("api" in payload
+        ? payload.api
+        : existing.api) as string | null | undefined,
+      testCases: ("testCases" in payload
+        ? payload.testCases
+        : existing.testCases) as string | null | undefined,
+      automatedTest: ("automatedTest" in payload
+        ? payload.automatedTest
+        : existing.automatedTest) as string | null | undefined,
+      assigneeId: ("assigneeId" in payload
+        ? payload.assigneeId
+        : existing.assigneeId) as string | null | undefined,
+      _count: existing._count ?? {
+        comments: 0,
+        screenshots: 0,
+        recordings: 0,
+        files: 0,
+      },
+    };
+    payload.qualityScore = this.computeIssueQualityScore(
+      mergedForScore,
+      projectConfig
+    );
     return this.prisma.issue.update({
       where: { id },
       data: payload as Prisma.IssueUpdateInput,
@@ -405,6 +505,58 @@ export class IssuesService {
         "qualityScore must be a number between 0 and 100"
       );
     }
+  }
+
+  private projectQualityScoreConfig(
+    value: unknown
+  ): ProjectQualityScoreConfig {
+    return normalizeQualityScoreConfig(value ?? createDefaultQualityScoreConfig());
+  }
+
+  private computeIssueQualityScore(
+    issue: IssueScoreInput,
+    config: ProjectQualityScoreConfig
+  ): number {
+    return computeQualityScorePercent(
+      issue as unknown as Record<string, unknown>,
+      config
+    );
+  }
+
+  async recomputeIssueQualityScore(issueId: string): Promise<number> {
+    const issue = await this.prisma.issue.findUnique({
+      where: { id: issueId },
+      select: {
+        id: true,
+        title: true,
+        description: true,
+        acceptanceCriteria: true,
+        database: true,
+        api: true,
+        testCases: true,
+        automatedTest: true,
+        assigneeId: true,
+        project: {
+          select: { qualityScoreConfig: true },
+        },
+        _count: {
+          select: {
+            comments: true,
+            screenshots: true,
+            recordings: true,
+            files: true,
+          },
+        },
+      },
+    });
+    if (!issue) throw new NotFoundException("Issue not found");
+    const config = this.projectQualityScoreConfig(issue.project.qualityScoreConfig);
+    const qualityScore = this.computeIssueQualityScore(issue, config);
+    await this.prisma.issue.update({
+      where: { id: issueId },
+      data: { qualityScore },
+    });
+    return qualityScore;
   }
 
   private validateNonEmptyBase64(value: unknown, field: string): string {
@@ -737,6 +889,7 @@ export class IssuesService {
       },
     });
 
+    await this.recomputeIssueQualityScore(issueId);
     return this.get(issueId);
   }
 
@@ -783,6 +936,7 @@ export class IssuesService {
       where: { id: recordingId },
       data: payload,
     });
+    await this.recomputeIssueQualityScore(issueId);
     return this.get(issueId);
   }
 
@@ -796,6 +950,7 @@ export class IssuesService {
     await this.storage.delete(recording.videoUrl);
 
     await this.prisma.issueRecording.delete({ where: { id: recordingId } });
+    await this.recomputeIssueQualityScore(issueId);
     return this.get(issueId);
   }
 
@@ -835,6 +990,7 @@ export class IssuesService {
       data: { imageUrl, issueId, name },
     });
 
+    await this.recomputeIssueQualityScore(issueId);
     return this.get(issueId);
   }
 
@@ -864,6 +1020,7 @@ export class IssuesService {
       where: { id: screenshotId },
       data: value === undefined ? {} : { name: value },
     });
+    await this.recomputeIssueQualityScore(issueId);
     return this.get(issueId);
   }
 
@@ -881,6 +1038,7 @@ export class IssuesService {
     await this.storage.delete(screenshot.imageUrl);
 
     await this.prisma.issueScreenshot.delete({ where: { id: screenshotId } });
+    await this.recomputeIssueQualityScore(issueId);
     return this.get(issueId);
   }
 
@@ -923,6 +1081,7 @@ export class IssuesService {
       data: { fileUrl, fileName: trimmedName, issueId },
     });
 
+    await this.recomputeIssueQualityScore(issueId);
     return this.get(issueId);
   }
 
@@ -959,6 +1118,7 @@ export class IssuesService {
     await this.storage.delete(file.fileUrl);
 
     await this.prisma.issueFile.delete({ where: { id: fileId } });
+    await this.recomputeIssueQualityScore(issueId);
     return this.get(issueId);
   }
 

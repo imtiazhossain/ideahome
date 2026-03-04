@@ -29,6 +29,8 @@ model User {
   acceptedProjectInvites ProjectInvite[] @relation("ProjectInviteAccepter")
   assignedIssues  Issue[]
   accounts        Account[]
+  calendarConnections CalendarConnection[]
+  calendarEvents  CalendarEvent[]
   createdAt       DateTime  @default(now())
 }
 
@@ -46,6 +48,7 @@ model Account {
 model Project {
   id               String    @id @default(cuid())
   name             String
+  qualityScoreConfig Json?
   organization     Organization @relation(fields: [organizationId], references: [id])
   organizationId   String
   memberships      ProjectMembership[]
@@ -57,9 +60,57 @@ model Project {
   bugs             Bug[]
   features         Feature[]
   expenses         Expense[]
+  calendarConnections CalendarConnection[]
+  calendarEvents   CalendarEvent[]
   taxDocuments     TaxDocument[]
   codeRepositories CodeRepository[]
   createdAt        DateTime  @default(now())
+}
+
+model CalendarConnection {
+  id                     String   @id @default(cuid())
+  user                   User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId                 String
+  project                Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectId              String
+  provider               String   @default("google")
+  googleCalendarId       String   @default("primary")
+  encryptedAccessToken   String
+  encryptedRefreshToken  String
+  tokenExpiresAt         DateTime?
+  syncToken              String?
+  lastSyncedAt           DateTime?
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  @@unique([userId, projectId, provider])
+}
+
+model CalendarEvent {
+  id                String   @id @default(cuid())
+  project           Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectId         String
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId            String
+  provider          String   @default("google")
+  providerEventId   String
+  title             String
+  description       String?
+  location          String?
+  startAt           DateTime
+  endAt             DateTime
+  isAllDay          Boolean  @default(false)
+  timeZone          String?
+  status            String   @default("confirmed")
+  etag              String?
+  updatedAtProvider DateTime?
+  lastSyncedAt      DateTime?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@unique([projectId, provider, providerEventId])
+  @@index([projectId, startAt])
+  @@index([projectId, endAt])
 }
 
 model ProjectInvite {

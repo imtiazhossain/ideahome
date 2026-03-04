@@ -11,6 +11,7 @@ export { IconChevronUp } from "./IconChevronUp";
 export { IconCode } from "./IconCode";
 export { IconCopy } from "./IconCopy";
 export { IconDownload } from "./IconDownload";
+export { IconEnhancements } from "./IconEnhancements";
 export { IconExpenses } from "./IconExpenses";
 export { IconFeatures } from "./IconFeatures";
 export { IconFilter } from "./IconFilter";

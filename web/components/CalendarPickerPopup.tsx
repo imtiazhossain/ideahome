@@ -41,11 +41,11 @@ export interface CalendarPickerPopupProps {
   onChange: (dateStr: string) => void;
   /** Called when the user picks a date, Clear, or Today (close the popup from parent). */
   onClose?: () => void;
-  showClear?: boolean;
   showToday?: boolean;
   /** Initial view when opened; defaults to value or today. */
   initialView?: { year: number; month: number };
   ariaLabel?: string;
+  className?: string;
 }
 
 /**
@@ -57,10 +57,10 @@ export function CalendarPickerPopup({
   value,
   onChange,
   onClose,
-  showClear = true,
   showToday = true,
   initialView,
   ariaLabel = "Calendar",
+  className,
 }: CalendarPickerPopupProps) {
   const today = toYYYYMMDD(new Date());
   const [view, setView] = useState<{ year: number; month: number }>(() => {
@@ -99,7 +99,7 @@ export function CalendarPickerPopup({
 
   return (
     <div
-      className="calendar-picker-popup"
+      className={["calendar-picker-popup", className].filter(Boolean).join(" ")}
       role="dialog"
       aria-label={ariaLabel}
       onClick={(e) => e.stopPropagation()}
@@ -140,8 +140,8 @@ export function CalendarPickerPopup({
         </div>
       </div>
       <div className="calendar-picker-weekdays">
-        {DAY_LABELS.map((label) => (
-          <span key={label} className="calendar-picker-weekday">
+        {DAY_LABELS.map((label, index) => (
+          <span key={`${label}-${index}`} className="calendar-picker-weekday">
             {label}
           </span>
         ))}
@@ -164,20 +164,8 @@ export function CalendarPickerPopup({
           </button>
         ))}
       </div>
-      {(showClear || showToday) && (
+      {showToday && (
         <div className="calendar-picker-footer">
-          {showClear && (
-            <button
-              type="button"
-              className="calendar-picker-footer-btn"
-              onClick={() => {
-                onChange("");
-                onClose?.();
-              }}
-            >
-              Clear
-            </button>
-          )}
           {showToday && (
             <button
               type="button"

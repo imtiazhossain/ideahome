@@ -11,6 +11,7 @@ import {
   type IssueComment,
   type CommentAttachmentType,
 } from "../../lib/api/issues";
+import { updateProject, type Project } from "../../lib/api/projects";
 import {
   uploadIssueRecording,
   updateIssueRecording,
@@ -48,7 +49,11 @@ import { lockScrollToAnchor } from "./scroll-lock";
 import { blobToBase64 } from "./media-base64";
 import { deriveScreenshotNameFromComments } from "./screenshot-names";
 import { hasIssueDetailChanges } from "./issue-detail-utils";
-import { computeQualityScore } from "./scoring";
+import {
+  SCORE_ITEM_DEFINITIONS,
+  computeQualityScore,
+  getQualityScoreConfig,
+} from "./scoring";
 import { issueKey } from "./issue-key";
 import type { IssueDetailModalProps } from "./IssueDetailModal";
 
@@ -57,6 +62,8 @@ export type UseHomePageIssueDetailOptions = {
   setSelectedIssue: React.Dispatch<React.SetStateAction<Issue | null>>;
   issues: Issue[];
   setIssues: React.Dispatch<React.SetStateAction<Issue[]>>;
+  projects: Project[];
+  setProjects: React.Dispatch<React.SetStateAction<Project[]>>;
   setError: (v: string | null) => void;
   users: User[];
   setIssueToDelete: (issue: Issue | null) => void;
@@ -70,6 +77,8 @@ export function useHomePageIssueDetail(
     setSelectedIssue,
     issues,
     setIssues,
+    projects,
+    setProjects,
     setError,
     users,
     setIssueToDelete,
@@ -80,6 +89,14 @@ export function useHomePageIssueDetail(
   const [issueSaving, setIssueSaving] = useState(false);
   const [issueSaveError, setIssueSaveError] = useState<string | null>(null);
   const [issueSaveSuccess, setIssueSaveSuccess] = useState(false);
+  const [qualityConfigOpen, setQualityConfigOpen] = useState(false);
+  const [qualityConfigSaving, setQualityConfigSaving] = useState(false);
+  const [qualityConfigError, setQualityConfigError] = useState<string | null>(
+    null
+  );
+  const [qualityConfigDraft, setQualityConfigDraft] = useState(
+    () => getQualityScoreConfig(null)
+  );
   const [automatedTestDropdownOpen, setAutomatedTestDropdownOpen] =
     useState(false);
   const [automatedTestRunResults, setAutomatedTestRunResults] = useState<
@@ -223,6 +240,11 @@ export function useHomePageIssueDetail(
     return deriveScreenshotNameFromComments(selectedIssue.screenshots, comments);
   }, [selectedIssue?.id, selectedIssue?.screenshots, issueComments]);
 
+  const selectedProject = useMemo(
+    () => projects.find((p) => p.id === selectedIssue?.projectId) ?? null,
+    [projects, selectedIssue?.projectId]
+  );
+
   // Sync issueDetailOriginal when selectedIssue changes
   useEffect(() => {
     if (selectedIssue) {
@@ -231,6 +253,13 @@ export function useHomePageIssueDetail(
       setIssueDetailOriginal(null);
     }
   }, [selectedIssue?.id]);
+
+  useEffect(() => {
+    setQualityConfigDraft(
+      getQualityScoreConfig(selectedProject?.qualityScoreConfig ?? null)
+    );
+    setQualityConfigError(null);
+  }, [selectedProject?.id, selectedProject?.qualityScoreConfig]);
 
   // Reset comment/modal state when no issue selected
   useEffect(() => {
@@ -1070,7 +1099,13 @@ export function useHomePageIssueDetail(
     setIssueSaveError(null);
     setIssueSaveSuccess(false);
     try {
-      const qualityScore = computeQualityScore(selectedIssue);
+      const qualityScore = computeQualityScore(
+        {
+          ...selectedIssue,
+          commentsCount: issueComments.length,
+        },
+        selectedProject?.qualityScoreConfig ?? null
+      );
       const body: Record<string, unknown> = {
         title: selectedIssue.title,
         description: selectedIssue.description ?? undefined,
@@ -1097,8 +1132,88 @@ export function useHomePageIssueDetail(
     }
   };
 
+  const qualityConfigTotal = useMemo(
+    () =>
+      SCORE_ITEM_DEFINITIONS.reduce(
+        (acc, item) => acc + (qualityConfigDraft.weights[item.id] ?? 0),
+        0
+      ),
+    [qualityConfigDraft]
+  );
+
+  const openQualityConfig = () => {
+    setQualityConfigDraft(
+      getQualityScoreConfig(selectedProject?.qualityScoreConfig ?? null)
+    );
+    setQualityConfigError(null);
+    setQualityConfigOpen(true);
+  };
+
+  const saveQualityConfig = async () => {
+    if (!selectedProject?.id || !selectedIssue) return;
+    if (qualityConfigTotal !== 100) {
+      setQualityConfigError("Total percentage must equal 100.");
+      return;
+    }
+    setQualityConfigSaving(true);
+    setQualityConfigError(null);
+    try {
+      const updatedProject = await updateProject(selectedProject.id, {
+        qualityScoreConfig: qualityConfigDraft,
+      });
+      setProjects((prev) =>
+        prev.map((p) => (p.id === updatedProject.id ? updatedProject : p))
+      );
+      setIssues((prev) =>
+        prev.map((issue) =>
+          issue.projectId === updatedProject.id
+            ? {
+                ...issue,
+                project: updatedProject,
+                qualityScore: computeQualityScore(
+                  issue,
+                  updatedProject.qualityScoreConfig ?? null
+                ),
+              }
+            : issue
+        )
+      );
+      setSelectedIssue((prev) => {
+        if (!prev || prev.projectId !== updatedProject.id) return prev;
+        return {
+          ...prev,
+          project: updatedProject,
+          qualityScore: computeQualityScore(
+            { ...prev, commentsCount: issueComments.length },
+            updatedProject.qualityScoreConfig ?? null
+          ),
+        };
+      });
+      setIssueDetailOriginal((prev) => {
+        if (!prev || prev.projectId !== updatedProject.id) return prev;
+        return {
+          ...prev,
+          project: updatedProject,
+          qualityScore: computeQualityScore(
+            { ...prev, commentsCount: issueComments.length },
+            updatedProject.qualityScoreConfig ?? null
+          ),
+        };
+      });
+      setQualityConfigOpen(false);
+    } catch (e) {
+      setQualityConfigError(
+        e instanceof Error ? e.message : "Failed to save quality score config"
+      );
+    } finally {
+      setQualityConfigSaving(false);
+    }
+  };
+
   const onClose = () => {
     if (isRecording) return;
+    setQualityConfigOpen(false);
+    setQualityConfigError(null);
     setSelectedIssue(null);
     setIssueDetailOriginal(null);
     setIssueSaveError(null);
@@ -1127,7 +1242,15 @@ export function useHomePageIssueDetail(
     handleDragLeave,
     handleDrop,
     issueKeyFn: issueKey,
-    computeQualityScoreFn: computeQualityScore,
+    computeQualityScoreFn: (issue) =>
+      computeQualityScore(
+        {
+          ...issue,
+          commentsCount:
+            issue.id === selectedIssue.id ? issueComments.length : undefined,
+        },
+        selectedProject?.qualityScoreConfig ?? null
+      ),
     issueDetailOriginal,
     issueSaving,
     issueSaveError,
@@ -1136,6 +1259,16 @@ export function useHomePageIssueDetail(
     setIssueSaveSuccess,
     hasIssueDetailChangesFn: hasIssueDetailChanges,
     handleSaveIssue,
+    qualityConfigOpen,
+    setQualityConfigOpen,
+    qualityConfigSaving,
+    qualityConfigError,
+    qualityConfigDraft,
+    setQualityConfigDraft,
+    qualityConfigTotal,
+    qualityScoreItems: SCORE_ITEM_DEFINITIONS,
+    openQualityConfig,
+    saveQualityConfig,
     setIssueToDelete,
     users,
     parseTestCasesFn: parseTestCases,

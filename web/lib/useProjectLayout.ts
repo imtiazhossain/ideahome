@@ -68,6 +68,7 @@ export interface UseProjectLayoutReturn {
     project?: { id: string; name: string } | null
   ) => Promise<void>;
   createProjectByName: (name: string) => Promise<void>;
+  renameProjectById: (projectId: string, name: string) => Promise<void>;
 }
 
 export function useProjectLayout(): UseProjectLayoutReturn {
@@ -80,6 +81,7 @@ export function useProjectLayout(): UseProjectLayoutReturn {
   } = useSelectedProject();
   const [projects, setProjects] = useState<{ id: string; name: string }[]>([]);
   const [projectsLoaded, setProjectsLoaded] = useState(false);
+  const [projectsLoadFailed, setProjectsLoadFailed] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [editingProjectId, setEditingProjectId] = useState<string | null>(null);
   const [editingProjectName, setEditingProjectName] = useState("");
@@ -94,6 +96,7 @@ export function useProjectLayout(): UseProjectLayoutReturn {
   selectedProjectIdRef.current = selectedProjectId;
 
   const loadProjects = useCallback(() => {
+    setProjectsLoadFailed(false);
     return fetchProjects()
       .then((data) => {
         setProjects(data);
@@ -113,7 +116,9 @@ export function useProjectLayout(): UseProjectLayoutReturn {
           }
         }
       })
-      .catch(() => {})
+      .catch(() => {
+        setProjectsLoadFailed(true);
+      })
       .finally(() => setProjectsLoaded(true));
   }, [setSelectedProjectId]);
 
@@ -127,10 +132,15 @@ export function useProjectLayout(): UseProjectLayoutReturn {
 
   // When user has no projects, redirect to home where they can create one
   useEffect(() => {
-    if (projectsLoaded && projects.length === 0 && router.pathname !== "/") {
+    if (
+      !projectsLoadFailed &&
+      projectsLoaded &&
+      projects.length === 0 &&
+      router.pathname !== "/"
+    ) {
       router.replace("/");
     }
-  }, [projectsLoaded, projects.length, router]);
+  }, [projectsLoaded, projects.length, projectsLoadFailed, router]);
 
   useEffect(() => {
     if (selectedProjectId) prefetchProjectLists(selectedProjectId);
@@ -223,6 +233,21 @@ export function useProjectLayout(): UseProjectLayoutReturn {
     [setLastKnownProjectName, setSelectedProjectId]
   );
 
+  const renameProjectById = useCallback(
+    async (projectId: string, name: string) => {
+      const trimmed = name.trim();
+      if (!projectId || !trimmed) return;
+      const prev = projects.find((x) => x.id === projectId);
+      if (prev?.name === trimmed) return;
+      const updated = await updateProject(projectId, { name: trimmed });
+      setProjects((p) => p.map((x) => (x.id === projectId ? updated : x)));
+      if (selectedProjectIdRef.current === projectId) {
+        setLastKnownProjectName(updated.name);
+      }
+    },
+    [projects, setLastKnownProjectName]
+  );
+
   const handleDeleteProject = useCallback(
     async (project?: { id: string; name: string } | null) => {
       const target = project ?? projectToDelete;
@@ -284,5 +309,6 @@ export function useProjectLayout(): UseProjectLayoutReturn {
     projectDeleting,
     handleDeleteProject,
     createProjectByName,
+    renameProjectById,
   };
 }

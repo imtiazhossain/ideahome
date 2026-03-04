@@ -38,7 +38,10 @@ export function IssueCard({
         status: issue.status,
       },
     });
-  const scoreDisplay = Math.round((computeQualityScore(issue) / 6) * 100);
+  const scoreDisplay =
+    typeof issue.qualityScore === "number" && Number.isFinite(issue.qualityScore)
+      ? Math.round(issue.qualityScore)
+      : computeQualityScore(issue, issue.project?.qualityScoreConfig ?? null);
   const scoreColor = getQualityScoreColor(scoreDisplay);
   const scoreTextColor =
     scoreDisplay >= 40 && scoreDisplay <= 65 ? "#1a1a1a" : "#fff";

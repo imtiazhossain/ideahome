@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useUndoList } from "./useUndoList";
 import {
   createOptimisticId,
@@ -29,6 +29,7 @@ export function useLocalCheckableList<T extends LocalCheckableItem>({
   resetKey,
   idPrefix = "local",
 }: UseLocalCheckableListOptions<T>) {
+  const [sortMode, setSortMode] = useState<CheckableSortMode | null>(null);
   const { pushHistory, undo, canUndo } = useUndoList(
     items,
     setItems as (items: T[]) => void,
@@ -119,9 +120,14 @@ export function useLocalCheckableList<T extends LocalCheckableItem>({
       if (items.length < 2) return;
       pushHistory();
       setItems(sortCheckableItems(items, mode));
+      setSortMode(mode);
     },
     [items, pushHistory, setItems]
   );
+
+  useEffect(() => {
+    setSortMode(null);
+  }, [resetKey]);
 
   return {
     items,
@@ -138,6 +144,7 @@ export function useLocalCheckableList<T extends LocalCheckableItem>({
     cancelEdit,
     handleReorder,
     sortItems,
+    sortMode,
     undo,
     canUndo,
   };

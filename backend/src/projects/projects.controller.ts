@@ -47,6 +47,15 @@ export class ProjectsController {
     return this.svc.inviteMember(id, requireUserId(req), body ?? {});
   }
 
+  @Delete(":id/members/:userId")
+  removeMember(
+    @Param("id") id: string,
+    @Param("userId") userId: string,
+    @Req() req: AuthenticatedRequest
+  ) {
+    return this.svc.removeMember(id, requireUserId(req), userId);
+  }
+
   @Get(":id/invites")
   listInvites(@Param("id") id: string, @Req() req: AuthenticatedRequest) {
     return this.svc.listInvites(id, requireUserId(req));
@@ -61,6 +70,15 @@ export class ProjectsController {
     return this.svc.inviteByEmail(id, requireUserId(req), body ?? {});
   }
 
+  @Delete(":id/invites/:inviteId")
+  revokeInvite(
+    @Param("id") id: string,
+    @Param("inviteId") inviteId: string,
+    @Req() req: AuthenticatedRequest
+  ) {
+    return this.svc.revokeInvite(id, requireUserId(req), inviteId);
+  }
+
   @Get(":id")
   get(@Param("id") id: string, @Req() req: AuthenticatedRequest) {
     return this.svc.get(id, requireUserId(req));
@@ -69,7 +87,11 @@ export class ProjectsController {
   @Put(":id")
   update(
     @Param("id") id: string,
-    @Body() body: { name?: string },
+    @Body()
+    body: {
+      name?: string;
+      qualityScoreConfig?: unknown;
+    },
     @Req() req: AuthenticatedRequest
   ) {
     return this.svc.update(id, requireUserId(req), body ?? {});

@@ -4,6 +4,7 @@ import { fetchUsers, type User } from "../../lib/api/users";
 import { computeQualityScore } from "./scoring";
 import type { Project } from "../../lib/api/projects";
 import type { Issue } from "../../lib/api/issues";
+import type { ProjectQualityScoreConfig } from "../../lib/api";
 
 type UseBoardCreateIssueArgs = {
   selectedProjectId: string;
@@ -11,6 +12,7 @@ type UseBoardCreateIssueArgs = {
   setIssues: React.Dispatch<React.SetStateAction<Issue[]>>;
   setSelectedProjectId: (id: string) => void;
   setError: (msg: string | null) => void;
+  qualityScoreConfig?: ProjectQualityScoreConfig | null;
 };
 
 export function useBoardCreateIssue({
@@ -19,6 +21,7 @@ export function useBoardCreateIssue({
   setIssues,
   setSelectedProjectId,
   setError,
+  qualityScoreConfig,
 }: UseBoardCreateIssueArgs) {
   const [createOpen, setCreateOpen] = useState(false);
   const [createTitle, setCreateTitle] = useState("");
@@ -71,8 +74,9 @@ export function useBoardCreateIssue({
           description: createDescription,
           acceptanceCriteria: createAcceptanceCriteria,
           database: createDatabase,
+          api: createApi,
           testCases: createTestCases,
-        });
+        }, qualityScoreConfig);
         const created = await createIssue({
           title: createTitle.trim(),
           description: createDescription.trim() || undefined,
@@ -109,6 +113,7 @@ export function useBoardCreateIssue({
       createApi,
       createTestCases,
       createAssigneeId,
+      qualityScoreConfig,
       selectedProjectId,
       setIssues,
       setError,

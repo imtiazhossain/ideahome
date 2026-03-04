@@ -13,20 +13,10 @@ import {
   setStoredAssistantVoiceUri,
   setStoredOpenRouterModel,
 } from "../lib/api/auth";
-import {
-  fetchProjectMembers,
-  fetchProjectInvites,
-  inviteProjectByEmail,
-  inviteProjectMember,
-  type ProjectInvite,
-  type ProjectMember,
-} from "../lib/api/projects";
-import { fetchUsers, type User } from "../lib/api/users";
 import { IconTrash } from "./IconTrash";
 import {
   IconBulbyHide,
   IconBulbyShow,
-  IconEdit,
   IconFilter,
   IconHomeBulby,
   IconMic,
@@ -37,6 +27,7 @@ import {
   BULBY_TRIGGER_VISIBILITY_EVENT,
 } from "./BulbyChatbox";
 import type { ProjectNavTabId } from "./ProjectNavBar";
+import { UiSelect } from "./UiSelect";
 
 export interface AppDrawerNavLink {
   href?: string;
@@ -101,8 +92,7 @@ export interface AppDrawerProps {
     label: string;
     visible: boolean;
   }>;
-  hiddenTabIds: ProjectNavTabId[];
-  setHiddenTabIds: (ids: ProjectNavTabId[]) => void;
+  onToggleTabVisibility: (tabId: ProjectNavTabId, visible: boolean) => void;
   availableVoices: Array<{ value: string; label: string }>;
   selectedVoiceUri: string;
   setSelectedVoiceUri: (uri: string) => void;
@@ -168,8 +158,7 @@ export function AppDrawer({
   drawerDeleteSectionsOpen,
   setDrawerDeleteSectionsOpen,
   sortedFilterSections,
-  hiddenTabIds,
-  setHiddenTabIds,
+  onToggleTabVisibility,
   availableVoices,
   selectedVoiceUri,
   setSelectedVoiceUri,
@@ -183,14 +172,6 @@ export function AppDrawer({
   deleteSectionTab,
 }: AppDrawerProps) {
   const [bulbyTriggerHidden, setBulbyTriggerHidden] = useState(false);
-  const [projectMembers, setProjectMembers] = useState<ProjectMember[]>([]);
-  const [projectInvites, setProjectInvites] = useState<ProjectInvite[]>([]);
-  const [orgUsers, setOrgUsers] = useState<User[]>([]);
-  const [inviteUserId, setInviteUserId] = useState("");
-  const [inviteEmail, setInviteEmail] = useState("");
-  const [collabLoading, setCollabLoading] = useState(false);
-  const [collabError, setCollabError] = useState<string | null>(null);
-  const [inviteSubmitting, setInviteSubmitting] = useState(false);
   useEffect(() => {
     try {
       setBulbyTriggerHidden(
@@ -200,84 +181,6 @@ export function AppDrawer({
       /* ignore */
     }
   }, []);
-
-  useEffect(() => {
-    if (!drawerOpen || !selectedProjectId) {
-      setProjectMembers([]);
-      setProjectInvites([]);
-      setInviteUserId("");
-      setInviteEmail("");
-      setCollabError(null);
-      return;
-    }
-    let cancelled = false;
-    setCollabLoading(true);
-    setCollabError(null);
-    Promise.all([
-      fetchUsers(),
-      fetchProjectMembers(selectedProjectId),
-      fetchProjectInvites(selectedProjectId),
-    ])
-      .then(([users, members, invites]) => {
-        if (cancelled) return;
-        setOrgUsers(users);
-        setProjectMembers(members);
-        setProjectInvites(invites);
-      })
-      .catch((e) => {
-        if (cancelled) return;
-        setCollabError(
-          e instanceof Error ? e.message : "Failed to load project members"
-        );
-      })
-      .finally(() => {
-        if (!cancelled) setCollabLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [drawerOpen, selectedProjectId]);
-
-  const inviteableUsers = React.useMemo(() => {
-    const memberIds = new Set(projectMembers.map((member) => member.userId));
-    return orgUsers.filter((user) => !memberIds.has(user.id));
-  }, [orgUsers, projectMembers]);
-
-  const handleInvite = async () => {
-    if (!selectedProjectId || !inviteUserId.trim()) return;
-    setInviteSubmitting(true);
-    setCollabError(null);
-    try {
-      const members = await inviteProjectMember(selectedProjectId, inviteUserId);
-      setProjectMembers(members);
-      setProjectInvites(await fetchProjectInvites(selectedProjectId));
-      setInviteUserId("");
-    } catch (e) {
-      setCollabError(
-        e instanceof Error ? e.message : "Failed to invite project member"
-      );
-    } finally {
-      setInviteSubmitting(false);
-    }
-  };
-
-  const handleInviteEmail = async () => {
-    if (!selectedProjectId || !inviteEmail.trim()) return;
-    setInviteSubmitting(true);
-    setCollabError(null);
-    try {
-      const invites = await inviteProjectByEmail(selectedProjectId, inviteEmail);
-      setProjectInvites(invites);
-      setProjectMembers(await fetchProjectMembers(selectedProjectId));
-      setInviteEmail("");
-    } catch (e) {
-      setCollabError(
-        e instanceof Error ? e.message : "Failed to send email invite"
-      );
-    } finally {
-      setInviteSubmitting(false);
-    }
-  };
   useEffect(() => {
     const handler = (e: Event) => {
       const ev = e as CustomEvent<{ hidden: boolean }>;
@@ -367,82 +270,36 @@ export function AppDrawer({
               )}
               {orderedProjects.map((p) => (
                 <div key={p.id} className="drawer-nav-item-row">
-                  {editingProjectId === p.id ? (
-                    <input
-                      ref={
-                        projectNameInputRef as React.RefObject<HTMLInputElement>
-                      }
-                      type="text"
-                      className="drawer-nav-item drawer-nav-item-input"
-                      value={editingProjectName}
-                      onChange={(e) =>
-                        setEditingProjectName(e.target.value)
-                      }
-                      onBlur={saveProjectName}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") saveProjectName();
-                        if (e.key === "Escape") cancelEditProjectName();
-                      }}
-                      onClick={(e) => e.stopPropagation()}
-                      aria-label="Project name"
-                    />
-                  ) : (
+                  <button
+                    type="button"
+                    className={`drawer-nav-item ${selectedProjectId === p.id ? "is-selected" : ""}`}
+                    onClick={() => {
+                      setSelectedProjectId(p.id);
+                      closeDrawerOnMobile();
+                    }}
+                  >
+                    {p.name}
+                  </button>
+                  <span className="drawer-nav-row-actions">
                     <button
                       type="button"
-                      className={`drawer-nav-item ${selectedProjectId === p.id ? "is-selected" : ""}`}
-                      onClick={() => {
-                        setSelectedProjectId(p.id);
-                        closeDrawerOnMobile();
-                      }}
-                      onDoubleClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        setEditingProjectId(p.id);
-                        setEditingProjectName(p.name);
-                      }}
-                      title="Double-click to edit name"
-                    >
-                      {p.name}
-                    </button>
-                  )}
-                  {editingProjectId !== p.id && (
-                    <button
-                      type="button"
-                      className="drawer-nav-item-edit"
+                      className="drawer-nav-item-reorder"
                       onClick={(e) => {
                         e.preventDefault();
                         e.stopPropagation();
-                        setEditingProjectId(p.id);
-                        setEditingProjectName(p.name);
+                        moveProject(p.id, "up");
                       }}
-                      aria-label={`Rename ${p.name}`}
-                      title={`Rename project "${p.name}"`}
+                      aria-label={`Move ${p.name} up`}
+                      title="Move up"
+                      disabled={orderedProjects[0]?.id === p.id}
                     >
-                      <IconEdit size={14} />
+                      ▲
                     </button>
-                  )}
-                  {editingProjectId !== p.id && (
-                    <span className="drawer-nav-row-actions">
-                      <button
-                        type="button"
-                        className="drawer-nav-item-reorder"
-                        onClick={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          moveProject(p.id, "up");
-                        }}
-                        aria-label={`Move ${p.name} up`}
-                        title="Move up"
-                        disabled={orderedProjects[0]?.id === p.id}
-                      >
-                        ▲
-                      </button>
-                    </span>
-                  )}
-                  {(showDeletePerProject || editingProjectId === p.id) && (
+                  </span>
+                  {showDeletePerProject && (
                     <button
                       type="button"
-                      className={`drawer-nav-item-delete${showDeletePerProject || editingProjectId === p.id ? " is-visible" : ""}`}
+                      className="drawer-nav-item-delete is-visible"
                       onClick={(e) => {
                         e.preventDefault();
                         e.stopPropagation();
@@ -464,98 +321,6 @@ export function AppDrawer({
                   )}
                 </div>
               ))}
-              <div className="drawer-project-collab" aria-live="polite">
-                <div className="drawer-nav-label drawer-nav-label-indent">
-                  Project Members
-                </div>
-                {selectedProjectId ? (
-                  <>
-                    <div className="drawer-project-collab-row">
-                      <input
-                        className="drawer-project-collab-email"
-                        type="email"
-                        value={inviteEmail}
-                        onChange={(e) => setInviteEmail(e.target.value)}
-                        placeholder="Invite by email"
-                        disabled={collabLoading || inviteSubmitting}
-                      />
-                      <button
-                        type="button"
-                        className="drawer-project-collab-invite"
-                        onClick={() => {
-                          void handleInviteEmail();
-                        }}
-                        disabled={
-                          collabLoading ||
-                          inviteSubmitting ||
-                          !inviteEmail.trim()
-                        }
-                      >
-                        {inviteSubmitting ? "Sending…" : "Send"}
-                      </button>
-                    </div>
-                    <div className="drawer-project-collab-row">
-                      <select
-                        className="drawer-project-collab-select"
-                        value={inviteUserId}
-                        onChange={(e) => setInviteUserId(e.target.value)}
-                        disabled={collabLoading || inviteSubmitting}
-                      >
-                        <option value="">Invite member…</option>
-                        {inviteableUsers.map((user) => (
-                          <option key={user.id} value={user.id}>
-                            {user.name?.trim() || user.email}
-                          </option>
-                        ))}
-                      </select>
-                      <button
-                        type="button"
-                        className="drawer-project-collab-invite"
-                        onClick={() => {
-                          void handleInvite();
-                        }}
-                        disabled={
-                          collabLoading || inviteSubmitting || !inviteUserId.trim()
-                        }
-                      >
-                        {inviteSubmitting ? "Inviting…" : "Add"}
-                      </button>
-                    </div>
-                    {collabError ? (
-                      <div className="drawer-project-collab-error">{collabError}</div>
-                    ) : null}
-                    <div className="drawer-project-collab-list">
-                      {projectMembers.map((member) => (
-                        <span
-                          key={member.userId}
-                          className="drawer-project-collab-chip"
-                        >
-                          {(member.user.name?.trim() || member.user.email) +
-                            (member.role === "OWNER" ? " (Owner)" : "")}
-                        </span>
-                      ))}
-                      {!collabLoading && projectMembers.length === 0 ? (
-                        <span className="drawer-project-collab-empty">
-                          No members yet.
-                        </span>
-                      ) : null}
-                    </div>
-                    {projectInvites.length > 0 ? (
-                      <div className="drawer-project-collab-list">
-                        {projectInvites.map((invite) => (
-                          <span key={invite.id} className="drawer-project-collab-chip is-pending">
-                            {invite.email} (pending)
-                          </span>
-                        ))}
-                      </div>
-                    ) : null}
-                  </>
-                ) : (
-                  <div className="drawer-project-collab-empty">
-                    Select a project to manage members.
-                  </div>
-                )}
-              </div>
               <div className="drawer-nav-label-row drawer-nav-label-row-sections">
                 <div className="drawer-nav-label">Sections</div>
                 <button
@@ -607,7 +372,7 @@ export function AppDrawer({
                     <button
                       type="button"
                       className={`drawer-nav-item ${activeTab === tabId ? "is-selected" : ""}`}
-                      onClick={() => {}}
+                      onClick={closeDrawerOnMobile}
                       title={label}
                     >
                       {label}
@@ -641,12 +406,7 @@ export function AppDrawer({
                     <input
                       type="checkbox"
                       checked={visible}
-                      onChange={() => {
-                        const next = visible
-                          ? [...hiddenTabIds, tabId]
-                          : hiddenTabIds.filter((id) => id !== tabId);
-                        setHiddenTabIds(next);
-                      }}
+                      onChange={() => onToggleTabVisibility(tabId, visible)}
                       aria-label={`${visible ? "Hide" : "Show"} ${label}`}
                     />
                     <span>{label}</span>
@@ -788,7 +548,7 @@ export function AppDrawer({
                         <span className="drawer-bottom-settings-model-label">
                           LLM
                         </span>
-                        <select
+                        <UiSelect
                           className="drawer-bottom-settings-model-select"
                           value={selectedAiModel}
                           onChange={(e) => {
@@ -802,7 +562,7 @@ export function AppDrawer({
                               {model}
                             </option>
                           ))}
-                        </select>
+                        </UiSelect>
                       </label>
                     )}
                     <button

@@ -48,6 +48,7 @@ import {
   getCompactTabLabel,
   getSettingsButtonVisibleStorageKey,
 } from "./project-nav/utils";
+import { ProjectSettingsModal } from "./ProjectSettingsModal";
 import {
   DrawerCollapsedNav,
   EXPLICIT_BOARD_SESSION_KEY,
@@ -96,6 +97,8 @@ export interface ProjectNavBarProps {
   onDeleteAllIssuesClick?: () => void;
   /** When onDeleteAllIssuesClick is provided, whether delete-all is disabled (e.g. loading or no issues). */
   deleteAllIssuesDisabled?: boolean;
+  /** Called when user saves a project name from the project settings modal. */
+  onRenameProject?: (projectId: string, name: string) => Promise<void> | void;
   /** When false, hides the settings button. Default true. */
   showSettingsButton?: boolean;
 }
@@ -407,6 +410,7 @@ export function ProjectNavBar({
   onDeleteProjectClick,
   onDeleteAllIssuesClick,
   deleteAllIssuesDisabled,
+  onRenameProject,
   showSettingsButton = true,
 }: ProjectNavBarProps) {
   const router = useRouter();
@@ -462,6 +466,7 @@ export function ProjectNavBar({
   );
   const [projectSearchOpen, setProjectSearchOpen] = useState(false);
   const [authMenuOpen, setAuthMenuOpen] = useState(false);
+  const [projectSettingsOpen, setProjectSettingsOpen] = useState(false);
   const [hasToken, setHasToken] = useState<boolean | null>(null);
   const { theme, toggleTheme } = useTheme();
   useEffect(() => {
@@ -744,7 +749,20 @@ export function ProjectNavBar({
               </span>
             </button>
             <h1 className="project-nav-project-name">
-              {projectName || "Project"}
+              <button
+                type="button"
+                className="project-nav-project-name-btn"
+                onClick={() => setProjectSettingsOpen(true)}
+                disabled={!selectedProjectId}
+                title={
+                  selectedProjectId
+                    ? "Open project settings"
+                    : "Select a project first"
+                }
+                aria-label="Open project settings"
+              >
+                {projectName || "Project"}
+              </button>
             </h1>
             <ProjectNavSearch
               projectId={projectId}
@@ -1259,6 +1277,13 @@ export function ProjectNavBar({
           </div>
         </form>
       </AccessibleModal>
+      <ProjectSettingsModal
+        open={projectSettingsOpen}
+        onClose={() => setProjectSettingsOpen(false)}
+        projectId={selectedProjectId}
+        projectName={projectName}
+        onRenameProject={onRenameProject}
+      />
     </header>
   );
 }

@@ -1,4 +1,6 @@
 import React from "react";
+import { UiSelect } from "./UiSelect";
+import { Text } from "./Text";
 
 export interface ProjectSelectProps {
   projects: { id: string; name: string }[];
@@ -25,8 +27,8 @@ export function ProjectSelect({
 }: ProjectSelectProps) {
   return (
     <div className={`form-group${className ? ` ${className}` : ""}`}>
-      <label htmlFor={id}>Project</label>
-      <select
+      <Text as="label" variant="label" htmlFor={id}>Project</Text>
+      <UiSelect
         id={id}
         className={selectClassName}
         value={value}
@@ -39,8 +41,12 @@ export function ProjectSelect({
             {p.name}
           </option>
         ))}
-      </select>
-      {projects.length === 0 && <span className="form-hint">{emptyHint}</span>}
+      </UiSelect>
+      {projects.length === 0 && (
+        <Text as="span" variant="caption" tone="muted" className="form-hint">
+          {emptyHint}
+        </Text>
+      )}
     </div>
   );
 }

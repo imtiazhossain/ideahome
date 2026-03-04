@@ -14,6 +14,7 @@ export function IssueDetailModalHeader({
   computeQualityScoreFn,
   onClose,
 }: IssueDetailModalHeaderProps) {
+  const qualityScorePercent = Math.round(computeQualityScoreFn(selectedIssue));
   return (
     <>
       <div className="modal-header">
@@ -37,25 +38,18 @@ export function IssueDetailModalHeader({
       >
         <div className="quality-score-bar-label">
           <span>Quality Score</span>
-          <span>
-            {Math.round((computeQualityScoreFn(selectedIssue) / 6) * 100)} /
-            100
-          </span>
+          <span>{qualityScorePercent} / 100</span>
         </div>
         <div
           className="quality-score-bar"
           role="progressbar"
-          aria-valuenow={Math.round(
-            (computeQualityScoreFn(selectedIssue) / 6) * 100
-          )}
+          aria-valuenow={qualityScorePercent}
           aria-valuemin={0}
           aria-valuemax={100}
         >
           <div
             className="quality-score-bar-fill"
-            style={{
-              width: `${(computeQualityScoreFn(selectedIssue) / 6) * 100}%`,
-            }}
+            style={{ width: `${qualityScorePercent}%` }}
           />
         </div>
       </div>

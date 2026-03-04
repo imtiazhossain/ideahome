@@ -18,6 +18,7 @@ const REWRITE_ROUTE_DEFS = [
   { base: "expenses", apiOnly: true },
   { base: "plaid", apiOnly: true },
   { base: "code", apiOnly: true },
+  { base: "calendar", apiOnly: true },
 ];
 
 function buildRewrites(targetBase) {

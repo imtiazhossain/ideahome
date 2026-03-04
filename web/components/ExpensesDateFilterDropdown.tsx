@@ -334,7 +334,6 @@ export function ExpensesDateFilterDropdown({
                       setOpenCalendar(null);
                     }}
                     onClose={() => setOpenCalendar(null)}
-                    showClear
                     showToday
                     ariaLabel="Select day"
                   />
@@ -568,7 +567,6 @@ export function ExpensesDateFilterDropdown({
                         setOpenCalendar(null);
                       }}
                       onClose={() => setOpenCalendar(null)}
-                      showClear
                       showToday
                       ariaLabel="From date"
                     />
@@ -600,7 +598,6 @@ export function ExpensesDateFilterDropdown({
                         setOpenCalendar(null);
                       }}
                       onClose={() => setOpenCalendar(null)}
-                      showClear
                       showToday
                       ariaLabel="To date"
                     />

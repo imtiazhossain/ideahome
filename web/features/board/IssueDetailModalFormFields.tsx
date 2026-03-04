@@ -2,6 +2,8 @@ import React from "react";
 import type { Issue } from "../../lib/api/issues";
 import type { User } from "../../lib/api/users";
 import { AutoResizeTextarea } from "../../components/AutoResizeTextarea";
+import { UiSelect } from "../../components/UiSelect";
+import { Text } from "../../components/Text";
 
 export type IssueDetailModalFormFieldsProps = {
   selectedIssue: Issue;
@@ -21,7 +23,7 @@ export function IssueDetailModalFormFields({
   return (
     <>
       <div className="form-group issue-modal-field expenses-field">
-        <label>Project</label>
+        <Text as="label" variant="label" tone="accent">Project</Text>
         <input
           className="expenses-input"
           type="text"
@@ -35,7 +37,7 @@ export function IssueDetailModalFormFields({
         />
       </div>
       <div className="form-group issue-modal-field expenses-field">
-        <label>Title</label>
+        <Text as="label" variant="label" tone="accent">Title</Text>
         <input
           className="expenses-input"
           value={selectedIssue.title ?? ""}
@@ -49,7 +51,7 @@ export function IssueDetailModalFormFields({
         />
       </div>
       <div className="form-group issue-modal-field expenses-field">
-        <label>Description</label>
+        <Text as="label" variant="label" tone="accent">Description</Text>
         <textarea
           className="expenses-input"
           value={selectedIssue.description ?? ""}
@@ -65,7 +67,7 @@ export function IssueDetailModalFormFields({
         />
       </div>
       <div className="form-group issue-modal-field expenses-field">
-        <label>Acceptance Criteria</label>
+        <Text as="label" variant="label" tone="accent">Acceptance Criteria</Text>
         <textarea
           className="expenses-input"
           value={selectedIssue.acceptanceCriteria ?? ""}
@@ -81,7 +83,7 @@ export function IssueDetailModalFormFields({
         />
       </div>
       <div className="form-group issue-modal-field expenses-field">
-        <label>Database</label>
+        <Text as="label" variant="label" tone="accent">Database</Text>
         <input
           className="expenses-input"
           value={selectedIssue.database ?? ""}
@@ -96,7 +98,7 @@ export function IssueDetailModalFormFields({
         />
       </div>
       <div className="form-group issue-modal-field expenses-field">
-        <label>API</label>
+        <Text as="label" variant="label" tone="accent">API</Text>
         <input
           className="expenses-input"
           value={selectedIssue.api ?? ""}
@@ -108,7 +110,7 @@ export function IssueDetailModalFormFields({
         />
       </div>
       <div className="form-group issue-modal-field expenses-field">
-        <label>Test Cases</label>
+        <Text as="label" variant="label" tone="accent">Test Cases</Text>
         {(() => {
           const lines = parseTestCasesFn(selectedIssue.testCases);
           const updateCases = (nextLines: string[]) => {
@@ -173,8 +175,8 @@ export function IssueDetailModalFormFields({
         })()}
       </div>
       <div className="form-group issue-modal-field expenses-field">
-        <label>Assigned To</label>
-        <select
+        <Text as="label" variant="label" tone="accent">Assigned To</Text>
+        <UiSelect
           className="form-select expenses-input"
           value={selectedIssue.assigneeId ?? ""}
           onChange={(e) =>
@@ -190,7 +192,7 @@ export function IssueDetailModalFormFields({
               {u.name || u.email}
             </option>
           ))}
-        </select>
+        </UiSelect>
       </div>
     </>
   );

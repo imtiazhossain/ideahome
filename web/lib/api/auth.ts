@@ -1,6 +1,8 @@
 export {
+  BACKEND_CONNECTIVITY_CHANGE_EVENT,
   getStoredToken,
   isAuthenticated,
+  isBackendOffline,
   isSkipLoginDev,
   AUTH_CHANGE_EVENT,
   ASSISTANT_VOICE_CHANGE_EVENT,

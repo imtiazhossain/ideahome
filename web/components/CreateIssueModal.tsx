@@ -1,10 +1,13 @@
 import React from "react";
-import type { Project, User } from "../lib/api";
+import type { Project, ProjectQualityScoreConfig, User } from "../lib/api";
 import { parseTestCases, serializeTestCases } from "../lib/utils";
 import { computeQualityScore } from "../features/board/scoring";
 import { AutoResizeTextarea } from "./AutoResizeTextarea";
 import { ErrorBanner } from "./ErrorBanner";
 import { ProjectSelect } from "./ProjectSelect";
+import { UiInput } from "./UiInput";
+import { Text } from "./Text";
+import { UiSelect } from "./UiSelect";
 
 export interface CreateIssueModalProps {
   open: boolean;
@@ -27,6 +30,7 @@ export interface CreateIssueModalProps {
   assigneeId: string;
   setAssigneeId: (v: string) => void;
   users: User[];
+  qualityScoreConfig?: ProjectQualityScoreConfig | null;
   error: string | null;
   onDismissError: () => void;
   submitting: boolean;
@@ -54,6 +58,7 @@ export function CreateIssueModal({
   assigneeId,
   setAssigneeId,
   users,
+  qualityScoreConfig,
   error,
   onDismissError,
   submitting,
@@ -69,8 +74,8 @@ export function CreateIssueModal({
     database,
     api,
     testCases,
-  });
-  const qualityScorePercent = Math.round((qualityScore / 6) * 100);
+  }, qualityScoreConfig);
+  const qualityScorePercent = Math.round(qualityScore);
   const updateCases = (nextLines: string[]) => {
     setTestCases(serializeTestCases(nextLines) ?? "");
   };
@@ -82,9 +87,9 @@ export function CreateIssueModal({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="modal-header">
-          <h2 className="tests-page-section-title issue-detail-modal-title">
+          <Text as="h2" variant="title" className="tests-page-section-title issue-detail-modal-title">
             Create Deck
-          </h2>
+          </Text>
           <button
             type="button"
             className="expenses-plaid-disconnect-btn issue-detail-modal-close"
@@ -99,8 +104,8 @@ export function CreateIssueModal({
             <form onSubmit={onSubmit}>
               <div className="quality-score-bar-wrap" style={{ marginBottom: 12 }}>
                 <div className="quality-score-bar-label">
-                  <span>Quality Score</span>
-                  <span>{qualityScorePercent} / 100</span>
+                  <Text as="span" variant="caption" tone="muted">Quality Score</Text>
+                  <Text as="span" variant="caption">{qualityScorePercent} / 100</Text>
                 </div>
                 <div
                   className="quality-score-bar"
@@ -111,7 +116,7 @@ export function CreateIssueModal({
                 >
                   <div
                     className="quality-score-bar-fill"
-                    style={{ width: `${(qualityScore / 6) * 100}%` }}
+                    style={{ width: `${qualityScorePercent}%` }}
                   />
                 </div>
               </div>
@@ -131,8 +136,8 @@ export function CreateIssueModal({
                 selectClassName="form-select expenses-input"
               />
               <div className="form-group issue-modal-field expenses-field">
-                <label>Title</label>
-                <input
+                <Text as="label" variant="label" tone="accent">Title</Text>
+                <UiInput
                   className="expenses-input"
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
@@ -141,7 +146,7 @@ export function CreateIssueModal({
                 />
               </div>
               <div className="form-group issue-modal-field expenses-field">
-                <label>Description</label>
+                <Text as="label" variant="label" tone="accent">Description</Text>
                 <textarea
                   className="expenses-input"
                   value={description}
@@ -151,7 +156,7 @@ export function CreateIssueModal({
                 />
               </div>
               <div className="form-group issue-modal-field expenses-field">
-                <label>Acceptance Criteria</label>
+                <Text as="label" variant="label" tone="accent">Acceptance Criteria</Text>
                 <textarea
                   className="expenses-input"
                   value={acceptanceCriteria}
@@ -161,8 +166,8 @@ export function CreateIssueModal({
                 />
               </div>
               <div className="form-group issue-modal-field expenses-field">
-                <label>Database</label>
-                <input
+                <Text as="label" variant="label" tone="accent">Database</Text>
+                <UiInput
                   className="expenses-input"
                   value={database}
                   onChange={(e) => setDatabase(e.target.value)}
@@ -170,8 +175,8 @@ export function CreateIssueModal({
                 />
               </div>
               <div className="form-group issue-modal-field expenses-field">
-                <label>API</label>
-                <input
+                <Text as="label" variant="label" tone="accent">API</Text>
+                <UiInput
                   className="expenses-input"
                   value={api}
                   onChange={(e) => setApi(e.target.value)}
@@ -179,7 +184,7 @@ export function CreateIssueModal({
                 />
               </div>
               <div className="form-group issue-modal-field expenses-field">
-                <label>Test Cases</label>
+                <Text as="label" variant="label" tone="accent">Test Cases</Text>
                 <div className="test-cases-list">
                   {lines.map((line, idx) => (
                     <div key={idx} className="test-case-row">
@@ -229,8 +234,8 @@ export function CreateIssueModal({
                 </div>
               </div>
               <div className="form-group issue-modal-field expenses-field">
-                <label>Assigned To</label>
-                <select
+                <Text as="label" variant="label" tone="accent">Assigned To</Text>
+                <UiSelect
                   className="form-select expenses-input"
                   value={assigneeId}
                   onChange={(e) => setAssigneeId(e.target.value)}
@@ -241,7 +246,7 @@ export function CreateIssueModal({
                       {u.name || u.email}
                     </option>
                   ))}
-                </select>
+                </UiSelect>
               </div>
               <div className="modal-actions">
                 <button

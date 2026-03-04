@@ -5,6 +5,17 @@ import { AppModule } from "../src/app.module";
 import { PrismaService } from "../src/prisma.service";
 import { createTestUserWithOrg } from "./helpers";
 
+const mockResendSend = jest.fn();
+jest.mock("resend", () => ({
+  Resend: function MockedResend() {
+    return {
+      emails: {
+        send: mockResendSend,
+      },
+    };
+  },
+}));
+
 describe("ProjectsController (e2e)", () => {
   let app: INestApplication;
   let prisma: PrismaService;
@@ -14,6 +25,11 @@ describe("ProjectsController (e2e)", () => {
   let projectId: string;
 
   beforeAll(async () => {
+    process.env.INVITE_EMAIL_ENABLED = "true";
+    process.env.RESEND_API_KEY = "re_test_e2e";
+    process.env.INVITE_EMAIL_FROM = "no-reply@example.com";
+    process.env.INVITE_EMAIL_FROM_NAME = "IdeaHome";
+    process.env.FRONTEND_URL = "https://ideahome.vercel.app";
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
     }).compile();
@@ -89,6 +105,45 @@ describe("ProjectsController (e2e)", () => {
       .expect(200)
       .expect((res: request.Response) => {
         expect(res.body).toHaveProperty("name", newName);
+      });
+  });
+
+  it("POST /projects/:id/invites returns 503 when email provider fails", () => {
+    mockResendSend.mockResolvedValueOnce({
+      error: { message: "Provider unavailable" },
+    });
+    return auth(
+      request(app.getHttpServer())
+        .post(`/projects/${projectId}/invites`)
+        .send({ email: `invitee-${Date.now()}@example.com` })
+    )
+      .expect(503)
+      .expect((res: request.Response) => {
+        expect(res.body).toHaveProperty(
+          "message",
+          "Failed to send invite email"
+        );
+      });
+  });
+
+  it("POST /projects/:id/invites succeeds on retry after a failed send", () => {
+    const invitedEmail = `retry-${Date.now()}@example.com`;
+    mockResendSend.mockResolvedValueOnce({
+      data: { id: "email_1" },
+    });
+    return auth(
+      request(app.getHttpServer())
+        .post(`/projects/${projectId}/invites`)
+        .send({ email: invitedEmail })
+    )
+      .expect(201)
+      .expect((res: request.Response) => {
+        expect(Array.isArray(res.body)).toBe(true);
+        expect(
+          res.body.some(
+            (invite: { email?: string }) => invite.email === invitedEmail
+          )
+        ).toBe(true);
       });
   });
 

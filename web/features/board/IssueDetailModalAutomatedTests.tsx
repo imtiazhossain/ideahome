@@ -3,6 +3,9 @@ import Link from "next/link";
 import type { Issue } from "../../lib/api/issues";
 import { type RunUiTestResult } from "../../lib/api/tests";
 import { uiTests, testNameToSlug } from "../../lib/ui-tests";
+import { UiMenuDropdown } from "../../components/UiMenuDropdown";
+import { IconX } from "../../components/icons";
+import { Text } from "../../components/Text";
 
 export type IssueDetailModalAutomatedTestsProps = {
   selectedIssue: Issue;
@@ -77,56 +80,34 @@ export function IssueDetailModalAutomatedTests({
 
   return (
     <div className="form-group issue-modal-field expenses-field">
-      <label>Automated Tests</label>
+      <Text as="label" variant="label" tone="accent">Automated Tests</Text>
       <div className="automated-tests-select">
-        <div ref={automatedTestDropdownRef}>
-          <button
-            type="button"
-            className="automated-tests-trigger expenses-input"
-            onClick={() =>
-              setAutomatedTestDropdownOpen((o) => !o)
-            }
-          >
-            <span className="automated-tests-trigger-text">
-              {selectedTests.length === 0
-                ? "Select automated tests…"
-                : `${selectedTests.length} test${selectedTests.length === 1 ? "" : "s"} selected`}
-            </span>
-            <span className="automated-tests-trigger-arrow">
-              {automatedTestDropdownOpen ? "▲" : "▼"}
-            </span>
-          </button>
-          {automatedTestDropdownOpen && (
-            <div className="automated-tests-dropdown">
-              {uiTests.map((f) =>
-                f.suites.map((suite) => (
-                  <div key={`${f.file}::${suite.name}`}>
-                    <div className="automated-tests-suite-header">
-                      {suite.name}
-                    </div>
-                    {suite.tests.map((test) => {
-                      const isChecked =
-                        selectedTests.includes(test);
-                      return (
-                        <button
-                          key={test}
-                          type="button"
-                          className={`automated-tests-option${isChecked ? " is-selected" : ""}`}
-                          onClick={() => toggleTest(test)}
-                        >
-                          <span className="automated-tests-check">
-                            {isChecked ? "✓" : ""}
-                          </span>
-                          <span>{test}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                ))
-              )}
-            </div>
+        <UiMenuDropdown
+          ref={automatedTestDropdownRef}
+          open={automatedTestDropdownOpen}
+          onOpenChange={setAutomatedTestDropdownOpen}
+          triggerAriaLabel="Select automated tests"
+          triggerText={
+            selectedTests.length === 0
+              ? "Select automated tests…"
+              : `${selectedTests.length} test${selectedTests.length === 1 ? "" : "s"} selected`
+          }
+          closeOnSelect={false}
+          multiSelect
+          groups={uiTests.flatMap((f) =>
+            f.suites.map((suite) => ({
+              id: `${f.file}::${suite.name}`,
+              label: suite.name,
+              items: suite.tests.map((test) => ({
+                id: test,
+                label: test,
+                selected: selectedTests.includes(test),
+                onSelect: () => toggleTest(test),
+              })),
+            }))
           )}
-        </div>
+          menuClassName="automated-tests-dropdown"
+        />
         {selectedTests.length > 0 && (
           <div className="automated-tests-chips">
             {selectedTests.map((t) => {
@@ -189,7 +170,7 @@ export function IssueDetailModalAutomatedTests({
                     onClick={() => removeTest(t)}
                     aria-label={`Remove ${t}`}
                   >
-                    ×
+                    <IconX />
                   </button>
                 </span>
               );

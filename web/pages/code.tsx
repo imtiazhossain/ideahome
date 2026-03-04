@@ -23,11 +23,13 @@ import { IconGrip } from "../components/IconGrip";
 import { ProjectFlowDiagram } from "../components/ProjectFlowDiagram";
 import {
   buildCodeRatingSuggestions,
+  readJsonIfAvailable,
   severityLabel,
   type AuditPayload,
   type AuditFinding,
   type WireframeSnapshot,
 } from "../lib/codePageUtils";
+import { API_REQUEST_HEADER } from "../lib/api";
 import { useCodePageState } from "../lib/useCodePageState";
 import { useProjectLayout } from "../lib/useProjectLayout";
 import { useTheme } from "./_app";
@@ -189,19 +191,41 @@ export default function CodePage() {
         method: "POST",
         cache: "no-store",
         headers: {
+          [API_REQUEST_HEADER]: "1",
           Pragma: "no-cache",
           "Cache-Control": "no-cache",
         },
       });
-      const data = (await response.json()) as SecurityAuditResponse;
+      const { data, text } = await readJsonIfAvailable<SecurityAuditResponse>(
+        response
+      );
+      if (!data) {
+        setSecurityAuditScore(null);
+        setSecurityAuditSummary(null);
+        setSecurityAuditFindings([]);
+        setSecurityAuditGeneratedAt(null);
+        const detail = text
+          ? text
+              .replace(/<[^>]+>/g, " ")
+              .replace(/\s+/g, " ")
+              .trim()
+              .slice(0, 180)
+          : "";
+        setSecurityAuditError(
+          `Security audit request failed (${response.status} ${response.statusText})${detail ? `: ${detail}` : ""}`
+        );
+        return;
+      }
       setSecurityAuditScore(data.score);
       setSecurityAuditSummary(data.summary);
       setSecurityAuditFindings(data.findings ?? []);
       setSecurityAuditGeneratedAt(data.generatedAt ?? null);
-      if (!response.ok || data.ok !== true) {
+      if (!response.ok) {
         setSecurityAuditError(
           data.error ?? `Security audit failed (${response.status})`
         );
+      } else if (data.ok !== true && data.error) {
+        setSecurityAuditError(data.error);
       }
     } catch (error) {
       setSecurityAuditScore(null);
@@ -361,6 +385,7 @@ export default function CodePage() {
       projectDeleting={projectDeleting}
       handleDeleteProject={handleDeleteProject}
       onCreateProject={layout.createProjectByName}
+      onRenameProject={layout.renameProjectById}
     >
       <div className="tests-page-content expenses-page-content">
         <div className="code-page">

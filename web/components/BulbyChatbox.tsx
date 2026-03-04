@@ -60,15 +60,24 @@ const DRAG_BOUNDS_MARGIN = 8;
 
 type DragPosition = { x: number; y: number };
 
+type ClampSize = { width: number; height: number };
+
+function getFallbackTriggerSize(): ClampSize {
+  if (typeof window !== "undefined" && window.matchMedia("(max-width: 640px)").matches) {
+    return { width: 44, height: 44 };
+  }
+  return { width: TRIGGER_SIZE, height: TRIGGER_SIZE };
+}
+
 /** Clamp position so the trigger stays fully on the viewport (never off page). */
-function clampPositionToViewport(pos: DragPosition): DragPosition {
+function clampPositionToViewport(pos: DragPosition, size: ClampSize = getFallbackTriggerSize()): DragPosition {
   if (typeof window === "undefined") return pos;
   const w = window.innerWidth;
   const h = window.innerHeight;
   const minX = DRAG_BOUNDS_MARGIN;
   const minY = DRAG_BOUNDS_MARGIN;
-  const maxX = w - TRIGGER_SIZE - DRAG_BOUNDS_MARGIN;
-  const maxY = h - TRIGGER_SIZE - DRAG_BOUNDS_MARGIN;
+  const maxX = Math.max(minX, w - size.width - DRAG_BOUNDS_MARGIN);
+  const maxY = Math.max(minY, h - size.height - DRAG_BOUNDS_MARGIN);
   return {
     x: Math.max(minX, Math.min(maxX, pos.x)),
     y: Math.max(minY, Math.min(maxY, pos.y)),
@@ -180,6 +189,7 @@ export function BulbyChatbox({ projectId }: BulbyChatboxProps) {
   const threadRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const chatboxRef = useRef<HTMLDivElement | null>(null);
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
   const panelRef = useRef<HTMLDivElement | null>(null);
   const [position, setPosition] = useState<DragPosition | null>(null);
   const [panelOffset, setPanelOffset] = useState({ x: 0, y: 0 });
@@ -278,6 +288,31 @@ export function BulbyChatbox({ projectId }: BulbyChatboxProps) {
 
   const lastPositionRef = useRef<DragPosition | null>(null);
 
+  const clampWithTriggerSize = useCallback((pos: DragPosition): DragPosition => {
+    const trigger = triggerRef.current;
+    const size = trigger
+      ? {
+          width: Math.max(1, trigger.offsetWidth),
+          height: Math.max(1, trigger.offsetHeight),
+        }
+      : getFallbackTriggerSize();
+    return clampPositionToViewport(pos, size);
+  }, []);
+
+  useEffect(() => {
+    const onResize = () => {
+      setPosition((current) => {
+        if (!current) return current;
+        const clamped = clampWithTriggerSize(current);
+        if (clamped.x === current.x && clamped.y === current.y) return current;
+        storePosition(clamped);
+        return clamped;
+      });
+    };
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, [clampWithTriggerSize]);
+
   /* When open with explicit position: open below if not enough room above; nudge panel so it stays visible; never overlap Bulby. */
   useEffect(() => {
     if (!open || position == null) {
@@ -325,21 +360,21 @@ export function BulbyChatbox({ projectId }: BulbyChatboxProps) {
     if ("touches" in e) e.preventDefault();
     const x = clientX - state.offsetX;
     const y = clientY - state.offsetY;
-    const next = clampPositionToViewport({ x, y });
+    const next = clampWithTriggerSize({ x, y });
     lastPositionRef.current = next;
     setPosition(next);
-  }, []);
+  }, [clampWithTriggerSize]);
 
   const handleDragEnd = useCallback(() => {
     const state = dragRef.current;
     dragRef.current = null;
     const raw = lastPositionRef.current ?? position;
     if (!state?.moved || !raw) return;
-    const toStore = clampPositionToViewport(raw);
+    const toStore = clampWithTriggerSize(raw);
     lastInViewportPositionRef.current = toStore;
     setPosition(toStore);
     storePosition(toStore);
-  }, [position]);
+  }, [position, clampWithTriggerSize]);
 
   const handleDragStart = useCallback(
     (e: React.MouseEvent | React.TouchEvent) => {
@@ -646,6 +681,7 @@ export function BulbyChatbox({ projectId }: BulbyChatboxProps) {
         </div>
       )}
       <button
+        ref={triggerRef}
         type="button"
         className={`bulby-chatbox-trigger bulby-chatbox-trigger--icon${open ? " bulby-chatbox-trigger--open" : ""}${loading ? " is-thinking" : ""}`}
         onClick={handleTriggerClick}

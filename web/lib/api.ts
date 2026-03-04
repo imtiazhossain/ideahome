@@ -1,4 +1,19 @@
-import { pathExpensesDeleteImported } from "@ideahome/shared-config";
+import {
+  pathExpensesDeleteImported,
+  pathCalendarGoogleStatus,
+  pathCalendarGoogleConnect,
+  pathCalendarGoogleCalendars,
+  pathCalendarGoogleCalendarSelection,
+  pathCalendarGoogleSync,
+  pathCalendarGoogleDisconnect,
+  pathCalendarEvents,
+  pathCalendarEventById,
+  type CalendarEvent as SharedCalendarEvent,
+  type CalendarGoogleCalendar as SharedCalendarGoogleCalendar,
+  type CalendarGoogleStatus as SharedCalendarGoogleStatus,
+  type CreateCalendarEventInput,
+  type UpdateCalendarEventInput,
+} from "@ideahome/shared-config";
 import {
   API_REQUEST_HEADER as SHARED_API_REQUEST_HEADER,
   ASSISTANT_VOICE_CHANGE_EVENT as SHARED_ASSISTANT_VOICE_CHANGE_EVENT,
@@ -54,6 +69,9 @@ import type {
   IssueRecording as SharedIssueRecording,
   IssueScreenshot as SharedIssueScreenshot,
   Project as SharedProject,
+  ProjectQualityScoreConfig as SharedProjectQualityScoreConfig,
+  QualityScoreItemId as SharedQualityScoreItemId,
+  QualityScoreWeights as SharedQualityScoreWeights,
   RunApiTestInput,
   RunApiTestResult as SharedRunApiTestResult,
   RunUiTestInput,
@@ -160,6 +178,26 @@ function authHeaders(): Record<string, string> {
 
 /** Header sent on all API requests so Next.js rewrites only proxy these (not page navigation). */
 export const API_REQUEST_HEADER = SHARED_API_REQUEST_HEADER;
+export const BACKEND_CONNECTIVITY_CHANGE_EVENT =
+  "ideahome-backend-connectivity-change";
+
+let backendOffline = false;
+
+function dispatchBackendConnectivityChange(offline: boolean): void {
+  if (backendOffline === offline) return;
+  backendOffline = offline;
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(
+    new CustomEvent(BACKEND_CONNECTIVITY_CHANGE_EVENT, {
+      detail: { offline, at: Date.now() },
+    })
+  );
+}
+
+/** True when recent API requests failed with a network-level backend connectivity error. */
+export function isBackendOffline(): boolean {
+  return backendOffline;
+}
 
 let unauthorizedBlocked = false;
 
@@ -187,11 +225,19 @@ async function apiFetch(
   const headers = new Headers(init?.headers);
   headers.set(API_REQUEST_HEADER, "1");
   Object.entries(authHeaders()).forEach(([k, v]) => headers.set(k, v));
-  const response = await fetch(input, { ...init, headers });
-  if (response.status === 401) {
-    handleUnauthorizedResponse();
+  try {
+    const response = await fetch(input, { ...init, headers });
+    dispatchBackendConnectivityChange(false);
+    if (response.status === 401) {
+      handleUnauthorizedResponse();
+    }
+    return response;
+  } catch (err) {
+    if (isLikelyNetworkFetchError(err)) {
+      dispatchBackendConnectivityChange(true);
+    }
+    throw err;
   }
-  return response;
 }
 
 function isLikelyNetworkFetchError(err: unknown): boolean {
@@ -530,6 +576,9 @@ export const API_BASE = API_BASE_RESOLVED;
 export type User = SharedUser;
 export type Organization = SharedOrganization;
 export type Project = SharedProject;
+export type ProjectQualityScoreConfig = SharedProjectQualityScoreConfig;
+export type QualityScoreItemId = SharedQualityScoreItemId;
+export type QualityScoreWeights = SharedQualityScoreWeights;
 export type ProjectMember = {
   userId: string;
   role: string;
@@ -670,6 +719,19 @@ export async function inviteProjectMember(
   });
 }
 
+export async function removeProjectMember(
+  projectId: string,
+  userId: string
+): Promise<ProjectMember[]> {
+  return requestJson<ProjectMember[]>(
+    `${pathProjectMembers(projectId)}/${encodeURIComponent(userId)}`,
+    {
+      method: "DELETE",
+      errorMessage: "Failed to remove project member",
+    }
+  );
+}
+
 export async function fetchProjectInvites(
   projectId: string
 ): Promise<ProjectInvite[]> {
@@ -687,6 +749,19 @@ export async function inviteProjectByEmail(
     body: { email },
     errorMessage: "Failed to send project invite",
   });
+}
+
+export async function revokeProjectInvite(
+  projectId: string,
+  inviteId: string
+): Promise<ProjectInvite[]> {
+  return requestJson<ProjectInvite[]>(
+    `${pathProjectInvites(projectId)}/${encodeURIComponent(inviteId)}`,
+    {
+      method: "DELETE",
+      errorMessage: "Failed to revoke project invite",
+    }
+  );
 }
 
 export type {
@@ -758,6 +833,9 @@ export const deleteEnhancement = checkableApis.deleteEnhancement;
 export const reorderEnhancements = checkableApis.reorderEnhancements;
 
 export type Expense = SharedExpense;
+export type CalendarEvent = SharedCalendarEvent;
+export type CalendarGoogleStatus = SharedCalendarGoogleStatus;
+export type CalendarGoogleCalendar = SharedCalendarGoogleCalendar;
 export type TaxDocument = {
   id: string;
   fileUrl: string;
@@ -962,6 +1040,123 @@ export async function disconnectPlaidLinkedAccount(
     {
       method: "DELETE",
       errorMessage: "Failed to disconnect account",
+    }
+  );
+}
+
+export async function fetchCalendarGoogleStatus(
+  projectId: string
+): Promise<CalendarGoogleStatus> {
+  return requestJson<CalendarGoogleStatus>(pathCalendarGoogleStatus(projectId), {
+    errorMessage: "Failed to load Google Calendar status",
+  });
+}
+
+export async function startGoogleCalendarConnect(
+  projectId: string
+): Promise<{ url: string }> {
+  return requestJson<{ url: string }>(pathCalendarGoogleConnect(projectId), {
+    method: "POST",
+    errorMessage: "Failed to start Google Calendar connect",
+  });
+}
+
+export async function fetchGoogleCalendars(
+  projectId: string
+): Promise<CalendarGoogleCalendar[]> {
+  return requestJson<CalendarGoogleCalendar[]>(
+    pathCalendarGoogleCalendars(projectId),
+    { errorMessage: "Failed to load Google calendars" }
+  );
+}
+
+export async function setGoogleCalendarSelection(
+  projectId: string,
+  googleCalendarId: string
+): Promise<{ selectedCalendarId: string }> {
+  return requestJson<{ selectedCalendarId: string }>(
+    pathCalendarGoogleCalendarSelection(projectId),
+    {
+      method: "PATCH",
+      body: { googleCalendarId },
+      errorMessage: "Failed to update selected Google calendar",
+    }
+  );
+}
+
+export async function syncGoogleCalendar(
+  projectId: string
+): Promise<{
+  upserted: number;
+  deleted: number;
+  lastSyncedAt: string;
+  fullResync?: boolean;
+}> {
+  return requestJson<{
+    upserted: number;
+    deleted: number;
+    lastSyncedAt: string;
+    fullResync?: boolean;
+  }>(pathCalendarGoogleSync(projectId), {
+    method: "POST",
+    errorMessage: "Failed to sync Google Calendar",
+  });
+}
+
+export async function disconnectGoogleCalendar(
+  projectId: string
+): Promise<{ disconnected: boolean }> {
+  return requestJson<{ disconnected: boolean }>(
+    pathCalendarGoogleDisconnect(projectId),
+    {
+      method: "DELETE",
+      errorMessage: "Failed to disconnect Google Calendar",
+    }
+  );
+}
+
+export async function fetchCalendarEvents(
+  projectId: string,
+  start: string,
+  end: string
+): Promise<CalendarEvent[]> {
+  return requestJson<CalendarEvent[]>(pathCalendarEvents(projectId, start, end), {
+    errorMessage: "Failed to load calendar events",
+  });
+}
+
+export async function createCalendarEvent(
+  projectId: string,
+  body: CreateCalendarEventInput
+): Promise<CalendarEvent> {
+  return requestJson<CalendarEvent>(pathCalendarEvents(projectId), {
+    method: "POST",
+    body,
+    errorMessage: "Failed to create calendar event",
+  });
+}
+
+export async function updateCalendarEvent(
+  projectId: string,
+  eventId: string,
+  body: UpdateCalendarEventInput
+): Promise<CalendarEvent> {
+  return requestJson<CalendarEvent>(pathCalendarEventById(eventId, projectId), {
+    method: "PATCH",
+    body,
+    errorMessage: "Failed to update calendar event",
+  });
+}
+
+export async function deleteCalendarEvent(
+  projectId: string,
+  eventId: string
+): Promise<{ deleted: boolean }> {
+  return requestJson<{ deleted: boolean }>(
+    pathCalendarEventById(eventId, projectId),
+    {
+      method: "DELETE",
+      errorMessage: "Failed to delete calendar event",
     }
   );
 }

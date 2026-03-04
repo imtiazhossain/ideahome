@@ -2103,7 +2103,6 @@ export default function FinancialsPage() {
                         setDatePickerOpen(false);
                       }}
                       onClose={() => setDatePickerOpen(false)}
-                      showClear
                       showToday
                     />
                   )}
@@ -2178,7 +2177,9 @@ export default function FinancialsPage() {
           >
             {expenses.length === 0 ? (
               <p className="tests-page-section-desc finances-empty-state-msg">
-                No expenses yet. Add one above.
+                It's dark in here...
+                <br />
+                Turn the lights on by adding something.
               </p>
             ) : filteredExpenses.length === 0 ? (
               <p className="tests-page-section-desc finances-empty-state-msg">
@@ -2378,6 +2379,7 @@ export default function FinancialsPage() {
       projectDeleting={projectDeleting}
       handleDeleteProject={handleDeleteProject}
       onCreateProject={layout.createProjectByName}
+      onRenameProject={layout.renameProjectById}
     >
       {!projectsLoaded || (Boolean(selectedProjectId) && expensesLoading) ? (
         <div className="tests-page-single-loading">

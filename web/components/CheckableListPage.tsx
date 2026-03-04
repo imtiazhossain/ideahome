@@ -129,6 +129,7 @@ export function CheckableListPage({
         projectDeleting: layout.projectDeleting,
         handleDeleteProject: layout.handleDeleteProject,
         onCreateProject: layout.createProjectByName,
+        onRenameProject: layout.renameProjectById,
       }}
       pageTitle={def.pageTitle}
       addFormProps={{
@@ -150,6 +151,7 @@ export function CheckableListPage({
       onUndo={list.undo}
       onCopyList={handleCopyList}
       onSort={list.sortItems}
+      currentSortMode={list.sortMode}
       sortDisabled={
         list.loading || list.items.some((item) => isOptimisticId(item.id))
       }

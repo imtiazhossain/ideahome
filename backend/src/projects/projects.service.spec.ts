@@ -2,6 +2,7 @@ import { Test, TestingModule } from "@nestjs/testing";
 import { BadRequestException, NotFoundException } from "@nestjs/common";
 import { PrismaClientKnownRequestError } from "@prisma/client/runtime/library";
 import { AuthService } from "../auth/auth.service";
+import { EmailService } from "../email/email.service";
 import { ProjectsService } from "./projects.service";
 import { PrismaService } from "../prisma.service";
 
@@ -67,6 +68,10 @@ describe("ProjectsService", () => {
       .fn()
       .mockResolvedValue({ organizationId: "o1" }),
   };
+  const mockEmailService = {
+    sendProjectInviteEmail: jest.fn(),
+    resolveInviteAppUrl: jest.fn(),
+  };
 
   beforeEach(async () => {
     jest.clearAllMocks();
@@ -79,6 +84,7 @@ describe("ProjectsService", () => {
         ProjectsService,
         { provide: PrismaService, useValue: mockPrisma },
         { provide: AuthService, useValue: mockAuthService },
+        { provide: EmailService, useValue: mockEmailService },
       ],
     }).compile();
 

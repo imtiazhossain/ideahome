@@ -22,8 +22,10 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { AppLayout } from "../components/AppLayout";
+import { Button } from "../components/Button";
 import { CollapsibleSection } from "../components/CollapsibleSection";
 import { IconGrip } from "../components/IconGrip";
+import { UiInput } from "../components/UiInput";
 import { useProjectLayout } from "../lib/useProjectLayout";
 import { useTheme } from "./_app";
 
@@ -586,18 +588,20 @@ export default function PagesPage() {
       projectDeleting={projectDeleting}
       handleDeleteProject={handleDeleteProject}
       onCreateProject={layout.createProjectByName}
+      onRenameProject={layout.renameProjectById}
     >
       <div className="tests-page-content pages-page-content">
         <header className="pages-page-header">
           <h1 className="tests-page-title">Pages</h1>
-          <button
-            type="button"
-            className="btn btn-secondary"
+          <Button
+            variant="ghost"
+            size="md"
+            className="pages-add-section-btn"
             onClick={handleAddSection}
             disabled={!selectedProjectId}
           >
             Add section
-          </button>
+          </Button>
         </header>
 
         {!selectedProjectId ? (
@@ -643,15 +647,16 @@ export default function PagesPage() {
                       headerTrailing={
                         <div className="pages-section-actions">
                           {dragHandle}
-                          <button
-                            type="button"
-                            className="btn btn-danger-outline"
+                          <Button
+                            variant="danger"
+                            size="lg"
                             onClick={() => handleDeleteSection(section.id)}
+                            className="pages-delete-btn"
                             aria-label={`Delete ${section.title || "section"}`}
                             title="Delete section"
                           >
                             Delete
-                          </button>
+                          </Button>
                         </div>
                       }
                     >
@@ -660,9 +665,9 @@ export default function PagesPage() {
                           <label htmlFor={`title-${section.id}`}>
                             Section title
                           </label>
-                          <input
+                          <UiInput
                             id={`title-${section.id}`}
-                            className="expenses-input"
+                            className="pages-title-input"
                             value={section.title}
                             onChange={(event) =>
                               handleUpdateSection(section.id, {
@@ -679,7 +684,7 @@ export default function PagesPage() {
                               <button
                                 key={`${section.id}-${action.id}`}
                                 type="button"
-                                className="btn btn-secondary btn-sm pages-toolbar-btn"
+                                className="ui-btn ui-btn--secondary ui-btn--sm pages-toolbar-btn"
                                 title={action.title}
                                 aria-label={action.title}
                                 onMouseDown={(event) => event.preventDefault()}

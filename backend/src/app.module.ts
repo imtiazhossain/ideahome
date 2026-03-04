@@ -15,8 +15,10 @@ import { ExpensesModule } from "./expenses/expenses.module";
 import { PlaidModule } from "./plaid/plaid.module";
 import { CodeModule } from "./code/code.module";
 import { TaxDocumentsModule } from "./tax-documents/tax-documents.module";
+import { CalendarModule } from "./calendar/calendar.module";
 import { PrismaService } from "./prisma.service";
 import { MalwareScannerService } from "./malware-scanner.service";
+import { EmailModule } from "./email/email.module";
 
 @Module({
   imports: [
@@ -34,6 +36,8 @@ import { MalwareScannerService } from "./malware-scanner.service";
     TaxDocumentsModule,
     PlaidModule,
     CodeModule,
+    CalendarModule,
+    EmailModule,
   ],
   controllers: [AppController],
   providers: [AppService, PrismaService, MalwareScannerService],

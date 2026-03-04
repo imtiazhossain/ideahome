@@ -227,6 +227,7 @@ export default function TestsPage() {
       projectDeleting={projectDeleting}
       handleDeleteProject={handleDeleteProject}
       onCreateProject={layout.createProjectByName}
+      onRenameProject={layout.renameProjectById}
     >
       <div className="tests-page-content">
         <h1 className="tests-page-title">Tests</h1>

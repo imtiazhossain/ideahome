@@ -110,6 +110,10 @@ export default function Home() {
   const [newColumnError, setNewColumnError] = useState<string | null>(null);
   const [draggingColumnId, setDraggingColumnId] = useState<string | null>(null);
   const { theme, toggleTheme } = useTheme();
+  const selectedProject = useMemo(
+    () => projects.find((p) => p.id === selectedProjectId) ?? null,
+    [projects, selectedProjectId]
+  );
 
   const createIssueForm = useBoardCreateIssue({
     selectedProjectId: selectedProjectId ?? "",
@@ -117,6 +121,7 @@ export default function Home() {
     setIssues,
     setSelectedProjectId,
     setError,
+    qualityScoreConfig: selectedProject?.qualityScoreConfig ?? null,
   });
   const {
     createOpen,
@@ -150,6 +155,8 @@ export default function Home() {
     setSelectedIssue,
     issues,
     setIssues,
+    projects,
+    setProjects,
     setError,
     users,
     setIssueToDelete,
@@ -340,6 +347,21 @@ export default function Home() {
   const cancelEditProjectName = () => {
     setEditingProjectId(null);
   };
+
+  const renameProjectById = useCallback(
+    async (projectId: string, name: string) => {
+      const trimmed = name.trim();
+      if (!projectId || !trimmed) return;
+      const prev = projects.find((x) => x.id === projectId);
+      if (prev?.name === trimmed) return;
+      const updated = await updateProject(projectId, { name: trimmed });
+      setProjects((p) => p.map((x) => (x.id === projectId ? updated : x)));
+      if (selectedProjectIdRef.current === projectId) {
+        setLastKnownProjectName(updated.name);
+      }
+    },
+    [projects, setLastKnownProjectName]
+  );
 
   const handleCreateProjectWithName = useCallback(
     async (name: string) => {
@@ -779,6 +801,7 @@ export default function Home() {
       onNewProjectClick={() => setCreateProjectOpen(true)}
       onAddClick={() => setCreateOpen(true)}
       onCreateProject={handleCreateProjectWithName}
+      onRenameProject={renameProjectById}
       onDeleteAllIssuesClick={() => setDeleteAllConfirmOpen(true)}
       deleteAllIssuesDisabled={loading || issues.length === 0}
     >
@@ -941,6 +964,7 @@ export default function Home() {
         assigneeId={createAssigneeId}
         setAssigneeId={setCreateAssigneeId}
         users={users}
+        qualityScoreConfig={selectedProject?.qualityScoreConfig ?? null}
         error={createError}
         onDismissError={() => setCreateError(null)}
         submitting={submitting}

@@ -114,6 +114,7 @@ export default function CustomListPage() {
         projectDeleting: layout.projectDeleting,
         handleDeleteProject: layout.handleDeleteProject,
         onCreateProject: layout.createProjectByName,
+        onRenameProject: layout.renameProjectById,
       }}
       pageTitle={list.name}
       addFormProps={{
@@ -131,6 +132,7 @@ export default function CustomListPage() {
       onUndo={listState.undo}
       onCopyList={handleCopyList}
       onSort={listState.sortItems}
+      currentSortMode={listState.sortMode}
       sortDisabled={!hydrated || listState.items.length < 2}
       copyListAriaLabel={`Copy ${list.name}`}
       copyListTitle={`Copy ${list.name} as bullet points`}
@@ -138,7 +140,7 @@ export default function CustomListPage() {
       checkableListProps={{
         items: listState.items,
         itemLabel: "entry",
-        emptyMessage: "No entries yet. Add one above.",
+        emptyMessage: "It's dark in here...\nTurn the lights on by adding something.",
         loading: !hydrated,
         isItemDisabled: () => false,
         editingIndex: listState.editingIndex,

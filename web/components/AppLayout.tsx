@@ -6,7 +6,11 @@ import {
   getCustomListTabId,
   getCustomLists,
 } from "../lib/customLists";
-import { AUTH_CHANGE_EVENT } from "../lib/api/auth";
+import {
+  AUTH_CHANGE_EVENT,
+  BACKEND_CONNECTIVITY_CHANGE_EVENT,
+  isBackendOffline,
+} from "../lib/api/auth";
 import { useProjectOrder } from "../lib/useProjectOrder";
 import { useAssistantSettings } from "../lib/useAssistantSettings";
 import { AppDrawer } from "./AppDrawer";
@@ -26,7 +30,7 @@ const SECTION_LINKS: {
   { tabId: "timeline", label: "Timeline" },
   { tabId: "board", label: "Dashboard", href: "/" },
   { tabId: "tests", label: "Tests", href: "/tests" },
-  { tabId: "calendar", label: "Calendar" },
+  { tabId: "calendar", label: "Calendar", href: "/calendar" },
   { tabId: "list", label: "Features", href: "/features" },
   { tabId: "forms", label: "Bugs", href: "/bugs" },
   { tabId: "goals", label: "Goals" },
@@ -73,6 +77,8 @@ export interface AppLayoutProps {
   onDeleteAllIssuesClick?: () => void;
   /** Pass through to ProjectNavBar */
   deleteAllIssuesDisabled?: boolean;
+  /** Pass through to ProjectNavBar */
+  onRenameProject?: (projectId: string, name: string) => Promise<void> | void;
   children: React.ReactNode;
 }
 
@@ -106,6 +112,7 @@ export function AppLayout({
   onCreateProject,
   onDeleteAllIssuesClick,
   deleteAllIssuesDisabled,
+  onRenameProject,
   children,
 }: AppLayoutProps) {
   const router = useRouter();
@@ -131,6 +138,7 @@ export function AppLayout({
   const [customLists, setCustomLists] = React.useState<
     ReturnType<typeof getCustomLists>
   >([]);
+  const [backendOffline, setBackendOffline] = React.useState(false);
   const creatingProjectInputRef = React.useRef<HTMLInputElement>(null);
   const creatingSectionInputRef = React.useRef<HTMLInputElement>(null);
 
@@ -142,6 +150,32 @@ export function AppLayout({
     return () => {
       window.removeEventListener("storage", syncCustomLists);
       window.removeEventListener(AUTH_CHANGE_EVENT, syncCustomLists);
+    };
+  }, []);
+
+  React.useEffect(() => {
+    setBackendOffline(isBackendOffline());
+    const onBackendConnectivityChange = (
+      event: Event
+    ) => {
+      const detail = (
+        event as CustomEvent<{ offline?: unknown }>
+      ).detail;
+      if (typeof detail?.offline === "boolean") {
+        setBackendOffline(detail.offline);
+        return;
+      }
+      setBackendOffline(isBackendOffline());
+    };
+    window.addEventListener(
+      BACKEND_CONNECTIVITY_CHANGE_EVENT,
+      onBackendConnectivityChange
+    );
+    return () => {
+      window.removeEventListener(
+        BACKEND_CONNECTIVITY_CHANGE_EVENT,
+        onBackendConnectivityChange
+      );
     };
   }, []);
 
@@ -190,21 +224,26 @@ export function AppLayout({
   const visibleOrderedNavLinks = React.useMemo(
     () =>
       orderedNavLinks
+        .filter((link) => tabOrder.includes(link.tabId))
         .filter((link) => !hiddenTabIds.includes(link.tabId))
         .filter((link) => !(isMobile && link.tabId === "code")),
-    [hiddenTabIds, isMobile, orderedNavLinks]
+    [hiddenTabIds, isMobile, orderedNavLinks, tabOrder]
   );
   const drawerOrderedNavLinks = React.useMemo(
     () =>
-      orderedNavLinks.filter((link) => !(isMobile && link.tabId === "code")),
-    [isMobile, orderedNavLinks]
+      orderedNavLinks
+        .filter((link) => tabOrder.includes(link.tabId))
+        .filter((link) => !(isMobile && link.tabId === "code")),
+    [isMobile, orderedNavLinks, tabOrder]
   );
   const sortedFilterSections = React.useMemo(
     () =>
       [...orderedNavLinks]
         .map((section) => ({
           ...section,
-          visible: !hiddenTabIds.includes(section.tabId),
+          visible:
+            tabOrder.includes(section.tabId) &&
+            !hiddenTabIds.includes(section.tabId),
         }))
         .sort((a, b) => {
           if (a.visible !== b.visible) return a.visible ? -1 : 1;
@@ -212,7 +251,7 @@ export function AppLayout({
             sensitivity: "base",
           });
         }),
-    [hiddenTabIds, orderedNavLinks]
+    [hiddenTabIds, orderedNavLinks, tabOrder]
   );
   const drawerSortedFilterSections = React.useMemo(
     () => sortedFilterSections.filter((s) => !(isMobile && s.tabId === "code")),
@@ -245,6 +284,36 @@ export function AppLayout({
       setTabOrder(nextOrder);
       setHiddenTabIds(hiddenTabIds.filter((id) => id !== tabId));
       setDeletedTabIds(Array.from(new Set([...deletedTabIds, tabId])));
+    },
+    [
+      deletedTabIds,
+      hiddenTabIds,
+      setDeletedTabIds,
+      setHiddenTabIds,
+      setTabOrder,
+      tabOrder,
+    ]
+  );
+
+  const toggleTabVisibility = React.useCallback(
+    (tabId: ProjectNavTabId, visible: boolean) => {
+      if (visible) {
+        if (!hiddenTabIds.includes(tabId)) {
+          setHiddenTabIds([...hiddenTabIds, tabId]);
+        }
+        return;
+      }
+
+      const nextHidden = hiddenTabIds.filter((id) => id !== tabId);
+      if (nextHidden.length !== hiddenTabIds.length) {
+        setHiddenTabIds(nextHidden);
+      }
+      if (!tabOrder.includes(tabId)) {
+        setTabOrder([...tabOrder, tabId]);
+      }
+      if (deletedTabIds.includes(tabId)) {
+        setDeletedTabIds(deletedTabIds.filter((id) => id !== tabId));
+      }
     },
     [
       deletedTabIds,
@@ -307,12 +376,7 @@ export function AppLayout({
   }, []);
 
   const closeDrawerOnMobile = React.useCallback(() => {
-    if (
-      typeof window !== "undefined" &&
-      window.matchMedia("(max-width: 768px)").matches
-    ) {
-      setDrawerOpen(false);
-    }
+    setDrawerOpen(false);
   }, [setDrawerOpen]);
 
   React.useEffect(() => {
@@ -428,8 +492,7 @@ export function AppLayout({
           drawerDeleteSectionsOpen={drawerDeleteSectionsOpen}
           setDrawerDeleteSectionsOpen={setDrawerDeleteSectionsOpen}
           sortedFilterSections={drawerSortedFilterSections}
-          hiddenTabIds={hiddenTabIds}
-          setHiddenTabIds={setHiddenTabIds}
+          onToggleTabVisibility={toggleTabVisibility}
           availableVoices={availableVoices}
           selectedVoiceUri={selectedVoiceUri}
           setSelectedVoiceUri={setSelectedVoiceUri}
@@ -471,14 +534,28 @@ export function AppLayout({
             }}
             onDeleteAllIssuesClick={onDeleteAllIssuesClick}
             deleteAllIssuesDisabled={deleteAllIssuesDisabled}
+            onRenameProject={onRenameProject}
           />
 
-          {children}
+          <div className="main-page-scroll">
+            {backendOffline ? (
+              <section className="app-offline-state" role="status" aria-live="polite">
+                <p className="app-offline-state-title">
+                  Looks like the lights went out, we&apos;re going to turn them on
+                  right away.
+                </p>
+              </section>
+            ) : (
+              children
+            )}
+          </div>
         </main>
       </div>
-      <BulbyChatbox
-        projectId={selectedProjectId || orderedProjects[0]?.id || ""}
-      />
+      {!backendOffline ? (
+        <BulbyChatbox
+          projectId={selectedProjectId || orderedProjects[0]?.id || ""}
+        />
+      ) : null}
     </>
   );
 }

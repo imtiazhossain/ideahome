@@ -7,6 +7,10 @@ import {
 import { STATUSES, type Issue, type IssueComment } from "../../lib/api/issues";
 import { type RunUiTestResult } from "../../lib/api/tests";
 import { type User } from "../../lib/api/users";
+import {
+  type ProjectQualityScoreConfig,
+  type QualityScoreItemId,
+} from "../../lib/api";
 import { ErrorBanner } from "../../components/ErrorBanner";
 import {
   IconEdit,
@@ -45,6 +49,7 @@ import { IssueDetailModalFiles } from "./IssueDetailModalFiles";
 import { IssueDetailModalComments } from "./IssueDetailModalComments";
 import { IssueDetailModalFormFields } from "./IssueDetailModalFormFields";
 import { IssueDetailModalAutomatedTests } from "./IssueDetailModalAutomatedTests";
+import { IssueQualityScoreConfigModal } from "./IssueQualityScoreConfigModal";
 
 export type IssueDetailModalProps = {
   selectedIssue: Issue;
@@ -66,6 +71,18 @@ export type IssueDetailModalProps = {
   setIssueSaveSuccess: (v: boolean) => void;
   hasIssueDetailChangesFn: (issue: Issue, original: Issue | null) => boolean;
   handleSaveIssue: () => Promise<void>;
+  qualityConfigOpen: boolean;
+  setQualityConfigOpen: React.Dispatch<React.SetStateAction<boolean>>;
+  qualityConfigSaving: boolean;
+  qualityConfigError: string | null;
+  qualityConfigDraft: ProjectQualityScoreConfig;
+  setQualityConfigDraft: React.Dispatch<
+    React.SetStateAction<ProjectQualityScoreConfig>
+  >;
+  qualityConfigTotal: number;
+  qualityScoreItems: Array<{ id: QualityScoreItemId; label: string }>;
+  openQualityConfig: () => void;
+  saveQualityConfig: () => Promise<void>;
   setIssueToDelete: (issue: Issue | null) => void;
   users: User[];
   parseTestCasesFn: (s: string | null | undefined) => string[];
@@ -188,6 +205,16 @@ export function IssueDetailModal(props: IssueDetailModalProps) {
     setIssueSaveSuccess,
     hasIssueDetailChangesFn,
     handleSaveIssue,
+    qualityConfigOpen,
+    setQualityConfigOpen,
+    qualityConfigSaving,
+    qualityConfigError,
+    qualityConfigDraft,
+    setQualityConfigDraft,
+    qualityConfigTotal,
+    qualityScoreItems,
+    openQualityConfig,
+    saveQualityConfig,
     setIssueToDelete,
     users,
     parseTestCasesFn,
@@ -547,7 +574,20 @@ export function IssueDetailModal(props: IssueDetailModalProps) {
           hasIssueDetailChangesFn={hasIssueDetailChangesFn}
           handleSaveIssue={handleSaveIssue}
           issueSaving={issueSaving}
+          openQualityConfig={openQualityConfig}
+          qualityConfigSaving={qualityConfigSaving}
           setIssueToDelete={setIssueToDelete}
+        />
+        <IssueQualityScoreConfigModal
+          open={qualityConfigOpen}
+          onClose={() => setQualityConfigOpen(false)}
+          saving={qualityConfigSaving}
+          error={qualityConfigError}
+          config={qualityConfigDraft}
+          setConfig={setQualityConfigDraft}
+          total={qualityConfigTotal}
+          items={qualityScoreItems}
+          onSave={saveQualityConfig}
         />
       </div>
     </div>

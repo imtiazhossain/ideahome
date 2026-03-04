@@ -105,10 +105,12 @@ export class IssueCommentsService {
     }
     const text = body.trim();
     if (!text) throw new BadRequestException("Comment body is required");
-    return this.prisma.issueComment.create({
+    const created = await this.prisma.issueComment.create({
       data: { issueId, body: text },
       include: COMMENT_INCLUDE,
     });
+    await this.issuesService.recomputeIssueQualityScore(issueId);
+    return created;
   }
 
   async update(
@@ -265,5 +267,6 @@ export class IssueCommentsService {
       await this.storage.delete(att.mediaUrl);
     }
     await this.prisma.issueComment.delete({ where: { id: commentId } });
+    await this.issuesService.recomputeIssueQualityScore(issueId);
   }
 }

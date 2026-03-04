@@ -14,7 +14,33 @@ export type ApiTestSuite = {
 };
 
 export type User = { id: string; email: string; name: string | null };
-export type Project = { id: string; name: string; createdAt?: string };
+export type QualityScoreItemId =
+  | "title"
+  | "description"
+  | "acceptanceCriteria"
+  | "database"
+  | "api"
+  | "testCases"
+  | "automatedTest"
+  | "assignee"
+  | "comments"
+  | "screenshots"
+  | "recordings"
+  | "files";
+
+export type QualityScoreWeights = Record<QualityScoreItemId, number>;
+
+export type ProjectQualityScoreConfig = {
+  version: 1;
+  weights: QualityScoreWeights;
+};
+
+export type Project = {
+  id: string;
+  name: string;
+  qualityScoreConfig?: ProjectQualityScoreConfig | null;
+  createdAt?: string;
+};
 export type Organization = { id: string; name: string };
 
 export type IssueRecording = {
@@ -52,6 +78,59 @@ export type Expense = {
   projectId: string;
   source?: string; // "manual" | "plaid"
   createdAt: string;
+};
+
+export type CalendarEvent = {
+  id: string;
+  provider: string;
+  providerEventId: string;
+  title: string;
+  description: string | null;
+  location: string | null;
+  startAt: string;
+  endAt: string;
+  isAllDay: boolean;
+  timeZone: string | null;
+  status: string;
+  etag: string | null;
+  updatedAtProvider: string | null;
+  lastSyncedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type CreateCalendarEventInput = {
+  title: string;
+  description?: string | null;
+  location?: string | null;
+  startAt: string;
+  endAt: string;
+  isAllDay?: boolean;
+  timeZone?: string | null;
+};
+
+export type UpdateCalendarEventInput = {
+  title?: string;
+  description?: string | null;
+  location?: string | null;
+  startAt?: string;
+  endAt?: string;
+  isAllDay?: boolean;
+  timeZone?: string | null;
+  status?: string;
+};
+
+export type CalendarGoogleStatus = {
+  connected: boolean;
+  selectedCalendarId: string | null;
+  lastSyncedAt: string | null;
+  connectedAt: string | null;
+};
+
+export type CalendarGoogleCalendar = {
+  id: string;
+  summary: string;
+  primary: boolean;
 };
 
 export type CommentAttachmentType =
@@ -131,6 +210,8 @@ export declare const EXPENSE_CATEGORIES: string[];
 export declare const IDEAHOME_APP_ORIGIN: string;
 export declare const IDEAHOME_API_ORIGIN: string;
 export declare const IDEAHOME_WEB_ORIGIN: string;
+export declare const QUALITY_SCORE_ITEM_IDS: QualityScoreItemId[];
+export declare const DEFAULT_QUALITY_SCORE_WEIGHTS: QualityScoreWeights;
 
 export type ChecklistItem = {
   id: string;
@@ -164,7 +245,10 @@ export type Issue = {
 };
 
 export type CreateProjectInput = { name: string };
-export type UpdateProjectInput = { name?: string };
+export type UpdateProjectInput = {
+  name?: string;
+  qualityScoreConfig?: ProjectQualityScoreConfig | null;
+};
 
 export type CreateIssueInput = {
   title: string;
@@ -219,6 +303,21 @@ export declare function testNameToSlug(name: string): string;
 export declare function readUrlParam(url: string, key: string): string;
 export declare function sanitizeAuthToken(rawValue: string): string;
 export declare function projectNameToAcronym(name: string): string;
+export declare function createDefaultQualityScoreConfig(): ProjectQualityScoreConfig;
+export declare function normalizeQualityScoreConfig(
+  value: unknown
+): ProjectQualityScoreConfig;
+export declare function isProjectQualityScoreConfig(
+  value: unknown
+): value is ProjectQualityScoreConfig;
+export declare function isQualityScoreItemComplete(
+  issue: Record<string, unknown>,
+  itemId: QualityScoreItemId
+): boolean;
+export declare function computeQualityScorePercent(
+  issue: Record<string, unknown>,
+  config?: unknown
+): number;
 export declare function pathProjects(): string;
 export declare function pathProjectById(projectId: string): string;
 export declare function pathProjectMembers(projectId: string): string;
@@ -276,3 +375,18 @@ export declare function pathAuthApple(): string;
 export declare function pathAuthGithub(): string;
 export declare function pathAuthMobile(provider: string): string;
 export declare function pathApiUiTests(): string;
+export declare function pathCalendarGoogleStatus(projectId: string): string;
+export declare function pathCalendarGoogleConnect(projectId: string): string;
+export declare function pathCalendarGoogleCalendars(projectId: string): string;
+export declare function pathCalendarGoogleCalendarSelection(projectId: string): string;
+export declare function pathCalendarGoogleSync(projectId: string): string;
+export declare function pathCalendarGoogleDisconnect(projectId: string): string;
+export declare function pathCalendarEvents(
+  projectId: string,
+  start?: string,
+  end?: string
+): string;
+export declare function pathCalendarEventById(
+  eventId: string,
+  projectId: string
+): string;

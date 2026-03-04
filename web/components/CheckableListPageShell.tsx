@@ -8,6 +8,7 @@ import { IconTrash } from "./IconTrash";
 import { IconCopy } from "./icons";
 import { SectionLoadingSpinner } from "./SectionLoadingSpinner";
 import { ErrorBanner } from "./ErrorBanner";
+import { UiMenuDropdown } from "./UiMenuDropdown";
 import type { CheckableSortMode } from "../lib/utils";
 
 export interface CheckableListPageShellProps {
@@ -20,6 +21,7 @@ export interface CheckableListPageShellProps {
   onUndo: () => void;
   onCopyList?: () => void;
   onSort?: (mode: CheckableSortMode) => void;
+  currentSortMode?: CheckableSortMode | null;
   sortDisabled?: boolean;
   copyListAriaLabel?: string;
   copyListTitle?: string;
@@ -50,6 +52,7 @@ export function CheckableListPageShell({
   onUndo,
   onCopyList,
   onSort,
+  currentSortMode = null,
   sortDisabled = false,
   copyListAriaLabel = "Copy list",
   copyListTitle = "Copy list as bullet points",
@@ -61,10 +64,30 @@ export function CheckableListPageShell({
   errorMessage = null,
   toastMessage = null,
 }: CheckableListPageShellProps) {
+  const sortDropdownRef = React.useRef<HTMLDivElement>(null);
+  const [sortDropdownOpen, setSortDropdownOpen] = React.useState(false);
+
+  React.useEffect(() => {
+    if (!sortDropdownOpen) return;
+    const onOutside = (event: MouseEvent) => {
+      if (!sortDropdownRef.current) return;
+      if (!sortDropdownRef.current.contains(event.target as Node)) {
+        setSortDropdownOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", onOutside);
+    return () => document.removeEventListener("mousedown", onOutside);
+  }, [sortDropdownOpen]);
+
   const isPageLoading =
     Boolean(checkableListProps.loading) ||
     (addGuard ? !addGuard.projectsLoaded : false) ||
     (listGuard ? !listGuard.projectsLoaded : false);
+  const isBackendOfflineError =
+    Boolean(errorMessage) &&
+    /api is offline|failed to fetch|networkerror|load failed|connection refused|err_connection_refused/i.test(
+      errorMessage ?? ""
+    );
   const addContent = <AddItemForm {...addFormProps} />;
 
   const listContent = <CheckableList {...checkableListProps} />;
@@ -72,13 +95,20 @@ export function CheckableListPageShell({
   return (
     <AppLayout {...appLayoutProps}>
       <div className="tests-page-content">
-        {errorMessage ? <ErrorBanner message={errorMessage} /> : null}
-        {isPageLoading ? (
+        {isBackendOfflineError ? (
+          <section className="tests-page-offline-state" role="status" aria-live="polite">
+            <p className="tests-page-offline-state-title">
+              Looks like the lights went out, we&apos;re going to turn them on
+              right away.
+            </p>
+          </section>
+        ) : isPageLoading ? (
           <div className="tests-page-single-loading">
             <SectionLoadingSpinner />
           </div>
         ) : (
           <>
+            {errorMessage ? <ErrorBanner message={errorMessage} /> : null}
             <section className="tests-page-section">
               {addGuard ? (
                 <ProjectSectionGuard
@@ -122,27 +152,48 @@ export function CheckableListPageShell({
                       </button>
                     ) : null}
                     {onSort ? (
-                      <select
-                        className="app-select tests-page-section-sort-select"
-                        defaultValue=""
-                        onChange={(e) => {
-                          const mode = e.currentTarget.value as
-                            | CheckableSortMode
-                            | "";
-                          if (!mode) return;
-                          onSort(mode);
-                          e.currentTarget.value = "";
-                        }}
-                        aria-label="Sort list"
-                        title="Sort list"
+                      <UiMenuDropdown
+                        ref={sortDropdownRef}
+                        open={sortDropdownOpen}
+                        onOpenChange={setSortDropdownOpen}
+                        triggerAriaLabel="Sort list"
+                        triggerText="Sort"
+                        className="tests-page-section-sort-dropdown"
+                        triggerClassName="tests-page-section-sort-trigger"
+                        menuClassName="tests-page-section-sort-menu"
                         disabled={sortDisabled}
-                      >
-                        <option value="">Sort</option>
-                        <option value="name-asc">A to Z</option>
-                        <option value="name-desc">Z to A</option>
-                        <option value="created-desc">Newest first</option>
-                        <option value="created-asc">Oldest first</option>
-                      </select>
+                        groups={[
+                          {
+                            id: "sort-options",
+                            items: [
+                              {
+                                id: "sort-name-asc",
+                                label: `${currentSortMode === "name-asc" ? "✓ " : ""}A to Z`,
+                                selected: currentSortMode === "name-asc",
+                                onSelect: () => onSort("name-asc"),
+                              },
+                              {
+                                id: "sort-name-desc",
+                                label: `${currentSortMode === "name-desc" ? "✓ " : ""}Z to A`,
+                                selected: currentSortMode === "name-desc",
+                                onSelect: () => onSort("name-desc"),
+                              },
+                              {
+                                id: "sort-created-desc",
+                                label: `${currentSortMode === "created-desc" ? "✓ " : ""}Newest first`,
+                                selected: currentSortMode === "created-desc",
+                                onSelect: () => onSort("created-desc"),
+                              },
+                              {
+                                id: "sort-created-asc",
+                                label: `${currentSortMode === "created-asc" ? "✓ " : ""}Oldest first`,
+                                selected: currentSortMode === "created-asc",
+                                onSelect: () => onSort("created-asc"),
+                              },
+                            ],
+                          },
+                        ]}
+                      />
                     ) : null}
                     {canUndo ? (
                       <button

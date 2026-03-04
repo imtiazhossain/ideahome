@@ -5,6 +5,8 @@ export {
   fetchOrganizations,
   inviteProjectByEmail,
   inviteProjectMember,
+  removeProjectMember,
+  revokeProjectInvite,
   ensureOrganization,
   createOrganization,
   createProject,

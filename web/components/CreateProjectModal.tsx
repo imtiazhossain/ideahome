@@ -1,6 +1,8 @@
 import React from "react";
 import type { Organization } from "../lib/api";
 import { ErrorBanner } from "./ErrorBanner";
+import { UiInput } from "./UiInput";
+import { UiSelect } from "./UiSelect";
 
 export interface CreateProjectModalProps {
   open: boolean;
@@ -60,7 +62,7 @@ export function CreateProjectModal({
           {organizations.length === 0 ? (
             <div className="form-group">
               <label>Organization name</label>
-              <input
+              <UiInput
                 value={newOrgName}
                 onChange={(e) => setNewOrgName(e.target.value)}
                 placeholder="My Organization"
@@ -73,7 +75,7 @@ export function CreateProjectModal({
           ) : (
             <div className="form-group">
               <label htmlFor="create-project-org">Organization</label>
-              <select
+              <UiSelect
                 id="create-project-org"
                 className="form-select"
                 value={newProjectOrgId}
@@ -86,12 +88,12 @@ export function CreateProjectModal({
                     {o.name}
                   </option>
                 ))}
-              </select>
+              </UiSelect>
             </div>
           )}
           <div className="form-group">
             <label>Project name</label>
-            <input
+            <UiInput
               value={newProjectName}
               onChange={(e) => setNewProjectName(e.target.value)}
               placeholder="e.g. Engineering, Marketing"

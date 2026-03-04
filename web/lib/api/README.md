@@ -11,6 +11,7 @@ Use domain modules under `web/lib/api/*` instead of importing everything from `w
 - `tests.ts`: test-run APIs.
 - `search.ts`: search endpoints for nav/global search.
 - `assistant.ts`: model/voice capability endpoints.
+- `calendar.ts`: Google Calendar connect/status/sync + events APIs.
 
 ## Migration Rule
 - New code should import from the narrowest domain module possible.

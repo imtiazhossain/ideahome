@@ -463,7 +463,7 @@ function SortableItem({
 export function CheckableList({
   items,
   itemLabel,
-  emptyMessage = "No entries yet. Add one above.",
+  emptyMessage = "It's dark in here...\nTurn the lights on by adding something.",
   loading = false,
   isItemDisabled,
   editingIndex,
@@ -585,7 +585,7 @@ export function CheckableList({
     );
   }
   if (items.length === 0) {
-    return <p className="tests-page-section-desc">{emptyMessage}</p>;
+    return <p className="features-list-empty-message">{emptyMessage}</p>;
   }
 
   const itemIds = items.map((i) => i.id);

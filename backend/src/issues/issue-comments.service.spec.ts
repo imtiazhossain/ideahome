@@ -43,11 +43,13 @@ describe("IssueCommentsService", () => {
 
   const mockIssuesService = {
     verifyIssueAccess: jest.fn().mockResolvedValue(undefined),
+    recomputeIssueQualityScore: jest.fn().mockResolvedValue(0),
   };
 
   beforeEach(async () => {
     jest.clearAllMocks();
     mockIssuesService.verifyIssueAccess.mockResolvedValue(undefined);
+    mockIssuesService.recomputeIssueQualityScore.mockResolvedValue(0);
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         IssueCommentsService,

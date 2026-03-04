@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { ListCacheKey } from "./listCache";
 import { useCachedProjectList } from "./useCachedProjectList";
 import { useUndoList } from "./useUndoList";
@@ -70,6 +70,7 @@ export function useCheckableProjectList<T extends CheckableProjectItem>({
   const projectId = selectedProjectId ?? "";
   const toggleRequestVersionRef = useRef<Record<string, number>>({});
   const normalizationAttemptKeyRef = useRef<string>("");
+  const [sortMode, setSortMode] = useState<CheckableSortMode | null>(null);
   const [items, setItems, loading, loadError] = useCachedProjectList<T>({
     listType,
     selectedProjectId: projectId,
@@ -174,6 +175,7 @@ export function useCheckableProjectList<T extends CheckableProjectItem>({
 
   useEffect(() => {
     normalizationAttemptKeyRef.current = "";
+    setSortMode(null);
   }, [projectId]);
 
   const addItem = useCallback(
@@ -333,6 +335,7 @@ export function useCheckableProjectList<T extends CheckableProjectItem>({
       pushHistory();
       const sorted = sortCheckableItems(items, mode);
       setItems(sorted);
+      setSortMode(mode);
       void syncReorderOrRefresh(sorted.map((item) => item.id));
     },
     [items, projectId, pushHistory, setItems, syncReorderOrRefresh]
@@ -463,6 +466,7 @@ export function useCheckableProjectList<T extends CheckableProjectItem>({
     cancelEdit,
     handleReorder,
     sortItems,
+    sortMode,
     patchItemById,
     removeDoneItems,
     pushHistory,
