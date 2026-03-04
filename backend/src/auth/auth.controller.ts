@@ -12,6 +12,13 @@ const OIDC_STATE_FUTURE_SKEW_MS = 60 * 1000;
 type OAuthCallbackQuery = { code?: string; state?: string };
 type OAuthProvider = "google" | "github" | "apple";
 
+async function importOpenIdClient(): Promise<typeof import("openid-client")> {
+  // Keep native dynamic import for ESM-only package in CJS output.
+  return (
+    await new Function("m", "return import(m)")("openid-client")
+  ) as typeof import("openid-client");
+}
+
 @Controller("auth")
 export class AuthController {
   constructor(
@@ -135,7 +142,7 @@ export class AuthController {
   }
 
   private async getOidcClient() {
-    const { Issuer } = await import("openid-client");
+    const { Issuer } = await importOpenIdClient();
     const issuer = await Issuer.discover(
       process.env.OIDC_ISSUER ?? /* istanbul ignore next */ ""
     );
@@ -172,7 +179,7 @@ export class AuthController {
 
   @Get("login")
   async login(@Res() res: Response) {
-    const { generators } = await import("openid-client");
+    const { generators } = await importOpenIdClient();
     const client = await this.getOidcClient();
 
     const codeVerifier = generators.codeVerifier();
