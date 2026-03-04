@@ -26,7 +26,14 @@ const REWRITE_ROUTE_DEFS = [
 ];
 
 function buildRewrites(targetBase) {
-  const rewrites = [];
+  const rewrites = [
+    // OAuth providers redirect users directly in browser navigations without custom headers.
+    // Keep this callback routable while preserving API-only protection on other calendar routes.
+    {
+      source: "/calendar/google/callback",
+      destination: `${targetBase}/calendar/google/callback`,
+    },
+  ];
   for (const def of REWRITE_ROUTE_DEFS) {
     const includeRoot = def.includeRoot !== false;
     const has = def.apiOnly ? { has: API_REWRITE_HAS } : {};
