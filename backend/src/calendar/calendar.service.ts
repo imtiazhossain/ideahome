@@ -541,6 +541,18 @@ export class CalendarService {
     return payload;
   }
 
+  private getInvalidCallbackReason(
+    state: string,
+    code: string,
+    oauthError?: string
+  ): string {
+    const providerError = oauthError?.trim();
+    if (providerError) return "provider_error";
+    if (!state?.trim()) return "missing_state";
+    if (!code?.trim()) return "missing_code";
+    return "invalid_state";
+  }
+
   async getGoogleConnectUrl(
     userId: string,
     projectId: string,
@@ -578,7 +590,9 @@ export class CalendarService {
         this.getFrontendCalendarUrl(undefined, options?.frontendBaseUrl ?? null)
       );
       const oauthError = options?.oauthError?.trim();
+      const reason = this.getInvalidCallbackReason(state, code, oauthError);
       redirect.searchParams.set("google_error", oauthError || "invalid_callback");
+      redirect.searchParams.set("google_error_reason", reason);
       return redirect.toString();
     }
     const { userId, projectId, frontendBaseUrl } = consumed;
@@ -647,6 +661,7 @@ export class CalendarService {
         this.getFrontendCalendarUrl(projectId, redirectBase)
       );
       redirect.searchParams.set("google_error", "oauth_failed");
+      redirect.searchParams.set("google_error_reason", "oauth_exchange_or_store_failed");
       redirect.searchParams.set("projectId", projectId);
       return redirect.toString();
     }
