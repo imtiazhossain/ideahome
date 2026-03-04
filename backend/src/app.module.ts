@@ -19,6 +19,7 @@ import { CalendarModule } from "./calendar/calendar.module";
 import { PrismaService } from "./prisma.service";
 import { MalwareScannerService } from "./malware-scanner.service";
 import { EmailModule } from "./email/email.module";
+import { SupportModule } from "./support/support.module";
 
 @Module({
   imports: [
@@ -38,6 +39,7 @@ import { EmailModule } from "./email/email.module";
     CodeModule,
     CalendarModule,
     EmailModule,
+    SupportModule,
   ],
   controllers: [AppController],
   providers: [AppService, PrismaService, MalwareScannerService],

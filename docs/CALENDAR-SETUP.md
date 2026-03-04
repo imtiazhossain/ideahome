@@ -20,6 +20,8 @@ Add these to `backend/.env`:
 GOOGLE_CALENDAR_CLIENT_ID="..."
 GOOGLE_CALENDAR_CLIENT_SECRET="..."
 GOOGLE_CALENDAR_TOKEN_ENCRYPTION_KEY="..." # openssl rand -base64 32
+# Optional HMAC secret for OAuth state signing (recommended in Firebase-only auth deployments)
+GOOGLE_CALENDAR_OAUTH_STATE_SECRET="..." # openssl rand -hex 32
 # Optional override (default = ${BACKEND_URL}/calendar/google/callback)
 GOOGLE_CALENDAR_REDIRECT_URI="http://localhost:3001/calendar/google/callback"
 ```
@@ -27,6 +29,7 @@ GOOGLE_CALENDAR_REDIRECT_URI="http://localhost:3001/calendar/google/callback"
 ## 3) Security notes
 
 - `GOOGLE_CALENDAR_TOKEN_ENCRYPTION_KEY` must decode to **32 bytes** (AES-256-GCM).
+- `GOOGLE_CALENDAR_OAUTH_STATE_SECRET` is optional but recommended; if omitted, backend falls back to `JWT_SECRET`, then `GOOGLE_CALENDAR_CLIENT_SECRET`.
 - Rotating the key invalidates previously stored encrypted Google tokens.
 - Keep OAuth secrets and encryption key only in secure env stores.
 

@@ -4497,6 +4497,56 @@ a.automated-tests-chip-text:hover {
   border: 1px solid rgba(239, 68, 68, 0.2);
 }
 
+.error-banner-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.error-banner-link-button {
+  background: none;
+  border: none;
+  color: inherit;
+  text-decoration: underline;
+  padding: 0;
+  cursor: pointer;
+  font: inherit;
+}
+
+.error-banner-arrow {
+  background: none;
+  border: none;
+  color: inherit;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  padding: 0 2px;
+}
+
+.error-banner-detail {
+  margin: 8px 24px 0;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  background: rgba(15, 23, 42, 0.03);
+  color: var(--text);
+  font-size: 13px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.error-banner-modal-error {
+  margin-top: 8px;
+  color: #b91c1c;
+  font-size: 13px;
+}
+
+.error-banner-modal-success {
+  margin-top: 8px;
+  color: #166534;
+  font-size: 13px;
+}
+
 .loading {
   padding: 24px;
   text-align: center;

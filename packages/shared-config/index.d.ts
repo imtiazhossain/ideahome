@@ -339,6 +339,7 @@ export declare function pathCommentAttachmentById(
 export declare function pathTestsRunUi(): string;
 export declare function pathTestsRunApi(): string;
 export declare function pathUsers(): string;
+export declare function pathSupportErrorReport(): string;
 export declare function pathExpenses(projectId?: string): string;
 export declare function pathExpenseById(expenseId: string): string;
 export declare function pathExpensesDeleteImported(projectId: string): string;

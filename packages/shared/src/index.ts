@@ -74,6 +74,7 @@ export {
   pathScreenshotStream,
   pathTestsRunApi,
   pathTestsRunUi,
+  pathSupportErrorReport,
   pathUsers,
   pathAuthApple,
   pathAuthGithub,

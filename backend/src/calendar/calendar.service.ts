@@ -7,7 +7,6 @@ import {
 import * as crypto from "crypto";
 import { verifyProjectForUser } from "../common/org-scope";
 import { PrismaService } from "../prisma.service";
-import { getJwtSecret } from "../auth/jwt-secret";
 
 const GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
 const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
@@ -85,6 +84,18 @@ type CreateOrUpdateEventInput = {
 @Injectable()
 export class CalendarService {
   constructor(private readonly prisma: PrismaService) {}
+
+  private getOAuthStateSecret(): string {
+    const explicit = process.env.GOOGLE_CALENDAR_OAUTH_STATE_SECRET?.trim();
+    if (explicit) return explicit;
+    const jwtSecret = process.env.JWT_SECRET?.trim();
+    if (jwtSecret) return jwtSecret;
+    const clientSecret = process.env.GOOGLE_CALENDAR_CLIENT_SECRET?.trim();
+    if (clientSecret) return clientSecret;
+    throw new BadRequestException(
+      "Google Calendar is not configured. Set GOOGLE_CALENDAR_CLIENT_SECRET or GOOGLE_CALENDAR_OAUTH_STATE_SECRET."
+    );
+  }
 
   private getClientId(): string {
     const clientId = process.env.GOOGLE_CALENDAR_CLIENT_ID?.trim();
@@ -190,7 +201,7 @@ export class CalendarService {
     const payloadStr = JSON.stringify(payload);
     const b64 = Buffer.from(payloadStr, "utf8").toString("base64url");
     const sig = crypto
-      .createHmac("sha256", getJwtSecret())
+      .createHmac("sha256", this.getOAuthStateSecret())
       .update(payloadStr)
       .digest("base64url");
     return `${b64}.${sig}`;
@@ -214,7 +225,7 @@ export class CalendarService {
       return null;
     }
     const expected = crypto
-      .createHmac("sha256", getJwtSecret())
+      .createHmac("sha256", this.getOAuthStateSecret())
       .update(payloadRaw)
       .digest("base64url");
     const sigBuf = Buffer.from(sig);

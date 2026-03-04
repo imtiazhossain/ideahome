@@ -127,6 +127,10 @@ function pathUsers() {
   return "/users";
 }
 
+function pathSupportErrorReport() {
+  return "/support/error-report";
+}
+
 function pathExpenses(projectId) {
   return projectId ? `/expenses?projectId=${enc(projectId)}` : "/expenses";
 }
@@ -565,6 +569,7 @@ const sharedConfig = {
   pathProjects,
   pathTestsRunApi,
   pathTestsRunUi,
+  pathSupportErrorReport,
   pathUsers,
   pathAuthProviders,
   projectNameToAcronym,

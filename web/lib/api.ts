@@ -50,6 +50,7 @@ import {
   pathProjects,
   pathTestsRunApi,
   pathTestsRunUi,
+  pathSupportErrorReport,
   pathUsers,
 } from "@ideahome/shared";
 import type {
@@ -330,6 +331,17 @@ export async function requestVoid(
 ): Promise<void> {
   const r = await apiFetch(`${getApiBase()}${path}`, buildRequestInit(options));
   if (!r.ok) await throwFromResponse(r, options.errorMessage);
+}
+
+export async function sendErrorReportEmail(body: {
+  errorMessage: string;
+  pageUrl?: string;
+}): Promise<void> {
+  return requestVoid(pathSupportErrorReport(), {
+    method: "POST",
+    body,
+    errorMessage: "Failed to send error report",
+  });
 }
 
 /** When true, app does not redirect to login (use with backend SKIP_AUTH_DEV in local dev). */
