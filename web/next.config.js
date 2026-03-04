@@ -61,13 +61,9 @@ const nextConfig = {
     return buildRewrites(backend);
   },
   transpilePackages: ["@ideahome/shared"],
-  serverExternalPackages: USE_BUILTIN_API ? ["backend"] : [],
   webpack: (config, { isServer }) => {
     if (isServer) {
-      if (USE_BUILTIN_API) {
-        config.externals = config.externals || [];
-        config.externals.push("backend", "backend/serverless");
-      } else {
+      if (!USE_BUILTIN_API) {
         config.resolve = config.resolve || {};
         config.resolve.alias = config.resolve.alias || {};
         config.resolve.alias["backend/serverless"] = path.resolve(
