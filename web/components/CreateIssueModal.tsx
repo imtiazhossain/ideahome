@@ -74,6 +74,11 @@ export function CreateIssueModal({
     database,
     api,
     testCases,
+    automatedTest: "",
+    assigneeId: assigneeId || null,
+    recordings: [],
+    screenshots: [],
+    files: [],
   }, qualityScoreConfig);
   const qualityScorePercent = Math.round(qualityScore);
   const updateCases = (nextLines: string[]) => {

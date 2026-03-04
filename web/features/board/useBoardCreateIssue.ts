@@ -76,6 +76,11 @@ export function useBoardCreateIssue({
           database: createDatabase,
           api: createApi,
           testCases: createTestCases,
+          automatedTest: "",
+          assigneeId: createAssigneeId || null,
+          recordings: [],
+          screenshots: [],
+          files: [],
         }, qualityScoreConfig);
         const created = await createIssue({
           title: createTitle.trim(),
