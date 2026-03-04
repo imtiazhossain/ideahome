@@ -1,5 +1,5 @@
 {
   "framework": "nextjs",
   "installCommand": "cd .. && pnpm install --filter web... --frozen-lockfile",
-  "buildCommand": "cd .. && NODE_OPTIONS=--max-old-space-size=6144 pnpm --filter web build"
+  "buildCommand": "cd .. && pnpm --filter @ideahome/shared build && NODE_OPTIONS=--max-old-space-size=6144 pnpm --filter web build"
 }
