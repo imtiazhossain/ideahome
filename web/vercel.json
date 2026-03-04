@@ -1,5 +1,5 @@
 {
   "framework": "nextjs",
-  "installCommand": "cd .. && pnpm install --filter backend... --filter web... --frozen-lockfile --ignore-scripts",
+  "installCommand": "cd .. && pnpm install --frozen-lockfile --ignore-scripts",
   "buildCommand": "cd .. && pnpm run build:vercel:web"
 }
