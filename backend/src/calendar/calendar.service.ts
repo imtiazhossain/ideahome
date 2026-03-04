@@ -81,6 +81,15 @@ type CreateOrUpdateEventInput = {
   status?: string;
 };
 
+type CalendarOauthStatePayload = {
+  userId: string;
+  projectId: string;
+  provider: "google";
+  iat: number;
+  n: string;
+  frontendBaseUrl?: string;
+};
+
 @Injectable()
 export class CalendarService {
   constructor(private readonly prisma: PrismaService) {}
@@ -88,10 +97,10 @@ export class CalendarService {
   private getOAuthStateSecret(): string {
     const explicit = process.env.GOOGLE_CALENDAR_OAUTH_STATE_SECRET?.trim();
     if (explicit) return explicit;
-    const jwtSecret = process.env.JWT_SECRET?.trim();
-    if (jwtSecret) return jwtSecret;
     const clientSecret = process.env.GOOGLE_CALENDAR_CLIENT_SECRET?.trim();
     if (clientSecret) return clientSecret;
+    const jwtSecret = process.env.JWT_SECRET?.trim();
+    if (jwtSecret) return jwtSecret;
     throw new BadRequestException(
       "Google Calendar is not configured. Set GOOGLE_CALENDAR_CLIENT_SECRET or GOOGLE_CALENDAR_OAUTH_STATE_SECRET."
     );
@@ -147,9 +156,9 @@ export class CalendarService {
       : "";
     const frontendBase = (
       normalizedOverride ||
-      process.env.FRONTEND_URL ??
-      process.env.NEXT_PUBLIC_APP_URL ??
-      "http://localhost:3000"
+      process.env.FRONTEND_URL?.trim() ||
+      process.env.NEXT_PUBLIC_APP_URL?.trim() ||
+      (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000")
     ).replace(/\/$/, "");
     const url = new URL("/calendar", frontendBase);
     if (projectId) url.searchParams.set("projectId", projectId);
@@ -209,13 +218,7 @@ export class CalendarService {
     return decrypted.toString("utf8");
   }
 
-  private signState(payload: {
-    userId: string;
-    projectId: string;
-    provider: "google";
-    iat: number;
-    n: string;
-  }): string {
+  private signState(payload: CalendarOauthStatePayload): string {
     const payloadStr = JSON.stringify(payload);
     const b64 = Buffer.from(payloadStr, "utf8").toString("base64url");
     const sig = crypto
@@ -229,6 +232,7 @@ export class CalendarService {
     userId: string;
     projectId: string;
     provider: "google";
+    frontendBaseUrl: string | null;
   } | null {
     const safeState = typeof state === "string" ? state.trim() : "";
     if (!safeState) return null;
@@ -254,22 +258,30 @@ export class CalendarService {
     ) {
       return null;
     }
-    let parsed: {
-      userId?: string;
-      projectId?: string;
-      provider?: string;
-      iat?: number;
-    };
+    let parsed: Partial<CalendarOauthStatePayload>;
     try {
-      parsed = JSON.parse(payloadRaw) as {
-        userId?: string;
-        projectId?: string;
-        provider?: string;
-        iat?: number;
-      };
+      parsed = JSON.parse(payloadRaw) as Partial<CalendarOauthStatePayload>;
     } catch {
       return null;
     }
+    const frontendBaseUrl =
+      typeof parsed.frontendBaseUrl === "string" ? parsed.frontendBaseUrl.trim() : "";
+    const normalizedFrontendBaseUrl = frontendBaseUrl
+      ? (() => {
+          try {
+            const parsedUrl = new URL(frontendBaseUrl);
+            if (
+              parsedUrl.protocol !== "http:" &&
+              parsedUrl.protocol !== "https:"
+            ) {
+              return "";
+            }
+            return `${parsedUrl.protocol}//${parsedUrl.host}`;
+          } catch {
+            return "";
+          }
+        })()
+      : "";
     if (
       typeof parsed.userId !== "string" ||
       typeof parsed.projectId !== "string" ||
@@ -284,6 +296,7 @@ export class CalendarService {
       userId: parsed.userId,
       projectId: parsed.projectId,
       provider: "google",
+      frontendBaseUrl: normalizedFrontendBaseUrl || null,
     };
   }
 
@@ -528,14 +541,20 @@ export class CalendarService {
     return payload;
   }
 
-  async getGoogleConnectUrl(userId: string, projectId: string): Promise<{ url: string }> {
+  async getGoogleConnectUrl(
+    userId: string,
+    projectId: string,
+    options?: { frontendBaseUrl?: string | null }
+  ): Promise<{ url: string }> {
     await this.verifyProjectAccess(projectId, userId);
+    const frontendBase = options?.frontendBaseUrl?.trim();
     const state = this.signState({
       userId,
       projectId,
       provider: "google",
       iat: Date.now(),
       n: crypto.randomBytes(8).toString("hex"),
+      ...(frontendBase ? { frontendBaseUrl: frontendBase } : {}),
     });
     const url = new URL(GOOGLE_AUTH_URL);
     url.searchParams.set("client_id", this.getClientId());
@@ -562,14 +581,15 @@ export class CalendarService {
       redirect.searchParams.set("google_error", oauthError || "invalid_callback");
       return redirect.toString();
     }
-    const { userId, projectId } = consumed;
+    const { userId, projectId, frontendBaseUrl } = consumed;
+    const redirectBase = frontendBaseUrl ?? options?.frontendBaseUrl ?? null;
     await this.verifyProjectAccess(projectId, userId);
 
     try {
       const token = await this.exchangeCodeForTokens(code.trim());
       if (!token.access_token || !token.refresh_token) {
         const redirect = new URL(
-          this.getFrontendCalendarUrl(projectId, options?.frontendBaseUrl ?? null)
+          this.getFrontendCalendarUrl(projectId, redirectBase)
         );
         redirect.searchParams.set("google_error", "missing_tokens");
         redirect.searchParams.set("projectId", projectId);
@@ -617,14 +637,14 @@ export class CalendarService {
       });
 
       const redirect = new URL(
-        this.getFrontendCalendarUrl(projectId, options?.frontendBaseUrl ?? null)
+        this.getFrontendCalendarUrl(projectId, redirectBase)
       );
       redirect.searchParams.set("google_connected", "1");
       redirect.searchParams.set("projectId", projectId);
       return redirect.toString();
     } catch {
       const redirect = new URL(
-        this.getFrontendCalendarUrl(projectId, options?.frontendBaseUrl ?? null)
+        this.getFrontendCalendarUrl(projectId, redirectBase)
       );
       redirect.searchParams.set("google_error", "oauth_failed");
       redirect.searchParams.set("projectId", projectId);

@@ -21,7 +21,7 @@ import { CalendarService } from "./calendar.service";
 export class CalendarController {
   constructor(private readonly calendar: CalendarService) {}
 
-  private inferFrontendBaseFromRequest(req: Request): string | null {
+  private inferBaseFromRequest(req: Request): string | null {
     const forwardedHost = req.header("x-forwarded-host")?.split(",")[0]?.trim();
     const host = forwardedHost || req.header("host")?.trim();
     if (!host) return null;
@@ -35,6 +35,21 @@ export class CalendarController {
     if (protocol !== "http" && protocol !== "https") return null;
 
     return `${protocol}://${host}`;
+  }
+
+  private inferFrontendBaseFromRequest(req: Request): string | null {
+    const origin = req.header("origin")?.trim();
+    if (origin) return origin;
+    const referer = req.header("referer")?.trim();
+    if (referer) {
+      try {
+        const parsed = new URL(referer);
+        return `${parsed.protocol}//${parsed.host}`;
+      } catch {
+        // Ignore invalid referer header and fall back to host/proto inference.
+      }
+    }
+    return this.inferBaseFromRequest(req);
   }
 
   @Get("google/status")
@@ -58,7 +73,9 @@ export class CalendarController {
     if (!projectId?.trim()) {
       throw new BadRequestException("projectId is required");
     }
-    return this.calendar.getGoogleConnectUrl(requireUserId(req), projectId.trim());
+    return this.calendar.getGoogleConnectUrl(requireUserId(req), projectId.trim(), {
+      frontendBaseUrl: this.inferFrontendBaseFromRequest(req),
+    });
   }
 
   @Get("google/callback")
@@ -69,7 +86,7 @@ export class CalendarController {
     @Req() req: Request,
     @Res() res: Response
   ) {
-    const frontendBaseUrl = this.inferFrontendBaseFromRequest(req);
+    const frontendBaseUrl = this.inferBaseFromRequest(req);
     const redirectUrl = await this.calendar.handleGoogleCallback(
       state ?? "",
       code ?? "",
