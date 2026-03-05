@@ -1,5 +1,6 @@
 import React from "react";
 import type { ProjectQualityScoreConfig, QualityScoreItemId } from "../../lib/api";
+import { CloseButton } from "../../components/CloseButton";
 import { UiInput } from "../../components/UiInput";
 import { Text } from "../../components/Text";
 import { IconUndo } from "../../components/IconUndo";
@@ -108,14 +109,7 @@ export function IssueQualityScoreConfigModal({
       >
         <div className="modal-header">
           <Text as="h2" variant="title">Quality Score Configuration</Text>
-          <button
-            type="button"
-            className="modal-close"
-            onClick={onClose}
-            aria-label="Close"
-          >
-            ×
-          </button>
+          <CloseButton className="modal-close" onClick={onClose} />
         </div>
 
         <div className="issue-quality-config-body">

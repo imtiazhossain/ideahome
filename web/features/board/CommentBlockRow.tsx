@@ -1,5 +1,5 @@
 import React from "react";
-import { IconX } from "../../components/icons";
+import { CloseButton } from "../../components/CloseButton";
 
 export type CommentBlockRowProps = {
   dataCommentBlockIndex?: number;
@@ -37,15 +37,13 @@ export function CommentBlockRow({
       >
         {icon} {label}
       </button>
-      <button
-        type="button"
+      <CloseButton
         className="btn btn-icon btn-icon-sm"
+        size="sm"
         onClick={onRemove}
         aria-label="Remove"
         title="Remove"
-      >
-        <IconX size={10} />
-      </button>
+      />
     </div>
   );
 }

@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/router";
 import { AppLayout } from "../components/AppLayout";
 import { Button } from "../components/Button";
+import { CloseButton } from "../components/CloseButton";
 import { ConfirmModal } from "../components/ConfirmModal";
 import { UiCheckbox } from "../components/UiCheckbox";
 import { SectionLoadingSpinner } from "../components/SectionLoadingSpinner";
@@ -710,14 +711,12 @@ export default function CalendarPage() {
                 <div className="calendar-success-toast-slot">
                   <div className="calendar-success-toast" role="status">
                     <p className="calendar-success-notice">{successMessage}</p>
-                    <button
-                      type="button"
+                    <CloseButton
                       className="calendar-success-close"
+                      size="sm"
                       aria-label="Dismiss success message"
                       onClick={() => setSuccessMessage("")}
-                    >
-                      ×
-                    </button>
+                    />
                   </div>
                 </div>
               )}

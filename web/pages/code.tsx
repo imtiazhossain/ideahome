@@ -14,6 +14,7 @@ import {
   useSortable,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
+import { restrictToWindowEdges } from "@dnd-kit/modifiers";
 import { CSS } from "@dnd-kit/utilities";
 import { AppLayout } from "../components/AppLayout";
 import { AutoResizeTextarea } from "../components/AutoResizeTextarea";
@@ -63,6 +64,15 @@ type SecurityAuditResponse = {
   findings: SecurityAuditFinding[];
   error?: string;
 };
+
+function formatReleaseDate(date: string): string {
+  const parts = date.split("-");
+  if (parts.length === 3) {
+    const [year, month, day] = parts;
+    if (year && month && day) return `${month}-${day}-${year}`;
+  }
+  return date;
+}
 
 function SortableCodeSection({
   sectionId,
@@ -401,6 +411,7 @@ export default function CodePage() {
           <DndContext
             id="code-page-sections-dnd"
             sensors={sensors}
+            modifiers={[restrictToWindowEdges]}
             collisionDetection={closestCenter}
             onDragEnd={handleSectionDragEnd}
           >
@@ -784,8 +795,12 @@ function renderCodeSectionInner(
                 key={`${note.date}-${note.title}`}
                 className="code-page-release-note"
               >
-                <p className="code-page-release-note-date">{note.date}</p>
-                <p className="code-page-release-note-date">{note.area}</p>
+                <p className="code-page-release-note-meta">
+                  <span className="code-page-release-note-date">
+                    {formatReleaseDate(note.date)}
+                  </span>
+                  <span className="code-page-release-note-area">{note.area}</span>
+                </p>
                 <h3 className="code-page-release-note-title">{note.title}</h3>
                 <p className="code-page-release-note-details">{note.details}</p>
               </li>

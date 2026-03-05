@@ -3,6 +3,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { BulbyCharacter } from "./BulbyCharacter";
+import { CloseButton } from "./CloseButton";
 import {
   buildIdeaChatContext,
   shouldUseWebSearch,
@@ -607,9 +608,9 @@ export function BulbyChatbox({ projectId }: BulbyChatboxProps) {
         >
           <div className="idea-plan-card-head">
             <span className="idea-plan-card-badge">Ask Bulby</span>
-            <button
-              type="button"
+            <CloseButton
               className="bulby-chatbox-close"
+              size="sm"
               onClick={() => {
                 setMessages([]);
                 setInputValue("");
@@ -617,9 +618,7 @@ export function BulbyChatbox({ projectId }: BulbyChatboxProps) {
               }}
               aria-label="Close chat"
               title="Close chat"
-            >
-              ×
-            </button>
+            />
           </div>
           <div className="idea-chat-thread" ref={threadRef}>
             {messages.length === 0 && !loading && (

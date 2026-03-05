@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useRef } from "react";
+import { CloseButton } from "./CloseButton";
 
 const FOCUSABLE_SELECTOR =
   'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
@@ -101,14 +102,7 @@ export function AccessibleModal({
       >
         <div className="modal-header">
           <h2 id="accessible-modal-title">{title}</h2>
-          <button
-            type="button"
-            className="modal-close"
-            onClick={onClose}
-            aria-label="Close"
-          >
-            ×
-          </button>
+          <CloseButton className="modal-close" onClick={onClose} />
         </div>
         {children}
       </div>

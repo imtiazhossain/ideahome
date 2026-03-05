@@ -14,6 +14,7 @@ import {
   useSortable,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
+import { restrictToWindowEdges } from "@dnd-kit/modifiers";
 import { CSS } from "@dnd-kit/utilities";
 import { IconCheck } from "./IconCheck";
 import { IconGrip } from "./IconGrip";
@@ -628,6 +629,7 @@ export function CheckableList({
   return (
     <DndContext
       sensors={sensors}
+      modifiers={[restrictToWindowEdges]}
       collisionDetection={closestCenter}
       onDragEnd={handleDragEnd}
     >

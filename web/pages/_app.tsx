@@ -31,6 +31,14 @@ function RedirectToFirstTab({ children }: { children: React.ReactNode }) {
       return;
     }
     if (!router.isReady) return;
+    const createProjectQuery = router.query.createProject;
+    if (
+      createProjectQuery === "1" ||
+      (Array.isArray(createProjectQuery) &&
+        createProjectQuery.includes("1"))
+    ) {
+      return;
+    }
     try {
       // Keep key set while on Board so we don't redirect when effect re-runs (e.g. selectedProjectId update)
       if (sessionStorage.getItem(EXPLICIT_BOARD_SESSION_KEY)) return;

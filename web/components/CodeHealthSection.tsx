@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { CloseButton } from "./CloseButton";
 
 /**
  * Code Health (coverage) section: run Jest coverage and show report iframe.
@@ -55,14 +56,11 @@ export function CodeHealthSection() {
         <div
           className={`coverage-page-output ${success === true ? "coverage-page-output--success" : "coverage-page-output--error"}`}
         >
-          <button
-            type="button"
+          <CloseButton
             className="coverage-page-output-close"
+            size="sm"
             onClick={() => setOutput(null)}
-            aria-label="Close"
-          >
-            ×
-          </button>
+          />
           <pre className="coverage-page-output-pre">{output}</pre>
         </div>
       )}

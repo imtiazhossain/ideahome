@@ -20,11 +20,14 @@ import {
   useSortable,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
+import { restrictToWindowEdges } from "@dnd-kit/modifiers";
 import { CSS } from "@dnd-kit/utilities";
 import { AppLayout } from "../components/AppLayout";
 import { Button } from "../components/Button";
 import { CollapsibleSection } from "../components/CollapsibleSection";
+import { ConfirmModal } from "../components/ConfirmModal";
 import { IconGrip } from "../components/IconGrip";
+import { IconTrash } from "../components/IconTrash";
 import { UiInput } from "../components/UiInput";
 import { useProjectLayout } from "../lib/useProjectLayout";
 import { useTheme } from "./_app";
@@ -314,6 +317,8 @@ export default function PagesPage() {
   const [collapsedSections, setCollapsedSections] = useState<
     Record<string, boolean>
   >({});
+  const [sectionPendingDelete, setSectionPendingDelete] =
+    useState<PageSection | null>(null);
   const textareaRefs = useRef<Record<string, HTMLTextAreaElement | null>>({});
 
   useEffect(() => {
@@ -621,6 +626,7 @@ export default function PagesPage() {
         ) : (
           <DndContext
             sensors={sensors}
+            modifiers={[restrictToWindowEdges]}
             collisionDetection={closestCenter}
             onDragEnd={handleDragEnd}
           >
@@ -645,19 +651,7 @@ export default function PagesPage() {
                       onToggle={() => toggleSection(section.id)}
                       sectionClassName="pages-note-section"
                       headerTrailing={
-                        <div className="pages-section-actions">
-                          {dragHandle}
-                          <Button
-                            variant="danger"
-                            size="lg"
-                            onClick={() => handleDeleteSection(section.id)}
-                            className="pages-delete-btn"
-                            aria-label={`Delete ${section.title || "section"}`}
-                            title="Delete section"
-                          >
-                            Delete
-                          </Button>
-                        </div>
+                        <div className="pages-section-actions">{dragHandle}</div>
                       }
                     >
                       <div className="pages-section-editor-grid">
@@ -718,6 +712,17 @@ export default function PagesPage() {
                           </div>
                         </div>
                       </div>
+                      <div className="pages-section-footer-actions">
+                        <button
+                          type="button"
+                          className="pages-section-delete-icon"
+                          onClick={() => setSectionPendingDelete(section)}
+                          aria-label={`Delete ${section.title || "section"}`}
+                          title="Delete section"
+                        >
+                          <IconTrash />
+                        </button>
+                      </div>
                     </CollapsibleSection>
                   )}
                 </SortablePagesSection>
@@ -726,6 +731,25 @@ export default function PagesPage() {
           </DndContext>
         )}
       </div>
+      {sectionPendingDelete ? (
+        <ConfirmModal
+          title="Delete section"
+          message={
+            <>
+              Delete &quot;
+              {sectionPendingDelete.title.trim() || "Untitled section"}
+              &quot;? This cannot be undone.
+            </>
+          }
+          confirmLabel="Delete"
+          onClose={() => setSectionPendingDelete(null)}
+          onConfirm={() => {
+            handleDeleteSection(sectionPendingDelete.id);
+            setSectionPendingDelete(null);
+          }}
+          danger
+        />
+      ) : null}
     </AppLayout>
   );
 }

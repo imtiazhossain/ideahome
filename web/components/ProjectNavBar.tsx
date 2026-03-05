@@ -15,6 +15,7 @@ import {
   horizontalListSortingStrategy,
   useSortable,
 } from "@dnd-kit/sortable";
+import { restrictToWindowEdges } from "@dnd-kit/modifiers";
 import { CSS } from "@dnd-kit/utilities";
 import { AUTH_CHANGE_EVENT, getStoredToken } from "../lib/api/auth";
 import { logout } from "../lib/api/session";
@@ -342,7 +343,7 @@ function ProjectNavAuthMenu({
             <Link
               href="/login"
               prefetch={false}
-              className="project-nav-auth-menu-item project-nav-auth-menu-item--icon"
+              className="project-nav-auth-menu-item project-nav-auth-menu-item--icon project-nav-auth-menu-item--login"
               role="menuitem"
               onClick={() => setAuthMenuOpen(false)}
               aria-label="Log in"
@@ -799,6 +800,7 @@ export function ProjectNavBar({
           <DndContext
             id="project-nav-tabs-dnd"
             sensors={tabsDragEnabled ? dragSensors : undefined}
+            modifiers={[restrictToWindowEdges]}
             collisionDetection={closestCenter}
             onDragStart={tabsDragEnabled ? handleTabsDragStart : undefined}
             onDragEnd={tabsDragEnabled ? handleTabsDragEnd : undefined}

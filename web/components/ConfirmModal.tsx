@@ -1,4 +1,6 @@
 import React from "react";
+import { Button } from "./Button";
+import { CloseButton } from "./CloseButton";
 
 export interface ConfirmModalProps {
   title: string;
@@ -33,43 +35,36 @@ export function ConfirmModal({
       onClick={() => !busy && onClose()}
     >
       <div
-        className="modal"
+        className="modal modal--confirm"
         onClick={(e) => e.stopPropagation()}
         style={modalStyle}
       >
         <div className="modal-header">
           <h2>{title}</h2>
-          <button
-            type="button"
+          <CloseButton
             className="modal-close"
             onClick={() => !busy && onClose()}
-            aria-label="Close"
-          >
-            ×
-          </button>
+            disabled={busy}
+          />
         </div>
-        <p style={{ margin: "0 0 16px", color: "var(--text-muted)" }}>
-          {message}
-        </p>
-        <div className="modal-actions">
-          <button
-            type="button"
-            className="btn btn-secondary"
+        <p className="confirm-modal-message">{message}</p>
+        <div className="modal-actions confirm-modal-actions">
+          <Button
+            variant="secondary"
+            size="lg"
             onClick={() => !busy && onClose()}
+            disabled={busy}
           >
             Cancel
-          </button>
-          <button
-            type="button"
-            className="btn btn-primary"
-            style={
-              danger ? { background: "var(--danger, #c53030)" } : undefined
-            }
-            onClick={onConfirm}
+          </Button>
+          <Button
+            variant={danger ? "danger" : "primary"}
+            size="lg"
+            onClick={() => void onConfirm()}
             disabled={busy}
           >
             {busy && confirmBusyLabel ? confirmBusyLabel : confirmLabel}
-          </button>
+          </Button>
         </div>
       </div>
     </div>

@@ -1,5 +1,7 @@
 import React from "react";
 import type { Organization } from "../lib/api";
+import { Button } from "./Button";
+import { CloseButton } from "./CloseButton";
 import { ErrorBanner } from "./ErrorBanner";
 import { UiInput } from "./UiInput";
 import { UiSelect } from "./UiSelect";
@@ -42,14 +44,11 @@ export function CreateProjectModal({
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <h2>Create project</h2>
-          <button
-            type="button"
+          <CloseButton
             className="modal-close"
             onClick={() => !submitting && onClose()}
-            aria-label="Close"
-          >
-            ×
-          </button>
+            disabled={submitting}
+          />
         </div>
         <form onSubmit={onSubmit}>
           {error && (
@@ -77,7 +76,6 @@ export function CreateProjectModal({
               <label htmlFor="create-project-org">Organization</label>
               <UiSelect
                 id="create-project-org"
-                className="form-select"
                 value={newProjectOrgId}
                 onChange={(e) => setNewProjectOrgId(e.target.value)}
                 required
@@ -102,20 +100,22 @@ export function CreateProjectModal({
             />
           </div>
           <div className="modal-actions">
-            <button
-              type="button"
-              className="btn btn-secondary"
+            <Button
+              variant="secondary"
+              size="lg"
               onClick={() => !submitting && onClose()}
+              disabled={submitting}
             >
               Cancel
-            </button>
-            <button
+            </Button>
+            <Button
               type="submit"
-              className="btn btn-primary"
+              variant="primary"
+              size="lg"
               disabled={submitting}
             >
               {submitting ? "Creating…" : "Create"}
-            </button>
+            </Button>
           </div>
         </form>
       </div>

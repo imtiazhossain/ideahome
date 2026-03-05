@@ -1568,6 +1568,9 @@ textarea {
   background: var(--bg-bar);
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
+  position: sticky;
+  top: 0;
+  z-index: 30;
 }
 
 .project-nav-top {
@@ -1746,7 +1749,7 @@ textarea {
   height: 40px;
   border: 1px solid rgba(96, 165, 250, 0.8);
   border-radius: 12px;
-  background: rgba(37, 99, 235, 0.08);
+  background: #1e293b;
   color: #bfdbfe;
   line-height: 0;
   transition:
@@ -1758,11 +1761,38 @@ textarea {
 
 .project-nav-auth-menu-item--logout:hover {
   border-color: #93c5fd;
-  background: rgba(59, 130, 246, 0.24);
+  background: #1e40af;
   color: #eff6ff;
 }
 
 .project-nav-auth-menu-item--logout:focus-visible {
+  outline: none;
+  border-color: #93c5fd;
+  box-shadow: 0 0 0 2px rgba(96, 165, 250, 0.35);
+}
+
+.project-nav-auth-menu-item--login {
+  width: 40px;
+  height: 40px;
+  border: 1px solid rgba(96, 165, 250, 0.8);
+  border-radius: 12px;
+  background: #1e293b;
+  color: #dbeafe;
+  line-height: 0;
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease,
+    color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.project-nav-auth-menu-item--login:hover {
+  border-color: #93c5fd;
+  background: #1e40af;
+  color: #eff6ff;
+}
+
+.project-nav-auth-menu-item--login:focus-visible {
   outline: none;
   border-color: #93c5fd;
   box-shadow: 0 0 0 2px rgba(96, 165, 250, 0.35);
@@ -3298,6 +3328,23 @@ textarea {
   border: 1px solid var(--border);
 }
 
+.modal--confirm {
+  max-width: 520px;
+  border-radius: 16px;
+}
+
+.modal--confirm .modal-close {
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--column-bg);
+  font-size: 22px;
+}
+
+.modal--confirm .modal-close:hover {
+  border-color: rgba(147, 197, 253, 0.45);
+  background: rgba(59, 130, 246, 0.12);
+}
+
 .modal--fit-screen {
   max-height: calc(100vh - 48px);
   overflow: hidden;
@@ -3805,24 +3852,6 @@ textarea {
 
 .modal-close {
   flex-shrink: 0;
-  width: 32px;
-  height: 32px;
-  padding: 0;
-  border: none;
-  border-radius: 4px;
-  background: transparent;
-  color: var(--text-muted);
-  font-size: 24px;
-  line-height: 1;
-  cursor: pointer;
-  transition:
-    background 0.15s ease,
-    color 0.15s ease;
-}
-
-.modal-close:hover {
-  background: var(--column-bg);
-  color: var(--text);
 }
 
 .modal h2 {
@@ -4087,6 +4116,17 @@ textarea {
   gap: 12px;
   justify-content: flex-end;
   margin-top: 24px;
+}
+
+.confirm-modal-message {
+  margin: 0 0 20px;
+  color: var(--text-muted);
+  font-size: 15px;
+  line-height: 1.45;
+}
+
+.confirm-modal-actions {
+  margin-top: 0;
 }
 
 .issue-quality-config-modal {
@@ -4599,6 +4639,10 @@ a.automated-tests-chip-text:hover {
   gap: 8px;
 }
 
+.error-banner-dismiss {
+  opacity: 0.8;
+}
+
 .error-banner-link-button {
   background: none;
   border: none;
@@ -4785,19 +4829,7 @@ a.automated-tests-chip-text:hover {
   right: 8px;
   width: 28px;
   height: 28px;
-  padding: 0;
-  border: none;
   border-radius: 6px;
-  background: transparent;
-  font-size: 20px;
-  line-height: 1;
-  color: var(--text-muted);
-  cursor: pointer;
-}
-
-.coverage-page-output-close:hover {
-  background: var(--border);
-  color: var(--text);
 }
 
 .coverage-page-output--success {
@@ -4915,17 +4947,11 @@ a.automated-tests-chip-text:hover {
 /* Tests page (JIRA-style dedicated page) */
 .tests-page-content {
   flex: 1;
-  overflow-y: auto;
-  scrollbar-width: none;
-  -ms-overflow-style: none;
   padding: 24px;
   max-width: 900px;
   margin-left: auto;
   margin-right: auto;
   width: 100%;
-}
-.tests-page-content::-webkit-scrollbar {
-  display: none;
 }
 
 .tests-page-single-loading {
@@ -5259,6 +5285,12 @@ a.automated-tests-chip-text:hover {
 }
 
 [data-theme="light"] .tests-page-section-bulk-delete {
+  color: #dc2626;
+  background: rgba(239, 68, 68, 0.08);
+  border-color: rgba(239, 68, 68, 0.4);
+}
+
+[data-theme="light"] .pages-section-delete-icon {
   color: #dc2626;
   background: rgba(239, 68, 68, 0.08);
   border-color: rgba(239, 68, 68, 0.4);
@@ -6157,14 +6189,10 @@ a.automated-tests-chip-text:hover {
 }
 
 .bulby-chatbox-close {
-  background: none;
-  border: none;
   color: rgba(148, 163, 184, 0.9);
-  font-size: 20px;
-  line-height: 1;
-  padding: 0 4px;
-  cursor: pointer;
   border-radius: 4px;
+  width: 28px;
+  height: 28px;
 }
 
 .bulby-chatbox-close:hover {
@@ -6539,17 +6567,34 @@ a.automated-tests-chip-text:hover {
 
 [data-theme="light"] .project-nav-auth-menu-item--logout {
   border-color: #2563eb;
-  background: rgba(37, 99, 235, 0.08);
-  color: #1d4ed8;
+  background: #f2f6fe;
+  color: #2563eb;
 }
 
 [data-theme="light"] .project-nav-auth-menu-item--logout:hover {
   border-color: #1d4ed8;
-  background: rgba(37, 99, 235, 0.16);
-  color: #1e3a8a;
+  background: #f2f6fe;
+  color: #1d4ed8;
 }
 
 [data-theme="light"] .project-nav-auth-menu-item--logout:focus-visible {
+  border-color: #1d4ed8;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.28);
+}
+
+[data-theme="light"] .project-nav-auth-menu-item--login {
+  border-color: #2563eb;
+  background: #f2f6fe;
+  color: #2563eb;
+}
+
+[data-theme="light"] .project-nav-auth-menu-item--login:hover {
+  border-color: #1d4ed8;
+  background: #f2f6fe;
+  color: #1d4ed8;
+}
+
+[data-theme="light"] .project-nav-auth-menu-item--login:focus-visible {
   border-color: #1d4ed8;
   box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.28);
 }
@@ -10387,6 +10432,66 @@ html[data-theme="dark"] .calendar-picker-popup {
   width: 100%;
 }
 
+.ui-close-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--column-bg);
+  color: var(--text-muted);
+  cursor: pointer;
+  line-height: 0;
+  transition:
+    border-color 0.15s ease,
+    color 0.15s ease,
+    background 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.ui-close-btn svg {
+  display: block;
+}
+
+.ui-close-btn--sm {
+  width: 24px;
+  height: 24px;
+}
+
+.ui-close-btn--md {
+  width: 32px;
+  height: 32px;
+}
+
+.ui-close-btn--lg {
+  width: 36px;
+  height: 36px;
+}
+
+.ui-close-btn:hover:not(:disabled) {
+  border-color: rgba(147, 197, 253, 0.45);
+  color: var(--text);
+  background: rgba(59, 130, 246, 0.12);
+}
+
+.ui-close-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+[data-theme="light"] .ui-close-btn {
+  border-color: rgba(59, 130, 246, 0.3);
+  background: rgba(255, 255, 255, 0.9);
+  color: #64748b;
+}
+
+[data-theme="light"] .ui-close-btn:hover:not(:disabled) {
+  border-color: rgba(37, 99, 235, 0.45);
+  color: #1e293b;
+  background: rgba(37, 99, 235, 0.12);
+}
+
 .ui-btn:disabled {
   opacity: 0.55;
   cursor: not-allowed;
@@ -10821,13 +10926,9 @@ html[data-theme="dark"] .calendar-picker-popup {
 }
 
 .calendar-success-close {
-  border: none;
-  background: transparent;
   color: var(--text-muted);
-  font-size: 24px;
-  line-height: 1;
-  padding: 0;
-  cursor: pointer;
+  width: 30px;
+  height: 30px;
 }
 
 .calendar-success-close:hover {
@@ -12106,7 +12207,22 @@ html[data-theme="dark"] .calendar-picker-popup {
   padding: 10px 12px;
 }
 
+.code-page-release-note-meta {
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
 .code-page-release-note-date {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--text-muted);
+}
+
+.code-page-release-note-area {
   margin: 0;
   font-size: 11px;
   font-weight: 600;
@@ -12268,6 +12384,48 @@ html[data-theme="dark"] .calendar-picker-popup {
   display: inline-flex;
   align-items: center;
   gap: 8px;
+}
+
+.pages-section-footer-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 12px;
+}
+
+.pages-section-delete-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  color: #ef4444;
+  background: rgba(127, 29, 29, 0.14);
+  border: 1px solid rgba(239, 68, 68, 0.45);
+  border-radius: 10px;
+  cursor: pointer;
+  transition:
+    color 0.15s ease,
+    background 0.15s ease,
+    border-color 0.15s ease,
+    box-shadow 0.15s ease,
+    transform 0.12s ease;
+}
+
+.pages-section-delete-icon:hover {
+  color: #f87171;
+  background: rgba(239, 68, 68, 0.2);
+  border-color: rgba(239, 68, 68, 0.7);
+  box-shadow: 0 0 0 1px rgba(248, 113, 113, 0.18) inset;
+}
+
+.pages-section-delete-icon:active {
+  transform: translateY(1px);
+}
+
+.pages-section-delete-icon svg {
+  width: 16px;
+  height: 16px;
 }
 
 .pages-section-editor-grid {

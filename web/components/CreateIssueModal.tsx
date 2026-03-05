@@ -3,6 +3,7 @@ import type { Project, ProjectQualityScoreConfig, User } from "../lib/api";
 import { parseTestCases, serializeTestCases } from "../lib/utils";
 import { computeQualityScore } from "../features/board/scoring";
 import { AutoResizeTextarea } from "./AutoResizeTextarea";
+import { CloseButton } from "./CloseButton";
 import { ErrorBanner } from "./ErrorBanner";
 import { ProjectSelect } from "./ProjectSelect";
 import { UiInput } from "./UiInput";
@@ -205,18 +206,16 @@ export function CreateIssueModal({
                           className={`expenses-input${idx > 0 ? " test-case-input-with-action" : ""}`}
                         />
                         {idx > 0 && (
-                          <button
-                            type="button"
+                          <CloseButton
                             className="project-nav-add test-case-remove"
+                            size="sm"
                             onClick={() => {
                               const next = lines.filter((_, i) => i !== idx);
                               updateCases(next.length ? next : [""]);
                             }}
                             aria-label="Remove test case"
                             title="Remove test case"
-                          >
-                            ×
-                          </button>
+                          />
                         )}
                       </div>
                       <button

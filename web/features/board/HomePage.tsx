@@ -18,6 +18,7 @@ import {
   horizontalListSortingStrategy,
   SortableContext,
 } from "@dnd-kit/sortable";
+import { restrictToWindowEdges } from "@dnd-kit/modifiers";
 import {
   getStoredToken,
   isAuthenticated,
@@ -47,6 +48,7 @@ import { type User } from "../../lib/api/users";
 import { AppLayout } from "../../components/AppLayout";
 import { AutoResizeTextarea } from "../../components/AutoResizeTextarea";
 import { ConfirmModal } from "../../components/ConfirmModal";
+import { CloseButton } from "../../components/CloseButton";
 import { CreateIssueModal } from "../../components/CreateIssueModal";
 import { CreateProjectModal } from "../../components/CreateProjectModal";
 import { ErrorBanner } from "../../components/ErrorBanner";
@@ -61,7 +63,6 @@ import {
   IconStop,
   IconUpload,
   IconVideo,
-  IconX,
 } from "../../components/icons";
 import { IconTrash } from "../../components/IconTrash";
 import { SectionLoadingSpinner } from "../../components/SectionLoadingSpinner";
@@ -817,6 +818,7 @@ export default function Home() {
         ) : (
           <DndContext
             sensors={boardDnd.boardSensors}
+            modifiers={[restrictToWindowEdges]}
             collisionDetection={closestCenter}
             onDragStart={handleBoardDragStart}
             onDragOver={handleBoardDragOver}
@@ -902,14 +904,10 @@ export default function Home() {
           <div className="modal board-add-column-modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <h2>Add column</h2>
-              <button
-                type="button"
+              <CloseButton
                 className="modal-close"
                 onClick={() => setAddColumnModalOpen(false)}
-                aria-label="Close"
-              >
-                ×
-              </button>
+              />
             </div>
             <form onSubmit={handleSubmitNewColumn}>
               <div className="form-group board-add-column-field">

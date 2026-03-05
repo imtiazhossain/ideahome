@@ -14,6 +14,7 @@ import {
   useSortable,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
+import { restrictToWindowEdges } from "@dnd-kit/modifiers";
 import { CSS } from "@dnd-kit/utilities";
 import { usePlaidLink } from "react-plaid-link";
 import type {
@@ -2402,6 +2403,7 @@ export default function FinancialsPage() {
 
           <DndContext
             sensors={sensors}
+            modifiers={[restrictToWindowEdges]}
             collisionDetection={closestCenter}
             onDragEnd={handleFinancesSectionDragEnd}
           >

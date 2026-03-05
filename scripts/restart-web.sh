@@ -11,7 +11,7 @@ echo "[web] Stopping existing web processes..."
 PIDS="$(
   ps aux \
     | rg "$ROOT_DIR" \
-    | rg "pnpm --filter web dev|web/node_modules/.bin/.*/next|next/dist/bin/next dev -H 0.0.0.0" \
+    | rg "pnpm --filter web dev|web/node_modules/.bin/.*/next|next/dist/bin/next dev" \
     | rg -v "rg " \
     | awk '{print $2}' \
     | sort -u \
@@ -26,7 +26,7 @@ fi
 PIDS_LEFT="$(
   ps aux \
     | rg "$ROOT_DIR" \
-    | rg "pnpm --filter web dev|web/node_modules/.bin/.*/next|next/dist/bin/next dev -H 0.0.0.0" \
+    | rg "pnpm --filter web dev|web/node_modules/.bin/.*/next|next/dist/bin/next dev" \
     | rg -v "rg " \
     | awk '{print $2}' \
     | sort -u \

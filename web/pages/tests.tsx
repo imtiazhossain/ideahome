@@ -10,6 +10,7 @@ import {
   stripAnsi,
 } from "../lib/playwright-output";
 import { AppLayout } from "../components/AppLayout";
+import { CloseButton } from "../components/CloseButton";
 import { useProjectLayout } from "../lib/useProjectLayout";
 import {
   uiTests as uiTestsInitial,
@@ -522,14 +523,7 @@ export default function TestsPage() {
           >
             <div className="modal-header">
               <h2>Run automated test</h2>
-              <button
-                type="button"
-                className="modal-close"
-                onClick={closeRunTestModal}
-                aria-label="Close"
-              >
-                ×
-              </button>
+              <CloseButton className="modal-close" onClick={closeRunTestModal} />
             </div>
             <p style={{ margin: "0 0 8px", fontWeight: 600 }}>
               {runTestModal.suite}
@@ -868,14 +862,10 @@ export default function TestsPage() {
           >
             <div className="modal-header">
               <h2>Test run: {viewRunModal.testName}</h2>
-              <button
-                type="button"
+              <CloseButton
                 className="modal-close"
                 onClick={() => setViewRunModal(null)}
-                aria-label="Close"
-              >
-                ×
-              </button>
+              />
             </div>
             <div className="modal-body modal-body--scrollable">
               {viewRunModal.result.videoBase64 ? (

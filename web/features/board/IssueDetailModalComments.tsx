@@ -2,6 +2,7 @@ import React, { type RefObject } from "react";
 import { getRecordingUrl, getScreenshotUrl } from "../../lib/api/media";
 import type { Issue, IssueComment } from "../../lib/api/issues";
 import { ErrorBanner } from "../../components/ErrorBanner";
+import { CloseButton } from "../../components/CloseButton";
 import {
   IconEdit,
   IconMic,
@@ -11,7 +12,6 @@ import {
   IconScreenshot,
   IconStop,
   IconUpload,
-  IconX,
 } from "../../components/icons";
 import { IconTrash } from "../../components/IconTrash";
 import { SectionLoadingSpinner } from "../../components/SectionLoadingSpinner";
@@ -692,17 +692,15 @@ export function IssueDetailModalComments(props: IssueDetailModalCommentsProps) {
                                       <IconScreenshot size={14} />{" "}
                                       {displayLabel}
                                     </span>
-                                    <button
-                                      type="button"
+                                    <CloseButton
                                       className="btn btn-icon btn-icon-sm"
+                                      size="sm"
                                       onClick={() =>
                                         removeEditingCommentBlock(bi)
                                       }
                                       aria-label="Remove"
                                       title="Remove"
-                                    >
-                                      <IconX size={10} />
-                                    </button>
+                                    />
                                   </div>
                                 );
                               }
@@ -739,17 +737,15 @@ export function IssueDetailModalComments(props: IssueDetailModalCommentsProps) {
                                       <IconPlay size={14} />{" "}
                                       {displayLabel}
                                     </span>
-                                    <button
-                                      type="button"
+                                    <CloseButton
                                       className="btn btn-icon btn-icon-sm"
+                                      size="sm"
                                       onClick={() =>
                                         removeEditingCommentBlock(bi)
                                       }
                                       aria-label="Remove"
                                       title="Remove"
-                                    >
-                                      <IconX size={10} />
-                                    </button>
+                                    />
                                   </div>
                                 );
                               }
@@ -773,17 +769,15 @@ export function IssueDetailModalComments(props: IssueDetailModalCommentsProps) {
                                       <IconUpload size={14} />{" "}
                                       {f.fileName}
                                     </span>
-                                    <button
-                                      type="button"
+                                    <CloseButton
                                       className="btn btn-icon btn-icon-sm"
+                                      size="sm"
                                       onClick={() =>
                                         removeEditingCommentBlock(bi)
                                       }
                                       aria-label="Remove"
                                       title="Remove"
-                                    >
-                                      <IconX size={10} />
-                                    </button>
+                                    />
                                   </div>
                                 );
                               }
@@ -1180,9 +1174,9 @@ export function IssueDetailModalComments(props: IssueDetailModalCommentsProps) {
                                       <IconRecordCamera size={14} />
                                     </button>
                                   ))}
-                                <button
-                                  type="button"
+                                <CloseButton
                                   className="btn btn-icon btn-sm"
+                                  size="sm"
                                   onClick={() =>
                                     setAddingAttachmentToCommentId(
                                       null
@@ -1190,9 +1184,7 @@ export function IssueDetailModalComments(props: IssueDetailModalCommentsProps) {
                                   }
                                   aria-label="Cancel"
                                   title="Cancel"
-                                >
-                                  <IconX size={14} />
-                                </button>
+                                />
                               </div>
                             </div>
                           )}

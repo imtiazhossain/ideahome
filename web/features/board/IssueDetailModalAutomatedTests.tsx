@@ -3,8 +3,8 @@ import Link from "next/link";
 import type { Issue } from "../../lib/api/issues";
 import { type RunUiTestResult } from "../../lib/api/tests";
 import { uiTests, testNameToSlug } from "../../lib/ui-tests";
+import { CloseButton } from "../../components/CloseButton";
 import { UiMenuDropdown } from "../../components/UiMenuDropdown";
-import { IconX } from "../../components/icons";
 import { Text } from "../../components/Text";
 
 export type IssueDetailModalAutomatedTestsProps = {
@@ -164,14 +164,12 @@ export function IssueDetailModalAutomatedTests({
                       </span>
                     )}
                   </span>
-                  <button
-                    type="button"
+                  <CloseButton
                     className="automated-tests-chip-remove"
+                    size="sm"
                     onClick={() => removeTest(t)}
                     aria-label={`Remove ${t}`}
-                  >
-                    <IconX />
-                  </button>
+                  />
                 </span>
               );
             })}

@@ -2,6 +2,7 @@
 const path = require("path");
 const USE_BUILTIN_API = process.env.USE_BUILTIN_API === "true";
 const FAST_DEPLOY_BUILD = process.env.NEXT_DEPLOY_FAST === "1";
+const NEXT_DIST_DIR = process.env.NEXT_DIST_DIR?.trim();
 
 // Only proxy to API when this header is present (avoids rewriting page navigation for /bugs, /features, etc.)
 const API_REWRITE_HAS = [{ type: "header", key: "X-Ideahome-Api", value: "1" }];
@@ -54,6 +55,7 @@ function buildRewrites(targetBase) {
 }
 
 const nextConfig = {
+  distDir: NEXT_DIST_DIR || ".next",
   eslint: {
     ignoreDuringBuilds: FAST_DEPLOY_BUILD,
   },

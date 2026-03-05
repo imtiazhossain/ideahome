@@ -21,7 +21,6 @@ import {
   IconScreenshot,
   IconStop,
   IconUpload,
-  IconX,
 } from "../../components/icons";
 import { IconTrash } from "../../components/IconTrash";
 import { SectionLoadingSpinner } from "../../components/SectionLoadingSpinner";

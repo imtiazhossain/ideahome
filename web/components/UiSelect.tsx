@@ -13,7 +13,7 @@ function cx(...parts: Array<string | undefined | false>): string {
 export function UiSelect({ className, children, ...props }: UiSelectProps) {
   return (
     <select
-      className={cx("ui-select", "expenses-date-filter-submenu-input", className)}
+      className={cx("ui-select", "app-select", className)}
       {...props}
     >
       {children}

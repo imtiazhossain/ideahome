@@ -2,6 +2,7 @@ import React from "react";
 import type { Issue } from "../../lib/api/issues";
 import type { User } from "../../lib/api/users";
 import { AutoResizeTextarea } from "../../components/AutoResizeTextarea";
+import { CloseButton } from "../../components/CloseButton";
 import { UiSelect } from "../../components/UiSelect";
 import { Text } from "../../components/Text";
 
@@ -137,20 +138,16 @@ export function IssueDetailModalFormFields({
                       }
                     />
                     {idx > 0 && (
-                      <button
-                        type="button"
+                      <CloseButton
                         className="project-nav-add test-case-remove"
+                        size="sm"
                         onClick={() => {
-                          const next = lines.filter(
-                            (_, i) => i !== idx
-                          );
+                          const next = lines.filter((_, i) => i !== idx);
                           updateCases(next);
                         }}
                         aria-label="Remove test case"
                         title="Remove test case"
-                      >
-                        ×
-                      </button>
+                      />
                     )}
                   </div>
                   <button
