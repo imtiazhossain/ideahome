@@ -120,6 +120,18 @@ export function useCheckableListAssistant(
     });
   }, []);
 
+  const syncIdeaInputViewport = useCallback((ideaId: string) => {
+    const node = assistantInputRefs.current[ideaId];
+    if (!node) return;
+    requestAnimationFrame(() => {
+      node.scrollTop = node.scrollHeight;
+      if (document.activeElement === node) {
+        const valueLength = node.value.length;
+        node.setSelectionRange(valueLength, valueLength);
+      }
+    });
+  }, []);
+
   React.useEffect(() => {
     if (typeof window === "undefined") return;
     const media = window.matchMedia("(max-width: 640px)");
@@ -159,6 +171,13 @@ export function useCheckableListAssistant(
     assistantGifById,
     assistantCollapsedById,
   ]);
+
+  React.useEffect(() => {
+    Object.entries(assistantRecordingById).forEach(([ideaId, recording]) => {
+      if (!recording) return;
+      syncIdeaInputViewport(ideaId);
+    });
+  }, [assistantInputById, assistantRecordingById, syncIdeaInputViewport]);
 
   React.useEffect(
     () => () => {
@@ -406,6 +425,7 @@ export function useCheckableListAssistant(
         }
         const merged = (finalTranscript || transcript).trim();
         setAssistantInputById((prev) => ({ ...prev, [ideaId]: merged }));
+        syncIdeaInputViewport(ideaId);
       };
 
       recognition.onerror = (event: any) => {
@@ -439,7 +459,7 @@ export function useCheckableListAssistant(
         );
       }
     },
-    [appendChatAssistantMessage, submitIdeaChatText]
+    [appendChatAssistantMessage, submitIdeaChatText, syncIdeaInputViewport]
   );
 
   const setPlaybackStatus = useCallback(
