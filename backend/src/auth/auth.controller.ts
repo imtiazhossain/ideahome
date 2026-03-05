@@ -15,7 +15,8 @@ type OAuthProvider = "google" | "github" | "apple";
 async function importOpenIdClient(): Promise<typeof import("openid-client")> {
   // Use require in Jest so moduleNameMapper can provide the test mock.
   if (process.env.JEST_WORKER_ID) {
-    return require("openid-client") as typeof import("openid-client");
+    const jestRequire = (0, eval)("require") as (id: string) => unknown;
+    return jestRequire("openid-client") as typeof import("openid-client");
   }
   // Keep native dynamic import for ESM-only package in CJS output.
   return (await new Function("m", "return import(m)")(
