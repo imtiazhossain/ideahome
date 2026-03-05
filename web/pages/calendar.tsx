@@ -239,6 +239,22 @@ export default function CalendarPage() {
     );
   }, [eventsByDate, selectedDate]);
 
+  const editingEvent = useMemo(
+    () => (editingEventId ? events.find((event) => event.id === editingEventId) ?? null : null),
+    [editingEventId, events]
+  );
+  const hasEditingEventChanges = useMemo(() => {
+    if (!editingEventId || !editingEvent) return false;
+    return (
+      title.trim() !== editingEvent.title.trim() ||
+      description !== (editingEvent.description ?? "") ||
+      location !== (editingEvent.location ?? "") ||
+      startAt !== toLocalDateTimeInputValue(new Date(editingEvent.startAt)) ||
+      endAt !== toLocalDateTimeInputValue(new Date(editingEvent.endAt)) ||
+      isAllDay !== editingEvent.isAllDay
+    );
+  }, [description, editingEvent, editingEventId, endAt, isAllDay, location, startAt, title]);
+
   const resetForm = useCallback(() => {
     setEditingEventId(null);
     setAttemptedEventSave(false);
@@ -936,13 +952,15 @@ export default function CalendarPage() {
                       <span>All day</span>
                     </div>
                     <div className="calendar-event-editor-actions">
-                      <Button
-                        variant="primary"
-                        size="md"
-                        onClick={() => void handleSaveEvent()}
-                      >
-                        {editingEventId ? "Save changes" : "Create event"}
-                      </Button>
+                      {!editingEventId || hasEditingEventChanges ? (
+                        <Button
+                          variant="primary"
+                          size="md"
+                          onClick={() => void handleSaveEvent()}
+                        >
+                          {editingEventId ? "Save changes" : "Create event"}
+                        </Button>
+                      ) : null}
                       {editingEventId && (
                         <Button variant="ghost" size="md" onClick={resetForm}>
                           Cancel edit

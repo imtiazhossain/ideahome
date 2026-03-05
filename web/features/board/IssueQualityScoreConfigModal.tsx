@@ -2,6 +2,7 @@ import React from "react";
 import type { ProjectQualityScoreConfig, QualityScoreItemId } from "../../lib/api";
 import { UiInput } from "../../components/UiInput";
 import { Text } from "../../components/Text";
+import { IconUndo } from "../../components/IconUndo";
 
 type ScoreItemDefinition = {
   id: QualityScoreItemId;
@@ -31,14 +32,69 @@ export function IssueQualityScoreConfigModal({
   items,
   onSave,
 }: IssueQualityScoreConfigModalProps) {
+  const [undoHistory, setUndoHistory] = React.useState<ProjectQualityScoreConfig[]>(
+    []
+  );
+  const [initialConfig, setInitialConfig] =
+    React.useState<ProjectQualityScoreConfig | null>(null);
+
+  React.useEffect(() => {
+    if (!open) return;
+    setUndoHistory([]);
+    setInitialConfig({
+      ...config,
+      weights: { ...config.weights },
+    });
+  }, [open]);
+
   if (!open) return null;
 
   const hasInvalidTotal = total !== 100;
+  const getWeight = (value: unknown): number => {
+    const parsed = Number.parseInt(String(value ?? 0), 10);
+    if (!Number.isFinite(parsed)) return 0;
+    return Math.max(0, Math.min(100, parsed));
+  };
+  const hasNetNumberChanges =
+    initialConfig !== null &&
+    items.some(
+      (item) =>
+        getWeight(config.weights[item.id]) !==
+        getWeight(initialConfig.weights[item.id])
+    );
+  const canUndo = undoHistory.length > 0 && hasNetNumberChanges;
   const parseWeight = (value: string): number => {
     const digitsOnly = value.replace(/\D+/g, "");
     if (!digitsOnly) return 0;
     const parsed = Number.parseInt(digitsOnly, 10);
     return Math.max(0, Math.min(100, parsed));
+  };
+  const pushUndoSnapshot = () => {
+    setUndoHistory((prev) => [
+      ...prev.slice(-49),
+      {
+        ...config,
+        weights: { ...config.weights },
+      },
+    ]);
+  };
+  const resetToEqualWeights = () => {
+    if (items.length === 0) return;
+    const baseWeight = Math.floor(100 / items.length);
+    const remainder = 100 - baseWeight * items.length;
+    const nextWeights = { ...config.weights };
+    items.forEach((item, index) => {
+      nextWeights[item.id] = baseWeight + (index < remainder ? 1 : 0);
+    });
+    const hasActualChange = items.some(
+      (item) => getWeight(config.weights[item.id]) !== getWeight(nextWeights[item.id])
+    );
+    if (!hasActualChange) return;
+    pushUndoSnapshot();
+    setConfig((prev) => ({
+      ...prev,
+      weights: nextWeights,
+    }));
   };
 
   return (
@@ -81,6 +137,7 @@ export function IssueQualityScoreConfigModal({
                   type="text"
                   inputMode="numeric"
                   pattern="[0-9]*"
+                  maxLength={3}
                   className="issue-quality-config-input ui-input--compact"
                   value={Math.max(
                     0,
@@ -91,6 +148,15 @@ export function IssueQualityScoreConfigModal({
                   )}
                   onChange={(e) => {
                     const clamped = parseWeight(e.target.value);
+                    const currentValue = Math.max(
+                      0,
+                      Math.min(
+                        100,
+                        Number.parseInt(String(config.weights[item.id] ?? 0), 10) || 0
+                      )
+                    );
+                    if (clamped === currentValue) return;
+                    pushUndoSnapshot();
                     setConfig((prev) => ({
                       ...prev,
                       weights: {
@@ -124,6 +190,34 @@ export function IssueQualityScoreConfigModal({
         </div>
 
         <div className="modal-actions issue-quality-config-actions">
+          {canUndo ? (
+            <button
+              type="button"
+              className="tests-page-section-undo"
+              onClick={() => {
+                const previousConfig = undoHistory[undoHistory.length - 1];
+                if (!previousConfig) return;
+                setUndoHistory((prev) => prev.slice(0, -1));
+                setConfig({
+                  ...previousConfig,
+                  weights: { ...previousConfig.weights },
+                });
+              }}
+              aria-label="Undo last change"
+              title="Undo"
+              disabled={saving}
+            >
+              <IconUndo />
+            </button>
+          ) : null}
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={resetToEqualWeights}
+            disabled={saving || items.length === 0}
+          >
+            Defaults
+          </button>
           <button
             type="button"
             className="btn btn-secondary"
@@ -132,14 +226,16 @@ export function IssueQualityScoreConfigModal({
           >
             Cancel
           </button>
-          <button
-            type="button"
-            className="btn btn-primary"
-            onClick={() => void onSave()}
-            disabled={saving || hasInvalidTotal}
-          >
-            {saving ? "Saving…" : "Save"}
-          </button>
+          {hasNetNumberChanges || saving ? (
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={() => void onSave()}
+              disabled={saving || hasInvalidTotal}
+            >
+              {saving ? "Saving…" : "Save"}
+            </button>
+          ) : null}
         </div>
       </div>
     </div>

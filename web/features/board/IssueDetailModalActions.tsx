@@ -1,7 +1,6 @@
 import React from "react";
 import type { Issue } from "../../lib/api/issues";
 import { IconTrash } from "../../components/IconTrash";
-import { IconSettings } from "../../components/icons";
 
 export type IssueDetailModalActionsProps = {
   selectedIssue: Issue;
@@ -9,8 +8,6 @@ export type IssueDetailModalActionsProps = {
   hasIssueDetailChangesFn: (issue: Issue, original: Issue | null) => boolean;
   handleSaveIssue: () => Promise<void>;
   issueSaving: boolean;
-  openQualityConfig: () => void;
-  qualityConfigSaving: boolean;
   setIssueToDelete: (issue: Issue | null) => void;
 };
 
@@ -20,8 +17,6 @@ export function IssueDetailModalActions({
   hasIssueDetailChangesFn,
   handleSaveIssue,
   issueSaving,
-  openQualityConfig,
-  qualityConfigSaving,
   setIssueToDelete,
 }: IssueDetailModalActionsProps) {
   return (
@@ -36,15 +31,6 @@ export function IssueDetailModalActions({
           {issueSaving ? "Saving…" : "Save"}
         </button>
       )}
-      <button
-        type="button"
-        className="expenses-add-btn issue-modal-action-btn issue-modal-quality-config-btn"
-        onClick={openQualityConfig}
-        disabled={qualityConfigSaving}
-      >
-        <IconSettings />
-        Quality Score
-      </button>
       <button
         type="button"
         className="expenses-plaid-disconnect-btn issue-modal-delete-btn"

@@ -5,6 +5,8 @@ export type IssueDetailModalHeaderProps = {
   selectedIssue: Issue;
   issueKeyFn: (issue: Issue) => string;
   computeQualityScoreFn: (issue: Issue) => number;
+  openQualityConfig: () => void;
+  qualityConfigSaving: boolean;
   onClose: () => void;
 };
 
@@ -12,6 +14,8 @@ export function IssueDetailModalHeader({
   selectedIssue,
   issueKeyFn,
   computeQualityScoreFn,
+  openQualityConfig,
+  qualityConfigSaving,
   onClose,
 }: IssueDetailModalHeaderProps) {
   const qualityScorePercent = Math.round(computeQualityScoreFn(selectedIssue));
@@ -32,8 +36,13 @@ export function IssueDetailModalHeader({
           </button>
         </div>
       </div>
-      <div
-        className="quality-score-bar-wrap"
+      <button
+        type="button"
+        className="quality-score-bar-wrap quality-score-bar-wrap-btn"
+        onClick={openQualityConfig}
+        disabled={qualityConfigSaving}
+        aria-label="Open quality score configuration"
+        title={qualityConfigSaving ? "Saving quality score configuration…" : "Configure quality score"}
         style={{ marginBottom: 12 }}
       >
         <div className="quality-score-bar-label">
@@ -52,7 +61,7 @@ export function IssueDetailModalHeader({
             style={{ width: `${qualityScorePercent}%` }}
           />
         </div>
-      </div>
+      </button>
     </>
   );
 }

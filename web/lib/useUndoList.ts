@@ -2,6 +2,14 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 const DEFAULT_MAX_HISTORY = 20;
 
+function deepClone<T>(value: T): T {
+  return JSON.parse(JSON.stringify(value)) as T;
+}
+
+function hasNetChanges<T>(current: T, baseline: T): boolean {
+  return JSON.stringify(current) !== JSON.stringify(baseline);
+}
+
 /**
  * Hook for undo support on list state.
  * Call pushHistory() before each mutation; call undo() to restore the previous state.
@@ -14,27 +22,38 @@ export function useUndoList<T>(
   resetKey?: string
 ) {
   const historyRef = useRef<T[][]>([]);
+  const baselineRef = useRef<T[]>(deepClone(items));
   const [canUndo, setCanUndo] = useState(false);
 
   useEffect(() => {
     historyRef.current = [];
+    baselineRef.current = deepClone(items);
     setCanUndo(false);
   }, [resetKey]);
 
+  useEffect(() => {
+    if (historyRef.current.length === 0) {
+      baselineRef.current = deepClone(items);
+      setCanUndo(false);
+      return;
+    }
+    setCanUndo(hasNetChanges(items, baselineRef.current));
+  }, [items]);
+
   const pushHistory = useCallback(() => {
-    const clone = JSON.parse(JSON.stringify(items)) as T[];
+    const clone = deepClone(items);
     historyRef.current.push(clone);
     if (historyRef.current.length > maxHistory) {
       historyRef.current.shift();
     }
-    setCanUndo(historyRef.current.length > 0);
+    setCanUndo(hasNetChanges(items, baselineRef.current));
   }, [items, maxHistory]);
 
   const undo = useCallback(() => {
     const prev = historyRef.current.pop();
     if (!prev) return null;
     setItems(prev);
-    setCanUndo(historyRef.current.length > 0);
+    setCanUndo(hasNetChanges(prev, baselineRef.current));
     return prev;
   }, [setItems]);
 

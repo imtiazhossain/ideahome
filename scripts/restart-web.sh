@@ -38,6 +38,9 @@ fi
 
 echo "[web] Starting fresh web dev server..."
 rm -f "$LOG_FILE"
+# Clear stale Next.js artifacts to avoid intermittent MODULE_NOT_FOUND
+# mismatches between webpack runtime and emitted vendor chunks.
+rm -rf "$ROOT_DIR/web/.next"
 # Start in a detached session (start_new_session) so the dev server doesn't die
 # when the launching shell exits.
 LAUNCHER_PID="$(

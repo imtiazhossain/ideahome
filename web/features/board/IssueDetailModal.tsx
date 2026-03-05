@@ -340,6 +340,8 @@ export function IssueDetailModal(props: IssueDetailModalProps) {
           selectedIssue={selectedIssue}
           issueKeyFn={issueKeyFn}
           computeQualityScoreFn={computeQualityScoreFn}
+          openQualityConfig={openQualityConfig}
+          qualityConfigSaving={qualityConfigSaving}
           onClose={onClose}
         />
         <div className="modal-body modal-body--scrollable issue-detail-modal-body">
@@ -574,8 +576,6 @@ export function IssueDetailModal(props: IssueDetailModalProps) {
           hasIssueDetailChangesFn={hasIssueDetailChangesFn}
           handleSaveIssue={handleSaveIssue}
           issueSaving={issueSaving}
-          openQualityConfig={openQualityConfig}
-          qualityConfigSaving={qualityConfigSaving}
           setIssueToDelete={setIssueToDelete}
         />
         <IssueQualityScoreConfigModal

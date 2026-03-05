@@ -143,6 +143,30 @@ export function IssueDetailModalComments(props: IssueDetailModalCommentsProps) {
     screenshotTaking,
   } = props;
 
+  const activeEditingComment = React.useMemo(
+    () =>
+      editingCommentId
+        ? issueComments.find((comment) => comment.id === editingCommentId) ?? null
+        : null,
+    [editingCommentId, issueComments]
+  );
+  const editedCommentBody = React.useMemo(
+    () =>
+      (
+        editingCommentBlocks
+          ? serializeEditingBlocksToBody(editingCommentBlocks, selectedIssue)
+          : editingCommentDraft
+      ).trim(),
+    [editingCommentBlocks, editingCommentDraft, selectedIssue]
+  );
+  const hasEditedCommentChanges = React.useMemo(
+    () =>
+      activeEditingComment
+        ? editedCommentBody !== (activeEditingComment.body ?? "").trim()
+        : false,
+    [activeEditingComment, editedCommentBody]
+  );
+
   return (
     <div className="form-group issue-modal-field expenses-field" ref={commentsSectionRef}>
       <label>Comments</label>
@@ -923,26 +947,18 @@ export function IssueDetailModalComments(props: IssueDetailModalCommentsProps) {
                               marginBottom: 8,
                             }}
                           >
-                            <button
-                              type="button"
-                              className="expenses-add-btn issue-comment-save-btn"
-                              onClick={handleSaveComment}
-                              disabled={
-                                updatingCommentId === c.id ||
-                                !(
-                                  editingCommentBlocks
-                                    ? serializeEditingBlocksToBody(
-                                        editingCommentBlocks,
-                                        selectedIssue
-                                      )
-                                    : editingCommentDraft
-                                ).trim()
-                              }
-                            >
-                              {updatingCommentId === c.id
-                                ? "Saving…"
-                                : "Save"}
-                            </button>
+                            {updatingCommentId === c.id || hasEditedCommentChanges ? (
+                              <button
+                                type="button"
+                                className="expenses-add-btn issue-comment-save-btn"
+                                onClick={handleSaveComment}
+                                disabled={updatingCommentId === c.id || !editedCommentBody}
+                              >
+                                {updatingCommentId === c.id
+                                  ? "Saving…"
+                                  : "Save"}
+                              </button>
+                            ) : null}
                             <button
                               type="button"
                               className="btn btn-secondary"

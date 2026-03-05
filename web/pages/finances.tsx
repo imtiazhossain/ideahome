@@ -2017,6 +2017,41 @@ export default function FinancialsPage() {
     }
 
     if (sectionId === "expenses-add-and-list") {
+      const listControls =
+        expenses.length > 0 ? (
+          <div className="expenses-list-controls">
+            <ExpensesDateFilterDropdown
+              mode={dateFilterMode}
+              filterDay={filterDay}
+              filterDayOfMonth={filterDayOfMonth}
+              filterMonth={filterMonth}
+              filterYear={filterYear}
+              rangeStart={rangeStart}
+              rangeEnd={rangeEnd}
+              onModeChange={setDateFilterMode}
+              onFilterDayChange={setFilterDay}
+              onFilterDayOfMonthChange={setFilterDayOfMonth}
+              onFilterMonthChange={setFilterMonth}
+              onFilterYearChange={setFilterYear}
+              onRangeStartChange={setRangeStart}
+              onRangeEndChange={setRangeEnd}
+              open={dateFilterOpen}
+              onOpenChange={setDateFilterOpen}
+            />
+            <div className="expenses-list-search-wrap">
+              <input
+                id="expenses-list-search"
+                type="search"
+                value={expenseSearchQuery}
+                onChange={(e) => setExpenseSearchQuery(e.target.value)}
+                placeholder="Search Expenses"
+                aria-label="Search expenses"
+                className="expenses-input expenses-list-search"
+              />
+            </div>
+          </div>
+        ) : null;
+
       return (
         <CollapsibleSection
           sectionId="expenses-add-and-list"
@@ -2037,41 +2072,6 @@ export default function FinancialsPage() {
           collapsed={isSectionCollapsed("expenses-add-and-list")}
           onToggle={() => toggleSection("expenses-add-and-list")}
           sectionClassName="expenses-add-section expenses-list-section"
-          headerExtra={
-            expenses.length > 0 ? (
-              <div className="expenses-list-controls">
-                <ExpensesDateFilterDropdown
-                  mode={dateFilterMode}
-                  filterDay={filterDay}
-                  filterDayOfMonth={filterDayOfMonth}
-                  filterMonth={filterMonth}
-                  filterYear={filterYear}
-                  rangeStart={rangeStart}
-                  rangeEnd={rangeEnd}
-                  onModeChange={setDateFilterMode}
-                  onFilterDayChange={setFilterDay}
-                  onFilterDayOfMonthChange={setFilterDayOfMonth}
-                  onFilterMonthChange={setFilterMonth}
-                  onFilterYearChange={setFilterYear}
-                  onRangeStartChange={setRangeStart}
-                  onRangeEndChange={setRangeEnd}
-                  open={dateFilterOpen}
-                  onOpenChange={setDateFilterOpen}
-                />
-                <div className="expenses-list-search-wrap">
-                  <input
-                    id="expenses-list-search"
-                    type="search"
-                    value={expenseSearchQuery}
-                    onChange={(e) => setExpenseSearchQuery(e.target.value)}
-                    placeholder="Search Expenses"
-                    aria-label="Search expenses"
-                    className="expenses-input expenses-list-search"
-                  />
-                </div>
-              </div>
-            ) : undefined
-          }
           headerTrailing={dragHandle}
         >
           <ProjectSectionGuard
@@ -2169,6 +2169,7 @@ export default function FinancialsPage() {
               </button>
             </form>
           </ProjectSectionGuard>
+          {listControls}
           <ProjectSectionGuard
             projectsLoaded={projectsLoaded}
             selectedProjectId={selectedProjectId}

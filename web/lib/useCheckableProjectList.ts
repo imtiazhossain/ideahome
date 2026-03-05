@@ -86,7 +86,7 @@ export function useCheckableProjectList<T extends CheckableProjectItem>({
     items,
     setItems as (items: T[]) => void,
     20,
-    projectId || undefined
+    projectId ? `${listType}:${projectId}` : listType
   );
   const {
     newItem,
