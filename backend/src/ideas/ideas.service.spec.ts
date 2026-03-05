@@ -10,6 +10,7 @@ describe("IdeasService", () => {
   const mockPrisma = {
     user: { findUnique: jest.fn() },
     project: { findUnique: jest.fn() },
+    projectMembership: { findUnique: jest.fn() },
     idea: {
       findMany: jest.fn(),
       findUnique: jest.fn(),
@@ -40,6 +41,7 @@ describe("IdeasService", () => {
       id: "p1",
       organizationId: "o1",
     });
+    mockPrisma.projectMembership.findUnique.mockResolvedValue({ id: "pm1" });
     mockPrisma.idea.aggregate.mockResolvedValue({ _max: { order: 0 } });
     mockIdeaPlanService.generatePlan.mockResolvedValue({
       summary: "summary",
@@ -111,7 +113,7 @@ describe("IdeasService", () => {
     it("should update idea", async () => {
       mockPrisma.idea.findUnique.mockResolvedValue({
         id: "i1",
-        project: { organizationId: "o1" },
+        projectId: "p1",
       });
       mockPrisma.idea.update.mockResolvedValue({ id: "i1", name: "Updated" });
 
@@ -124,7 +126,7 @@ describe("IdeasService", () => {
     it("should delete idea", async () => {
       mockPrisma.idea.findUnique.mockResolvedValue({
         id: "i1",
-        project: { organizationId: "o1" },
+        projectId: "p1",
       });
       mockPrisma.idea.delete.mockResolvedValue({ id: "i1" });
 

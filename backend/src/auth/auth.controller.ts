@@ -13,10 +13,14 @@ type OAuthCallbackQuery = { code?: string; state?: string };
 type OAuthProvider = "google" | "github" | "apple";
 
 async function importOpenIdClient(): Promise<typeof import("openid-client")> {
+  // Use require in Jest so moduleNameMapper can provide the test mock.
+  if (process.env.JEST_WORKER_ID) {
+    return require("openid-client") as typeof import("openid-client");
+  }
   // Keep native dynamic import for ESM-only package in CJS output.
-  return (
-    await new Function("m", "return import(m)")("openid-client")
-  ) as typeof import("openid-client");
+  return (await new Function("m", "return import(m)")(
+    "openid-client"
+  )) as typeof import("openid-client");
 }
 
 @Controller("auth")

@@ -1,7 +1,6 @@
 import { Test, TestingModule } from "@nestjs/testing";
 import {
   BadRequestException,
-  ForbiddenException,
   NotFoundException,
 } from "@nestjs/common";
 import { TodosService } from "./todos.service";
@@ -13,6 +12,7 @@ describe("TodosService", () => {
   const mockPrisma = {
     user: { findUnique: jest.fn() },
     project: { findUnique: jest.fn() },
+    projectMembership: { findUnique: jest.fn() },
     todo: {
       findMany: jest.fn(),
       findUnique: jest.fn(),
@@ -31,6 +31,7 @@ describe("TodosService", () => {
       id: "p1",
       organizationId: "o1",
     });
+    mockPrisma.projectMembership.findUnique.mockResolvedValue({ id: "pm1" });
     mockPrisma.todo.aggregate.mockResolvedValue({ _max: { order: 2 } });
 
     const module: TestingModule = await Test.createTestingModule({
@@ -127,7 +128,7 @@ describe("TodosService", () => {
     it("should update todo", async () => {
       mockPrisma.todo.findUnique.mockResolvedValue({
         id: "t1",
-        project: { organizationId: "o1" },
+        projectId: "p1",
       });
       mockPrisma.todo.update.mockResolvedValue({ id: "t1", name: "Updated" });
 
@@ -138,7 +139,7 @@ describe("TodosService", () => {
     it("should throw BadRequestException when updating to blank name", async () => {
       mockPrisma.todo.findUnique.mockResolvedValue({
         id: "t1",
-        project: { organizationId: "o1" },
+        projectId: "p1",
       });
       await expect(
         service.update("t1", "user-1", { name: "  " })
@@ -149,7 +150,7 @@ describe("TodosService", () => {
     it("should throw BadRequestException when update name is not a string", async () => {
       mockPrisma.todo.findUnique.mockResolvedValue({
         id: "t1",
-        project: { organizationId: "o1" },
+        projectId: "p1",
       });
       await expect(
         service.update("t1", "user-1", { name: 123 as unknown as string })
@@ -160,7 +161,7 @@ describe("TodosService", () => {
     it("should throw BadRequestException when done update is not boolean", async () => {
       mockPrisma.todo.findUnique.mockResolvedValue({
         id: "t1",
-        project: { organizationId: "o1" },
+        projectId: "p1",
       });
       await expect(
         service.update("t1", "user-1", {
@@ -173,7 +174,7 @@ describe("TodosService", () => {
     it("should throw BadRequestException when order is invalid", async () => {
       mockPrisma.todo.findUnique.mockResolvedValue({
         id: "t1",
-        project: { organizationId: "o1" },
+        projectId: "p1",
       });
       await expect(
         service.update("t1", "user-1", { order: -1 })
@@ -186,7 +187,7 @@ describe("TodosService", () => {
     it("should delete todo", async () => {
       mockPrisma.todo.findUnique.mockResolvedValue({
         id: "t1",
-        project: { organizationId: "o1" },
+        projectId: "p1",
       });
       mockPrisma.todo.delete.mockResolvedValue({ id: "t1" });
 

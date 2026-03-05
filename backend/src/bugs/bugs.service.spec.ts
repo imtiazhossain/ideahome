@@ -1,5 +1,5 @@
 import { Test, TestingModule } from "@nestjs/testing";
-import { ForbiddenException, NotFoundException } from "@nestjs/common";
+import { NotFoundException } from "@nestjs/common";
 import { BugsService } from "./bugs.service";
 import { PrismaService } from "../prisma.service";
 
@@ -9,6 +9,7 @@ describe("BugsService", () => {
   const mockPrisma = {
     user: { findUnique: jest.fn() },
     project: { findUnique: jest.fn() },
+    projectMembership: { findUnique: jest.fn() },
     bug: {
       findMany: jest.fn(),
       findUnique: jest.fn(),
@@ -27,6 +28,7 @@ describe("BugsService", () => {
       id: "p1",
       organizationId: "o1",
     });
+    mockPrisma.projectMembership.findUnique.mockResolvedValue({ id: "pm1" });
     mockPrisma.bug.aggregate.mockResolvedValue({ _max: { order: 2 } });
 
     const module: TestingModule = await Test.createTestingModule({
@@ -69,14 +71,10 @@ describe("BugsService", () => {
       });
     });
 
-    it("should throw ForbiddenException when user has no org", async () => {
-      mockPrisma.user.findUnique.mockResolvedValue({ organizationId: null });
-
+    it("should throw NotFoundException when user is not in project membership", async () => {
+      mockPrisma.projectMembership.findUnique.mockResolvedValueOnce(null);
       await expect(service.list("p1", "user-1")).rejects.toThrow(
-        ForbiddenException
-      );
-      await expect(service.list("p1", "user-1")).rejects.toThrow(
-        "User has no organization"
+        NotFoundException
       );
     });
 
@@ -128,7 +126,7 @@ describe("BugsService", () => {
     it("should update bug", async () => {
       mockPrisma.bug.findUnique.mockResolvedValue({
         id: "b1",
-        project: { organizationId: "o1" },
+        projectId: "p1",
       });
       mockPrisma.bug.update.mockResolvedValue({
         id: "b1",
@@ -152,7 +150,7 @@ describe("BugsService", () => {
     it("should delete bug", async () => {
       mockPrisma.bug.findUnique.mockResolvedValue({
         id: "b1",
-        project: { organizationId: "o1" },
+        projectId: "p1",
       });
       mockPrisma.bug.delete.mockResolvedValue({ id: "b1" });
 

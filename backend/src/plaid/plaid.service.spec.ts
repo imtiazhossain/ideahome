@@ -16,6 +16,9 @@ describe("PlaidService", () => {
       findUnique: jest.fn(),
       update: jest.fn(),
     },
+    projectMembership: {
+      findUnique: jest.fn(),
+    },
     plaidItem: {
       findMany: jest.fn(),
       findFirst: jest.fn(),
@@ -39,6 +42,9 @@ describe("PlaidService", () => {
       id: "p1",
       organizationId: "o1",
       lastPlaidSyncAt: null,
+    });
+    (mockPrisma.projectMembership.findUnique as jest.Mock).mockResolvedValue({
+      id: "pm1",
     });
   };
 
@@ -308,4 +314,3 @@ describe("PlaidService", () => {
     });
   });
 });
-

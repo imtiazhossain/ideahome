@@ -4875,7 +4875,7 @@ a.automated-tests-chip-text:hover {
 
 .coverage-page-output {
   position: relative;
-  padding: 12px 36px 12px 12px;
+  padding: 12px;
   border-radius: 8px;
   border: 1px solid var(--border);
   background: var(--column-bg);
@@ -4889,12 +4889,57 @@ a.automated-tests-chip-text:hover {
 }
 
 .coverage-page-output-close {
-  position: absolute;
-  top: 8px;
-  right: 8px;
   width: 28px;
   height: 28px;
   border-radius: 6px;
+}
+
+.coverage-page-output-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.coverage-page-output-title {
+  margin: 0;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+}
+
+.coverage-page-output-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.coverage-page-output-toggle {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 4px 8px;
+  background: var(--input-bg);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.coverage-page-output-toggle:hover {
+  border-color: var(--text-muted);
+}
+
+.coverage-page-output--minimized {
+  max-height: none;
+  overflow: hidden;
+}
+
+.coverage-page-output-minimized-note {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-muted);
 }
 
 .coverage-page-output--success {

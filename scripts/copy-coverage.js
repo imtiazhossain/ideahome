@@ -4,8 +4,10 @@ const path = require("path");
 const src = path.join(__dirname, "..", "backend", "src", "coverage", "lcov-report");
 const dest = path.join(__dirname, "..", "web", "public", "coverage-report");
 
-// Remove keyboard-hint paragraph and Filter template from Istanbul HTML
-const BLOCK_TO_REMOVE = /[\s\n]*<p class="quiet">\s*Press[\s\S]*?<\/template>\s*/;
+// Remove only the keyboard-hint paragraph from Istanbul HTML.
+// Keep <template id="filterTemplate">, which sorter.js requires.
+const KEYBOARD_HINT_TO_REMOVE =
+  /[\s\n]*<p class="quiet">\s*Press[\s\S]*?<\/p>\s*/;
 
 function stripCoverageUi(dir) {
   const entries = fs.readdirSync(dir, { withFileTypes: true });
@@ -15,7 +17,7 @@ function stripCoverageUi(dir) {
       stripCoverageUi(full);
     } else if (e.name.endsWith(".html")) {
       let content = fs.readFileSync(full, "utf-8");
-      const next = content.replace(BLOCK_TO_REMOVE, "\n        ");
+      const next = content.replace(KEYBOARD_HINT_TO_REMOVE, "\n        ");
       if (next !== content) {
         fs.writeFileSync(full, next, "utf-8");
       }

@@ -11,6 +11,7 @@ describe("OrganizationsService", () => {
   let service: OrganizationsService;
 
   const mockPrisma = {
+    $transaction: jest.fn(),
     user: {
       findUnique: jest.fn(),
       update: jest.fn(),
@@ -20,14 +21,23 @@ describe("OrganizationsService", () => {
       findUniqueOrThrow: jest.fn(),
       create: jest.fn(),
     },
+    organizationMembership: {
+      findFirst: jest.fn(),
+      upsert: jest.fn(),
+    },
   };
 
   const mockAuthService = {
     ensureUserOrganization: jest.fn(),
+    ensureOrganizationMembership: jest.fn().mockResolvedValue(undefined),
   };
 
   beforeEach(async () => {
     jest.clearAllMocks();
+    mockPrisma.$transaction.mockImplementation(
+      (ops: Array<Promise<unknown>>) => Promise.all(ops)
+    );
+    mockPrisma.organizationMembership.findFirst.mockResolvedValue(null);
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         OrganizationsService,
@@ -82,10 +92,8 @@ describe("OrganizationsService", () => {
       expect(mockPrisma.organization.create).toHaveBeenCalledWith({
         data: { name: input.name },
       });
-      expect(mockPrisma.user.update).toHaveBeenCalledWith({
-        where: { id: "user-1" },
-        data: { organizationId: "org-1" },
-      });
+      expect(mockPrisma.$transaction).toHaveBeenCalled();
+      expect(mockPrisma.organizationMembership.upsert).toHaveBeenCalled();
     });
 
     it("should throw BadRequestException when name is blank", async () => {
@@ -131,6 +139,9 @@ describe("OrganizationsService", () => {
       expect(mockAuthService.ensureUserOrganization).toHaveBeenCalledWith(
         "user-1"
       );
+      expect(
+        mockAuthService.ensureOrganizationMembership
+      ).toHaveBeenCalledWith("org-1", "user-1", "MEMBER");
     });
   });
 });

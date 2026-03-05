@@ -16,6 +16,9 @@ describe("ExpensesService", () => {
       findUnique: jest.fn(),
       updateMany: jest.fn(),
     },
+    projectMembership: {
+      findUnique: jest.fn(),
+    },
     expense: {
       findMany: jest.fn(),
       findUnique: jest.fn(),
@@ -36,6 +39,7 @@ describe("ExpensesService", () => {
       id: "p1",
       organizationId: "o1",
     });
+    mockPrisma.projectMembership.findUnique.mockResolvedValue({ id: "pm1" });
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -61,10 +65,10 @@ describe("ExpensesService", () => {
     });
 
     it("should throw ForbiddenException when user has no org", async () => {
-      mockPrisma.user.findUnique.mockResolvedValue({ organizationId: null });
+      mockPrisma.projectMembership.findUnique.mockResolvedValueOnce(null);
 
       await expect(service.list("p1", "user-1")).rejects.toThrow(
-        ForbiddenException
+        NotFoundException
       );
     });
 
@@ -224,7 +228,7 @@ describe("ExpensesService", () => {
     it("should update expense", async () => {
       mockPrisma.expense.findUnique.mockResolvedValue({
         id: "e1",
-        project: { organizationId: "o1" },
+        project: { id: "p1", memberships: [{ id: "pm1" }] },
       });
       mockPrisma.expense.update.mockResolvedValue({
         id: "e1",
@@ -238,7 +242,7 @@ describe("ExpensesService", () => {
     it("should throw BadRequestException for negative amount", async () => {
       mockPrisma.expense.findUnique.mockResolvedValue({
         id: "e1",
-        project: { organizationId: "o1" },
+        project: { id: "p1", memberships: [{ id: "pm1" }] },
       });
       await expect(
         service.update("e1", "user-1", { amount: -1 })
@@ -249,7 +253,7 @@ describe("ExpensesService", () => {
     it("should throw BadRequestException for invalid date", async () => {
       mockPrisma.expense.findUnique.mockResolvedValue({
         id: "e1",
-        project: { organizationId: "o1" },
+        project: { id: "p1", memberships: [{ id: "pm1" }] },
       });
       await expect(
         service.update("e1", "user-1", { date: "2025-02-30" })
@@ -260,7 +264,7 @@ describe("ExpensesService", () => {
     it("should throw BadRequestException for non-string date update", async () => {
       mockPrisma.expense.findUnique.mockResolvedValue({
         id: "e1",
-        project: { organizationId: "o1" },
+        project: { id: "p1", memberships: [{ id: "pm1" }] },
       });
       await expect(
         service.update("e1", "user-1", { date: 123 as unknown as string })
@@ -271,7 +275,7 @@ describe("ExpensesService", () => {
     it("should throw BadRequestException for blank description update", async () => {
       mockPrisma.expense.findUnique.mockResolvedValue({
         id: "e1",
-        project: { organizationId: "o1" },
+        project: { id: "p1", memberships: [{ id: "pm1" }] },
       });
       await expect(
         service.update("e1", "user-1", { description: "   " })
@@ -282,7 +286,7 @@ describe("ExpensesService", () => {
     it("should throw BadRequestException for non-string description update", async () => {
       mockPrisma.expense.findUnique.mockResolvedValue({
         id: "e1",
-        project: { organizationId: "o1" },
+        project: { id: "p1", memberships: [{ id: "pm1" }] },
       });
       await expect(
         service.update("e1", "user-1", {
@@ -295,7 +299,7 @@ describe("ExpensesService", () => {
     it("should throw BadRequestException for non-string category update", async () => {
       mockPrisma.expense.findUnique.mockResolvedValue({
         id: "e1",
-        project: { organizationId: "o1" },
+        project: { id: "p1", memberships: [{ id: "pm1" }] },
       });
       await expect(
         service.update("e1", "user-1", { category: 123 as unknown as string })
@@ -308,7 +312,7 @@ describe("ExpensesService", () => {
     it("should delete expense", async () => {
       mockPrisma.expense.findUnique.mockResolvedValue({
         id: "e1",
-        project: { organizationId: "o1" },
+        project: { id: "p1", memberships: [{ id: "pm1" }] },
       });
       mockPrisma.expense.delete.mockResolvedValue({ id: "e1" });
 

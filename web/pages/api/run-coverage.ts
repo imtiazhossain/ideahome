@@ -47,6 +47,8 @@ export default async function handler(
       proc.stderr?.on("data", (d) => (stderr += d.toString()));
       proc.on("close", (code) => resolve({ stdout, stderr, code: code ?? 1 }));
     });
+  const wait = (ms: number) =>
+    new Promise<void>((resolve) => setTimeout(resolve, ms));
 
   const backendDir = path.join(root, "backend");
   const lines: string[] = [];
@@ -66,7 +68,17 @@ export default async function handler(
       "coverage",
       "lcov-report"
     );
-    const reportExists = fs.existsSync(lcovReportDir);
+    let reportExists = fs.existsSync(lcovReportDir);
+    if (!reportExists) {
+      lines.push("Waiting for coverage report files...");
+      for (let i = 0; i < 20; i += 1) {
+        await wait(250);
+        if (fs.existsSync(lcovReportDir)) {
+          reportExists = true;
+          break;
+        }
+      }
+    }
 
     if (reportExists) {
       lines.push("\nRunning: pnpm coverage:copy");

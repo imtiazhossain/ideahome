@@ -51,6 +51,9 @@ describe("IssuesService", () => {
     project: {
       findUnique: jest.fn(),
     },
+    projectMembership: {
+      findUnique: jest.fn(),
+    },
     issue: {
       findMany: jest.fn(),
       findUnique: jest.fn(),
@@ -90,6 +93,7 @@ describe("IssuesService", () => {
       contentType: "application/octet-stream",
     });
     mockPrisma.user.findUnique.mockResolvedValue({ organizationId: "o1" });
+    mockPrisma.projectMembership.findUnique.mockResolvedValue({ id: "pm1" });
     const fs = require("fs");
     fs.existsSync.mockReturnValue(false);
     const module: TestingModule = await Test.createTestingModule({
@@ -165,7 +169,7 @@ describe("IssuesService", () => {
       const result = await service.list(undefined, undefined, "user-1");
       expect(result).toEqual(expected);
       expect(mockPrisma.issue.findMany).toHaveBeenCalledWith({
-        where: { project: { organizationId: "o1" } },
+        where: { project: { memberships: { some: { userId: "user-1" } } } },
         include: ISSUE_INCLUDE,
         orderBy: { createdAt: "desc" },
       });
@@ -238,7 +242,7 @@ describe("IssuesService", () => {
       const result = await service.create(input);
       expect(result).toEqual(expected);
       expect(mockPrisma.issue.create).toHaveBeenCalledWith({
-        data: { ...input, key: "P1-1" },
+        data: expect.objectContaining({ ...input, key: "P1-1" }),
         include: ISSUE_INCLUDE,
       });
     });
@@ -284,7 +288,7 @@ describe("IssuesService", () => {
       const result = await service.create(input);
       expect(result).toEqual(expected);
       expect(mockPrisma.issue.create).toHaveBeenCalledWith({
-        data: { ...input, key: "P1-1" },
+        data: expect.objectContaining({ ...input, key: "P1-1" }),
         include: ISSUE_INCLUDE,
       });
     });
@@ -296,8 +300,9 @@ describe("IssuesService", () => {
         organizationId: "o1",
       });
       mockPrisma.user.findUnique.mockResolvedValueOnce({
-        organizationId: "o2",
+        organizationId: "o1",
       });
+      mockPrisma.projectMembership.findUnique.mockResolvedValueOnce(null);
 
       await expect(
         service.create({
@@ -454,7 +459,7 @@ describe("IssuesService", () => {
       expect(result).toEqual(expected);
       expect(mockPrisma.issue.update).toHaveBeenCalledWith({
         where: { id: "1" },
-        data,
+        data: expect.objectContaining(data),
         include: ISSUE_INCLUDE,
       });
     });
@@ -470,7 +475,7 @@ describe("IssuesService", () => {
       expect(result).toEqual(expected);
       expect(mockPrisma.issue.update).toHaveBeenCalledWith({
         where: { id: "1" },
-        data: { automatedTest: tests },
+        data: expect.objectContaining({ automatedTest: tests }),
         include: ISSUE_INCLUDE,
       });
     });
@@ -483,7 +488,7 @@ describe("IssuesService", () => {
       await service.update("1", data);
       expect(mockPrisma.issue.update).toHaveBeenCalledWith({
         where: { id: "1" },
-        data: { title: "OK" },
+        data: expect.objectContaining({ title: "OK" }),
         include: ISSUE_INCLUDE,
       });
     });
@@ -496,7 +501,7 @@ describe("IssuesService", () => {
       await service.update("1", data);
       expect(mockPrisma.issue.update).toHaveBeenCalledWith({
         where: { id: "1" },
-        data: { title: "OK" },
+        data: expect.objectContaining({ title: "OK" }),
         include: ISSUE_INCLUDE,
       });
     });
@@ -513,8 +518,9 @@ describe("IssuesService", () => {
       mockPrisma.issue.findUnique.mockResolvedValue({ projectId: "p1" });
       mockPrisma.project.findUnique.mockResolvedValue({ organizationId: "o1" });
       mockPrisma.user.findUnique.mockResolvedValueOnce({
-        organizationId: "o2",
+        organizationId: "o1",
       });
+      mockPrisma.projectMembership.findUnique.mockResolvedValueOnce(null);
 
       await expect(
         service.update("1", { assigneeId: "u-other" })
@@ -553,7 +559,7 @@ describe("IssuesService", () => {
       await service.update("1", { title: "  Updated  " });
       expect(mockPrisma.issue.update).toHaveBeenCalledWith({
         where: { id: "1" },
-        data: { title: "Updated" },
+        data: expect.objectContaining({ title: "Updated" }),
         include: ISSUE_INCLUDE,
       });
     });
@@ -581,7 +587,7 @@ describe("IssuesService", () => {
       await service.update("1", { assigneeId: "   " });
       expect(mockPrisma.issue.update).toHaveBeenCalledWith({
         where: { id: "1" },
-        data: { assigneeId: null },
+        data: expect.objectContaining({ assigneeId: null }),
         include: ISSUE_INCLUDE,
       });
     });
@@ -644,14 +650,14 @@ describe("IssuesService", () => {
       await service.deleteMany("project-1", "user-1");
       expect(mockPrisma.issue.findMany).toHaveBeenCalledWith({
         where: {
-          project: { organizationId: "o1" },
+          project: { memberships: { some: { userId: "user-1" } } },
           projectId: "project-1",
         },
         include: { recordings: true, screenshots: true, files: true },
       });
       expect(mockPrisma.issue.deleteMany).toHaveBeenCalledWith({
         where: {
-          project: { organizationId: "o1" },
+          project: { memberships: { some: { userId: "user-1" } } },
           projectId: "project-1",
         },
       });
@@ -664,11 +670,11 @@ describe("IssuesService", () => {
 
       await service.deleteMany(undefined, "user-1");
       expect(mockPrisma.issue.findMany).toHaveBeenCalledWith({
-        where: { project: { organizationId: "o1" } },
+        where: { project: { memberships: { some: { userId: "user-1" } } } },
         include: { recordings: true, screenshots: true, files: true },
       });
       expect(mockPrisma.issue.deleteMany).toHaveBeenCalledWith({
-        where: { project: { organizationId: "o1" } },
+        where: { project: { memberships: { some: { userId: "user-1" } } } },
       });
     });
 
@@ -785,11 +791,18 @@ describe("IssuesService", () => {
 
   describe("addRecording", () => {
     it("should add recording with default filename", async () => {
-      mockPrisma.issue.findUnique.mockResolvedValue({ id: "i1" });
+      mockPrisma.issue.findUnique.mockResolvedValue({
+        id: "i1",
+        project: { qualityScoreConfig: null },
+        _count: { comments: 0, screenshots: 0, recordings: 0, files: 0 },
+      });
       mockPrisma.issueRecording.create.mockResolvedValue({});
-      mockPrisma.issue.findUnique
-        .mockResolvedValueOnce({ id: "i1" })
-        .mockResolvedValueOnce({ id: "i1", title: "Issue" });
+      mockPrisma.issue.findUnique.mockResolvedValue({
+        id: "i1",
+        title: "Issue",
+        project: { qualityScoreConfig: null },
+        _count: { comments: 0, screenshots: 0, recordings: 0, files: 0 },
+      });
 
       const result = await service.addRecording(
         "i1",
@@ -798,7 +811,7 @@ describe("IssuesService", () => {
         "screen"
       );
       expect(mockPrisma.issueRecording.create).toHaveBeenCalled();
-      expect(result).toEqual({ id: "i1", title: "Issue" });
+      expect(result).toEqual(expect.objectContaining({ id: "i1", title: "Issue" }));
     });
 
     it("should throw when issue not found", async () => {
@@ -809,11 +822,18 @@ describe("IssuesService", () => {
     });
 
     it("should use custom filename and displayName when fileName has valid extension", async () => {
-      mockPrisma.issue.findUnique.mockResolvedValue({ id: "i1" });
+      mockPrisma.issue.findUnique.mockResolvedValue({
+        id: "i1",
+        project: { qualityScoreConfig: null },
+        _count: { comments: 0, screenshots: 0, recordings: 0, files: 0 },
+      });
       mockPrisma.issueRecording.create.mockResolvedValue({});
-      mockPrisma.issue.findUnique
-        .mockResolvedValueOnce({ id: "i1" })
-        .mockResolvedValueOnce({ id: "i1", title: "Issue" });
+      mockPrisma.issue.findUnique.mockResolvedValue({
+        id: "i1",
+        title: "Issue",
+        project: { qualityScoreConfig: null },
+        _count: { comments: 0, screenshots: 0, recordings: 0, files: 0 },
+      });
 
       await service.addRecording(
         "i1",
@@ -872,10 +892,14 @@ describe("IssuesService", () => {
         issueId: "i1",
       });
       mockPrisma.issueRecording.update.mockResolvedValue({});
-      mockPrisma.issue.findUnique.mockResolvedValue({ id: "i1" });
+      mockPrisma.issue.findUnique.mockResolvedValue({
+        id: "i1",
+        project: { qualityScoreConfig: null },
+        _count: { comments: 0, screenshots: 0, recordings: 0, files: 0 },
+      });
 
       const result = await service.updateRecording("i1", "r1", { name: "New" });
-      expect(result).toEqual({ id: "i1" });
+      expect(result).toEqual(expect.objectContaining({ id: "i1" }));
       expect(mockPrisma.issueRecording.update).toHaveBeenCalledWith({
         where: { id: "r1" },
         data: { name: "New" },
@@ -887,10 +911,14 @@ describe("IssuesService", () => {
         id: "r1",
         issueId: "i1",
       });
-      mockPrisma.issue.findUnique.mockResolvedValue({ id: "i1" });
+      mockPrisma.issue.findUnique.mockResolvedValue({
+        id: "i1",
+        project: { qualityScoreConfig: null },
+        _count: { comments: 0, screenshots: 0, recordings: 0, files: 0 },
+      });
 
       const result = await service.updateRecording("i1", "r1", {});
-      expect(result).toEqual({ id: "i1" });
+      expect(result).toEqual(expect.objectContaining({ id: "i1" }));
       expect(mockPrisma.issueRecording.update).not.toHaveBeenCalled();
     });
 
@@ -907,10 +935,14 @@ describe("IssuesService", () => {
         issueId: "i1",
       });
       mockPrisma.issueRecording.update.mockResolvedValue({});
-      mockPrisma.issue.findUnique.mockResolvedValue({ id: "i1" });
+      mockPrisma.issue.findUnique.mockResolvedValue({
+        id: "i1",
+        project: { qualityScoreConfig: null },
+        _count: { comments: 0, screenshots: 0, recordings: 0, files: 0 },
+      });
 
       const result = await service.updateRecording("i1", "r1", { name: "" });
-      expect(result).toEqual({ id: "i1" });
+      expect(result).toEqual(expect.objectContaining({ id: "i1" }));
       expect(mockPrisma.issueRecording.update).toHaveBeenCalledWith({
         where: { id: "r1" },
         data: { name: null },
@@ -923,7 +955,11 @@ describe("IssuesService", () => {
         issueId: "i1",
       });
       mockPrisma.issueRecording.update.mockResolvedValue({});
-      mockPrisma.issue.findUnique.mockResolvedValue({ id: "i1" });
+      mockPrisma.issue.findUnique.mockResolvedValue({
+        id: "i1",
+        project: { qualityScoreConfig: null },
+        _count: { comments: 0, screenshots: 0, recordings: 0, files: 0 },
+      });
 
       await service.updateRecording("i1", "r1", { name: "  New  " });
       expect(mockPrisma.issueRecording.update).toHaveBeenCalledWith({
@@ -938,13 +974,17 @@ describe("IssuesService", () => {
         issueId: "i1",
       });
       mockPrisma.issueRecording.update.mockResolvedValue({});
-      mockPrisma.issue.findUnique.mockResolvedValue({ id: "i1" });
+      mockPrisma.issue.findUnique.mockResolvedValue({
+        id: "i1",
+        project: { qualityScoreConfig: null },
+        _count: { comments: 0, screenshots: 0, recordings: 0, files: 0 },
+      });
 
       const result = await service.updateRecording("i1", "r1", {
         mediaType: "audio",
         recordingType: "camera",
       });
-      expect(result).toEqual({ id: "i1" });
+      expect(result).toEqual(expect.objectContaining({ id: "i1" }));
       expect(mockPrisma.issueRecording.update).toHaveBeenCalledWith({
         where: { id: "r1" },
         data: { mediaType: "audio", recordingType: "camera" },
@@ -992,10 +1032,14 @@ describe("IssuesService", () => {
         videoUrl: "uploads/recordings/x.webm",
       });
       mockPrisma.issueRecording.delete.mockResolvedValue({});
-      mockPrisma.issue.findUnique.mockResolvedValue({ id: "i1" });
+      mockPrisma.issue.findUnique.mockResolvedValue({
+        id: "i1",
+        project: { qualityScoreConfig: null },
+        _count: { comments: 0, screenshots: 0, recordings: 0, files: 0 },
+      });
 
       const result = await service.removeRecording("i1", "r1");
-      expect(result).toEqual({ id: "i1" });
+      expect(result).toEqual(expect.objectContaining({ id: "i1" }));
       expect(mockStorageService.delete).toHaveBeenCalledWith(
         "uploads/recordings/x.webm"
       );
@@ -1014,15 +1058,21 @@ describe("IssuesService", () => {
 
   describe("addScreenshot", () => {
     it("should add screenshot and return issue", async () => {
-      mockPrisma.issue.findUnique.mockResolvedValue({ id: "i1" });
+      mockPrisma.issue.findUnique.mockResolvedValue({
+        id: "i1",
+        project: { qualityScoreConfig: null },
+        _count: { comments: 0, screenshots: 0, recordings: 0, files: 0 },
+      });
       mockPrisma.issueScreenshot.create.mockResolvedValue({});
-      mockPrisma.issue.findUnique
-        .mockResolvedValueOnce({ id: "i1" })
-        .mockResolvedValueOnce({ id: "i1" });
+      mockPrisma.issue.findUnique.mockResolvedValue({
+        id: "i1",
+        project: { qualityScoreConfig: null },
+        _count: { comments: 0, screenshots: 0, recordings: 0, files: 0 },
+      });
 
       const result = await service.addScreenshot("i1", "iVBORw0KGgo=");
       expect(mockPrisma.issueScreenshot.create).toHaveBeenCalled();
-      expect(result).toEqual({ id: "i1" });
+      expect(result).toEqual(expect.objectContaining({ id: "i1" }));
     });
 
     it("should throw when issue not found", async () => {
@@ -1056,14 +1106,18 @@ describe("IssuesService", () => {
         issueId: "i1",
       });
       mockPrisma.issueScreenshot.update.mockResolvedValue({});
-      mockPrisma.issue.findUnique.mockResolvedValue({ id: "i1" });
+      mockPrisma.issue.findUnique.mockResolvedValue({
+        id: "i1",
+        project: { qualityScoreConfig: null },
+        _count: { comments: 0, screenshots: 0, recordings: 0, files: 0 },
+      });
 
       const result = await service.updateScreenshot("i1", "s1", "New name");
       expect(mockPrisma.issueScreenshot.update).toHaveBeenCalledWith({
         where: { id: "s1" },
         data: { name: "New name" },
       });
-      expect(result).toEqual({ id: "i1" });
+      expect(result).toEqual(expect.objectContaining({ id: "i1" }));
     });
 
     it("should throw when screenshot not found", async () => {
@@ -1103,10 +1157,14 @@ describe("IssuesService", () => {
       });
       require("fs").existsSync.mockReturnValue(true);
       mockPrisma.issueScreenshot.delete.mockResolvedValue({});
-      mockPrisma.issue.findUnique.mockResolvedValue({ id: "i1" });
+      mockPrisma.issue.findUnique.mockResolvedValue({
+        id: "i1",
+        project: { qualityScoreConfig: null },
+        _count: { comments: 0, screenshots: 0, recordings: 0, files: 0 },
+      });
 
       const result = await service.removeScreenshot("i1", "s1");
-      expect(result).toEqual({ id: "i1" });
+      expect(result).toEqual(expect.objectContaining({ id: "i1" }));
       expect(mockPrisma.issueScreenshot.delete).toHaveBeenCalledWith({
         where: { id: "s1" },
       });
@@ -1122,15 +1180,21 @@ describe("IssuesService", () => {
 
   describe("addFile", () => {
     it("should add file and return issue", async () => {
-      mockPrisma.issue.findUnique.mockResolvedValue({ id: "i1" });
+      mockPrisma.issue.findUnique.mockResolvedValue({
+        id: "i1",
+        project: { qualityScoreConfig: null },
+        _count: { comments: 0, screenshots: 0, recordings: 0, files: 0 },
+      });
       mockPrisma.issueFile.create.mockResolvedValue({});
-      mockPrisma.issue.findUnique
-        .mockResolvedValueOnce({ id: "i1" })
-        .mockResolvedValueOnce({ id: "i1" });
+      mockPrisma.issue.findUnique.mockResolvedValue({
+        id: "i1",
+        project: { qualityScoreConfig: null },
+        _count: { comments: 0, screenshots: 0, recordings: 0, files: 0 },
+      });
 
       const result = await service.addFile("i1", "ZGF0YQ==", "doc.pdf");
       expect(mockPrisma.issueFile.create).toHaveBeenCalled();
-      expect(result).toEqual({ id: "i1" });
+      expect(result).toEqual(expect.objectContaining({ id: "i1" }));
     });
 
     it("should throw when issue not found", async () => {
@@ -1191,7 +1255,11 @@ describe("IssuesService", () => {
         issueId: "i1",
       });
       mockPrisma.issueFile.update.mockResolvedValue({});
-      mockPrisma.issue.findUnique.mockResolvedValue({ id: "i1" });
+      mockPrisma.issue.findUnique.mockResolvedValue({
+        id: "i1",
+        project: { qualityScoreConfig: null },
+        _count: { comments: 0, screenshots: 0, recordings: 0, files: 0 },
+      });
 
       const result = await service.updateFile("i1", "f1", {
         fileName: "new.pdf",
@@ -1200,7 +1268,7 @@ describe("IssuesService", () => {
         where: { id: "f1" },
         data: { fileName: "new.pdf" },
       });
-      expect(result).toEqual({ id: "i1" });
+      expect(result).toEqual(expect.objectContaining({ id: "i1" }));
     });
 
     it("should return issue without update when fileName empty", async () => {
@@ -1208,10 +1276,14 @@ describe("IssuesService", () => {
         id: "f1",
         issueId: "i1",
       });
-      mockPrisma.issue.findUnique.mockResolvedValue({ id: "i1" });
+      mockPrisma.issue.findUnique.mockResolvedValue({
+        id: "i1",
+        project: { qualityScoreConfig: null },
+        _count: { comments: 0, screenshots: 0, recordings: 0, files: 0 },
+      });
 
       const result = await service.updateFile("i1", "f1", { fileName: "   " });
-      expect(result).toEqual({ id: "i1" });
+      expect(result).toEqual(expect.objectContaining({ id: "i1" }));
       expect(mockPrisma.issueFile.update).not.toHaveBeenCalled();
     });
 
@@ -1242,10 +1314,14 @@ describe("IssuesService", () => {
       });
       require("fs").existsSync.mockReturnValue(true);
       mockPrisma.issueFile.delete.mockResolvedValue({});
-      mockPrisma.issue.findUnique.mockResolvedValue({ id: "i1" });
+      mockPrisma.issue.findUnique.mockResolvedValue({
+        id: "i1",
+        project: { qualityScoreConfig: null },
+        _count: { comments: 0, screenshots: 0, recordings: 0, files: 0 },
+      });
 
       const result = await service.removeFile("i1", "f1");
-      expect(result).toEqual({ id: "i1" });
+      expect(result).toEqual(expect.objectContaining({ id: "i1" }));
       expect(mockPrisma.issueFile.delete).toHaveBeenCalledWith({
         where: { id: "f1" },
       });

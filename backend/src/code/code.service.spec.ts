@@ -12,6 +12,7 @@ describe("CodeService", () => {
   const mockPrisma = {
     user: { findUnique: jest.fn() },
     project: { findUnique: jest.fn() },
+    projectMembership: { findUnique: jest.fn() },
     codeRepository: { findMany: jest.fn(), findFirst: jest.fn(), create: jest.fn() },
     codeAnalysisRun: { findFirst: jest.fn(), create: jest.fn() },
   };
@@ -22,6 +23,7 @@ describe("CodeService", () => {
 
   beforeEach(async () => {
     jest.clearAllMocks();
+    mockPrisma.projectMembership.findUnique.mockResolvedValue({ id: "pm1" });
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         CodeService,
@@ -57,19 +59,13 @@ describe("CodeService", () => {
     });
 
     it("throws when user not found", async () => {
-      mockPrisma.user.findUnique.mockResolvedValue(null);
+      mockPrisma.projectMembership.findUnique.mockResolvedValue(null);
       await expect(
         service.listRepositoriesForProject("proj1", "user1")
       ).rejects.toThrow(NotFoundException);
     });
 
     it("calls ensureUserOrganization when user has no organizationId", async () => {
-      mockPrisma.user.findUnique.mockResolvedValue({
-        organizationId: null,
-      });
-      mockAuthService.ensureUserOrganization.mockResolvedValue({
-        organizationId: "org1",
-      });
       mockPrisma.project.findUnique.mockResolvedValue({
         id: "proj1",
         organizationId: "org1",
@@ -77,21 +73,17 @@ describe("CodeService", () => {
       mockPrisma.codeRepository.findMany.mockResolvedValue([]);
 
       await service.listRepositoriesForProject("proj1", "user1");
-      expect(mockAuthService.ensureUserOrganization).toHaveBeenCalledWith("user1");
+      expect(mockAuthService.ensureUserOrganization).not.toHaveBeenCalled();
     });
 
     it("throws when ensureUserOrganization returns no organizationId", async () => {
-      mockPrisma.user.findUnique.mockResolvedValue({ organizationId: null });
-      mockAuthService.ensureUserOrganization.mockResolvedValue({
-        organizationId: null,
-      });
+      mockPrisma.projectMembership.findUnique.mockResolvedValue(null);
       await expect(
         service.listRepositoriesForProject("proj1", "user1")
       ).rejects.toThrow(NotFoundException);
     });
 
     it("throws when project not found or wrong org", async () => {
-      mockPrisma.user.findUnique.mockResolvedValue({ organizationId: "org1" });
       mockPrisma.project.findUnique.mockResolvedValue(null);
       await expect(
         service.listRepositoriesForProject("proj1", "user1")
@@ -101,7 +93,6 @@ describe("CodeService", () => {
 
   describe("createGithubRepositoryForProject", () => {
     beforeEach(() => {
-      mockPrisma.user.findUnique.mockResolvedValue({ organizationId: "org1" });
       mockPrisma.project.findUnique.mockResolvedValue({
         id: "proj1",
         organizationId: "org1",
@@ -182,7 +173,6 @@ describe("CodeService", () => {
 
   describe("getLatestAnalysisRun", () => {
     it("returns latest run when repo exists", async () => {
-      mockPrisma.user.findUnique.mockResolvedValue({ organizationId: "org1" });
       mockPrisma.project.findUnique.mockResolvedValue({
         id: "proj1",
         organizationId: "org1",
@@ -204,7 +194,6 @@ describe("CodeService", () => {
     });
 
     it("throws when code repository not found", async () => {
-      mockPrisma.user.findUnique.mockResolvedValue({ organizationId: "org1" });
       mockPrisma.project.findUnique.mockResolvedValue({
         id: "proj1",
         organizationId: "org1",
@@ -218,7 +207,6 @@ describe("CodeService", () => {
 
   describe("saveAnalysisRun", () => {
     it("creates analysis run when repo exists", async () => {
-      mockPrisma.user.findUnique.mockResolvedValue({ organizationId: "org1" });
       mockPrisma.project.findUnique.mockResolvedValue({
         id: "proj1",
         organizationId: "org1",
@@ -239,7 +227,6 @@ describe("CodeService", () => {
     });
 
     it("throws when code repository not found", async () => {
-      mockPrisma.user.findUnique.mockResolvedValue({ organizationId: "org1" });
       mockPrisma.project.findUnique.mockResolvedValue({
         id: "proj1",
         organizationId: "org1",

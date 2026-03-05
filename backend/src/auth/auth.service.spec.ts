@@ -5,6 +5,7 @@ import { PrismaService } from "../prisma.service";
 describe("AuthService", () => {
   let service: AuthService;
   const mockPrisma = {
+    $transaction: jest.fn(),
     account: {
       findUnique: jest.fn(),
       create: jest.fn(),
@@ -20,6 +21,17 @@ describe("AuthService", () => {
         .fn()
         .mockResolvedValue({ id: "org-1", name: "My Workspace" }),
     },
+    organizationMembership: {
+      upsert: jest.fn(),
+      create: jest.fn(),
+    },
+    projectInvite: {
+      findMany: jest.fn(),
+      update: jest.fn(),
+    },
+    projectMembership: {
+      upsert: jest.fn(),
+    },
   };
 
   const origEnv = process.env;
@@ -27,6 +39,10 @@ describe("AuthService", () => {
   beforeEach(async () => {
     jest.clearAllMocks();
     process.env = { ...origEnv };
+    mockPrisma.$transaction.mockImplementation(
+      (ops: Array<Promise<unknown>>) => Promise.all(ops)
+    );
+    mockPrisma.projectInvite.findMany.mockResolvedValue([]);
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         AuthService,

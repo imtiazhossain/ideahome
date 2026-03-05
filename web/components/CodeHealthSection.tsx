@@ -8,6 +8,7 @@ import { CloseButton } from "./CloseButton";
 export function CodeHealthSection() {
   const [running, setRunning] = useState(false);
   const [output, setOutput] = useState<string | null>(null);
+  const [outputMinimized, setOutputMinimized] = useState(false);
   const [success, setSuccess] = useState<boolean | null>(null);
   const [reportCopied, setReportCopied] = useState(false);
   const [reportUrl, setReportUrl] = useState<string | null>(null);
@@ -15,6 +16,7 @@ export function CodeHealthSection() {
   async function runCoverage() {
     setRunning(true);
     setOutput(null);
+    setOutputMinimized(false);
     setSuccess(null);
     setReportCopied(false);
     setReportUrl(null);
@@ -54,34 +56,58 @@ export function CodeHealthSection() {
       </div>
       {output !== null && (
         <div
-          className={`coverage-page-output ${success === true ? "coverage-page-output--success" : "coverage-page-output--error"}`}
+          className={`coverage-page-output ${success === true ? "coverage-page-output--success" : "coverage-page-output--error"}${outputMinimized ? " coverage-page-output--minimized" : ""}`}
         >
-          <CloseButton
-            className="coverage-page-output-close"
-            size="sm"
-            onClick={() => setOutput(null)}
-          />
-          <pre className="coverage-page-output-pre">{output}</pre>
+          <div className="coverage-page-output-header">
+            <p className="coverage-page-output-title">Coverage output</p>
+            <div className="coverage-page-output-actions">
+              <button
+                type="button"
+                className="coverage-page-output-toggle"
+                onClick={() => setOutputMinimized((prev) => !prev)}
+                aria-expanded={!outputMinimized}
+              >
+                {outputMinimized ? "Expand" : "Minimize"}
+              </button>
+              <CloseButton
+                className="coverage-page-output-close"
+                size="sm"
+                onClick={() => setOutput(null)}
+              />
+            </div>
+          </div>
+          {outputMinimized ? (
+            <p className="coverage-page-output-minimized-note">Output hidden.</p>
+          ) : (
+            <pre className="coverage-page-output-pre">{output}</pre>
+          )}
         </div>
       )}
-      <div className="coverage-page-frame-wrap">
-        {reportUrl === null && output === null && (
-          <div className="coverage-page-frame-placeholder" aria-live="polite">
-            Run coverage above to see the report chart.
-          </div>
-        )}
-        {output !== null && success === false && !reportCopied && (
-          <div className="coverage-page-frame-placeholder" aria-live="polite">
-            No coverage report — run failed. Fix errors above and run again.
-          </div>
-        )}
-        <iframe
-          key={reportUrl ?? "blank"}
-          src={reportUrl ?? "about:blank"}
-          title="Code coverage report"
-          className="coverage-page-frame"
-        />
-      </div>
+      {running && (
+        <div className="coverage-page-frame-placeholder" aria-live="polite">
+          Running coverage...
+        </div>
+      )}
+      {!running && reportUrl === null && output === null && (
+        <div className="coverage-page-frame-placeholder" aria-live="polite">
+          Run coverage above to see the report chart.
+        </div>
+      )}
+      {output !== null && success === false && !reportCopied && (
+        <div className="coverage-page-frame-placeholder" aria-live="polite">
+          No coverage report — run failed. Fix errors above and run again.
+        </div>
+      )}
+      {reportUrl !== null && (
+        <div className="coverage-page-frame-wrap">
+          <iframe
+            key={reportUrl}
+            src={reportUrl}
+            title="Code coverage report"
+            className="coverage-page-frame"
+          />
+        </div>
+      )}
     </div>
   );
 }

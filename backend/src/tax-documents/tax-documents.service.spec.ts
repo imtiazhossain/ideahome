@@ -16,6 +16,9 @@ describe("TaxDocumentsService", () => {
         organizationId: "org-1",
       }),
     },
+    projectMembership: {
+      findUnique: jest.fn().mockResolvedValue({ id: "pm1" }),
+    },
     taxDocument: {
       findMany: jest.fn(),
       findUnique: jest.fn(),
@@ -97,7 +100,7 @@ describe("TaxDocumentsService", () => {
   it("updates notes/taxYear", async () => {
     mockPrisma.taxDocument.findUnique.mockResolvedValue({
       id: "d1",
-      project: { organizationId: "org-1" },
+      projectId: "p1",
     });
     mockPrisma.taxDocument.update.mockResolvedValue({ id: "d1", notes: "ok" });
     const res = await service.update("d1", "u1", {
@@ -115,7 +118,7 @@ describe("TaxDocumentsService", () => {
     mockPrisma.taxDocument.findUnique.mockResolvedValue({
       id: "d1",
       fileUrl: "uploads/taxes/x.bin",
-      project: { organizationId: "org-1" },
+      projectId: "p1",
     });
     mockPrisma.taxDocument.delete.mockResolvedValue({ id: "d1" });
     const res = await service.remove("d1", "u1");
@@ -127,8 +130,9 @@ describe("TaxDocumentsService", () => {
     mockPrisma.taxDocument.findUnique.mockResolvedValue({
       id: "d1",
       fileUrl: "uploads/taxes/x.bin",
-      project: { organizationId: "other-org" },
+      projectId: "p1",
     });
+    mockPrisma.projectMembership.findUnique.mockResolvedValueOnce(null);
     await expect(service.remove("d1", "u1")).rejects.toThrow(NotFoundException);
   });
 });

@@ -9,6 +9,7 @@ describe("FeaturesService", () => {
   const mockPrisma = {
     user: { findUnique: jest.fn() },
     project: { findUnique: jest.fn() },
+    projectMembership: { findUnique: jest.fn() },
     feature: {
       findMany: jest.fn(),
       findUnique: jest.fn(),
@@ -27,6 +28,7 @@ describe("FeaturesService", () => {
       id: "p1",
       organizationId: "o1",
     });
+    mockPrisma.projectMembership.findUnique.mockResolvedValue({ id: "pm1" });
     mockPrisma.feature.aggregate.mockResolvedValue({ _max: { order: 1 } });
 
     const module: TestingModule = await Test.createTestingModule({
@@ -82,7 +84,7 @@ describe("FeaturesService", () => {
     it("should update feature", async () => {
       mockPrisma.feature.findUnique.mockResolvedValue({
         id: "f1",
-        project: { organizationId: "o1" },
+        projectId: "p1",
       });
       mockPrisma.feature.update.mockResolvedValue({
         id: "f1",
@@ -98,7 +100,7 @@ describe("FeaturesService", () => {
     it("should delete feature", async () => {
       mockPrisma.feature.findUnique.mockResolvedValue({
         id: "f1",
-        project: { organizationId: "o1" },
+        projectId: "p1",
       });
       mockPrisma.feature.delete.mockResolvedValue({ id: "f1" });
 

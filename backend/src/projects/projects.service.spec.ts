@@ -22,6 +22,11 @@ describe("ProjectsService", () => {
       update: jest.fn(),
       delete: jest.fn(),
     },
+    projectMembership: {
+      create: jest.fn(),
+      findUnique: jest.fn(),
+      deleteMany: jest.fn(),
+    },
     todo: {
       deleteMany: jest.fn(),
     },
@@ -67,6 +72,7 @@ describe("ProjectsService", () => {
     ensureUserOrganization: jest
       .fn()
       .mockResolvedValue({ organizationId: "o1" }),
+    ensureOrganizationMembership: jest.fn().mockResolvedValue(undefined),
   };
   const mockEmailService = {
     sendProjectInviteEmail: jest.fn(),
@@ -76,6 +82,7 @@ describe("ProjectsService", () => {
   beforeEach(async () => {
     jest.clearAllMocks();
     mockPrisma.user.findUnique.mockResolvedValue({ organizationId: "o1" });
+    mockPrisma.projectMembership.findUnique.mockResolvedValue({ id: "pm1" });
     mockPrisma.$transaction.mockImplementation(
       (fn: (tx: typeof mockPrisma) => unknown) => fn(mockPrisma)
     );
@@ -96,15 +103,9 @@ describe("ProjectsService", () => {
   });
 
   describe("getOrgIdForUser", () => {
-    it("should throw NotFoundException when user not found", async () => {
-      mockPrisma.user.findUnique.mockResolvedValue(null);
-
-      await expect(service.list("user-missing")).rejects.toThrow(
-        NotFoundException
-      );
-      await expect(service.list("user-missing")).rejects.toThrow(
-        "User not found"
-      );
+    it("list does not validate user existence", async () => {
+      mockPrisma.project.findMany.mockResolvedValue([]);
+      await expect(service.list("user-missing")).resolves.toEqual([]);
     });
   });
 
@@ -117,12 +118,9 @@ describe("ProjectsService", () => {
 
       const result = await service.list("user-1");
       expect(result).toEqual(expected);
-      expect(mockPrisma.user.findUnique).toHaveBeenCalledWith({
-        where: { id: "user-1" },
-        select: { organizationId: true },
-      });
       expect(mockPrisma.project.findMany).toHaveBeenCalledWith({
-        where: { organizationId: "o1" },
+        where: { memberships: { some: { userId: "user-1" } } },
+        orderBy: { createdAt: "asc" },
       });
       expect(mockPrisma.project.createMany).not.toHaveBeenCalled();
     });
@@ -156,12 +154,10 @@ describe("ProjectsService", () => {
         id: "1",
         organizationId: "other-org",
       });
+      mockPrisma.projectMembership.findUnique.mockResolvedValue(null);
 
       await expect(service.get("1", "user-1")).rejects.toThrow(
         NotFoundException
-      );
-      await expect(service.get("1", "user-1")).rejects.toThrow(
-        "Project not found"
       );
     });
   });
@@ -177,7 +173,19 @@ describe("ProjectsService", () => {
       expect(mockPrisma.project.create).toHaveBeenCalledWith({
         data: { name: input.name, organizationId: "o1" },
       });
-      expect(mockAuthService.ensureUserOrganization).not.toHaveBeenCalled();
+      expect(mockPrisma.projectMembership.create).toHaveBeenCalledWith({
+        data: {
+          projectId: "1",
+          userId: "user-1",
+          role: "OWNER",
+          invitedByUserId: "user-1",
+        },
+      });
+      expect(mockAuthService.ensureOrganizationMembership).toHaveBeenCalledWith(
+        "o1",
+        "user-1",
+        "MEMBER"
+      );
     });
 
     it("should ensure user org when missing then create project", async () => {
@@ -197,6 +205,7 @@ describe("ProjectsService", () => {
       expect(mockPrisma.project.create).toHaveBeenCalledWith({
         data: { name: input.name, organizationId: "new-org" },
       });
+      expect(mockPrisma.projectMembership.create).toHaveBeenCalled();
     });
 
     it("should throw BadRequestException when name is blank", async () => {
@@ -301,6 +310,9 @@ describe("ProjectsService", () => {
         where: { projectId: "1" },
       });
       expect(mockPrisma.issue.deleteMany).toHaveBeenCalledWith({
+        where: { projectId: "1" },
+      });
+      expect(mockPrisma.projectMembership.deleteMany).toHaveBeenCalledWith({
         where: { projectId: "1" },
       });
     });
