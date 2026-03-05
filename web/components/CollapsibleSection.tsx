@@ -71,7 +71,7 @@ export function CollapsibleSection({
         {headerExtra != null && !collapsed ? headerExtra : null}
         {headerTrailing != null ? headerTrailing : null}
       </div>
-      <div id={bodyId} hidden={collapsed}>
+      <div id={bodyId} hidden={collapsed} className="collapsible-section-body">
         {children}
       </div>
     </section>

@@ -80,6 +80,14 @@ test.describe("Code page", () => {
     ).toBeVisible();
   });
 
+  test("shows Release Notes section on Code page", async ({ page }) => {
+    await page.goto("/code");
+    await expect(
+      page.getByRole("heading", { name: "Release Notes" })
+    ).toBeVisible();
+    await expect(page.locator(".code-page-release-notes-list")).toBeVisible();
+  });
+
   test("shows readable error when security audit returns HTML", async ({
     page,
   }) => {

@@ -19,6 +19,7 @@ import {
 
 export const CODE_PAGE_SECTION_IDS = [
   "code-repos",
+  "code-release-notes",
   "code-audit",
   "code-security",
   "code-rating",

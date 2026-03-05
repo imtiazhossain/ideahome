@@ -30,6 +30,7 @@ import {
   type WireframeSnapshot,
 } from "../lib/codePageUtils";
 import { API_REQUEST_HEADER } from "../lib/api";
+import { APP_RELEASE_NOTES } from "../lib/releaseNotes";
 import { useCodePageState } from "../lib/useCodePageState";
 import { useProjectLayout } from "../lib/useProjectLayout";
 import { useTheme } from "./_app";
@@ -758,6 +759,42 @@ function renderCodeSectionInner(
               ))}
             </section>
           </section>
+        )}
+      </CollapsibleSection>
+    );
+  }
+  if (sectionId === "code-release-notes") {
+    return (
+      <CollapsibleSection
+        sectionId="code-release-notes"
+        title="Release Notes"
+        collapsed={isSectionCollapsed("code-release-notes")}
+        onToggle={() => toggleSection("code-release-notes")}
+        sectionClassName="code-page-release-notes-section code-page-body-section"
+        headingId="code-page-release-notes-heading"
+        headerTrailing={dragHandle}
+      >
+        <p className="code-page-audit-copy">
+          Recent product and engineering updates across the entire app.
+        </p>
+        {APP_RELEASE_NOTES.length > 0 ? (
+          <ol className="code-page-release-notes-list">
+            {APP_RELEASE_NOTES.map((note) => (
+              <li
+                key={`${note.date}-${note.title}`}
+                className="code-page-release-note"
+              >
+                <p className="code-page-release-note-date">{note.date}</p>
+                <p className="code-page-release-note-date">{note.area}</p>
+                <h3 className="code-page-release-note-title">{note.title}</h3>
+                <p className="code-page-release-note-details">{note.details}</p>
+              </li>
+            ))}
+          </ol>
+        ) : (
+          <div className="code-page-empty">
+            No release notes yet. Add entries in <code>web/lib/releaseNotes.ts</code>.
+          </div>
         )}
       </CollapsibleSection>
     );
