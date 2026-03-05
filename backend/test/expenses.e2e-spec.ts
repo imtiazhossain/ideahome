@@ -29,13 +29,12 @@ describe("ExpensesController (e2e)", () => {
     userId = testUser.userId;
     orgId = testUser.orgId;
 
-    const project = await prisma.project.create({
-      data: {
-        name: `E2E Expenses Project ${Date.now()}`,
-        organizationId: orgId,
-      },
-    });
-    projectId = project.id;
+    const projectRes = await request(app.getHttpServer())
+      .post("/projects")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ name: `E2E Expenses Project ${Date.now()}` })
+      .expect(201);
+    projectId = projectRes.body.id;
   });
 
   afterAll(async () => {

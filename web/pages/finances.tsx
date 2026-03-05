@@ -177,9 +177,38 @@ const TAX_CHECKLIST_STORAGE_PREFIX = "ideahome-tax-checklist";
 const FINANCES_DRAGGABLE_SECTION_IDS = [
   "expenses-summary",
   "expenses-financials",
+  "expenses-add-and-list",
+  "expenses-taxes",
+] as const;
+const LEGACY_FINANCES_DRAGGABLE_SECTION_IDS = [
+  "expenses-summary",
+  "expenses-financials",
   "expenses-taxes",
   "expenses-add-and-list",
 ] as const;
+
+function normalizeFinancesSectionOrder(parsed: unknown): string[] {
+  const valid = FINANCES_DRAGGABLE_SECTION_IDS as unknown as string[];
+  if (!Array.isArray(parsed) || parsed.length === 0) {
+    return [...FINANCES_DRAGGABLE_SECTION_IDS];
+  }
+  const ordered = parsed.filter(
+    (id: unknown) => typeof id === "string" && valid.includes(id)
+  ) as string[];
+  const missing = valid.filter((id) => !ordered.includes(id));
+  const combined = ordered.length ? [...ordered, ...missing] : [...valid];
+
+  // One-time migration of legacy default ordering so existing users see
+  // "Expenses" before "Taxes" without affecting custom drag orders.
+  const legacy = [...LEGACY_FINANCES_DRAGGABLE_SECTION_IDS];
+  const isLegacyDefault =
+    combined.length === legacy.length &&
+    combined.every((id, index) => id === legacy[index]);
+  if (isLegacyDefault) {
+    return [...FINANCES_DRAGGABLE_SECTION_IDS];
+  }
+  return combined;
+}
 
 type TaxDocumentKind =
   | "w2"
@@ -586,17 +615,7 @@ export default function FinancialsPage() {
       try {
         const raw = localStorage.getItem(financesSectionOrderStorageKey);
         if (!raw) return [...FINANCES_DRAGGABLE_SECTION_IDS];
-        const parsed = JSON.parse(raw) as unknown;
-        if (!Array.isArray(parsed) || parsed.length === 0)
-          return [...FINANCES_DRAGGABLE_SECTION_IDS];
-        const valid = FINANCES_DRAGGABLE_SECTION_IDS as unknown as string[];
-        const ordered = parsed.filter(
-          (id: unknown) => typeof id === "string" && valid.includes(id)
-        ) as string[];
-        const missing = valid.filter((id) => !ordered.includes(id));
-        return ordered.length
-          ? [...ordered, ...missing]
-          : [...FINANCES_DRAGGABLE_SECTION_IDS];
+        return normalizeFinancesSectionOrder(JSON.parse(raw) as unknown);
       } catch {
         return [...FINANCES_DRAGGABLE_SECTION_IDS];
       }
@@ -738,15 +757,8 @@ export default function FinancialsPage() {
     try {
       const raw = localStorage.getItem(key);
       if (!raw) return;
-      const parsed = JSON.parse(raw) as unknown;
-      if (!Array.isArray(parsed) || parsed.length === 0) return;
-      const valid = FINANCES_DRAGGABLE_SECTION_IDS as unknown as string[];
-      const ordered = (parsed as string[]).filter((id) => valid.includes(id));
-      const missing = valid.filter((id) => !ordered.includes(id));
       setFinancesSectionOrder(
-        ordered.length
-          ? [...ordered, ...missing]
-          : [...FINANCES_DRAGGABLE_SECTION_IDS]
+        normalizeFinancesSectionOrder(JSON.parse(raw) as unknown)
       );
     } catch {
       // ignore
