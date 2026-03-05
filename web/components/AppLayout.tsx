@@ -15,6 +15,7 @@ import { useProjectOrder } from "../lib/useProjectOrder";
 import { useAssistantSettings } from "../lib/useAssistantSettings";
 import { AppDrawer } from "./AppDrawer";
 import { BulbyChatbox } from "./BulbyChatbox";
+import { DeleteProjectModal } from "./DeleteProjectModal";
 import { ProjectNavBar, useIsMobile, useTabOrder } from "./ProjectNavBar";
 import type { ProjectNavTabId } from "./ProjectNavBar";
 
@@ -530,7 +531,7 @@ export function AppLayout({
             }
             onDeleteProjectClick={() => {
               const current = projects.find((p) => p.id === selectedProjectId);
-              if (current) void handleDeleteProject(current);
+              if (current) setProjectToDelete(current);
             }}
             onDeleteAllIssuesClick={onDeleteAllIssuesClick}
             deleteAllIssuesDisabled={deleteAllIssuesDisabled}
@@ -554,6 +555,14 @@ export function AppLayout({
       {!backendOffline ? (
         <BulbyChatbox
           projectId={selectedProjectId || orderedProjects[0]?.id || ""}
+        />
+      ) : null}
+      {projectToDelete ? (
+        <DeleteProjectModal
+          project={projectToDelete}
+          deleting={projectDeleting}
+          onClose={() => setProjectToDelete(null)}
+          onConfirm={() => handleDeleteProject(projectToDelete)}
         />
       ) : null}
     </>

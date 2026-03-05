@@ -1285,6 +1285,13 @@ export function ProjectNavBar({
         projectId={selectedProjectId}
         projectName={projectName}
         onRenameProject={onRenameProject}
+        onDeleteProject={
+          onDeleteProjectClick
+            ? () => {
+                onDeleteProjectClick();
+              }
+            : undefined
+        }
       />
     </header>
   );

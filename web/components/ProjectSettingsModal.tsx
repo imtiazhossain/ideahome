@@ -22,6 +22,7 @@ export interface ProjectSettingsModalProps {
   projectId?: string;
   projectName: string;
   onRenameProject?: (projectId: string, name: string) => Promise<void> | void;
+  onDeleteProject?: (projectId: string, name: string) => void | Promise<void>;
 }
 
 export function ProjectSettingsModal({
@@ -30,6 +31,7 @@ export function ProjectSettingsModal({
   projectId,
   projectName,
   onRenameProject,
+  onDeleteProject,
 }: ProjectSettingsModalProps) {
   const [nameInput, setNameInput] = useState(projectName);
   const [nameSaving, setNameSaving] = useState(false);
@@ -437,6 +439,26 @@ export function ProjectSettingsModal({
                 )}
               </div>
             </div>
+
+            {onDeleteProject ? (
+              <>
+                <div className="project-settings-modal-divider" />
+                <div className="project-settings-modal-actions">
+                  <Button
+                    variant="danger"
+                    size="lg"
+                    onClick={() => {
+                      if (!projectId) return;
+                      onClose();
+                      void onDeleteProject(projectId, projectName);
+                    }}
+                    disabled={nameSaving || collabLoading || inviteSubmitting}
+                  >
+                    Delete project
+                  </Button>
+                </div>
+              </>
+            ) : null}
 
             {hasNameEdits ? (
               <div className="modal-actions project-settings-modal-actions project-settings-modal-actions-bottom">
