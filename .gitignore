@@ -92,3 +92,6 @@ ehthumbs.db
 # pnpm-lock.yaml
 # package-lock.json
 # yarn.lock
+
+# Next.js E2E build output
+**/.next-*

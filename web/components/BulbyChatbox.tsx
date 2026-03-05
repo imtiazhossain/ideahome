@@ -195,6 +195,9 @@ export function BulbyChatbox({ projectId }: BulbyChatboxProps) {
   const [position, setPosition] = useState<DragPosition | null>(null);
   const [panelOffset, setPanelOffset] = useState({ x: 0, y: 0 });
   const [panelOpensBelow, setPanelOpensBelow] = useState(false);
+  const [panelLockedHeight, setPanelLockedHeight] = useState<number | null>(null);
+  const unlockPanelHeightRafRef = useRef<number | null>(null);
+  const panelPlacementLockedRef = useRef(false);
   const [triggerHidden, setTriggerHiddenState] = useState(false);
 
   useEffect(() => {
@@ -252,20 +255,81 @@ export function BulbyChatbox({ projectId }: BulbyChatboxProps) {
     if (el) el.scrollTop = el.scrollHeight;
   }, [messages, loading]);
 
-  useEffect(() => {
-    if (!open) return;
+  const focusInputToEnd = useCallback(() => {
     const el = inputRef.current;
     if (!el) return;
-    // Focus the chat input when the panel opens so the user can start typing immediately.
-    el.focus();
-    // Move caret to the end of any existing text.
+    el.focus({ preventScroll: true });
     const len = el.value.length;
     try {
       el.setSelectionRange(len, len);
     } catch {
       // Some browsers may not support setSelectionRange on textarea; ignore.
     }
-  }, [open]);
+  }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    // Focus on open can race with portal mount/layout; retry over the next frames.
+    focusInputToEnd();
+    let raf2: number | null = null;
+    const raf1 = requestAnimationFrame(() => {
+      focusInputToEnd();
+      raf2 = requestAnimationFrame(() => focusInputToEnd());
+    });
+    const timer = window.setTimeout(() => focusInputToEnd(), 120);
+    return () => {
+      cancelAnimationFrame(raf1);
+      if (raf2 != null) cancelAnimationFrame(raf2);
+      window.clearTimeout(timer);
+    };
+  }, [open, focusInputToEnd]);
+
+  useEffect(() => {
+    if (!open || loading) return;
+    // Keep typing flow uninterrupted after assistant replies.
+    const raf = requestAnimationFrame(() => focusInputToEnd());
+    return () => cancelAnimationFrame(raf);
+  }, [open, loading, messages.length, focusInputToEnd]);
+
+  const lockPanelHeight = useCallback(() => {
+    const rect = panelRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    setPanelLockedHeight(rect.height);
+  }, []);
+
+  useEffect(() => {
+    if (unlockPanelHeightRafRef.current != null) {
+      cancelAnimationFrame(unlockPanelHeightRafRef.current);
+      unlockPanelHeightRafRef.current = null;
+    }
+    if (!open) {
+      setPanelLockedHeight(null);
+      return;
+    }
+    if (loading || panelLockedHeight == null) return;
+    // Hold lock for one extra paint cycle to avoid a single-frame resize pop.
+    unlockPanelHeightRafRef.current = requestAnimationFrame(() => {
+      unlockPanelHeightRafRef.current = requestAnimationFrame(() => {
+        setPanelLockedHeight(null);
+        unlockPanelHeightRafRef.current = null;
+      });
+    });
+    return () => {
+      if (unlockPanelHeightRafRef.current != null) {
+        cancelAnimationFrame(unlockPanelHeightRafRef.current);
+        unlockPanelHeightRafRef.current = null;
+      }
+    };
+  }, [open, loading, panelLockedHeight]);
+
+  useEffect(() => {
+    return () => {
+      if (unlockPanelHeightRafRef.current != null) {
+        cancelAnimationFrame(unlockPanelHeightRafRef.current);
+        unlockPanelHeightRafRef.current = null;
+      }
+    }
+  }, []);
 
   useEffect(() => {
     setPosition(loadStoredPosition());
@@ -319,8 +383,10 @@ export function BulbyChatbox({ projectId }: BulbyChatboxProps) {
     if (!open || position == null) {
       setPanelOffset({ x: 0, y: 0 });
       setPanelOpensBelow(false);
+      panelPlacementLockedRef.current = false;
       return;
     }
+    if (panelPlacementLockedRef.current) return;
     const el = panelRef.current;
     if (!el) return;
     const rect = el.getBoundingClientRect();
@@ -342,7 +408,8 @@ export function BulbyChatbox({ projectId }: BulbyChatboxProps) {
     if (panelOpensBelow && y < 0) y = 0;
     else if (!panelOpensBelow && y > 0) y = 0;
     setPanelOffset({ x, y });
-  }, [open, position, messages, panelOpensBelow]);
+    panelPlacementLockedRef.current = true;
+  }, [open, position, panelOpensBelow]);
 
   const handleDragMove = useCallback((e: MouseEvent | TouchEvent) => {
     const state = dragRef.current;
@@ -472,6 +539,7 @@ export function BulbyChatbox({ projectId }: BulbyChatboxProps) {
 
     const addToTodoName = parseAddToTodoIntent(draft);
     if (addToTodoName) {
+      lockPanelHeight();
       setLoading(true);
       try {
         await createTodo({
@@ -497,6 +565,7 @@ export function BulbyChatbox({ projectId }: BulbyChatboxProps) {
 
     const expenseQuery = tryParseExpenseQuery(draft);
     if (expenseQuery) {
+      lockPanelHeight();
       setLoading(true);
       setLoadingStatus("Looking up your expenses...");
       try {
@@ -516,6 +585,7 @@ export function BulbyChatbox({ projectId }: BulbyChatboxProps) {
     }
 
     if (isExpenseOverviewQuery(draft)) {
+      lockPanelHeight();
       setLoading(true);
       setLoadingStatus("Looking up your expenses...");
       try {
@@ -541,15 +611,9 @@ export function BulbyChatbox({ projectId }: BulbyChatboxProps) {
     const includeWeb = shouldUseWebSearch(draft);
     const model = getStoredOpenRouterModel() ?? undefined;
 
+    lockPanelHeight();
     setLoading(true);
     setLoadingStatus("Thinking...");
-    const loadingTicker = setInterval(() => {
-      setLoadingStatus((prev) => {
-        const elapsed = prev.match(/\((\d+)s\)/)?.[1];
-        const sec = elapsed ? parseInt(elapsed, 10) + 1 : 1;
-        return `Thinking... (${sec}s)`;
-      });
-    }, 1000);
 
     try {
       const result = await generateListItemAssistantChat(
@@ -567,7 +631,6 @@ export function BulbyChatbox({ projectId }: BulbyChatboxProps) {
         err instanceof Error ? err.message : "Something went wrong. Try again."
       );
     } finally {
-      clearInterval(loadingTicker);
       setLoading(false);
     }
   }, [inputValue, loading, messages, projectId, appendAssistantMessage]);
@@ -593,8 +656,8 @@ export function BulbyChatbox({ projectId }: BulbyChatboxProps) {
         <div
           ref={panelRef}
           className="bulby-chatbox-panel idea-plan-card"
-          style={
-            position != null
+          style={{
+            ...(position != null
               ? {
                   position: "absolute",
                   left: "50%",
@@ -603,8 +666,15 @@ export function BulbyChatbox({ projectId }: BulbyChatboxProps) {
                     : { bottom: "100%", marginBottom: BULBY_CHATBOX_GAP }),
                   transform: `translate(calc(-50% + ${panelOffset.x}px), ${panelOffset.y}px)`,
                 }
-              : undefined
-          }
+              : {}),
+            ...(loading && panelLockedHeight != null
+              ? {
+                  height: `${panelLockedHeight}px`,
+                  minHeight: `${panelLockedHeight}px`,
+                  maxHeight: `${panelLockedHeight}px`,
+                }
+              : {}),
+          }}
         >
           <div className="idea-plan-card-head">
             <span className="idea-plan-card-badge">Ask Bulby</span>
@@ -666,7 +736,6 @@ export function BulbyChatbox({ projectId }: BulbyChatboxProps) {
               placeholder="Ask Bulby anything..."
               rows={1}
               aria-label="Ask Bulby"
-              disabled={loading}
             />
             <button
               type="button"
@@ -682,7 +751,7 @@ export function BulbyChatbox({ projectId }: BulbyChatboxProps) {
       <button
         ref={triggerRef}
         type="button"
-        className={`bulby-chatbox-trigger bulby-chatbox-trigger--icon${open ? " bulby-chatbox-trigger--open" : ""}${loading ? " is-thinking" : ""}`}
+        className={`bulby-chatbox-trigger bulby-chatbox-trigger--icon${open ? " bulby-chatbox-trigger--open" : ""}${loading && !open ? " is-thinking" : ""}`}
         onClick={handleTriggerClick}
         onMouseDown={handlePointerDown}
         onTouchStart={handlePointerDown}

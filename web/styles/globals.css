@@ -6142,6 +6142,13 @@ a.automated-tests-chip-text:hover {
   box-sizing: border-box;
 }
 
+/* Prevent mobile browser focus-zoom in Bulby/assistant textareas. */
+@media (hover: none) and (pointer: coarse) {
+  .idea-chat-input {
+    font-size: 16px;
+  }
+}
+
 .idea-chat-input::placeholder {
   color: rgba(148, 163, 184, 0.95);
 }
