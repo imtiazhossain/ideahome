@@ -5785,6 +5785,8 @@ a.automated-tests-chip-text:hover {
   align-items: center;
   width: auto;
   min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
   user-select: text;
   cursor: text;
   line-height: 1.2;
@@ -7112,10 +7114,14 @@ a.automated-tests-chip-text:hover {
 }
 
 .features-list-input-wrap {
-  display: inline-grid;
+  display: grid;
   align-items: center;
   min-width: 2ch;
   flex: 1 1 auto;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .features-list-input-sizer {
@@ -7127,16 +7133,24 @@ a.automated-tests-chip-text:hover {
   white-space: pre;
   visibility: hidden;
   min-width: 2ch;
+  max-width: 100%;
+  overflow: hidden;
 }
 
 .features-list-input {
   grid-area: 1 / 1 / 2 / 2;
   width: 100%;
   min-width: 0;
+  max-width: 100%;
   padding: 0;
   border: none;
   border-radius: 0;
   background: transparent;
+  resize: none;
+  overflow: hidden;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
   font-size: 15px;
   font-weight: 400;
   line-height: 1.2;

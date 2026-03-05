@@ -120,7 +120,7 @@ function SortableItem({
 }: SortableItemProps) {
   const disabled = isItemDisabled?.(item) ?? false;
   const itemRef = useRef<HTMLLIElement | null>(null);
-  const editingInputRef = useRef<HTMLInputElement | null>(null);
+  const editingInputRef = useRef<HTMLTextAreaElement | null>(null);
   const [swipeOffset, setSwipeOffset] = useState(0);
   const [isPointerTracking, setIsPointerTracking] = useState(false);
   const [isSwiping, setIsSwiping] = useState(false);
@@ -264,6 +264,8 @@ function SortableItem({
     }
 
     const raf = window.requestAnimationFrame(() => {
+      input.style.height = "auto";
+      input.style.height = `${input.scrollHeight}px`;
       if (typeof scrollerTop === "number" && scroller) {
         scroller.scrollTop = scrollerTop;
       }
@@ -314,7 +316,9 @@ function SortableItem({
     ) : null;
   const detailsSlot = !isEditing ? renderItemDetails?.(item, index) : null;
   const selectAllEditingText = (
-    e: React.SyntheticEvent<HTMLInputElement> | React.MouseEvent<HTMLInputElement>
+    e:
+      | React.SyntheticEvent<HTMLTextAreaElement>
+      | React.MouseEvent<HTMLTextAreaElement>
   ) => {
     const input = e.currentTarget;
     input.setSelectionRange(0, input.value.length);
@@ -360,32 +364,37 @@ function SortableItem({
               title={item.done ? "Mark not done" : "Mark done"}
             />
             <span className="features-list-input-wrap">
-              <span className="features-list-input-sizer" aria-hidden>
-                {editingValue || "\u00A0"}
-              </span>
-              <input
+              <textarea
                 ref={editingInputRef}
-                type="text"
                 value={editingValue}
                 onChange={(e) => onEditingValueChange(e.target.value)}
                 onBlur={onSaveEdit}
                 onDoubleClick={selectAllEditingText}
+                onInput={(e) => {
+                  const el = e.currentTarget;
+                  el.style.height = "auto";
+                  el.style.height = `${el.scrollHeight}px`;
+                }}
                 onPointerUp={(e) => {
                   if (e.pointerType !== "touch") return;
                   const now = Date.now();
                   if (now - lastInputTapAtRef.current < 320) {
                     selectAllEditingText(
-                      e as unknown as React.SyntheticEvent<HTMLInputElement>
+                      e as unknown as React.SyntheticEvent<HTMLTextAreaElement>
                     );
                   }
                   lastInputTapAtRef.current = now;
                 }}
                 onKeyDown={(e) => {
-                  if (e.key === "Enter") onSaveEdit();
+                  if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+                    e.preventDefault();
+                    onSaveEdit();
+                  }
                   if (e.key === "Escape") onCancelEdit();
                 }}
                 className="features-list-input"
                 aria-label={`Edit ${itemLabel}`}
+                rows={1}
               />
             </span>
             {item.done && (
