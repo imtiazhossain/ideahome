@@ -226,12 +226,12 @@ export function IssueQualityScoreConfigModal({
           >
             Cancel
           </button>
-          {hasNetNumberChanges || saving ? (
+          {(hasNetNumberChanges || saving) && !hasInvalidTotal ? (
             <button
               type="button"
               className="btn btn-primary"
               onClick={() => void onSave()}
-              disabled={saving || hasInvalidTotal}
+              disabled={saving}
             >
               {saving ? "Saving…" : "Save"}
             </button>
