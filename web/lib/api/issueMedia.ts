@@ -18,7 +18,7 @@ import type {
   Issue as SharedIssue,
   IssueComment as SharedIssueComment,
 } from "@ideahome/shared";
-import { getApiBase, requestJson, requestVoid } from "../api";
+import { getApiBase, requestJson, requestVoid } from "./http";
 
 export type Issue = SharedIssue;
 export type IssueComment = SharedIssueComment;

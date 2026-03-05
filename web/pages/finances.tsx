@@ -11,17 +11,10 @@ import {
 import {
   SortableContext,
   sortableKeyboardCoordinates,
-  useSortable,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { restrictToWindowEdges } from "@dnd-kit/modifiers";
-import { CSS } from "@dnd-kit/utilities";
-import { usePlaidLink } from "react-plaid-link";
-import type {
-  PlaidLinkError,
-  PlaidLinkOnEventMetadata,
-  PlaidLinkOnExitMetadata,
-} from "react-plaid-link";
+import type { PlaidLinkError, PlaidLinkOnEventMetadata, PlaidLinkOnExitMetadata } from "react-plaid-link";
 import { useRouter } from "next/router";
 import { EXPENSE_CATEGORIES } from "@ideahome/shared";
 import {
@@ -39,14 +32,12 @@ import {
   renamePlaidLinkedAccount,
   getPlaidLastSync,
   getPlaidLinkToken,
-  getUserScopedStorageKey,
   isAuthenticated,
   syncPlaidTransactions,
   updateTaxDocument,
   updateExpense,
   type Expense,
   type PlaidLinkedAccount,
-  type TaxDocument as ApiTaxDocument,
 } from "../lib/api";
 import { formatCurrency, formatRelativeTime, toYYYYMMDD } from "../lib/utils";
 import { useProjectLayout } from "../lib/useProjectLayout";
@@ -64,481 +55,34 @@ import { ProjectSectionGuard } from "../components/ProjectSectionGuard";
 import { SectionLoadingSpinner } from "../components/SectionLoadingSpinner";
 import { CollapsibleSection } from "../components/CollapsibleSection";
 import { useTheme } from "./_app";
-import { IconGrip } from "../components/IconGrip";
-
-const EXPENSES_STORAGE_PREFIX = "ideahome-expenses";
-const LEGACY_EXPENSES_KEY = "ideahome-expenses";
-const LEGACY_COSTS_KEY = "ideahome-costs-expenses";
-
-function getExpensesStorageKey(): string {
-  return getUserScopedStorageKey(EXPENSES_STORAGE_PREFIX, LEGACY_EXPENSES_KEY);
-}
-
-function loadStoredExpensesLegacy(): {
-  amount: number;
-  description: string;
-  date: string;
-  category: string;
-}[] {
-  if (typeof window === "undefined") return [];
-  try {
-    const key = getExpensesStorageKey();
-    let raw = localStorage.getItem(key);
-    if (!raw && key !== LEGACY_EXPENSES_KEY) {
-      raw =
-        localStorage.getItem(LEGACY_EXPENSES_KEY) ??
-        localStorage.getItem(LEGACY_COSTS_KEY);
-    }
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-    return parsed.map((item: unknown) => {
-      if (
-        item &&
-        typeof item === "object" &&
-        "amount" in item &&
-        "description" in item
-      ) {
-        const o = item as Record<string, unknown>;
-        return {
-          amount: Number(o.amount) || 0,
-          description: String(o.description ?? ""),
-          date:
-            typeof o.date === "string"
-              ? o.date
-              : new Date().toISOString().slice(0, 10),
-          category: typeof o.category === "string" ? o.category : "Other",
-        };
-      }
-      return {
-        amount: 0,
-        description: "",
-        date: new Date().toISOString().slice(0, 10),
-        category: "Other",
-      };
-    });
-  } catch {
-    return [];
-  }
-}
-
-function clearStoredExpensesLegacy(): void {
-  if (typeof window === "undefined") return;
-  const key = getExpensesStorageKey();
-  localStorage.removeItem(key);
-  localStorage.removeItem(LEGACY_EXPENSES_KEY);
-  localStorage.removeItem(LEGACY_COSTS_KEY);
-}
-
-function saveStoredExpensesLegacy(
-  items: {
-    amount: number;
-    description: string;
-    date: string;
-    category: string;
-  }[]
-): void {
-  if (typeof window === "undefined") return;
-  try {
-    localStorage.setItem(getExpensesStorageKey(), JSON.stringify(items));
-  } catch {
-    // best effort local fallback
-  }
-}
-
-function formatExpenseDateDisplay(value: string): string {
-  if (!value) return "Select date";
-  const parsed = new Date(`${value}T00:00:00`);
-  if (Number.isNaN(parsed.getTime())) return value;
-  return parsed.toLocaleDateString("en-US", {
-    month: "2-digit",
-    day: "2-digit",
-    year: "2-digit",
-  });
-}
-
-const MONTH_NAMES = [
-  "January",
-  "February",
-  "March",
-  "April",
-  "May",
-  "June",
-  "July",
-  "August",
-  "September",
-  "October",
-  "November",
-  "December",
-];
-
-const TAX_DOCS_STORAGE_PREFIX = "ideahome-tax-docs";
-const TAX_CHECKLIST_STORAGE_PREFIX = "ideahome-tax-checklist";
-const FINANCES_DRAGGABLE_SECTION_IDS = [
-  "expenses-summary",
-  "expenses-financials",
-  "expenses-add-and-list",
-  "expenses-taxes",
-] as const;
-const LEGACY_FINANCES_DRAGGABLE_SECTION_IDS = [
-  "expenses-summary",
-  "expenses-financials",
-  "expenses-taxes",
-  "expenses-add-and-list",
-] as const;
-
-function normalizeFinancesSectionOrder(parsed: unknown): string[] {
-  const valid = FINANCES_DRAGGABLE_SECTION_IDS as unknown as string[];
-  if (!Array.isArray(parsed) || parsed.length === 0) {
-    return [...FINANCES_DRAGGABLE_SECTION_IDS];
-  }
-  const ordered = parsed.filter(
-    (id: unknown) => typeof id === "string" && valid.includes(id)
-  ) as string[];
-  const missing = valid.filter((id) => !ordered.includes(id));
-  const combined = ordered.length ? [...ordered, ...missing] : [...valid];
-
-  // One-time migration of legacy default ordering so existing users see
-  // "Expenses" before "Taxes" without affecting custom drag orders.
-  const legacy = [...LEGACY_FINANCES_DRAGGABLE_SECTION_IDS];
-  const isLegacyDefault =
-    combined.length === legacy.length &&
-    combined.every((id, index) => id === legacy[index]);
-  if (isLegacyDefault) {
-    return [...FINANCES_DRAGGABLE_SECTION_IDS];
-  }
-  return combined;
-}
-
-type TaxDocumentKind =
-  | "w2"
-  | "1099"
-  | "1098"
-  | "deduction"
-  | "identity"
-  | "prior_return"
-  | "property"
-  | "medical"
-  | "retirement"
-  | "crypto"
-  | "business"
-  | "payment"
-  | "other";
-
-type TaxDocument = ApiTaxDocument & {
-  id: string;
-  fileName: string;
-  sizeBytes: number;
-  kind: TaxDocumentKind;
-  taxYear: number | null;
-  notes: string;
-  textPreview: string | null;
-};
-
-const TAX_CHECKLIST_ITEMS = [
-  {
-    id: "confirm-identity",
-    label: "Confirm legal name, SSN, and address match tax records.",
-  },
-  {
-    id: "collect-income-docs",
-    label:
-      "Collect all income forms (W-2, 1099, K-1, retirement distributions).",
-  },
-  {
-    id: "collect-deduction-docs",
-    label:
-      "Collect deduction docs (mortgage interest, donations, medical, property taxes).",
-  },
-  {
-    id: "collect-payment-docs",
-    label: "Gather estimated tax payment and withholding records.",
-  },
-  {
-    id: "review-last-return",
-    label: "Review last year's return for carryovers and recurring items.",
-  },
-] as const;
-
-type TaxChecklistState = Record<
-  (typeof TAX_CHECKLIST_ITEMS)[number]["id"],
-  boolean
->;
-
-function getTaxDocsStorageKey(projectId: string | null): string {
-  const suffix = projectId ? `-${projectId}` : "-none";
-  return getUserScopedStorageKey(
-    `${TAX_DOCS_STORAGE_PREFIX}${suffix}`,
-    `${TAX_DOCS_STORAGE_PREFIX}${suffix}`
-  );
-}
-
-function getTaxChecklistStorageKey(projectId: string | null): string {
-  const suffix = projectId ? `-${projectId}` : "-none";
-  return getUserScopedStorageKey(
-    `${TAX_CHECKLIST_STORAGE_PREFIX}${suffix}`,
-    `${TAX_CHECKLIST_STORAGE_PREFIX}${suffix}`
-  );
-}
-
-function defaultTaxChecklistState(): TaxChecklistState {
-  return {
-    "confirm-identity": false,
-    "collect-income-docs": false,
-    "collect-deduction-docs": false,
-    "collect-payment-docs": false,
-    "review-last-return": false,
-  };
-}
-
-function inferTaxDocumentKind(fileName: string): TaxDocumentKind {
-  const n = fileName.toLowerCase();
-  if (n.includes("w-2") || n.includes("w2")) return "w2";
-  if (n.includes("1099")) return "1099";
-  if (n.includes("1098")) return "1098";
-  if (n.includes("ssn") || n.includes("passport") || n.includes("driver")) {
-    return "identity";
-  }
-  if (n.includes("prior") || n.includes("last-year") || n.includes("1040")) {
-    return "prior_return";
-  }
-  if (
-    n.includes("donation") ||
-    n.includes("charity") ||
-    n.includes("receipt") ||
-    n.includes("expense")
-  ) {
-    return "deduction";
-  }
-  if (n.includes("property") || n.includes("tax-bill")) return "property";
-  if (n.includes("medical") || n.includes("hsa")) return "medical";
-  if (n.includes("401k") || n.includes("ira") || n.includes("pension")) {
-    return "retirement";
-  }
-  if (n.includes("crypto") || n.includes("coinbase") || n.includes("kraken")) {
-    return "crypto";
-  }
-  if (
-    n.includes("schedule-c") ||
-    n.includes("business") ||
-    n.includes("invoice")
-  ) {
-    return "business";
-  }
-  if (
-    n.includes("estimated") ||
-    n.includes("payment") ||
-    n.includes("voucher")
-  ) {
-    return "payment";
-  }
-  return "other";
-}
-
-function inferTaxYear(fileName: string): number | null {
-  const match = fileName.match(/\b(20\d{2})\b/);
-  if (!match) return null;
-  const year = Number(match[1]);
-  if (!Number.isFinite(year)) return null;
-  if (year < 2000 || year > 2100) return null;
-  return year;
-}
-
-function formatBytes(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
-
-function taxKindLabel(kind: TaxDocumentKind): string {
-  if (kind === "w2") return "W-2";
-  if (kind === "1099") return "1099";
-  if (kind === "1098") return "1098";
-  if (kind === "prior_return") return "Prior Return";
-  if (kind === "deduction") return "Deductions";
-  if (kind === "identity") return "Identity";
-  if (kind === "property") return "Property";
-  if (kind === "medical") return "Medical";
-  if (kind === "retirement") return "Retirement";
-  if (kind === "crypto") return "Crypto";
-  if (kind === "business") return "Business";
-  if (kind === "payment") return "Payments";
-  return "Other";
-}
-
-function taxDocInsight(kind: TaxDocumentKind): string {
-  if (kind === "w2" || kind === "1099") {
-    return "Income form detected. Confirm payer info, withholding, and totals.";
-  }
-  if (kind === "1098") {
-    return "Potential deduction form. Verify deductible interest and amounts.";
-  }
-  if (kind === "deduction" || kind === "medical" || kind === "property") {
-    return "Potential deduction support doc. Keep this with your receipts backup.";
-  }
-  if (kind === "payment") {
-    return "Payment record detected. Reconcile with estimated tax payments made.";
-  }
-  if (kind === "prior_return") {
-    return "Prior return found. Use it to compare carryovers and recurring forms.";
-  }
-  if (kind === "identity") {
-    return "Identity document found. Ensure filer and dependent identity details match.";
-  }
-  if (kind === "retirement" || kind === "crypto" || kind === "business") {
-    return "Special-case tax document detected. Review for additional forms and schedules.";
-  }
-  return "Review and categorize this document before filing.";
-}
-
-async function readTaxTextPreview(file: File): Promise<string | null> {
-  const name = file.name.toLowerCase();
-  const isTextLike =
-    file.type.startsWith("text/") ||
-    name.endsWith(".txt") ||
-    name.endsWith(".csv") ||
-    name.endsWith(".json") ||
-    name.endsWith(".md");
-  if (!isTextLike) return null;
-  try {
-    const raw = await file.text();
-    const compact = raw.replace(/\s+/g, " ").trim();
-    if (!compact) return null;
-    return compact.slice(0, 320);
-  } catch {
-    return null;
-  }
-}
-
-async function fileToBase64(file: File): Promise<string> {
-  const buffer = await file.arrayBuffer();
-  let binary = "";
-  const bytes = new Uint8Array(buffer);
-  const chunk = 0x8000;
-  for (let i = 0; i < bytes.length; i += chunk) {
-    binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
-  }
-  return btoa(binary);
-}
-
-function expenseInDateFilter(
-  expenseDate: string | undefined,
-  mode: DateFilterMode,
-  day?: string,
-  dayOfMonth?: number,
-  month?: number,
-  year?: number,
-  rangeStart?: string,
-  rangeEnd?: string
-): boolean {
-  if (!expenseDate) return false;
-  if (mode === "all") return true;
-  const d = new Date(`${expenseDate}T00:00:00`);
-  if (Number.isNaN(d.getTime())) return false;
-  if (mode === "day" && day) {
-    return expenseDate === day;
-  }
-  if (mode === "dayOfMonth" && dayOfMonth !== undefined) {
-    return d.getDate() === dayOfMonth;
-  }
-  if (mode === "month" && month !== undefined && year !== undefined) {
-    return d.getMonth() === month - 1 && d.getFullYear() === year;
-  }
-  if (mode === "year" && year !== undefined) {
-    return d.getFullYear() === year;
-  }
-  if (mode === "range" && rangeStart && rangeEnd) {
-    const start = new Date(`${rangeStart}T00:00:00`).getTime();
-    const end = new Date(`${rangeEnd}T23:59:59`).getTime();
-    const t = d.getTime();
-    return t >= start && t <= end;
-  }
-  return true;
-}
-
-/** Mounts only when token is set; opens Link on mount. Unmount when token is null to get a fresh instance next time. */
-function PlaidLinkLauncher({
-  token,
-  onSuccess,
-  onExit,
-  onEvent,
-  onOpened,
-}: {
-  token: string;
-  onSuccess: (publicToken: string) => void;
-  onExit: (
-    error: PlaidLinkError | null,
-    metadata: PlaidLinkOnExitMetadata
-  ) => void;
-  onEvent: (eventName: string, metadata: PlaidLinkOnEventMetadata) => void;
-  onOpened: () => void;
-}) {
-  const receivedRedirectUri = useMemo(() => {
-    if (typeof window === "undefined") return undefined;
-    try {
-      const current = new URL(window.location.href);
-      return current.searchParams.has("oauth_state_id")
-        ? window.location.href
-        : undefined;
-    } catch {
-      return undefined;
-    }
-  }, []);
-  const { open, ready } = usePlaidLink({
-    token,
-    onSuccess,
-    onExit,
-    onEvent,
-    receivedRedirectUri,
-  });
-  const openedRef = useRef(false);
-  useEffect(() => {
-    if (ready && !openedRef.current) {
-      openedRef.current = true;
-      open();
-      onOpened();
-    }
-  }, [ready, open, onOpened]);
-  return null;
-}
-
-function SortableFinancesSection({
-  sectionId,
-  children,
-}: {
-  sectionId: string;
-  children: (dragHandle: React.ReactNode) => React.ReactNode;
-}) {
-  const {
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-    attributes,
-    listeners,
-  } = useSortable({ id: sectionId });
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.5 : 1,
-  };
-  const dragHandle = (
-    <span
-      className="code-page-section-drag-handle features-list-drag-handle"
-      {...attributes}
-      {...listeners}
-      aria-label="Drag to reorder"
-      title="Drag to reorder"
-    >
-      <IconGrip />
-    </span>
-  );
-  return (
-    <div ref={setNodeRef} style={style}>
-      {children(dragHandle)}
-    </div>
-  );
-}
+import { PlaidLinkLauncher, SortableFinancesSection } from "../features/finances/components";
+import {
+  FINANCES_DRAGGABLE_SECTION_IDS,
+  MONTH_NAMES,
+  TAX_CHECKLIST_ITEMS,
+  clearStoredExpensesLegacy,
+  defaultTaxChecklistState,
+  expenseInDateFilter,
+  fileToBase64,
+  filterAndSortExpenses,
+  formatBytes,
+  formatExpenseDateDisplay,
+  getExpensesStorageKey,
+  getTaxChecklistStorageKey,
+  getTaxDocsStorageKey,
+  inferTaxDocumentKind,
+  inferTaxYear,
+  loadStoredExpensesLegacy,
+  normalizeFinancesSectionOrder,
+  readTaxTextPreview,
+  saveStoredExpensesLegacy,
+  taxDocInsight,
+  taxKindLabel,
+  type TaxChecklistState,
+  type TaxDocument,
+  type TaxDocumentKind,
+  type ExpenseSortField,
+} from "../features/finances/utils";
 
 export default function FinancialsPage() {
   const router = useRouter();
@@ -586,8 +130,7 @@ export default function FinancialsPage() {
   const [expenseSearchQuery, setExpenseSearchQuery] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
   const [addExpenseError, setAddExpenseError] = useState("");
-  type SortField = "date" | "description" | "amount" | "category";
-  const [sortBy, setSortBy] = useState<SortField>("date");
+  const [sortBy, setSortBy] = useState<ExpenseSortField>("date");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const migratedFromStorageRef = useRef(false);
 
@@ -1004,7 +547,7 @@ export default function FinancialsPage() {
     }
   }, [selectedProjectId, importedCount]);
 
-  const handleSort = (field: SortField) => {
+  const handleSort = (field: ExpenseSortField) => {
     if (sortBy === field) {
       setSortDir((d) => (d === "asc" ? "desc" : "asc"));
     } else {
@@ -1500,82 +1043,14 @@ export default function FinancialsPage() {
     setEditingDescriptionId(null);
   };
 
-  const expenseSearchLower = expenseSearchQuery.trim().toLowerCase();
-  const filteredExpensesRaw = expenses.filter((e) => {
-    if (
-      !expenseInDateFilter(
-        e.date,
-        dateFilterMode,
-        dateFilterMode === "day" ? filterDay : undefined,
-        dateFilterMode === "dayOfMonth" ? filterDayOfMonth : undefined,
-        dateFilterMode === "month" ? filterMonth : undefined,
-        dateFilterMode === "month" || dateFilterMode === "year"
-          ? filterYear
-          : undefined,
-        dateFilterMode === "range" ? rangeStart : undefined,
-        dateFilterMode === "range" ? rangeEnd : undefined
-      )
-    ) {
-      return false;
-    }
-    if (categoryFilter !== null && (e.category || "Other") !== categoryFilter) {
-      return false;
-    }
-    if (expenseSearchLower === "") return true;
-    const desc = (e.description ?? "").toLowerCase();
-    const cat = (e.category ?? "").toLowerCase();
-    const dateRaw = (e.date ?? "").toLowerCase();
-    const dateDisplay = formatExpenseDateDisplay(e.date).toLowerCase();
-    const amountStr = String(e.amount).toLowerCase();
-    return (
-      desc.includes(expenseSearchLower) ||
-      cat.includes(expenseSearchLower) ||
-      dateRaw.includes(expenseSearchLower) ||
-      dateDisplay.includes(expenseSearchLower) ||
-      amountStr.includes(expenseSearchLower)
-    );
-  });
-
-  const filteredExpenses = [...filteredExpensesRaw].sort((a, b) => {
-    let cmp = 0;
-    if (sortBy === "date") {
-      const da = new Date(`${a.date ?? ""}T00:00:00`).getTime();
-      const db = new Date(`${b.date ?? ""}T00:00:00`).getTime();
-      cmp = da - db;
-    } else if (sortBy === "description") {
-      cmp = (a.description ?? "").localeCompare(
-        b.description ?? "",
-        undefined,
-        { sensitivity: "base" }
-      );
-    } else if (sortBy === "amount") {
-      cmp = a.amount - b.amount;
-    } else {
-      cmp = (a.category ?? "").localeCompare(b.category ?? "", undefined, {
-        sensitivity: "base",
-      });
-    }
-    return sortDir === "asc" ? cmp : -cmp;
-  });
-
-  const expensesForSummary =
-    dateFilterMode === "all"
-      ? expenses
-      : expenses.filter((e) =>
-          expenseInDateFilter(
-            e.date,
-            dateFilterMode,
-            dateFilterMode === "day" ? filterDay : undefined,
-            dateFilterMode === "dayOfMonth" ? filterDayOfMonth : undefined,
-            dateFilterMode === "month" ? filterMonth : undefined,
-            dateFilterMode === "month" || dateFilterMode === "year"
-              ? filterYear
-              : undefined,
-            dateFilterMode === "range" ? rangeStart : undefined,
-            dateFilterMode === "range" ? rangeEnd : undefined
-          )
-        );
-  const total = expensesForSummary.reduce((sum, e) => sum + e.amount, 0);
+  const { filteredExpenses, expensesForSummary, total } = useMemo(
+    () =>
+      filterAndSortExpenses(expenses, {
+        dateFilterMode, filterDay, filterDayOfMonth, filterMonth, filterYear,
+        rangeStart, rangeEnd, categoryFilter, expenseSearchQuery, sortBy, sortDir,
+      }),
+    [expenses, dateFilterMode, filterDay, filterDayOfMonth, filterMonth, filterYear, rangeStart, rangeEnd, categoryFilter, expenseSearchQuery, sortBy, sortDir]
+  );
   const byCategory = expensesForSummary.reduce<Record<string, number>>(
     (acc, e) => {
       const c = e.category || "Other";

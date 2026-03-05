@@ -108,4 +108,40 @@ test.describe("Code page", () => {
       page.locator(".code-page-security-section .code-page-error-inline")
     ).toHaveCount(0);
   });
+
+  test("Security audit click does not navigate away", async ({ page }) => {
+    await page.route("**/api/run-security-audit*", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          ok: true,
+          generatedAt: new Date().toISOString(),
+          durationMs: 50,
+          score: 9.4,
+          summary: {
+            critical: 0,
+            high: 0,
+            moderate: 1,
+            low: 2,
+            totalDependencies: 120,
+          },
+          findings: [],
+        }),
+      });
+    });
+
+    await page.goto("/code");
+    await expandSecuritySection(page);
+
+    const runButton = page
+      .locator(".code-page-security-section")
+      .getByRole("button", { name: "Run security audit" });
+    await runButton.click();
+
+    await expect(page).toHaveURL(/\/code$/);
+    await expect(
+      page.locator(".code-page-security-section .code-page-rating-score-value")
+    ).toHaveText("9.4/10");
+  });
 });

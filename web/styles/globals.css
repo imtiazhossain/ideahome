@@ -12257,6 +12257,13 @@ html[data-theme="dark"] .calendar-picker-popup {
   gap: 10px;
 }
 
+.code-page-findings-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
 .code-page-release-notes-list {
   list-style: none;
   margin: 8px 0 0;

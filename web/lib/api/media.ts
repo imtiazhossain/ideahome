@@ -1,3 +1,13 @@
+import type {
+  IssueFile as SharedIssueFile,
+  IssueRecording as SharedIssueRecording,
+  IssueScreenshot as SharedIssueScreenshot,
+} from "@ideahome/shared";
+
+export type IssueRecording = SharedIssueRecording;
+export type IssueScreenshot = SharedIssueScreenshot;
+export type IssueFile = SharedIssueFile;
+
 export {
   uploadIssueRecording,
   updateIssueRecording,
@@ -10,7 +20,4 @@ export {
   uploadIssueFile,
   deleteIssueFile,
   getIssueFileUrl,
-  type IssueRecording,
-  type IssueScreenshot,
-  type IssueFile,
-} from "../api";
+} from "./issueMedia";

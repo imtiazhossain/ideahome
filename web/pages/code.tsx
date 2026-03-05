@@ -65,6 +65,47 @@ type SecurityAuditResponse = {
   error?: string;
 };
 
+function formatTokenFindingsForClipboard(findings: AuditFinding[]): string {
+  return findings
+    .map((finding, index) => {
+      const location = [
+        finding.file ? `File: ${finding.file}` : "",
+        finding.lines != null ? `${finding.lines} lines` : "",
+      ]
+        .filter(Boolean)
+        .join(" | ");
+      return [
+        `${index + 1}. ${finding.title}`,
+        `Severity: ${severityLabel(finding.severity)}`,
+        `Effort: ${finding.effort}`,
+        `Why: ${finding.why}`,
+        `Action: ${finding.action}`,
+        location,
+      ]
+        .filter(Boolean)
+        .join("\n");
+    })
+    .join("\n\n");
+}
+
+function formatSecurityFindingsForClipboard(
+  findings: SecurityAuditFinding[]
+): string {
+  return findings
+    .map((finding, index) =>
+      [
+        `${index + 1}. ${finding.title}`,
+        `Package: ${finding.moduleName}`,
+        `Severity: ${finding.severity}`,
+        `Recommendation: ${finding.recommendation}`,
+        finding.url ? `Advisory: ${finding.url}` : "",
+      ]
+        .filter(Boolean)
+        .join("\n")
+    )
+    .join("\n\n");
+}
+
 function formatReleaseDate(date: string): string {
   const parts = date.split("-");
   if (parts.length === 3) {
@@ -193,6 +234,8 @@ export default function CodePage() {
   const [securityAuditGeneratedAt, setSecurityAuditGeneratedAt] = useState<
     string | null
   >(null);
+  const [tokenFindingsCopied, setTokenFindingsCopied] = useState(false);
+  const [securityFindingsCopied, setSecurityFindingsCopied] = useState(false);
   const [projectFlowRefreshNonce, setProjectFlowRefreshNonce] = useState(0);
   const runSecurityAudit = useCallback(async () => {
     setSecurityAuditRunning(true);
@@ -253,6 +296,39 @@ export default function CodePage() {
   const updateProjectFlowDiagram = useCallback(() => {
     setProjectFlowRefreshNonce((prev) => prev + 1);
   }, []);
+  const handleSecurityAuditClick = useCallback(
+    (event: React.MouseEvent<HTMLButtonElement>) => {
+      event.preventDefault();
+      event.stopPropagation();
+      if (securityAuditRunning) return;
+      void runSecurityAudit();
+    },
+    [runSecurityAudit, securityAuditRunning]
+  );
+  const handleCopyTokenFindings = useCallback(async () => {
+    if (findings.length === 0) return;
+    try {
+      await navigator.clipboard.writeText(
+        formatTokenFindingsForClipboard(findings)
+      );
+      setTokenFindingsCopied(true);
+      window.setTimeout(() => setTokenFindingsCopied(false), 1800);
+    } catch {
+      setTokenFindingsCopied(false);
+    }
+  }, [findings]);
+  const handleCopySecurityFindings = useCallback(async () => {
+    if (securityAuditFindings.length === 0) return;
+    try {
+      await navigator.clipboard.writeText(
+        formatSecurityFindingsForClipboard(securityAuditFindings)
+      );
+      setSecurityFindingsCopied(true);
+      window.setTimeout(() => setSecurityFindingsCopied(false), 1800);
+    } catch {
+      setSecurityFindingsCopied(false);
+    }
+  }, [securityAuditFindings]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -322,7 +398,11 @@ export default function CodePage() {
         securityAuditFindings,
         securityAuditGeneratedAt,
         securityAuditScore,
-        runSecurityAudit,
+        handleSecurityAuditClick,
+        tokenFindingsCopied,
+        securityFindingsCopied,
+        handleCopyTokenFindings,
+        handleCopySecurityFindings,
       }),
     [
       hasSelectedProject,
@@ -366,7 +446,11 @@ export default function CodePage() {
       securityAuditFindings,
       securityAuditGeneratedAt,
       securityAuditScore,
-      runSecurityAudit,
+      handleSecurityAuditClick,
+      tokenFindingsCopied,
+      securityFindingsCopied,
+      handleCopyTokenFindings,
+      handleCopySecurityFindings,
     ]
   );
 
@@ -493,7 +577,13 @@ function renderCodeSectionInner(
     securityAuditFindings: SecurityAuditFinding[];
     securityAuditGeneratedAt: string | null;
     securityAuditScore: number | null;
-    runSecurityAudit: () => Promise<void>;
+    handleSecurityAuditClick: (
+      event: React.MouseEvent<HTMLButtonElement>
+    ) => void;
+    tokenFindingsCopied: boolean;
+    securityFindingsCopied: boolean;
+    handleCopyTokenFindings: () => Promise<void>;
+    handleCopySecurityFindings: () => Promise<void>;
   }
 ) {
   const {
@@ -540,7 +630,11 @@ function renderCodeSectionInner(
     securityAuditFindings,
     securityAuditGeneratedAt,
     securityAuditScore,
-    runSecurityAudit,
+    handleSecurityAuditClick,
+    tokenFindingsCopied,
+    securityFindingsCopied,
+    handleCopyTokenFindings,
+    handleCopySecurityFindings,
   } = ctx;
   const ratingSuggestions = buildCodeRatingSuggestions(findings);
   if (sectionId === "code-repos") {
@@ -726,9 +820,22 @@ function renderCodeSectionInner(
         )}
         {payload && (
           <section className="code-page-body">
-            <h3 id="code-findings-heading" className="code-page-findings-title">
-              Audit findings
-            </h3>
+            <div className="code-page-findings-header">
+              <h3
+                id="code-findings-heading"
+                className="code-page-findings-title"
+              >
+                Audit findings
+              </h3>
+              <button
+                type="button"
+                className="code-page-rating-prompt-copy-btn"
+                onClick={handleCopyTokenFindings}
+                disabled={findings.length === 0}
+              >
+                {tokenFindingsCopied ? "Copied" : "Copy findings"}
+              </button>
+            </div>
             <section className="code-page-findings">
               {findings.length === 0 && !requestError && (
                 <div className="code-page-empty">No findings.</div>
@@ -926,7 +1033,7 @@ function renderCodeSectionInner(
         <button
           type="button"
           className="code-page-run-btn"
-          onClick={() => void runSecurityAudit()}
+          onClick={handleSecurityAuditClick}
           disabled={securityAuditRunning}
         >
           {securityAuditRunning
@@ -981,9 +1088,18 @@ function renderCodeSectionInner(
         )}
         {securityAuditFindings.length > 0 && (
           <section className="code-page-body">
-            <h3 className="code-page-findings-title">
-              Top security findings
-            </h3>
+            <div className="code-page-findings-header">
+              <h3 className="code-page-findings-title">
+                Top security findings
+              </h3>
+              <button
+                type="button"
+                className="code-page-rating-prompt-copy-btn"
+                onClick={handleCopySecurityFindings}
+              >
+                {securityFindingsCopied ? "Copied" : "Copy findings"}
+              </button>
+            </div>
             <section className="code-page-findings">
               {securityAuditFindings.map((finding) => (
                 <article key={finding.id} className="code-finding">

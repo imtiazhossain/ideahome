@@ -3,5 +3,6 @@ export {
   fetchIdeaSearch,
   fetchBugSearch,
   fetchFeatureSearch,
-  fetchIssueSearch,
-} from "../api";
+} from "./ideas";
+
+export { fetchIssueSearch } from "./issues";

@@ -20,36 +20,29 @@ import { CSS } from "@dnd-kit/utilities";
 import { AUTH_CHANGE_EVENT, getStoredToken } from "../lib/api/auth";
 import { logout } from "../lib/api/session";
 import {
-  useProjectSearch,
-  type ProjectSearchResult,
-} from "../lib/useProjectSearch";
-import {
   addCustomList,
   getCustomListTabId,
   getCustomLists,
 } from "../lib/customLists";
 import {
   IconChevronDown,
-  IconChevronUp,
-  IconFilter,
   IconHomeBulby,
   IconLogin,
   IconLogout,
   IconProfile,
-  IconReorder,
-  IconSettings,
-  IconSearch,
 } from "./icons";
 import { AccessibleModal } from "./AccessibleModal";
 import { ErrorBanner } from "./ErrorBanner";
 import { IconFromName } from "./IconFromName";
 import { IconPlus } from "./IconPlus";
-import { IconTrash } from "./IconTrash";
 import {
   getCompactTabLabel,
   getSettingsButtonVisibleStorageKey,
 } from "./project-nav/utils";
 import { ProjectSettingsModal } from "./ProjectSettingsModal";
+import { ProjectNavSearch } from "./project-nav/ProjectNavSearch";
+import { ProjectNavSettingsMenu } from "./project-nav/ProjectNavSettingsMenu";
+import { useProjectNavSettings } from "./project-nav/useProjectNavSettings";
 import {
   DrawerCollapsedNav,
   EXPLICIT_BOARD_SESSION_KEY,
@@ -104,182 +97,6 @@ export interface ProjectNavBarProps {
   showSettingsButton?: boolean;
   /** Open global appearance settings page. */
   onOpenAppearanceSettings?: () => void;
-}
-
-interface ProjectNavSearchProps {
-  projectId?: string;
-  searchPlaceholder: string;
-  searchValue: string;
-  onSearchChange?: (value: string) => void;
-  projectSearchOpen: boolean;
-  setProjectSearchOpen: (open: boolean) => void;
-}
-
-function ProjectNavSearch({
-  projectId,
-  searchPlaceholder,
-  searchValue,
-  onSearchChange,
-  projectSearchOpen,
-  setProjectSearchOpen,
-}: ProjectNavSearchProps) {
-  const [projectSearchQuery, setProjectSearchQuery] = useState("");
-  const {
-    results: projectSearchResults,
-    setResults: setProjectSearchResults,
-    loading: projectSearchLoading,
-  } = useProjectSearch(projectId, projectSearchQuery);
-  const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
-  const projectSearchRef = useRef<HTMLDivElement>(null);
-  const projectSearchInputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (
-        projectSearchRef.current &&
-        !projectSearchRef.current.contains(e.target as Node)
-      ) {
-        setProjectSearchOpen(false);
-        setMobileSearchOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-    };
-  }, []);
-
-  return (
-    <div
-      className={`project-nav-search-wrap${
-        mobileSearchOpen ? " is-mobile-search-open" : ""
-      }`}
-      ref={projectSearchRef}
-      style={projectId ? { position: "relative" } : undefined}
-    >
-      <button
-        type="button"
-        className="project-nav-search-icon"
-        aria-label="Open search"
-        onClick={() => {
-          if (
-            typeof window !== "undefined" &&
-            window.matchMedia("(max-width: 1024px)").matches
-          ) {
-            setMobileSearchOpen(true);
-            requestAnimationFrame(() => projectSearchInputRef.current?.focus());
-            return;
-          }
-          projectSearchInputRef.current?.focus();
-        }}
-      >
-        <IconSearch />
-      </button>
-      <input
-        ref={projectSearchInputRef}
-        type="search"
-        id="project-nav-search-input"
-        className="project-nav-search"
-        placeholder={
-          projectId
-            ? "A little light to find things in the dark..."
-            : searchPlaceholder
-        }
-        value={projectId ? projectSearchQuery : searchValue}
-        onChange={(e) => {
-          if (projectId) {
-            const v = e.target.value;
-            setProjectSearchQuery(v);
-            setProjectSearchOpen(!!v.trim());
-          } else {
-            onSearchChange?.(e.target.value);
-          }
-        }}
-        onFocus={() => {
-          setMobileSearchOpen(true);
-          if (projectId && projectSearchQuery.trim()) {
-            setProjectSearchOpen(true);
-          }
-        }}
-        onBlur={() => {
-          if (
-            typeof window !== "undefined" &&
-            window.matchMedia("(max-width: 1024px)").matches &&
-            !(projectId ? projectSearchQuery.trim() : searchValue.trim())
-          ) {
-            setMobileSearchOpen(false);
-          }
-        }}
-        aria-label="Search"
-        aria-expanded={
-          projectId
-            ? projectSearchOpen && projectSearchResults.length > 0
-            : undefined
-        }
-        aria-controls={projectId ? "project-search-results" : undefined}
-        aria-autocomplete={projectId ? "list" : undefined}
-      />
-      {projectId &&
-        projectSearchOpen &&
-        (projectSearchResults.length > 0 || projectSearchLoading) && (
-          <ul
-            id="project-search-results"
-            className="project-nav-search-results"
-            role="listbox"
-            aria-label="Search results"
-          >
-            {projectSearchLoading ? (
-              <li
-                className="project-nav-search-results-loading"
-                role="option"
-                aria-selected={false}
-              >
-                Searching…
-              </li>
-            ) : (
-              projectSearchResults.map((item) => {
-                const key =
-                  item.type === "issue"
-                    ? `issue-${item.id}`
-                    : `list-${item.page}-${item.id}`;
-                const href =
-                  item.type === "issue"
-                    ? `/?issueId=${encodeURIComponent(item.id)}`
-                    : `${item.page}?projectId=${encodeURIComponent(
-                        item.projectId
-                      )}`;
-                const title = item.type === "issue" ? item.title : item.name;
-                const meta =
-                  item.type === "issue" ? item.status : item.pageLabel;
-                return (
-                  <li key={key} role="option">
-                    <Link
-                      href={href}
-                      prefetch={false}
-                      className="project-nav-search-result-item"
-                      onClick={() => {
-                        setProjectSearchOpen(false);
-                        setProjectSearchQuery("");
-                        setProjectSearchResults([]);
-                      }}
-                    >
-                      <span className="project-nav-search-result-title">
-                        {title}
-                      </span>
-                      {meta && (
-                        <span className="project-nav-search-result-meta">
-                          {meta}
-                        </span>
-                      )}
-                    </Link>
-                  </li>
-                );
-              })
-            )}
-          </ul>
-        )}
-    </div>
-  );
 }
 
 interface ProjectNavAuthMenuProps {
@@ -408,8 +225,6 @@ export function ProjectNavBar({
   onOpenDrawer,
   projects,
   selectedProjectId,
-  onSelectProject,
-  onCreateProject,
   onDeleteProjectClick,
   onDeleteAllIssuesClick,
   deleteAllIssuesDisabled,
@@ -427,31 +242,28 @@ export function ProjectNavBar({
     setDeletedTabIds,
   } = useTabOrder();
   const isMobile = useIsMobile();
-  const [settingsButtonVisible, setSettingsButtonVisible] = useState(true);
-  const [settingsMenuOpen, setSettingsMenuOpen] = useState(false);
-  const [reorderSectionOpen, setReorderSectionOpen] = useState(false);
-  const [showTabsSectionOpen, setShowTabsSectionOpen] = useState(false);
-  const [addSectionOpen, setAddSectionOpen] = useState(false);
-  const [deleteProjectSectionOpen, setDeleteProjectSectionOpen] =
-    useState(false);
-  const settingsMenuRef = useRef<HTMLDivElement>(null);
+  const {
+    settingsButtonVisible,
+    setSettingsButtonVisible,
+    settingsMenuOpen,
+    setSettingsMenuOpen,
+    reorderSectionOpen,
+    setReorderSectionOpen,
+    showTabsSectionOpen,
+    setShowTabsSectionOpen,
+    addSectionOpen,
+    setAddSectionOpen,
+    deleteProjectSectionOpen,
+    setDeleteProjectSectionOpen,
+    settingsMenuRef,
+    closeSettingsMenu,
+  } = useProjectNavSettings();
   const [createListModalOpen, setCreateListModalOpen] = useState(false);
   const [createListName, setCreateListName] = useState("");
   const [createListError, setCreateListError] = useState<string | null>(null);
-  const [projectSwitcherOpen, setProjectSwitcherOpen] = useState(false);
-  const projectSwitcherRef = useRef<HTMLDivElement>(null);
-  const [showCreateProjectInput, setShowCreateProjectInput] = useState(false);
-  const [newProjectName, setNewProjectName] = useState("");
-  const createProjectInputRef = useRef<HTMLInputElement>(null);
   const [customLists, setCustomLists] = useState<
     ReturnType<typeof getCustomLists>
   >([]);
-
-  useEffect(() => {
-    if (showCreateProjectInput) {
-      createProjectInputRef.current?.focus();
-    }
-  }, [showCreateProjectInput]);
 
   useEffect(() => {
     const syncCustomLists = () => setCustomLists(getCustomLists());
@@ -502,46 +314,12 @@ export function ProjectNavBar({
     }
   }, []);
   useEffect(() => {
-    const openSettingsMenu = () => {
-      setSettingsButtonVisible(true);
-      setSettingsMenuOpen(true);
-      setShowTabsSectionOpen(false);
-      setReorderSectionOpen(false);
-      setAddSectionOpen(false);
-      setDeleteProjectSectionOpen(false);
-    };
-    window.addEventListener(OPEN_SETTINGS_MENU_EVENT, openSettingsMenu);
-    return () =>
-      window.removeEventListener(OPEN_SETTINGS_MENU_EVENT, openSettingsMenu);
-  }, []);
-  const handleLogout = useCallback(() => {
-    setAuthMenuOpen(false);
-    logout("/login");
-  }, []);
-
-  const closeSettingsMenu = useCallback(() => {
-    setSettingsMenuOpen(false);
-    setShowTabsSectionOpen(false);
-    setReorderSectionOpen(false);
-    setAddSectionOpen(false);
-    setDeleteProjectSectionOpen(false);
-  }, []);
-
-  useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (
         settingsMenuRef.current &&
         !settingsMenuRef.current.contains(e.target as Node)
       ) {
         closeSettingsMenu();
-      }
-      if (
-        projectSwitcherRef.current &&
-        !projectSwitcherRef.current.contains(e.target as Node)
-      ) {
-        setProjectSwitcherOpen(false);
-        setShowCreateProjectInput(false);
-        setNewProjectName("");
       }
     };
     document.addEventListener("mousedown", handleClickOutside);
@@ -571,19 +349,6 @@ export function ProjectNavBar({
   useEffect(() => {
     setTabOrder(loadTabOrder(deletedTabIds));
   }, [deletedTabIds, setTabOrder]);
-
-  const moveTab = useCallback(
-    (tabId: ProjectNavTabId, direction: "up" | "down") => {
-      const idx = tabOrder.indexOf(tabId);
-      if (idx === -1) return;
-      const swapIdx = direction === "up" ? idx - 1 : idx + 1;
-      if (swapIdx < 0 || swapIdx >= tabOrder.length) return;
-      const next = [...tabOrder];
-      [next[idx], next[swapIdx]] = [next[swapIdx], next[idx]];
-      setTabOrder(next);
-    },
-    [tabOrder, setTabOrder]
-  );
 
   /** Move tab within the visible-only list (for reorder UI). */
   const moveTabVisible = useCallback(
@@ -835,7 +600,6 @@ export function ProjectNavBar({
                               setProjectSearchOpen(false);
                               closeSettingsMenu();
                               setAuthMenuOpen(false);
-                              setProjectSwitcherOpen(false);
                               try {
                                 sessionStorage.setItem(
                                   EXPLICIT_BOARD_SESSION_KEY,
@@ -876,7 +640,6 @@ export function ProjectNavBar({
                               setProjectSearchOpen(false);
                               closeSettingsMenu();
                               setAuthMenuOpen(false);
-                              setProjectSwitcherOpen(false);
                               if (activeTab === tab.id) {
                                 const main =
                                   document.querySelector(".main-content");
@@ -947,277 +710,47 @@ export function ProjectNavBar({
             </SortableContext>
           </DndContext>
         </div>
-        {showSettingsButton && (
-          <div ref={settingsMenuRef} className="project-nav-settings-wrap">
-            {settingsButtonVisible && settingsMenuOpen && (
-              <div
-                className="project-nav-settings-menu"
-                role="menu"
-                aria-label="Settings"
-              >
-                {onDeleteAllIssuesClick && (
-                  <button
-                    type="button"
-                    role="menuitem"
-                    className="project-nav-add-menu-item"
-                    disabled={deleteAllIssuesDisabled}
-                    onClick={() => {
-                      closeSettingsMenu();
-                      onDeleteAllIssuesClick();
-                    }}
-                    title={
-                      deleteAllIssuesDisabled
-                        ? "No issues to delete"
-                        : "Delete all issues"
-                    }
-                    aria-label="Delete all issues"
-                  >
-                    Delete all issues
-                  </button>
-                )}
-                <button
-                  type="button"
-                  className={`project-nav-settings-section-toggle${reorderSectionOpen ? " is-open" : ""}`}
-                  onClick={() => setReorderSectionOpen((o) => !o)}
-                  aria-expanded={reorderSectionOpen}
-                  aria-label="Reorder tabs"
-                  title="Reorder tabs"
-                >
-                  <IconReorder />
-                </button>
-                {reorderSectionOpen && (
-                  <ul className="project-nav-reorder-list" role="list">
-                    {(() => {
-                      const visibleTabs = tabOrder
-                        .filter((id) => !hiddenSet.has(id))
-                        .filter(
-                          (id) =>
-                            !(
-                              isMobile &&
-                              TABS.find((t) => t.id === id)?.desktopOnly
-                            )
-                        );
-                      return visibleTabs.map((id, visibleIdx) => {
-                        const builtIn = TABS.find((t) => t.id === id);
-                        const label =
-                          builtIn?.label ??
-                          (typeof id === "string" && id.startsWith("custom-")
-                            ? (customLists.find(
-                                (l) => getCustomListTabId(l.slug) === id
-                              )?.name ?? id)
-                            : id);
-                        return (
-                          <li key={id} className="project-nav-reorder-item">
-                            <span className="project-nav-reorder-label">
-                              {label}
-                            </span>
-                            <span className="project-nav-reorder-actions">
-                              <button
-                                type="button"
-                                className="project-nav-reorder-btn"
-                                onClick={() => moveTabVisible(id, "up")}
-                                disabled={visibleIdx === 0}
-                                aria-label={`Move ${label} up`}
-                                title="Move up"
-                              >
-                                <IconChevronUp />
-                              </button>
-                            </span>
-                          </li>
-                        );
-                      });
-                    })()}
-                  </ul>
-                )}
-                <button
-                  type="button"
-                  className={`project-nav-settings-section-toggle${showTabsSectionOpen ? " is-open" : ""}`}
-                  onClick={() => setShowTabsSectionOpen((o) => !o)}
-                  aria-expanded={showTabsSectionOpen}
-                  aria-label="Filter tabs"
-                >
-                  <IconFilter />
-                </button>
-                {showTabsSectionOpen && (
-                  <ul className="project-nav-filter-list" role="list">
-                    {[...tabOrder]
-                      .filter(
-                        (id) =>
-                          !(
-                            isMobile &&
-                            TABS.find((t) => t.id === id)?.desktopOnly
-                          )
-                      )
-                      .map((id) => {
-                        const builtIn = TABS.find((t) => t.id === id);
-                        const label =
-                          builtIn?.label ??
-                          (typeof id === "string" && id.startsWith("custom-")
-                            ? (customLists.find(
-                                (l) => getCustomListTabId(l.slug) === id
-                              )?.name ?? id)
-                            : id);
-                        return { id, label };
-                      })
-                      .sort((a, b) =>
-                        a.label.localeCompare(b.label, undefined, {
-                          sensitivity: "base",
-                        })
-                      )
-                      .map(({ id, label }) => {
-                        const visible = !hiddenSet.has(id);
-                        const canDelete = tabOrder.length > 1;
-                        return (
-                          <li key={id} className="project-nav-filter-item">
-                            <label className="project-nav-filter-label">
-                              <input
-                                type="checkbox"
-                                checked={visible}
-                                onChange={() => {
-                                  const next = visible
-                                    ? [...hiddenTabIds, id]
-                                    : hiddenTabIds.filter((h) => h !== id);
-                                  setHiddenTabIds(next);
-                                }}
-                                aria-label={`${visible ? "Hide" : "Show"} ${label}`}
-                              />
-                              <span>{label}</span>
-                            </label>
-                            <button
-                              type="button"
-                              className="project-nav-filter-delete"
-                              onClick={() => deleteTab(id)}
-                              aria-label={`Delete ${label} tab`}
-                              title={
-                                canDelete
-                                  ? `Delete ${label} tab`
-                                  : "At least one tab must remain"
-                              }
-                              disabled={!canDelete}
-                            >
-                              <IconTrash />
-                            </button>
-                          </li>
-                        );
-                      })}
-                    <li className="project-nav-filter-item project-nav-filter-restore-row">
-                      <button
-                        type="button"
-                        role="menuitem"
-                        className="project-nav-add-menu-item project-nav-filter-restore-btn"
-                        disabled={deletedTabIds.length === 0}
-                        onClick={restoreDeletedTabs}
-                        title={
-                          deletedTabIds.length === 0
-                            ? "No deleted tabs to restore"
-                            : "Restore deleted tabs"
-                        }
-                        aria-label="Restore deleted tabs"
-                      >
-                        Restore deleted tabs
-                      </button>
-                    </li>
-                  </ul>
-                )}
-                <button
-                  type="button"
-                  className={`project-nav-settings-section-toggle project-nav-settings-section-header${addSectionOpen ? " is-open" : ""}`}
-                  onClick={() => setAddSectionOpen((o) => !o)}
-                  aria-expanded={addSectionOpen}
-                  aria-label="Add"
-                >
-                  <IconPlus />
-                </button>
-                {addSectionOpen && (
-                  <ul className="project-nav-add-menu-list" role="list">
-                    {onAddClick && (
-                      <li role="none">
-                        <button
-                          type="button"
-                          role="menuitem"
-                          className="project-nav-add-menu-item"
-                          onClick={() => {
-                            closeSettingsMenu();
-                            onAddClick();
-                          }}
-                        >
-                          Create Deck
-                        </button>
-                      </li>
-                    )}
-                    <li role="none">
-                      <button
-                        type="button"
-                        role="menuitem"
-                        className="project-nav-add-menu-item"
-                        onClick={() => {
-                          closeSettingsMenu();
-                          setCreateListName("");
-                          setCreateListError(null);
-                          setCreateListModalOpen(true);
-                        }}
-                      >
-                        New list…
-                      </button>
-                    </li>
-                  </ul>
-                )}
-                <button
-                  type="button"
-                  role="menuitem"
-                  className="project-nav-settings-section-toggle"
-                  onClick={() => {
-                    if (onOpenAppearanceSettings) {
-                      onOpenAppearanceSettings();
-                    } else {
-                      void router.push("/settings");
-                    }
-                  }}
-                  aria-label="Open appearance settings"
-                  title="Open appearance settings"
-                >
-                  <span className="project-nav-theme-icon" aria-hidden>
-                    <IconSettings />
-                  </span>
-                </button>
-                {onDeleteProjectClick && (
-                  <>
-                    <button
-                      type="button"
-                      className={`project-nav-settings-section-toggle project-nav-settings-section-header${deleteProjectSectionOpen ? " is-open" : ""}`}
-                      onClick={() => setDeleteProjectSectionOpen((o) => !o)}
-                      aria-expanded={deleteProjectSectionOpen}
-                      aria-label="Delete project"
-                      title="Delete project"
-                    >
-                      <IconTrash />
-                    </button>
-                    {deleteProjectSectionOpen && (
-                      <button
-                        type="button"
-                        role="menuitem"
-                        className="project-nav-add-menu-item project-nav-settings-delete-project"
-                        disabled={!selectedProjectId || !projects?.length}
-                        onClick={() => {
-                          closeSettingsMenu();
-                          onDeleteProjectClick();
-                        }}
-                        title={
-                          !selectedProjectId || !projects?.length
-                            ? "No project to delete"
-                            : "Delete the Project"
-                        }
-                        aria-label="Delete the Project"
-                      >
-                        Delete the Project
-                      </button>
-                    )}
-                  </>
-                )}
-              </div>
-            )}
-          </div>
-        )}
+        <ProjectNavSettingsMenu
+          showSettingsButton={showSettingsButton}
+          settingsButtonVisible={settingsButtonVisible}
+          settingsMenuOpen={settingsMenuOpen}
+          setSettingsMenuOpen={setSettingsMenuOpen}
+          settingsMenuRef={settingsMenuRef}
+          closeSettingsMenu={closeSettingsMenu}
+          onDeleteAllIssuesClick={onDeleteAllIssuesClick}
+          deleteAllIssuesDisabled={deleteAllIssuesDisabled}
+          reorderSectionOpen={reorderSectionOpen}
+          setReorderSectionOpen={setReorderSectionOpen}
+          showTabsSectionOpen={showTabsSectionOpen}
+          setShowTabsSectionOpen={setShowTabsSectionOpen}
+          addSectionOpen={addSectionOpen}
+          setAddSectionOpen={setAddSectionOpen}
+          deleteProjectSectionOpen={deleteProjectSectionOpen}
+          setDeleteProjectSectionOpen={setDeleteProjectSectionOpen}
+          tabOrder={tabOrder}
+          hiddenSet={hiddenSet}
+          hiddenTabIds={hiddenTabIds}
+          setHiddenTabIds={setHiddenTabIds}
+          deletedTabIds={deletedTabIds}
+          restoreDeletedTabs={restoreDeletedTabs}
+          deleteTab={deleteTab}
+          moveTabVisible={moveTabVisible}
+          isMobile={isMobile}
+          customLists={customLists}
+          onAddClick={onAddClick}
+          onOpenCreateListModal={() => {
+            setCreateListName("");
+            setCreateListError(null);
+            setCreateListModalOpen(true);
+          }}
+          onOpenAppearanceSettings={onOpenAppearanceSettings}
+          onOpenSettingsRoute={() => {
+            void router.push("/settings");
+          }}
+          onDeleteProjectClick={onDeleteProjectClick}
+          selectedProjectId={selectedProjectId}
+          projectsLength={projects?.length}
+        />
       </nav>
 
       <AccessibleModal
