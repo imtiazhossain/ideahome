@@ -118,6 +118,9 @@ function readPublicEnv(name: string): string | undefined {
 
 const API_BASE_RAW = readPublicEnv("NEXT_PUBLIC_API_URL") || "";
 const API_BASE_DEFAULT = "http://localhost:3001";
+const SKIP_LOGIN_DEV =
+  process.env.NEXT_PUBLIC_SKIP_LOGIN_DEV ??
+  readPublicEnv("NEXT_PUBLIC_SKIP_LOGIN_DEV");
 
 function resolveApiBase(raw: string): string {
   if (!raw) return API_BASE_DEFAULT;
@@ -350,7 +353,7 @@ export async function sendErrorReportEmail(body: {
 
 /** When true, app does not redirect to login (use with backend SKIP_AUTH_DEV in local dev). */
 export function isSkipLoginDev(): boolean {
-  return readPublicEnv("NEXT_PUBLIC_SKIP_LOGIN_DEV") === "true";
+  return SKIP_LOGIN_DEV === "true";
 }
 
 export function getStoredToken(): string | null {

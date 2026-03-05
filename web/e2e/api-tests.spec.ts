@@ -13,6 +13,39 @@ test.afterEach(async ({ page }) => {
   await page.close();
 });
 
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript(() => {
+    localStorage.setItem("ideahome_token", "e2e-token");
+    sessionStorage.setItem("ideahome_token_session", "e2e-token");
+    document.cookie = "ideahome_token=e2e-token; Path=/; SameSite=Lax";
+  });
+
+  const project = { id: "e2e-project-1", name: "E2E Project" };
+  await page.route("**/projects*", async (route) => {
+    if (route.request().method() === "GET") {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify([project]),
+      });
+      return;
+    }
+    await route.continue();
+  });
+
+  await page.route("**/issues*", async (route) => {
+    if (route.request().method() === "GET") {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify([]),
+      });
+      return;
+    }
+    await route.continue();
+  });
+});
+
 test.describe("API Tests page", () => {
   test("API Tests page loads with title and back link", async ({ page }) => {
     await test.step("Navigate to API Tests page", async () => {
@@ -41,9 +74,12 @@ test.describe("API Tests page", () => {
     await test.step("Verify home URL and Idea Home title", async () => {
       await expectHomeUrl(page);
       await expandSidebarIfNeeded(page);
-      await expect(page.locator(".drawer-title")).toHaveText("Idea Home", {
-        timeout: 5000,
-      });
+      await expect(page.locator(".drawer-brand-title")).toHaveText(
+        "Idea Home",
+        {
+          timeout: 5000,
+        }
+      );
     });
   });
 

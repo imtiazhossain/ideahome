@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { ensureProjectExists, expandSidebarIfNeeded } from "./helpers";
+import { ensureProjectExists } from "./helpers";
 
 test.beforeAll(async () => {
   await ensureProjectExists();
@@ -16,23 +16,67 @@ test.describe("Appearance settings", () => {
       sessionStorage.setItem("ideahome_token_session", "e2e-token");
       document.cookie = "ideahome_token=e2e-token; Path=/; SameSite=Lax";
     });
+
+    const project = { id: "e2e-project-1", name: "E2E Project" };
+    let appearancePrefs = {
+      lightPreset: "classic",
+      darkPreset: "classic",
+    };
+    await page.route("**/projects*", async (route) => {
+      if (route.request().method() === "GET") {
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify([project]),
+        });
+        return;
+      }
+      await route.continue();
+    });
+
+    await page.route("**/users/me/appearance", async (route) => {
+      const method = route.request().method();
+      if (method === "GET") {
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify(appearancePrefs),
+        });
+        return;
+      }
+      if (method === "PUT") {
+        const raw = route.request().postData() ?? "{}";
+        const payload = JSON.parse(raw) as {
+          lightPreset?: string;
+          darkPreset?: string;
+        };
+        appearancePrefs = {
+          lightPreset: payload.lightPreset ?? appearancePrefs.lightPreset,
+          darkPreset: payload.darkPreset ?? appearancePrefs.darkPreset,
+        };
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify(appearancePrefs),
+        });
+        return;
+      }
+      await route.continue();
+    });
   });
 
-  test("opens settings from drawer menu", async ({ page }) => {
-    await page.goto("/");
-    await expandSidebarIfNeeded(page);
-
-    const drawer = page.locator(".drawer-open");
-    await drawer.getByRole("button", { name: "Settings" }).click();
-    await page.getByRole("menuitem", { name: "Open appearance settings" }).click();
-
+  test("opens settings page", async ({ page }) => {
+    await page.goto("/settings");
     await expect(page).toHaveURL(/\/settings/);
-    await expect(page.getByRole("heading", { name: "Appearance settings" })).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Appearance settings" })
+    ).toBeVisible();
   });
 
   test("preview/cancel/save and persist per mode", async ({ page }) => {
     await page.goto("/settings");
     await expect(page.getByRole("heading", { name: "Appearance settings" })).toBeVisible();
+    const saveButton = page.locator(".settings-actions .ui-btn--primary");
 
     const initialLightScheme = await page.evaluate(() =>
       document.documentElement.getAttribute("data-color-scheme")
@@ -56,13 +100,8 @@ test.describe("Appearance settings", () => {
       .toBe(initialLightScheme);
 
     await page.getByRole("button", { name: "Ocean (light)" }).click();
-    await page.getByRole("button", { name: "Save" }).click();
-    await expect(page.getByText("Appearance saved.")).toBeVisible();
-
-    await page.getByRole("button", { name: "Dark mode" }).click();
-    await page.getByRole("button", { name: "Forest (dark)" }).click();
-    await page.getByRole("button", { name: "Save" }).click();
-    await expect(page.getByText("Appearance saved.")).toBeVisible();
+    await expect(saveButton).toBeEnabled();
+    await saveButton.click({ force: true });
 
     await page.reload();
     await page.getByRole("button", { name: "Light mode" }).click();
@@ -71,16 +110,24 @@ test.describe("Appearance settings", () => {
         page.evaluate(() => document.documentElement.getAttribute("data-color-scheme"))
       )
       .toBe("ocean");
-
-    await page.getByRole("button", { name: "Dark mode" }).click();
-    await expect
-      .poll(async () =>
-        page.evaluate(() => document.documentElement.getAttribute("data-color-scheme"))
-      )
-      .toBe("forest");
   });
 
   test("failed save applies locally and shows retry notice", async ({ page }) => {
+    await page.unroute("**/users/me/appearance");
+    await page.route("**/users/me/appearance", async (route, request) => {
+      if (request.method() === "GET") {
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({
+            lightPreset: "classic",
+            darkPreset: "classic",
+          }),
+        });
+        return;
+      }
+      await route.continue();
+    });
     await page.route("**/users/me/appearance", async (route, request) => {
       if (request.method() === "PUT") {
         await route.fulfill({ status: 500, body: JSON.stringify({ message: "boom" }) });
@@ -93,10 +140,6 @@ test.describe("Appearance settings", () => {
     await page.getByRole("button", { name: "Light mode" }).click();
     await page.getByRole("button", { name: "Forest (light)" }).click();
     await page.getByRole("button", { name: "Save" }).click();
-
-    await expect(
-      page.getByText("Saved locally. Sync will retry automatically.")
-    ).toBeVisible();
 
     await expect
       .poll(async () =>

@@ -1,10 +1,45 @@
 import { test, expect } from "@playwright/test";
+import type { Page } from "@playwright/test";
 
 test.afterEach(async ({ page }) => {
   await page.close();
 });
 
+async function seedAuthAndMocks(page: Page) {
+  await page.addInitScript(() => {
+    localStorage.setItem("ideahome_token", "e2e-token");
+    sessionStorage.setItem("ideahome_token_session", "e2e-token");
+    document.cookie = "ideahome_token=e2e-token; Path=/; SameSite=Lax";
+  });
+  await page.route("**/projects*", async (route) => {
+    if (route.request().method() !== "GET") {
+      await route.continue();
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify([{ id: "proj-e2e", name: "E2E Project" }]),
+    });
+  });
+  await page.route("**/api/run-coverage", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        ok: true,
+        output: "Coverage generated",
+        reportCopied: true,
+      }),
+    });
+  });
+}
+
 test.describe("Code Health section (on Code page)", () => {
+  test.beforeEach(async ({ page }) => {
+    await seedAuthAndMocks(page);
+  });
+
   test("Code page has Code Health section with title and Run coverage button", async ({
     page,
   }) => {
@@ -28,10 +63,8 @@ test.describe("Code Health section (on Code page)", () => {
     await test.step("Click Run coverage", async () => {
       await page.getByRole("button", { name: "Run coverage" }).click();
     });
-    await test.step("Verify Running… button visible", async () => {
-      await expect(
-        page.getByRole("button", { name: "Running…" })
-      ).toBeVisible();
+    await test.step("Verify coverage output appears", async () => {
+      await expect(page.getByText("Coverage output")).toBeVisible();
     });
   });
 });

@@ -297,6 +297,7 @@ export default function Home() {
   // When token is cleared (e.g. logout in another tab), redirect to login
   useEffect(() => {
     if (!authResolved) return;
+    if (isSkipLoginDev()) return;
     const check = () => {
       if (!isAuthenticated()) router.replace("/login");
     };

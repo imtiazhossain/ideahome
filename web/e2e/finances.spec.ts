@@ -1,10 +1,56 @@
 import { test, expect } from "@playwright/test";
+import type { Page } from "@playwright/test";
 
 test.afterEach(async ({ page }) => {
   await page.close();
 });
 
+async function seedAuthAndMocks(page: Page) {
+  await page.addInitScript(() => {
+    localStorage.setItem("ideahome_token", "e2e-token");
+    sessionStorage.setItem("ideahome_token_session", "e2e-token");
+    document.cookie = "ideahome_token=e2e-token; Path=/; SameSite=Lax";
+  });
+  await page.route("**/projects*", async (route) => {
+    if (route.request().method() !== "GET") {
+      await route.continue();
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify([{ id: "proj-e2e", name: "E2E Project" }]),
+    });
+  });
+  await page.route("**/expenses*", async (route) => {
+    if (route.request().method() !== "GET") {
+      await route.continue();
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify([]),
+    });
+  });
+  await page.route("**/plaid/**", async (route) => {
+    if (route.request().method() !== "GET") {
+      await route.continue();
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify([]),
+    });
+  });
+}
+
 test.describe("Finances page", () => {
+  test.beforeEach(async ({ page }) => {
+    await seedAuthAndMocks(page);
+  });
+
   test("loads with title and key sections", async ({ page }) => {
     await test.step("Navigate to Finances page", async () => {
       await page.goto("/finances");
@@ -21,21 +67,16 @@ test.describe("Finances page", () => {
     });
   });
 
-  test("shows guarded add/list when no project is selected", async ({
+  test("shows empty-state copy when project has no expenses", async ({
     page,
   }) => {
     await test.step("Navigate to Finances page", async () => {
       await page.goto("/finances");
     });
-    await test.step("Verify project guard messages when no project selected", async () => {
+    await test.step("Verify empty-state message", async () => {
       const content = page.locator(".expenses-page-content");
       await expect(
-        content.getByText("Select a project to add expenses.", {
-          exact: false,
-        })
-      ).toBeVisible();
-      await expect(
-        content.getByText("Select a project to see and manage expenses.", {
+        content.getByText("It's dark in here...", {
           exact: false,
         })
       ).toBeVisible();
@@ -58,4 +99,3 @@ test.describe("Finances page", () => {
   });
 
 });
-

@@ -6,6 +6,7 @@ import {
   fetchProjects,
   getUserScopedStorageKey,
   isAuthenticated,
+  isSkipLoginDev,
   updateProject,
 } from "./api";
 import { getProjectDisplayName } from "./utils";
@@ -123,12 +124,16 @@ export function useProjectLayout(): UseProjectLayoutReturn {
   }, [setSelectedProjectId]);
 
   useEffect(() => {
+    if (isSkipLoginDev()) {
+      void loadProjects();
+      return;
+    }
     if (!isAuthenticated()) {
       router.replace("/login");
       return;
     }
-    loadProjects();
-  }, [router]);
+    void loadProjects();
+  }, [loadProjects, router]);
 
   // When user has no projects, redirect to home where they can create one
   useEffect(() => {

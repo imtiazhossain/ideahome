@@ -35,7 +35,7 @@ export default defineConfig({
     command:
       'env -i PATH="$PATH" HOME="$HOME" SHELL="$SHELL" TERM="$TERM" NEXT_TELEMETRY_DISABLED=1 NEXT_DIST_DIR=.next-e2e NEXT_PUBLIC_SKIP_LOGIN_DEV=true NEXT_PUBLIC_API_URL="${NEXT_PUBLIC_API_URL:-http://localhost:3001}" node scripts/next-dev-with-chunk-fix.js -p 3099',
     url: process.env.PLAYWRIGHT_BASE_URL || "http://localhost:3099",
-    reuseExistingServer: !process.env.CI,
+    reuseExistingServer: false,
     timeout: 120000,
   },
 });
