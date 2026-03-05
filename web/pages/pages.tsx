@@ -151,14 +151,17 @@ function renderConfluencePreview(content: string): React.ReactNode {
       continue;
     }
 
-    const checklistMatch = line.match(/^-\s+\[( |x|X)\]\s+(.+)$/);
+    const checklistMatch = line.match(/^-\s+\[( |x|X)\](?:\s+(.*))?$/);
     if (checklistMatch) {
       const items: { checked: boolean; text: string }[] = [];
       while (i < lines.length) {
         const current = (lines[i] ?? "").trim();
-        const match = current.match(/^-\s+\[( |x|X)\]\s+(.+)$/);
+        const match = current.match(/^-\s+\[( |x|X)\](?:\s+(.*))?$/);
         if (!match) break;
-        items.push({ checked: match[1].toLowerCase() === "x", text: match[2] });
+        items.push({
+          checked: match[1].toLowerCase() === "x",
+          text: (match[2] ?? "").trim(),
+        });
         i += 1;
       }
       blocks.push(
@@ -183,6 +186,10 @@ function renderConfluencePreview(content: string): React.ReactNode {
         if (!match || current.startsWith("- [")) break;
         items.push(match[1]);
         i += 1;
+      }
+      if (items.length === 0) {
+        i += 1;
+        continue;
       }
       blocks.push(
         <ul className="pages-preview-list" key={`ul-${i}`}>
