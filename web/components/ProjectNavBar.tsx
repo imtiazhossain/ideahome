@@ -283,6 +283,9 @@ export function ProjectNavBar({
   const [projectSearchOpen, setProjectSearchOpen] = useState(false);
   const [authMenuOpen, setAuthMenuOpen] = useState(false);
   const [projectSettingsOpen, setProjectSettingsOpen] = useState(false);
+  const [loadingTabId, setLoadingTabId] = useState<ProjectNavTabId | null>(
+    null
+  );
   const [hasToken, setHasToken] = useState<boolean | null>(null);
   useEffect(() => {
     setHasToken(!!getStoredToken());
@@ -305,6 +308,18 @@ export function ProjectNavBar({
     window.addEventListener(AUTH_CHANGE_EVENT, handler);
     return () => window.removeEventListener(AUTH_CHANGE_EVENT, handler);
   }, []);
+  useEffect(() => {
+    const handleRouteSettled = () => setLoadingTabId(null);
+    router.events.on("routeChangeComplete", handleRouteSettled);
+    router.events.on("routeChangeError", handleRouteSettled);
+    return () => {
+      router.events.off("routeChangeComplete", handleRouteSettled);
+      router.events.off("routeChangeError", handleRouteSettled);
+    };
+  }, [router.events]);
+  useEffect(() => {
+    setLoadingTabId(null);
+  }, [activeTab]);
   useEffect(() => {
     try {
       const stored = localStorage.getItem(getSettingsButtonVisibleStorageKey());
@@ -464,6 +479,16 @@ export function ProjectNavBar({
     e.stopPropagation();
     return true;
   }, []);
+  const setTabLoadingFromClick = useCallback(
+    (e: React.MouseEvent<Element>, tabId: ProjectNavTabId) => {
+      if (e.defaultPrevented) return;
+      if (e.button !== 0) return;
+      if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+      if (activeTab === tabId) return;
+      setLoadingTabId(tabId);
+    },
+    [activeTab]
+  );
 
   const handleTabsDragStart = useCallback(
     (event: DragStartEvent) => {
@@ -585,38 +610,122 @@ export function ProjectNavBar({
                       id={tab.id}
                       enabled={tabsDragEnabled}
                     >
-                      {tab.href ? (
-                        tab.href === "/" ? (
+                      {(() => {
+                        const isTabLoading = loadingTabId === tab.id;
+                        return tab.href ? (
+                          tab.href === "/" ? (
+                            <button
+                              type="button"
+                              className={`project-nav-tab ${activeTab === tab.id ? "is-active" : ""}${isTabLoading ? " is-loading" : ""}`}
+                              aria-current={
+                                activeTab === tab.id ? "page" : undefined
+                              }
+                              aria-busy={isTabLoading ? true : undefined}
+                              data-tab-id={tab.id}
+                              title={tab.label}
+                              onClick={(e) => {
+                                if (consumeDraggedClick(e)) return;
+                                setProjectSearchOpen(false);
+                                closeSettingsMenu();
+                                setAuthMenuOpen(false);
+                                try {
+                                  sessionStorage.setItem(
+                                    EXPLICIT_BOARD_SESSION_KEY,
+                                    "1"
+                                  );
+                                } catch {
+                                  /* ignore */
+                                }
+                                if (activeTab === tab.id) {
+                                  const main =
+                                    document.querySelector(".main-content");
+                                  if (main)
+                                    main.scrollTo({ top: 0, behavior: "smooth" });
+                                } else {
+                                  setTabLoadingFromClick(e, tab.id);
+                                  void router.push("/");
+                                }
+                              }}
+                            >
+                              <span className="project-nav-tab-icon">
+                                {tab.icon}
+                              </span>
+                              <span className="project-nav-tab-label">
+                                {getTabLabel(tab.id, tab.label)}
+                              </span>
+                              {isTabLoading && (
+                                <span className="project-nav-tab-loading" aria-hidden="true" />
+                              )}
+                            </button>
+                          ) : (
+                            <Link
+                              href={tab.href}
+                              prefetch={false}
+                              className={`project-nav-tab ${activeTab === tab.id ? "is-active" : ""}${isTabLoading ? " is-loading" : ""}`}
+                              aria-current={
+                                activeTab === tab.id ? "page" : undefined
+                              }
+                              aria-busy={isTabLoading ? true : undefined}
+                              data-tab-id={tab.id}
+                              title={tab.label}
+                              onClick={(e) => {
+                                if (consumeDraggedClick(e)) return;
+                                setProjectSearchOpen(false);
+                                closeSettingsMenu();
+                                setAuthMenuOpen(false);
+                                if (activeTab === tab.id) {
+                                  const main =
+                                    document.querySelector(".main-content");
+                                  if (main)
+                                    main.scrollTo({ top: 0, behavior: "smooth" });
+                                } else {
+                                  setTabLoadingFromClick(e, tab.id);
+                                }
+                              }}
+                            >
+                              <span className="project-nav-tab-icon">
+                                {tab.icon}
+                              </span>
+                              <span className="project-nav-tab-label">
+                                {getTabLabel(tab.id, tab.label)}
+                              </span>
+                              {isTabLoading && (
+                                <span className="project-nav-tab-loading" aria-hidden="true" />
+                              )}
+                            </Link>
+                          )
+                        ) : (
                           <button
                             type="button"
-                            className={`project-nav-tab ${activeTab === tab.id ? "is-active" : ""}`}
+                            className={`project-nav-tab ${activeTab === tab.id ? "is-active" : ""}${isTabLoading ? " is-loading" : ""}`}
+                            onClick={(e) => {
+                              if (consumeDraggedClick(e)) return;
+                              onTabChange?.(tab.id);
+                              if (onTabChange) return;
+                              const builtInTab = TABS.find(
+                                (entry) => entry.id === tab.id
+                              );
+                              const href = builtInTab?.href;
+                              if (!href) return;
+                              if (href === "/") {
+                                try {
+                                  sessionStorage.setItem(
+                                    EXPLICIT_BOARD_SESSION_KEY,
+                                    "1"
+                                  );
+                                } catch {
+                                  // ignore
+                                }
+                              }
+                              setTabLoadingFromClick(e, tab.id);
+                              void router.push(href);
+                            }}
                             aria-current={
                               activeTab === tab.id ? "page" : undefined
                             }
+                            aria-busy={isTabLoading ? true : undefined}
                             data-tab-id={tab.id}
                             title={tab.label}
-                            onClick={(e) => {
-                              if (consumeDraggedClick(e)) return;
-                              setProjectSearchOpen(false);
-                              closeSettingsMenu();
-                              setAuthMenuOpen(false);
-                              try {
-                                sessionStorage.setItem(
-                                  EXPLICIT_BOARD_SESSION_KEY,
-                                  "1"
-                                );
-                              } catch {
-                                /* ignore */
-                              }
-                              if (activeTab === tab.id) {
-                                const main =
-                                  document.querySelector(".main-content");
-                                if (main)
-                                  main.scrollTo({ top: 0, behavior: "smooth" });
-                              } else {
-                                void router.push("/");
-                              }
-                            }}
                           >
                             <span className="project-nav-tab-icon">
                               {tab.icon}
@@ -624,85 +733,20 @@ export function ProjectNavBar({
                             <span className="project-nav-tab-label">
                               {getTabLabel(tab.id, tab.label)}
                             </span>
+                            {isTabLoading && (
+                              <span className="project-nav-tab-loading" aria-hidden="true" />
+                            )}
+                            {tab.hasDropdown && (
+                              <span
+                                className="project-nav-tab-chevron"
+                                aria-hidden
+                              >
+                                <IconChevronDown />
+                              </span>
+                            )}
                           </button>
-                        ) : (
-                          <Link
-                            href={tab.href}
-                            prefetch={false}
-                            className={`project-nav-tab ${activeTab === tab.id ? "is-active" : ""}`}
-                            aria-current={
-                              activeTab === tab.id ? "page" : undefined
-                            }
-                            data-tab-id={tab.id}
-                            title={tab.label}
-                            onClick={(e) => {
-                              if (consumeDraggedClick(e)) return;
-                              setProjectSearchOpen(false);
-                              closeSettingsMenu();
-                              setAuthMenuOpen(false);
-                              if (activeTab === tab.id) {
-                                const main =
-                                  document.querySelector(".main-content");
-                                if (main)
-                                  main.scrollTo({ top: 0, behavior: "smooth" });
-                              }
-                            }}
-                          >
-                            <span className="project-nav-tab-icon">
-                              {tab.icon}
-                            </span>
-                            <span className="project-nav-tab-label">
-                              {getTabLabel(tab.id, tab.label)}
-                            </span>
-                          </Link>
-                        )
-                      ) : (
-                        <button
-                          type="button"
-                          className={`project-nav-tab ${activeTab === tab.id ? "is-active" : ""}`}
-                          onClick={(e) => {
-                            if (consumeDraggedClick(e)) return;
-                            onTabChange?.(tab.id);
-                            if (onTabChange) return;
-                            const builtInTab = TABS.find(
-                              (entry) => entry.id === tab.id
-                            );
-                            const href = builtInTab?.href;
-                            if (!href) return;
-                            if (href === "/") {
-                              try {
-                                sessionStorage.setItem(
-                                  EXPLICIT_BOARD_SESSION_KEY,
-                                  "1"
-                                );
-                              } catch {
-                                // ignore
-                              }
-                            }
-                            void router.push(href);
-                          }}
-                          aria-current={
-                            activeTab === tab.id ? "page" : undefined
-                          }
-                          data-tab-id={tab.id}
-                          title={tab.label}
-                        >
-                          <span className="project-nav-tab-icon">
-                            {tab.icon}
-                          </span>
-                          <span className="project-nav-tab-label">
-                            {getTabLabel(tab.id, tab.label)}
-                          </span>
-                          {tab.hasDropdown && (
-                            <span
-                              className="project-nav-tab-chevron"
-                              aria-hidden
-                            >
-                              <IconChevronDown />
-                            </span>
-                          )}
-                        </button>
-                      )}
+                        );
+                      })()}
                     </SortableNavTab>
                   ))}
                 </div>

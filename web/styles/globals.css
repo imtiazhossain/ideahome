@@ -2215,6 +2215,22 @@ textarea {
   line-height: 1.2;
 }
 
+.project-nav-tab-loading {
+  width: 12px;
+  height: 12px;
+  border: 2px solid transparent;
+  border-top-color: currentColor;
+  border-right-color: currentColor;
+  border-radius: 999px;
+  animation: project-nav-tab-loading-spin 0.7s linear infinite;
+}
+
+@keyframes project-nav-tab-loading-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .project-nav-tab-chevron {
   display: flex;
   align-items: center;
