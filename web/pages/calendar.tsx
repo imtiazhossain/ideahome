@@ -854,9 +854,15 @@ export default function CalendarPage() {
                             <Button
                               variant="ghost"
                               size="sm"
-                              onClick={() => startEditing(event)}
+                              onClick={() => {
+                                if (editingEventId === event.id) {
+                                  resetForm();
+                                  return;
+                                }
+                                startEditing(event);
+                              }}
                             >
-                              Edit
+                              {editingEventId === event.id ? "Cancel" : "Edit"}
                             </Button>
                             <Button
                               variant="danger"
@@ -906,43 +912,45 @@ export default function CalendarPage() {
                         placeholder="Optional location"
                       />
                     </div>
-                    <div className="calendar-event-editor-row">
-                      <div
-                        className={
-                          "calendar-event-editor-field" + (startRequiredError ? " is-error" : "")
-                        }
-                      >
-                        <label>Start</label>
-                        <UiDateTimePickerField
-                          label="Start"
-                          value={startAt}
-                          onChange={(value) => {
-                            setStartAt(value);
-                            setEndAt((current) => ensureEndAfterStart(value, current));
-                          }}
-                          ariaLabel="Event start date and time"
-                          className="calendar-event-datetime-field"
-                          showInlineLabel={false}
-                          hasError={startRequiredError}
-                        />
+                    {!isAllDay && (
+                      <div className="calendar-event-editor-row">
+                        <div
+                          className={
+                            "calendar-event-editor-field" + (startRequiredError ? " is-error" : "")
+                          }
+                        >
+                          <label>Start</label>
+                          <UiDateTimePickerField
+                            label="Start"
+                            value={startAt}
+                            onChange={(value) => {
+                              setStartAt(value);
+                              setEndAt((current) => ensureEndAfterStart(value, current));
+                            }}
+                            ariaLabel="Event start date and time"
+                            className="calendar-event-datetime-field"
+                            showInlineLabel={false}
+                            hasError={startRequiredError}
+                          />
+                        </div>
+                        <div
+                          className={
+                            "calendar-event-editor-field" + (endRequiredError ? " is-error" : "")
+                          }
+                        >
+                          <label>End</label>
+                          <UiDateTimePickerField
+                            label="End"
+                            value={endAt}
+                            onChange={(value) => setEndAt(ensureEndAfterStart(startAt, value))}
+                            ariaLabel="Event end date and time"
+                            className="calendar-event-datetime-field"
+                            showInlineLabel={false}
+                            hasError={endRequiredError}
+                          />
+                        </div>
                       </div>
-                      <div
-                        className={
-                          "calendar-event-editor-field" + (endRequiredError ? " is-error" : "")
-                        }
-                      >
-                        <label>End</label>
-                        <UiDateTimePickerField
-                          label="End"
-                          value={endAt}
-                          onChange={(value) => setEndAt(ensureEndAfterStart(startAt, value))}
-                          ariaLabel="Event end date and time"
-                          className="calendar-event-datetime-field"
-                          showInlineLabel={false}
-                          hasError={endRequiredError}
-                        />
-                      </div>
-                    </div>
+                    )}
                     <div className="calendar-event-editor-checkbox">
                       <UiCheckbox
                         checked={isAllDay}
@@ -960,11 +968,6 @@ export default function CalendarPage() {
                           {editingEventId ? "Save changes" : "Create event"}
                         </Button>
                       ) : null}
-                      {editingEventId && (
-                        <Button variant="ghost" size="md" onClick={resetForm}>
-                          Cancel edit
-                        </Button>
-                      )}
                     </div>
                   </div>
                 </div>

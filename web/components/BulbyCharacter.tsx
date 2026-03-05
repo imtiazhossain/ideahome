@@ -23,6 +23,7 @@ export function BulbyCharacter() {
       >
         {/* Circle: dark fill + blue glow border (r=29 so stroke fits inside viewBox 0 0 64 64) */}
         <circle
+          className="bulby-character-circle"
           cx="32"
           cy="32"
           r="29"
@@ -32,6 +33,7 @@ export function BulbyCharacter() {
         />
         {/* Lightbulb: light outline inside */}
         <path
+          className="bulby-character-icon"
           d="M32 18c-6 0-11 5-11 11 0 5 3 9 7 11v2h8v-2c4-2 7-6 7-11 0-6-5-11-11-11z"
           stroke={BULB_STROKE}
           strokeWidth="1.5"
@@ -40,6 +42,7 @@ export function BulbyCharacter() {
           fill="none"
         />
         <line
+          className="bulby-character-icon"
           x1="26"
           y1="42"
           x2="38"
@@ -49,6 +52,7 @@ export function BulbyCharacter() {
           strokeLinecap="round"
         />
         <line
+          className="bulby-character-icon"
           x1="28"
           y1="45"
           x2="36"
@@ -58,6 +62,7 @@ export function BulbyCharacter() {
           strokeLinecap="round"
         />
         <line
+          className="bulby-character-icon"
           x1="30"
           y1="47.5"
           x2="34"

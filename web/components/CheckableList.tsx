@@ -16,9 +16,9 @@ import {
 } from "@dnd-kit/sortable";
 import { restrictToWindowEdges } from "@dnd-kit/modifiers";
 import { CSS } from "@dnd-kit/utilities";
-import { IconCheck } from "./IconCheck";
 import { IconGrip } from "./IconGrip";
 import { IconTrash } from "./IconTrash";
+import { UiCheckbox } from "./UiCheckbox";
 
 export interface CheckableListItem {
   id: string;
@@ -344,10 +344,10 @@ function SortableItem({
       >
         {isEditing ? (
           <>
-            <button
-              type="button"
+            <UiCheckbox
               className="features-list-done-toggle"
-              onClick={() => !disabled && onToggleDone(index)}
+              checked={item.done}
+              onChange={() => !disabled && onToggleDone(index)}
               disabled={disabled}
               aria-label={
                 item.done
@@ -355,15 +355,7 @@ function SortableItem({
                   : `Mark "${item.name}" done`
               }
               title={item.done ? "Mark not done" : "Mark done"}
-            >
-              {item.done ? (
-                <span className="features-list-done-check" aria-hidden>
-                  <IconCheck />
-                </span>
-              ) : (
-                <span className="features-list-done-empty" aria-hidden />
-              )}
-            </button>
+            />
             <span className="features-list-input-wrap">
               <span className="features-list-input-sizer" aria-hidden>
                 {editingValue || "\u00A0"}
@@ -401,10 +393,10 @@ function SortableItem({
           </>
         ) : (
           <>
-            <button
-              type="button"
+            <UiCheckbox
               className="features-list-done-toggle"
-              onClick={() => !disabled && onToggleDone(index)}
+              checked={item.done}
+              onChange={() => !disabled && onToggleDone(index)}
               disabled={disabled}
               aria-label={
                 item.done
@@ -412,15 +404,7 @@ function SortableItem({
                   : `Mark "${item.name}" done`
               }
               title={item.done ? "Mark not done" : "Mark done"}
-            >
-              {item.done ? (
-                <span className="features-list-done-check" aria-hidden>
-                  <IconCheck />
-                </span>
-              ) : (
-                <span className="features-list-done-empty" aria-hidden />
-              )}
-            </button>
+            />
             <span
               className="features-list-label"
               onClick={() => !disabled && onStartEdit(index)}
