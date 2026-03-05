@@ -577,6 +577,8 @@ export default function FinancialsPage() {
     Record<string, boolean>
   >({});
   const financesSectionOrderStorageKey = `ideahome-finances-section-order${selectedProjectId ? `-${selectedProjectId}` : ""}`;
+  const financesSectionCollapsedStorageKey = `ideahome-finances-section-collapsed${selectedProjectId ? `-${selectedProjectId}` : ""}`;
+  const linkedAccountsCollapsedStorageKey = `ideahome-finances-linked-accounts-collapsed${selectedProjectId ? `-${selectedProjectId}` : ""}`;
   const [financesSectionOrder, setFinancesSectionOrder] = useState<string[]>(
     () => {
       if (typeof window === "undefined")
@@ -650,6 +652,73 @@ export default function FinancialsPage() {
     string | null
   >(null);
   const [linkedAccountsCollapsed, setLinkedAccountsCollapsed] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const raw = localStorage.getItem(financesSectionCollapsedStorageKey);
+      if (!raw) {
+        setSectionCollapsed({});
+        return;
+      }
+      const parsed = JSON.parse(raw) as unknown;
+      if (!parsed || typeof parsed !== "object") {
+        setSectionCollapsed({});
+        return;
+      }
+      const valid = new Set<string>([
+        "expenses-summary",
+        "expenses-auth-notice",
+        "expenses-plaid",
+        "expenses-taxes",
+        "expenses-add-and-list",
+      ]);
+      const next: Record<string, boolean> = {};
+      for (const [id, collapsed] of Object.entries(
+        parsed as Record<string, unknown>
+      )) {
+        if (!valid.has(id) || typeof collapsed !== "boolean") continue;
+        next[id] = collapsed;
+      }
+      setSectionCollapsed(next);
+    } catch {
+      setSectionCollapsed({});
+    }
+  }, [financesSectionCollapsedStorageKey]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      localStorage.setItem(
+        financesSectionCollapsedStorageKey,
+        JSON.stringify(sectionCollapsed)
+      );
+    } catch {
+      // ignore
+    }
+  }, [financesSectionCollapsedStorageKey, sectionCollapsed]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const raw = localStorage.getItem(linkedAccountsCollapsedStorageKey);
+      setLinkedAccountsCollapsed(raw === "true");
+    } catch {
+      setLinkedAccountsCollapsed(false);
+    }
+  }, [linkedAccountsCollapsedStorageKey]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      localStorage.setItem(
+        linkedAccountsCollapsedStorageKey,
+        String(linkedAccountsCollapsed)
+      );
+    } catch {
+      // ignore
+    }
+  }, [linkedAccountsCollapsed, linkedAccountsCollapsedStorageKey]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;

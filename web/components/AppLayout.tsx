@@ -454,8 +454,6 @@ export function AppLayout({
           saveProjectName={saveProjectName}
           cancelEditProjectName={cancelEditProjectName}
           projectNameInputRef={projectNameInputRef}
-          theme={theme}
-          toggleTheme={toggleTheme}
           showDeletePerProject={showDeletePerProject}
           handleDeleteProject={handleDeleteProject}
           projectDeleting={projectDeleting}
@@ -505,6 +503,9 @@ export function AppLayout({
           orderedNavLinks={drawerOrderedNavLinks}
           tabOrderLength={tabOrder.length}
           deleteSectionTab={deleteSectionTab}
+          onOpenAppearanceSettings={() => {
+            void router.push("/settings");
+          }}
         />
 
         <main className="main-content">
@@ -536,6 +537,9 @@ export function AppLayout({
             onDeleteAllIssuesClick={onDeleteAllIssuesClick}
             deleteAllIssuesDisabled={deleteAllIssuesDisabled}
             onRenameProject={onRenameProject}
+            onOpenAppearanceSettings={() => {
+              void router.push("/settings");
+            }}
           />
 
           <div className="main-page-scroll">

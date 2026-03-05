@@ -84,17 +84,20 @@ function IconFlashlight() {
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
-      strokeWidth="2.1"
+      strokeWidth="1.0"
       strokeLinecap="round"
       strokeLinejoin="round"
       aria-hidden
     >
-      <path d="M9 8h6l-1.2 6H10.2L9 8z" />
-      <path d="M10 14h4l1 8H9l1-8z" />
-      <path d="M8 8h8" />
-      <path d="M12 0.4V7" />
-      <path d="M6 1.8l3.8 5" />
-      <path d="M18 1.8l-3.8 5" />
+      <path d="M3 21h18" />
+      <path d="M5.5 21h4.2l-1.1-7.2H6.6z" />
+      <path d="M14.3 21h4.2l-0.9-10.2h-2.4z" />
+      <path d="M6.2 13.8h2.9" />
+      <path d="M15 10.8h2.9" />
+      <path d="M10.8 9.2h2.7l-1.2 2.6h1.8l-2.9 4.2.8-2.9H10z" />
+      <path d="M7 7.1c0-1 0.7-1.8 1.6-1.9" />
+      <path d="M15.8 5.8c0-1 0.7-1.8 1.6-1.9" />
+      <path d="M17.2 8.6c0-1.2 0.8-2.2 1.9-2.4" />
     </svg>
   );
 }

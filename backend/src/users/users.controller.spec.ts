@@ -9,6 +9,8 @@ describe("UsersController", () => {
 
   const mockUsersService = {
     list: jest.fn(),
+    getAppearancePreferences: jest.fn(),
+    updateAppearancePreferences: jest.fn(),
   };
 
   beforeEach(async () => {
@@ -41,6 +43,44 @@ describe("UsersController", () => {
       await expect(controller.list(req)).resolves.toEqual(users);
       expect(mockUsersService.list).toHaveBeenCalledTimes(1);
       expect(mockUsersService.list).toHaveBeenCalledWith("u1");
+    });
+  });
+
+  describe("appearance", () => {
+    it("returns effective appearance preferences", async () => {
+      const req = { user: { sub: "u1" } } as any;
+      const prefs = {
+        version: 1,
+        lightPreset: "classic",
+        darkPreset: "forest",
+        updatedAt: "2026-03-05T00:00:00.000Z",
+      };
+      mockUsersService.getAppearancePreferences.mockResolvedValue(prefs);
+
+      await expect(controller.getAppearance(req)).resolves.toEqual(prefs);
+      expect(mockUsersService.getAppearancePreferences).toHaveBeenCalledWith(
+        "u1"
+      );
+    });
+
+    it("updates appearance preferences", async () => {
+      const req = { user: { sub: "u1" } } as any;
+      const body = { lightPreset: "ocean", darkPreset: "forest" };
+      const saved = {
+        version: 1,
+        lightPreset: "ocean",
+        darkPreset: "forest",
+        updatedAt: "2026-03-05T00:00:00.000Z",
+      };
+      mockUsersService.updateAppearancePreferences.mockResolvedValue(saved);
+
+      await expect(controller.updateAppearance(req, body)).resolves.toEqual(
+        saved
+      );
+      expect(mockUsersService.updateAppearancePreferences).toHaveBeenCalledWith(
+        "u1",
+        body
+      );
     });
   });
 });

@@ -127,6 +127,10 @@ function pathUsers() {
   return "/users";
 }
 
+function pathUsersMeAppearance() {
+  return "/users/me/appearance";
+}
+
 function pathSupportErrorReport() {
   return "/support/error-report";
 }
@@ -346,6 +350,8 @@ const DEFAULT_QUALITY_SCORE_WEIGHTS = {
   files: 5,
 };
 
+const APPEARANCE_PRESET_IDS = ["classic", "ocean", "forest"];
+
 function createDefaultQualityScoreConfig() {
   return {
     version: 1,
@@ -504,6 +510,7 @@ const sharedConfig = {
   IDEAHOME_WEB_ORIGIN,
   QUALITY_SCORE_ITEM_IDS,
   DEFAULT_QUALITY_SCORE_WEIGHTS,
+  APPEARANCE_PRESET_IDS,
   createDefaultQualityScoreConfig,
   normalizeQualityScoreConfig,
   isProjectQualityScoreConfig,
@@ -571,6 +578,7 @@ const sharedConfig = {
   pathTestsRunUi,
   pathSupportErrorReport,
   pathUsers,
+  pathUsersMeAppearance,
   pathAuthProviders,
   projectNameToAcronym,
   STATUS_OPTIONS,

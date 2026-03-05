@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/router";
 import { AppLayout } from "../components/AppLayout";
 import { Button } from "../components/Button";
@@ -47,6 +47,8 @@ const MONTH_NAMES = [
 const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const CALENDAR_OAUTH_MESSAGE_TYPE = "ideahome:calendar-oauth-complete";
 const SYNC_REQUEST_TIMEOUT_MS = 60_000;
+const CALENDAR_SYNC_PANEL_COLLAPSED_STORAGE_KEY =
+  "ideahome:calendar-sync-panel-collapsed";
 
 function toYMD(date: Date): string {
   const year = date.getFullYear();
@@ -204,6 +206,7 @@ export default function CalendarPage() {
   const [disconnecting, setDisconnecting] = useState(false);
   const [disconnectConfirmOpen, setDisconnectConfirmOpen] = useState(false);
   const [linkedCalendarDropdownOpen, setLinkedCalendarDropdownOpen] = useState(false);
+  const [syncPanelCollapsed, setSyncPanelCollapsed] = useState(false);
   const [error, setError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
   const [editingEventId, setEditingEventId] = useState<string | null>(null);
@@ -215,6 +218,32 @@ export default function CalendarPage() {
   const [endAt, setEndAt] = useState("");
   const [isAllDay, setIsAllDay] = useState(false);
   const [attemptedEventSave, setAttemptedEventSave] = useState(false);
+  const eventEditorRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const storedValue = window.localStorage.getItem(
+        CALENDAR_SYNC_PANEL_COLLAPSED_STORAGE_KEY
+      );
+      if (storedValue === "true") setSyncPanelCollapsed(true);
+      if (storedValue === "false") setSyncPanelCollapsed(false);
+    } catch {
+      // Ignore storage failures (private mode/blocked storage).
+    }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      window.localStorage.setItem(
+        CALENDAR_SYNC_PANEL_COLLAPSED_STORAGE_KEY,
+        String(syncPanelCollapsed)
+      );
+    } catch {
+      // Ignore storage failures (private mode/blocked storage).
+    }
+  }, [syncPanelCollapsed]);
 
   const titleRequiredError = attemptedEventSave && title.trim().length === 0;
   const startRequiredError =
@@ -557,6 +586,26 @@ export default function CalendarPage() {
     setIsAllDay(event.isAllDay);
   }, []);
 
+  const handleDaySelection = useCallback(
+    (value: string, options?: { jumpToEditor?: boolean }) => {
+      setSelectedDate(value);
+      const shouldJumpToEditor =
+        options?.jumpToEditor &&
+        typeof window !== "undefined" &&
+        window.matchMedia("(max-width: 1080px)").matches;
+      if (shouldJumpToEditor) {
+        window.requestAnimationFrame(() => {
+          eventEditorRef.current?.scrollIntoView({
+            behavior: "smooth",
+            block: "start",
+            inline: "nearest",
+          });
+        });
+      }
+    },
+    []
+  );
+
   return (
     <AppLayout
       title="Calendar · Idea Home"
@@ -609,51 +658,67 @@ export default function CalendarPage() {
               <section className="tests-page-section calendar-sync-card">
                 <div className="calendar-sync-row">
                   <div>
-                    <h2 className="tests-page-section-title">Google Calendar</h2>
+                    <button
+                      type="button"
+                      className={`tests-page-section-toggle-inline${syncPanelCollapsed ? " is-collapsed" : ""}`}
+                      aria-expanded={!syncPanelCollapsed}
+                      aria-controls="calendar-sync-panel-body"
+                      aria-label={syncPanelCollapsed ? "Expand section" : "Collapse section"}
+                      onClick={() => setSyncPanelCollapsed((current) => !current)}
+                    >
+                      <span className="tests-page-section-toggle-chevron" aria-hidden="true">
+                        ▶
+                      </span>
+                      <h2 className="tests-page-section-title" style={{ margin: 0 }}>
+                        Google Calendar
+                      </h2>
+                    </button>
                     <p className="calendar-sync-subtitle">
                       {status?.connected
                         ? "Connected. Choose a calendar and sync events."
                         : "Connect Google Calendar to sync events for this project."}
                     </p>
                   </div>
-                  <div className="calendar-sync-actions">
-                    <div className="calendar-sync-primary">
-                      {status?.connected && status.lastSyncedAt && (
-                        <span className="calendar-last-sync" role="status">
-                          Last synced {new Date(status.lastSyncedAt).toLocaleString()}
-                        </span>
-                      )}
+                  {!syncPanelCollapsed && (
+                    <div id="calendar-sync-panel-body" className="calendar-sync-actions">
+                      <div className="calendar-sync-primary">
+                        {status?.connected && status.lastSyncedAt && (
+                          <span className="calendar-last-sync" role="status">
+                            Last synced {new Date(status.lastSyncedAt).toLocaleString()}
+                          </span>
+                        )}
+                        <Button
+                          variant="secondary"
+                          size="md"
+                          className="calendar-sync-btn"
+                          onClick={handleSync}
+                          disabled={!status?.connected || syncing}
+                        >
+                          {syncing ? "Syncing..." : "Sync now"}
+                        </Button>
+                      </div>
                       <Button
                         variant="secondary"
                         size="md"
-                        className="calendar-sync-btn"
-                        onClick={handleSync}
-                        disabled={!status?.connected || syncing}
+                        className="calendar-connect-btn"
+                        onClick={handleConnectGoogle}
                       >
-                        {syncing ? "Syncing..." : "Sync now"}
+                        {status?.connected ? "Reconnect Google" : "Connect Google Calendar"}
                       </Button>
+                      {status?.connected && (
+                        <Button
+                          variant="danger"
+                          size="md"
+                          className="calendar-disconnect-btn"
+                          onClick={() => setDisconnectConfirmOpen(true)}
+                        >
+                          Disconnect
+                        </Button>
+                      )}
                     </div>
-                    <Button
-                      variant="secondary"
-                      size="md"
-                      className="calendar-connect-btn"
-                      onClick={handleConnectGoogle}
-                    >
-                      {status?.connected ? "Reconnect Google" : "Connect Google Calendar"}
-                    </Button>
-                    {status?.connected && (
-                      <Button
-                        variant="danger"
-                        size="md"
-                        className="calendar-disconnect-btn"
-                        onClick={() => setDisconnectConfirmOpen(true)}
-                      >
-                        Disconnect
-                      </Button>
-                    )}
-                  </div>
+                  )}
                 </div>
-                {status?.connected && (
+                {!syncPanelCollapsed && status?.connected && (
                   <div className="calendar-sync-row calendar-sync-row-secondary">
                     <label className="calendar-sync-label">
                       Linked calendar
@@ -758,12 +823,11 @@ export default function CalendarPage() {
 
                     <UiDatePickerField
                       className="calendar-date-filter"
-                      popupClassName="calendar-picker-popup-design-system"
                       label="Selected day"
                       value={selectedDate}
                       ariaLabel="Calendar day picker"
                       onChange={(value) => {
-                        setSelectedDate(value);
+                        handleDaySelection(value, { jumpToEditor: true });
                         const selected = parseYMD(value);
                         if (selected) {
                           setViewDate(
@@ -797,7 +861,7 @@ export default function CalendarPage() {
                             (isSelected ? " is-selected" : "") +
                             (isToday ? " is-today" : "")
                           }
-                          onClick={() => setSelectedDate(key)}
+                          onClick={() => handleDaySelection(key, { jumpToEditor: true })}
                         >
                           <span className="calendar-month-cell-day">{date.getDate()}</span>
                           <div className="calendar-month-cell-events">
@@ -877,7 +941,7 @@ export default function CalendarPage() {
                     )}
                   </ul>
 
-                  <div className="calendar-event-editor">
+                  <div ref={eventEditorRef} className="calendar-event-editor">
                     <h4>{editingEventId ? "Edit event" : "Create event"}</h4>
                     <div
                       className={

@@ -125,6 +125,33 @@ export default function TestsPage() {
   );
   const [runningSuiteKey, setRunningSuiteKey] = useState<string | null>(null);
   const [runningAllUiTests, setRunningAllUiTests] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const raw = localStorage.getItem("ideahome-tests-collapsed-suites");
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as unknown;
+      if (!Array.isArray(parsed)) return;
+      const next = parsed.filter((item): item is string => typeof item === "string");
+      setCollapsedSuites(new Set(next));
+    } catch {
+      // ignore storage errors
+    }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      localStorage.setItem(
+        "ideahome-tests-collapsed-suites",
+        JSON.stringify(Array.from(collapsedSuites))
+      );
+    } catch {
+      // ignore storage errors
+    }
+  }, [collapsedSuites]);
+
   const toggleSuite = (key: string) => {
     setCollapsedSuites((prev) => {
       const next = new Set(prev);

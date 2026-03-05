@@ -15,6 +15,7 @@ import {
   type UpdateCalendarEventInput,
 } from "@ideahome/shared-config";
 import {
+  APPEARANCE_PRESET_IDS,
   API_REQUEST_HEADER as SHARED_API_REQUEST_HEADER,
   ASSISTANT_VOICE_CHANGE_EVENT as SHARED_ASSISTANT_VOICE_CHANGE_EVENT,
   AUTH_CHANGE_EVENT as SHARED_AUTH_CHANGE_EVENT,
@@ -52,8 +53,11 @@ import {
   pathTestsRunUi,
   pathSupportErrorReport,
   pathUsers,
+  pathUsersMeAppearance,
 } from "@ideahome/shared";
 import type {
+  AppearancePreferences as SharedAppearancePreferences,
+  AppearancePresetId as SharedAppearancePresetId,
   AddCommentAttachmentInput,
   CommentAttachment as SharedCommentAttachment,
   CommentAttachmentType as SharedCommentAttachmentType,
@@ -586,6 +590,8 @@ export function getApiBase(): string {
 export const API_BASE = API_BASE_RESOLVED;
 
 export type User = SharedUser;
+export type AppearancePresetId = SharedAppearancePresetId;
+export type AppearancePreferences = SharedAppearancePreferences;
 export type Organization = SharedOrganization;
 export type Project = SharedProject;
 export type ProjectQualityScoreConfig = SharedProjectQualityScoreConfig;
@@ -611,6 +617,7 @@ export type RunUiTestResult = SharedRunUiTestResult;
 export type RunApiTestResult = SharedRunApiTestResult;
 
 export const STATUSES = STATUS_OPTIONS;
+export const APPEARANCE_PRESETS = APPEARANCE_PRESET_IDS;
 
 export type ProjectCodeRepository = {
   id: string;
@@ -1176,6 +1183,23 @@ export async function deleteCalendarEvent(
 export async function fetchUsers(): Promise<User[]> {
   return requestJson<User[]>(pathUsers(), {
     errorMessage: "Failed to fetch users",
+  });
+}
+
+export async function fetchMyAppearancePrefs(): Promise<AppearancePreferences> {
+  return requestJson<AppearancePreferences>(pathUsersMeAppearance(), {
+    errorMessage: "Failed to fetch appearance preferences",
+  });
+}
+
+export async function updateMyAppearancePrefs(input: {
+  lightPreset: AppearancePresetId;
+  darkPreset: AppearancePresetId;
+}): Promise<AppearancePreferences> {
+  return requestJson<AppearancePreferences>(pathUsersMeAppearance(), {
+    method: "PUT",
+    body: input,
+    errorMessage: "Failed to save appearance preferences",
   });
 }
 

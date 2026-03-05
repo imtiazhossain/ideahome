@@ -34,6 +34,24 @@ function cx(...parts: Array<string | undefined | false>): string {
   return parts.filter(Boolean).join(" ");
 }
 
+function scrollSelectedTimeItemIntoList(
+  listRef: React.RefObject<HTMLUListElement | null>
+): void {
+  const list = listRef.current;
+  if (!list) return;
+  const selected = list.querySelector<HTMLButtonElement>(
+    ".calendar-event-datetime-time-item.is-selected"
+  );
+  if (!selected) return;
+  const selectedTop =
+    selected.getBoundingClientRect().top -
+    list.getBoundingClientRect().top +
+    list.scrollTop;
+  const targetTop = selectedTop - list.clientHeight / 2 + selected.clientHeight / 2;
+  const maxTop = Math.max(0, list.scrollHeight - list.clientHeight);
+  list.scrollTop = Math.max(0, Math.min(targetTop, maxTop));
+}
+
 function getCalendarCells(
   viewYear: number,
   viewMonth: number,
@@ -176,15 +194,12 @@ export function UiDateTimePickerField({
 
   useEffect(() => {
     if (!open) return;
-    hourListRef.current
-      ?.querySelector(".calendar-event-datetime-time-item.is-selected")
-      ?.scrollIntoView({ block: "center" });
-    minuteListRef.current
-      ?.querySelector(".calendar-event-datetime-time-item.is-selected")
-      ?.scrollIntoView({ block: "center" });
-    periodListRef.current
-      ?.querySelector(".calendar-event-datetime-time-item.is-selected")
-      ?.scrollIntoView({ block: "center" });
+    const frameId = window.requestAnimationFrame(() => {
+      scrollSelectedTimeItemIntoList(hourListRef);
+      scrollSelectedTimeItemIntoList(minuteListRef);
+      scrollSelectedTimeItemIntoList(periodListRef);
+    });
+    return () => window.cancelAnimationFrame(frameId);
   }, [open, parts.hour, parts.minute, parts.period]);
 
   useEffect(() => {

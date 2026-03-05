@@ -27,6 +27,9 @@ export const CODE_PAGE_SECTION_IDS = [
   "code-wireframe",
   "code-project-flow",
 ] as const;
+const DEFAULT_CODE_SECTION_COLLAPSED: Record<string, boolean> = {
+  "code-project-flow": false,
+};
 
 export type CodePageState = {
   running: boolean;
@@ -87,9 +90,10 @@ export function useCodePageState(
   const [auditPromptCopied, setAuditPromptCopied] = useState(false);
   const [sectionCollapsed, setSectionCollapsed] = useState<
     Record<string, boolean>
-  >({ "code-project-flow": false }); // project flow diagram starts expanded
+  >(DEFAULT_CODE_SECTION_COLLAPSED); // project flow diagram starts expanded
 
   const sectionOrderStorageKey = `ideahome-code-section-order${selectedProjectId ? `-${selectedProjectId}` : ""}`;
+  const sectionCollapsedStorageKey = `ideahome-code-section-collapsed${selectedProjectId ? `-${selectedProjectId}` : ""}`;
   const [sectionOrder, setSectionOrderState] = useState<string[]>([
     ...CODE_PAGE_SECTION_IDS,
   ]);
@@ -124,6 +128,46 @@ export function useCodePageState(
       /* ignore */
     }
   }, [selectedProjectId]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const key = `ideahome-code-section-collapsed${selectedProjectId ? `-${selectedProjectId}` : ""}`;
+    try {
+      const raw = localStorage.getItem(key);
+      if (!raw) {
+        setSectionCollapsed(DEFAULT_CODE_SECTION_COLLAPSED);
+        return;
+      }
+      const parsed = JSON.parse(raw) as unknown;
+      if (!parsed || typeof parsed !== "object") {
+        setSectionCollapsed(DEFAULT_CODE_SECTION_COLLAPSED);
+        return;
+      }
+      const valid = new Set<string>(CODE_PAGE_SECTION_IDS as unknown as string[]);
+      const next: Record<string, boolean> = { ...DEFAULT_CODE_SECTION_COLLAPSED };
+      for (const [id, collapsed] of Object.entries(
+        parsed as Record<string, unknown>
+      )) {
+        if (!valid.has(id) || typeof collapsed !== "boolean") continue;
+        next[id] = collapsed;
+      }
+      setSectionCollapsed(next);
+    } catch {
+      setSectionCollapsed(DEFAULT_CODE_SECTION_COLLAPSED);
+    }
+  }, [selectedProjectId]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      localStorage.setItem(
+        sectionCollapsedStorageKey,
+        JSON.stringify(sectionCollapsed)
+      );
+    } catch {
+      /* ignore */
+    }
+  }, [sectionCollapsed, sectionCollapsedStorageKey]);
 
   const setSectionOrder = useCallback((order: string[]) => {
     setSectionOrderState(order);

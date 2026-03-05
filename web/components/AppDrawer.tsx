@@ -50,8 +50,6 @@ export interface AppDrawerProps {
   saveProjectName: () => void;
   cancelEditProjectName: () => void;
   projectNameInputRef: React.RefObject<HTMLInputElement | null>;
-  theme: string;
-  toggleTheme: () => void;
   showDeletePerProject?: boolean;
   handleDeleteProject: (project: { id: string; name: string }) => Promise<void>;
   projectDeleting: boolean;
@@ -104,6 +102,7 @@ export interface AppDrawerProps {
   orderedNavLinks: AppDrawerNavLink[];
   tabOrderLength: number;
   deleteSectionTab: (tabId: ProjectNavTabId) => void;
+  onOpenAppearanceSettings: () => void;
 }
 
 /**
@@ -125,8 +124,6 @@ export function AppDrawer({
   saveProjectName,
   cancelEditProjectName,
   projectNameInputRef,
-  theme,
-  toggleTheme,
   showDeletePerProject = false,
   handleDeleteProject,
   projectDeleting,
@@ -170,6 +167,7 @@ export function AppDrawer({
   orderedNavLinks,
   tabOrderLength,
   deleteSectionTab,
+  onOpenAppearanceSettings,
 }: AppDrawerProps) {
   const [bulbyTriggerHidden, setBulbyTriggerHidden] = useState(false);
   useEffect(() => {
@@ -622,24 +620,16 @@ export function AppDrawer({
                       className="drawer-bottom-settings-menu-item"
                       role="menuitem"
                       onClick={() => {
-                        toggleTheme();
+                        onOpenAppearanceSettings();
                         setDrawerSettingsOpen(false);
                         setDrawerFiltersOpen(false);
                         setDrawerVoicesOpen(false);
                         setDrawerDeleteSectionsOpen(false);
                       }}
-                      aria-label={
-                        theme === "light"
-                          ? "Switch to dark theme"
-                          : "Switch to light theme"
-                      }
-                      title={
-                        theme === "light"
-                          ? "Switch to dark theme"
-                          : "Switch to light theme"
-                      }
+                      aria-label="Open appearance settings"
+                      title="Open appearance settings"
                     >
-                      {theme === "light" ? "☀" : "🌙"}
+                      <IconSettings />
                     </button>
                   </>
                 )}

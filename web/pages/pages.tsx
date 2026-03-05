@@ -327,8 +327,37 @@ export default function PagesPage() {
       setCollapsedSections({});
       return;
     }
-    setSections(loadSectionsFromStorage(selectedProjectId));
-    setCollapsedSections({});
+    const loadedSections = loadSectionsFromStorage(selectedProjectId);
+    setSections(loadedSections);
+    if (typeof window === "undefined") {
+      setCollapsedSections({});
+      return;
+    }
+    try {
+      const raw = localStorage.getItem(
+        `ideahome-pages-collapsed-sections-${selectedProjectId}`
+      );
+      if (!raw) {
+        setCollapsedSections({});
+        return;
+      }
+      const parsed = JSON.parse(raw) as unknown;
+      if (!parsed || typeof parsed !== "object") {
+        setCollapsedSections({});
+        return;
+      }
+      const validSectionIds = new Set(loadedSections.map((section) => section.id));
+      const next: Record<string, boolean> = {};
+      for (const [id, collapsed] of Object.entries(
+        parsed as Record<string, unknown>
+      )) {
+        if (!validSectionIds.has(id) || typeof collapsed !== "boolean") continue;
+        next[id] = collapsed;
+      }
+      setCollapsedSections(next);
+    } catch {
+      setCollapsedSections({});
+    }
   }, [selectedProjectId]);
 
   useEffect(() => {
@@ -342,6 +371,24 @@ export default function PagesPage() {
       // ignore storage errors
     }
   }, [sections, selectedProjectId]);
+
+  useEffect(() => {
+    if (!selectedProjectId || typeof window === "undefined") return;
+    try {
+      const validSectionIds = new Set(sections.map((section) => section.id));
+      const persisted: Record<string, boolean> = {};
+      for (const [id, collapsed] of Object.entries(collapsedSections)) {
+        if (!validSectionIds.has(id) || collapsed !== true) continue;
+        persisted[id] = true;
+      }
+      localStorage.setItem(
+        `ideahome-pages-collapsed-sections-${selectedProjectId}`,
+        JSON.stringify(persisted)
+      );
+    } catch {
+      // ignore storage errors
+    }
+  }, [collapsedSections, sections, selectedProjectId]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),

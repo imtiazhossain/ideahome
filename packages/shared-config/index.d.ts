@@ -14,6 +14,13 @@ export type ApiTestSuite = {
 };
 
 export type User = { id: string; email: string; name: string | null };
+export type AppearancePresetId = "classic" | "ocean" | "forest";
+export type AppearancePreferences = {
+  version: 1;
+  lightPreset: AppearancePresetId;
+  darkPreset: AppearancePresetId;
+  updatedAt: string;
+};
 export type QualityScoreItemId =
   | "title"
   | "description"
@@ -212,6 +219,7 @@ export declare const IDEAHOME_API_ORIGIN: string;
 export declare const IDEAHOME_WEB_ORIGIN: string;
 export declare const QUALITY_SCORE_ITEM_IDS: QualityScoreItemId[];
 export declare const DEFAULT_QUALITY_SCORE_WEIGHTS: QualityScoreWeights;
+export declare const APPEARANCE_PRESET_IDS: AppearancePresetId[];
 
 export type ChecklistItem = {
   id: string;
@@ -339,6 +347,7 @@ export declare function pathCommentAttachmentById(
 export declare function pathTestsRunUi(): string;
 export declare function pathTestsRunApi(): string;
 export declare function pathUsers(): string;
+export declare function pathUsersMeAppearance(): string;
 export declare function pathSupportErrorReport(): string;
 export declare function pathExpenses(projectId?: string): string;
 export declare function pathExpenseById(expenseId: string): string;

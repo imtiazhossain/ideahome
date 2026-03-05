@@ -23,7 +23,6 @@ import {
   useProjectSearch,
   type ProjectSearchResult,
 } from "../lib/useProjectSearch";
-import { useTheme } from "../lib/ThemeContext";
 import {
   addCustomList,
   getCustomListTabId,
@@ -38,6 +37,7 @@ import {
   IconLogout,
   IconProfile,
   IconReorder,
+  IconSettings,
   IconSearch,
 } from "./icons";
 import { AccessibleModal } from "./AccessibleModal";
@@ -102,6 +102,8 @@ export interface ProjectNavBarProps {
   onRenameProject?: (projectId: string, name: string) => Promise<void> | void;
   /** When false, hides the settings button. Default true. */
   showSettingsButton?: boolean;
+  /** Open global appearance settings page. */
+  onOpenAppearanceSettings?: () => void;
 }
 
 interface ProjectNavSearchProps {
@@ -413,6 +415,7 @@ export function ProjectNavBar({
   deleteAllIssuesDisabled,
   onRenameProject,
   showSettingsButton = true,
+  onOpenAppearanceSettings,
 }: ProjectNavBarProps) {
   const router = useRouter();
   const {
@@ -469,7 +472,6 @@ export function ProjectNavBar({
   const [authMenuOpen, setAuthMenuOpen] = useState(false);
   const [projectSettingsOpen, setProjectSettingsOpen] = useState(false);
   const [hasToken, setHasToken] = useState<boolean | null>(null);
-  const { theme, toggleTheme } = useTheme();
   useEffect(() => {
     setHasToken(!!getStoredToken());
   }, []);
@@ -799,7 +801,7 @@ export function ProjectNavBar({
         <div ref={tabsScrollRef} className="project-nav-tabs-scroll">
           <DndContext
             id="project-nav-tabs-dnd"
-            sensors={tabsDragEnabled ? dragSensors : undefined}
+            sensors={dragSensors}
             modifiers={[restrictToWindowEdges]}
             collisionDetection={closestCenter}
             onDragStart={tabsDragEnabled ? handleTabsDragStart : undefined}
@@ -1165,21 +1167,17 @@ export function ProjectNavBar({
                   role="menuitem"
                   className="project-nav-settings-section-toggle"
                   onClick={() => {
-                    toggleTheme();
+                    if (onOpenAppearanceSettings) {
+                      onOpenAppearanceSettings();
+                    } else {
+                      void router.push("/settings");
+                    }
                   }}
-                  aria-label={
-                    theme === "light"
-                      ? "Switch to dark theme"
-                      : "Switch to light theme"
-                  }
-                  title={
-                    theme === "light"
-                      ? "Switch to dark theme"
-                      : "Switch to light theme"
-                  }
+                  aria-label="Open appearance settings"
+                  title="Open appearance settings"
                 >
                   <span className="project-nav-theme-icon" aria-hidden>
-                    {theme === "light" ? "🌙" : "☀️"}
+                    <IconSettings />
                   </span>
                 </button>
                 {onDeleteProjectClick && (

@@ -36,6 +36,7 @@ export {
   IDEAHOME_WEB_ORIGIN,
   QUALITY_SCORE_ITEM_IDS,
   DEFAULT_QUALITY_SCORE_WEIGHTS,
+  APPEARANCE_PRESET_IDS,
   ISSUE_STATUS_IDS,
   MOBILE_ACTIVE_TAB_STORAGE_KEY,
   MOBILE_AUTH_BYPASS_STORAGE_KEY,
@@ -76,6 +77,7 @@ export {
   pathTestsRunUi,
   pathSupportErrorReport,
   pathUsers,
+  pathUsersMeAppearance,
   pathAuthApple,
   pathAuthGithub,
   pathAuthGoogle,
@@ -111,6 +113,8 @@ export {
 
 export type {
   User,
+  AppearancePresetId,
+  AppearancePreferences,
   Project,
   ProjectQualityScoreConfig,
   QualityScoreItemId,
