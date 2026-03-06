@@ -1,3 +1,4 @@
+import { API_TESTS } from "@ideahome/shared-config/api-tests";
 import { getList, setList, type ListCacheKey } from "./listCache";
 import {
   fetchBugs,
@@ -11,6 +12,15 @@ import {
   type Idea,
   type Todo,
 } from "./api/checklists";
+import {
+  fetchCalendarEvents,
+  fetchCalendarGoogleStatus,
+  fetchExpenses,
+  type CalendarEvent,
+  type CalendarGoogleStatus,
+  type Expense,
+} from "./api/expenses";
+import { uiTests as uiTestsInitial, type UITestFile } from "./ui-tests";
 
 export type SummaryListKey =
   | "todos"
@@ -72,6 +82,43 @@ export type SummaryViewModel = {
   insights: SummaryInsight[];
 };
 
+export type SummaryExpenseOverview = {
+  totalAmount: number;
+  recentAmount: number;
+  expenseCount: number;
+  topCategory: string | null;
+  latestExpenseLabel: string;
+};
+
+export type SummaryTestingOverview = {
+  apiTestCount: number;
+  uiTestCount: number;
+  suiteCount: number;
+  healthLabel: string;
+  detail: string;
+};
+
+export type SummaryCalendarUpdate = {
+  id: string;
+  title: string;
+  startsAtLabel: string;
+};
+
+export type SummaryCalendarOverview = {
+  connected: boolean;
+  lastSyncedAt: string | null;
+  upcomingCount: number;
+  statusLabel: string;
+  updates: SummaryCalendarUpdate[];
+};
+
+export type SummaryDashboardData = {
+  lists: SummaryLists;
+  expenses: SummaryExpenseOverview;
+  testing: SummaryTestingOverview;
+  calendar: SummaryCalendarOverview;
+};
+
 const AREA_META: {
   key: SummaryListKey;
   label: string;
@@ -123,7 +170,7 @@ const AREA_META: {
 ];
 
 export type SummaryFetchResult = {
-  lists: SummaryLists;
+  data: SummaryDashboardData;
   fromCache: boolean;
 };
 
@@ -137,6 +184,52 @@ function emptyLists(): SummaryLists {
   };
 }
 
+function emptyExpenseOverview(): SummaryExpenseOverview {
+  return {
+    totalAmount: 0,
+    recentAmount: 0,
+    expenseCount: 0,
+    topCategory: null,
+    latestExpenseLabel: "No expenses logged yet",
+  };
+}
+
+function fallbackTestingOverview(): SummaryTestingOverview {
+  const apiTestCount = API_TESTS.reduce(
+    (count, suite) => count + suite.tests.length,
+    0
+  );
+  const uiTestCount = uiTestsInitial.reduce(
+    (count, file) =>
+      count +
+      file.suites.reduce(
+        (suiteCount, suite) => suiteCount + suite.tests.length,
+        0
+      ),
+    0
+  );
+  return {
+    apiTestCount,
+    uiTestCount,
+    suiteCount:
+      API_TESTS.length +
+      uiTestsInitial.reduce((count, file) => count + file.suites.length, 0),
+    healthLabel: "Coverage mapped",
+    detail:
+      "Run history is not persisted yet, so this card shows available automated coverage.",
+  };
+}
+
+function emptyCalendarOverview(): SummaryCalendarOverview {
+  return {
+    connected: false,
+    lastSyncedAt: null,
+    upcomingCount: 0,
+    statusLabel: "Calendar not connected",
+    updates: [],
+  };
+}
+
 function clampPercent(value: number): number {
   if (!Number.isFinite(value)) return 0;
   return Math.max(0, Math.min(100, value));
@@ -147,8 +240,20 @@ function computePercent(part: number, total: number): number {
   return clampPercent((part / total) * 100);
 }
 
+function formatCurrency(amount: number): string {
+  return new Intl.NumberFormat(undefined, {
+    style: "currency",
+    currency: "USD",
+    maximumFractionDigits: 0,
+  }).format(amount);
+}
+
 function startOfDay(date: Date): Date {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+}
+
+function startOfMonth(date: Date): Date {
+  return new Date(date.getFullYear(), date.getMonth(), 1);
 }
 
 function addDays(date: Date, days: number): Date {
@@ -178,6 +283,23 @@ function buildTrendWindow(now: Date, days: number): SummaryTrendPoint[] {
       created: 0,
       completedEstimate: 0,
     };
+  });
+}
+
+function formatCalendarEventStart(event: CalendarEvent): string {
+  const start = new Date(event.startAt);
+  if (Number.isNaN(start.getTime())) return "Upcoming";
+  if (event.isAllDay) {
+    return start.toLocaleDateString(undefined, {
+      month: "short",
+      day: "numeric",
+    });
+  }
+  return start.toLocaleString(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
   });
 }
 
@@ -305,6 +427,135 @@ function buildInsights(params: {
   return insights.slice(0, 4);
 }
 
+function buildExpenseOverview(
+  expenses: Expense[],
+  now: Date = new Date()
+): SummaryExpenseOverview {
+  if (expenses.length === 0) return emptyExpenseOverview();
+
+  const monthStart = startOfMonth(now);
+  const byCategory = new Map<string, number>();
+  let totalAmount = 0;
+  let recentAmount = 0;
+  let latest: Expense | null = null;
+
+  for (const expense of expenses) {
+    totalAmount += expense.amount;
+    byCategory.set(
+      expense.category,
+      (byCategory.get(expense.category) ?? 0) + expense.amount
+    );
+
+    const expenseDate = new Date(expense.date || expense.createdAt);
+    if (!Number.isNaN(expenseDate.getTime()) && expenseDate >= monthStart) {
+      recentAmount += expense.amount;
+    }
+
+    if (
+      !latest ||
+      new Date(expense.createdAt).getTime() >
+        new Date(latest.createdAt).getTime()
+    ) {
+      latest = expense;
+    }
+  }
+
+  const topCategory =
+    [...byCategory.entries()].sort(
+      (left, right) => right[1] - left[1]
+    )[0]?.[0] ?? null;
+  const latestExpense = latest;
+
+  return {
+    totalAmount,
+    recentAmount,
+    expenseCount: expenses.length,
+    topCategory,
+    latestExpenseLabel: latestExpense
+      ? `${latestExpense.description || latestExpense.category} · ${formatCurrency(latestExpense.amount)}`
+      : "No expenses logged yet",
+  };
+}
+
+function buildTestingOverview(
+  uiTestsList: UITestFile[]
+): SummaryTestingOverview {
+  const apiTestCount = API_TESTS.reduce(
+    (count, suite) => count + suite.tests.length,
+    0
+  );
+  const uiTestCount = uiTestsList.reduce(
+    (count, file) =>
+      count +
+      file.suites.reduce(
+        (suiteCount, suite) => suiteCount + suite.tests.length,
+        0
+      ),
+    0
+  );
+  const suiteCount =
+    API_TESTS.length +
+    uiTestsList.reduce((count, file) => count + file.suites.length, 0);
+  const totalCount = apiTestCount + uiTestCount;
+
+  return {
+    apiTestCount,
+    uiTestCount,
+    suiteCount,
+    healthLabel: totalCount > 0 ? "Coverage active" : "No automated tests",
+    detail:
+      totalCount > 0
+        ? `${totalCount} automated tests discovered across ${suiteCount} suites.`
+        : "No automated tests were discovered for this workspace.",
+  };
+}
+
+function buildCalendarOverview(
+  status: CalendarGoogleStatus | null,
+  events: CalendarEvent[],
+  now: Date = new Date()
+): SummaryCalendarOverview {
+  if (!status?.connected) {
+    return emptyCalendarOverview();
+  }
+
+  const upcoming = events
+    .filter((event) => {
+      const start = new Date(event.startAt);
+      return !Number.isNaN(start.getTime()) && start >= now;
+    })
+    .sort(
+      (left, right) =>
+        new Date(left.startAt).getTime() - new Date(right.startAt).getTime()
+    );
+
+  return {
+    connected: true,
+    lastSyncedAt: status.lastSyncedAt,
+    upcomingCount: upcoming.length,
+    statusLabel: status.lastSyncedAt
+      ? `Last synced ${new Date(status.lastSyncedAt).toLocaleString()}`
+      : "Connected, waiting for first sync",
+    updates: upcoming.slice(0, 3).map((event) => ({
+      id: event.id,
+      title: event.title,
+      startsAtLabel: formatCalendarEventStart(event),
+    })),
+  };
+}
+
+async function fetchUiTestsCatalog(): Promise<UITestFile[]> {
+  if (typeof fetch !== "function") return uiTestsInitial;
+  try {
+    const response = await fetch("/api/ui-tests", { cache: "no-store" });
+    if (!response.ok) return uiTestsInitial;
+    const payload = (await response.json()) as unknown;
+    return Array.isArray(payload) ? (payload as UITestFile[]) : uiTestsInitial;
+  } catch {
+    return uiTestsInitial;
+  }
+}
+
 export function aggregateSummaryViewModel(
   lists: SummaryLists,
   now: Date = new Date()
@@ -396,7 +647,17 @@ export function getCachedSummaryLists(
     cached[area.key] = items;
   });
 
-  return hasCachedData ? { lists: cached, fromCache: true } : null;
+  return hasCachedData
+    ? {
+        data: {
+          lists: cached,
+          expenses: emptyExpenseOverview(),
+          testing: fallbackTestingOverview(),
+          calendar: emptyCalendarOverview(),
+        },
+        fromCache: true,
+      }
+    : null;
 }
 
 export async function fetchSummaryLists(
@@ -415,7 +676,37 @@ export async function fetchSummaryLists(
     lists[key] = items;
   });
 
-  return { lists, fromCache: false };
+  const now = new Date();
+  const calendarWindowEnd = addDays(now, 7).toISOString();
+  const [expenses, testing, calendar] = await Promise.all([
+    fetchExpenses(projectId)
+      .then((items) => buildExpenseOverview(items, now))
+      .catch(() => emptyExpenseOverview()),
+    fetchUiTestsCatalog()
+      .then((uiTestsList) => buildTestingOverview(uiTestsList))
+      .catch(() => fallbackTestingOverview()),
+    fetchCalendarGoogleStatus(projectId)
+      .then(async (status) => {
+        if (!status.connected) return buildCalendarOverview(status, [], now);
+        const events = await fetchCalendarEvents(
+          projectId,
+          now.toISOString(),
+          calendarWindowEnd
+        ).catch(() => []);
+        return buildCalendarOverview(status, events, now);
+      })
+      .catch(() => emptyCalendarOverview()),
+  ]);
+
+  return {
+    data: {
+      lists,
+      expenses,
+      testing,
+      calendar,
+    },
+    fromCache: false,
+  };
 }
 
 export const SUMMARY_AREA_META = AREA_META;

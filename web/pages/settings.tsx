@@ -95,6 +95,33 @@ const SECTION_LINKS: {
   { tabId: "settings", label: "Settings" },
 ];
 
+function IconSun(props: React.SVGProps<SVGSVGElement>) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" {...props}>
+      <circle cx="12" cy="12" r="4" strokeWidth="1.8" />
+      <path
+        d="M12 2.75v2.5M12 18.75v2.5M21.25 12h-2.5M5.25 12h-2.5M18.54 5.46l-1.77 1.77M7.23 16.77l-1.77 1.77M18.54 18.54l-1.77-1.77M7.23 7.23 5.46 5.46"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function IconMoon(props: React.SVGProps<SVGSVGElement>) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" {...props}>
+      <path
+        d="M20 14.2A8 8 0 1 1 9.8 4a6.6 6.6 0 0 0 10.2 10.2Z"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
 export default function SettingsPage() {
   const layout = useProjectLayout();
   const isMobile = useIsMobile();
@@ -480,6 +507,7 @@ export default function SettingsPage() {
                   onClick={() => setTheme("light")}
                   aria-pressed={theme === "light"}
                 >
+                  <IconSun className="settings-mode-btn-icon" aria-hidden />
                   Light mode
                 </button>
                 <button
@@ -488,6 +516,7 @@ export default function SettingsPage() {
                   onClick={() => setTheme("dark")}
                   aria-pressed={theme === "dark"}
                 >
+                  <IconMoon className="settings-mode-btn-icon" aria-hidden />
                   Dark mode
                 </button>
               </div>
@@ -553,7 +582,7 @@ export default function SettingsPage() {
               </div>
 
               <div
-                className="settings-actions"
+                className="settings-actions settings-actions-appearance"
                 role="group"
                 aria-label="Appearance actions"
               >
@@ -905,7 +934,7 @@ export default function SettingsPage() {
                       stack.
                     </p>
                   </div>
-                  <div className="settings-actions settings-actions-start">
+                  <div className="settings-tool-action">
                     <button
                       type="button"
                       className="ui-btn ui-btn--secondary"

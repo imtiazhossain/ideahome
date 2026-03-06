@@ -5,6 +5,7 @@ import React, {
   useRef,
   useState,
 } from "react";
+import Link from "next/link";
 import { AppLayout } from "../components/AppLayout";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { SectionLoadingSpinner } from "../components/SectionLoadingSpinner";
@@ -18,7 +19,7 @@ import {
   aggregateSummaryViewModel,
   fetchSummaryLists,
   getCachedSummaryLists,
-  type SummaryLists,
+  type SummaryDashboardData,
 } from "../lib/summary";
 import { useProjectLayout } from "../lib/useProjectLayout";
 import { useTheme } from "./_app";
@@ -42,11 +43,19 @@ function insightClassName(tone: "success" | "warning" | "danger" | "neutral") {
   }
 }
 
+const AREA_HREFS = {
+  todos: "/todo",
+  features: "/features",
+  enhancements: "/enhancements",
+  ideas: "/ideas",
+  bugs: "/bugs",
+} as const;
+
 export default function SummaryPage() {
   const layout = useProjectLayout();
   const theme = useTheme();
   const requestVersionRef = useRef(0);
-  const [lists, setLists] = useState<SummaryLists | null>(null);
+  const [dashboard, setDashboard] = useState<SummaryDashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const selectedProjectId = layout.selectedProjectId;
@@ -54,7 +63,7 @@ export default function SummaryPage() {
   useEffect(() => {
     if (!layout.projectsLoaded) return;
     if (!selectedProjectId) {
-      setLists(null);
+      setDashboard(null);
       setLoading(false);
       setError(null);
       return;
@@ -66,7 +75,7 @@ export default function SummaryPage() {
 
     if (cached) {
       startTransition(() => {
-        setLists(cached.lists);
+        setDashboard(cached.data);
         setLoading(false);
         setError(null);
       });
@@ -79,7 +88,7 @@ export default function SummaryPage() {
       .then((result) => {
         if (requestVersionRef.current !== requestVersion) return;
         startTransition(() => {
-          setLists(result.lists);
+          setDashboard(result.data);
           setLoading(false);
           setError(null);
         });
@@ -94,8 +103,8 @@ export default function SummaryPage() {
   }, [layout.projectsLoaded, selectedProjectId]);
 
   const summary = useMemo(
-    () => (lists ? aggregateSummaryViewModel(lists) : null),
-    [lists]
+    () => (dashboard ? aggregateSummaryViewModel(dashboard.lists) : null),
+    [dashboard]
   );
 
   const { theme: themeValue, toggleTheme } = theme;
@@ -134,7 +143,8 @@ export default function SummaryPage() {
           <p className="summary-page-eyebrow">Operations</p>
           <h1 className="summary-page-title">Summary</h1>
           <p className="summary-page-subtitle">
-            A colorful progress snapshot for the currently selected project.
+            A colorful progress snapshot for delivery, spend, testing, and
+            calendar activity.
           </p>
         </div>
 
@@ -167,15 +177,27 @@ export default function SummaryPage() {
                       className="summary-hero-chip-row"
                       aria-label="Summary quick stats"
                     >
-                      <span className="summary-hero-chip">
+                      <Link
+                        href="/todo"
+                        prefetch={false}
+                        className="summary-hero-chip summary-inline-link"
+                      >
                         {summary.totalItems} tracked items
-                      </span>
-                      <span className="summary-hero-chip">
+                      </Link>
+                      <Link
+                        href="/todo"
+                        prefetch={false}
+                        className="summary-hero-chip summary-inline-link"
+                      >
                         {summary.openItems} still open
-                      </span>
-                      <span className="summary-hero-chip">
+                      </Link>
+                      <Link
+                        href="/bugs"
+                        prefetch={false}
+                        className="summary-hero-chip summary-inline-link"
+                      >
                         {summary.openBugs} blockers
-                      </span>
+                      </Link>
                     </div>
                   </div>
                   <SummaryDonutChart
@@ -194,12 +216,14 @@ export default function SummaryPage() {
                     value={summary.completedItems}
                     detail={`${Math.round(summary.completionRate)}% of tracked work`}
                     accentClassName="is-complete"
+                    href="/todo"
                   />
                   <SummaryStatCard
                     title="Open Work"
                     value={summary.openItems}
                     detail={`${summary.totalItems} total items in scope`}
                     accentClassName="is-open"
+                    href="/todo"
                   />
                   <SummaryStatCard
                     title="Blockers"
@@ -210,12 +234,14 @@ export default function SummaryPage() {
                         : "Open bugs needing attention"
                     }
                     accentClassName="is-bugs"
+                    href="/bugs"
                   />
                   <SummaryStatCard
                     title="7-Day Momentum"
                     value={summary.momentumCount}
                     detail={formatDelta(summary.momentumDelta)}
                     accentClassName="is-momentum"
+                    href="/"
                   />
                 </section>
 
@@ -235,10 +261,18 @@ export default function SummaryPage() {
                           <p className="summary-panel-eyebrow">Work Mix</p>
                           <h2>Open vs completed by area</h2>
                         </div>
-                        <SummarySplitBarChart areas={summary.areas} />
+                        <SummarySplitBarChart
+                          areas={summary.areas}
+                          getHref={(key) => AREA_HREFS[key]}
+                        />
                       </article>
 
-                      <article className="summary-panel">
+                      <Link
+                        href="/"
+                        prefetch={false}
+                        className="summary-panel summary-panel-link"
+                        aria-label="Open board"
+                      >
                         <div className="summary-panel-heading">
                           <p className="summary-panel-eyebrow">
                             Recent Activity
@@ -259,7 +293,154 @@ export default function SummaryPage() {
                           </span>
                         </div>
                         <SummaryTrendChart points={summary.trend} />
-                      </article>
+                      </Link>
+                    </section>
+
+                    <section className="summary-supplemental-grid">
+                      <Link
+                        href="/finances"
+                        prefetch={false}
+                        className="summary-panel summary-panel-link summary-panel-accent-blue"
+                        aria-label="Open finances"
+                      >
+                        <div className="summary-panel-heading">
+                          <p className="summary-panel-eyebrow">Expenses</p>
+                          <h2>Spend snapshot</h2>
+                        </div>
+                        <div className="summary-metric-stack">
+                          <strong className="summary-metric-value">
+                            {dashboard?.expenses.recentAmount.toLocaleString(
+                              undefined,
+                              {
+                                style: "currency",
+                                currency: "USD",
+                                maximumFractionDigits: 0,
+                              }
+                            )}
+                          </strong>
+                          <p className="summary-metric-caption">
+                            This month, {dashboard?.expenses.expenseCount ?? 0}{" "}
+                            expenses tracked
+                          </p>
+                          <div className="summary-meta-list">
+                            <div className="summary-meta-row">
+                              <span>Total spend</span>
+                              <strong>
+                                {dashboard?.expenses.totalAmount.toLocaleString(
+                                  undefined,
+                                  {
+                                    style: "currency",
+                                    currency: "USD",
+                                    maximumFractionDigits: 0,
+                                  }
+                                )}
+                              </strong>
+                            </div>
+                            <div className="summary-meta-row">
+                              <span>Top category</span>
+                              <strong>
+                                {dashboard?.expenses.topCategory ??
+                                  "No category yet"}
+                              </strong>
+                            </div>
+                          </div>
+                          <p className="summary-supporting-copy">
+                            {dashboard?.expenses.latestExpenseLabel}
+                          </p>
+                        </div>
+                      </Link>
+
+                      <Link
+                        href="/tests"
+                        prefetch={false}
+                        className="summary-panel summary-panel-link summary-panel-accent-amber"
+                        aria-label="Open tests"
+                      >
+                        <div className="summary-panel-heading">
+                          <p className="summary-panel-eyebrow">
+                            Testing Health
+                          </p>
+                          <h2>Coverage readiness</h2>
+                        </div>
+                        <div className="summary-metric-stack">
+                          <strong className="summary-metric-value">
+                            {(dashboard?.testing.apiTestCount ?? 0) +
+                              (dashboard?.testing.uiTestCount ?? 0)}
+                          </strong>
+                          <p className="summary-metric-caption">
+                            {dashboard?.testing.healthLabel ??
+                              "Coverage mapped"}
+                          </p>
+                          <div className="summary-meta-list">
+                            <div className="summary-meta-row">
+                              <span>API tests</span>
+                              <strong>
+                                {dashboard?.testing.apiTestCount ?? 0}
+                              </strong>
+                            </div>
+                            <div className="summary-meta-row">
+                              <span>UI tests</span>
+                              <strong>
+                                {dashboard?.testing.uiTestCount ?? 0}
+                              </strong>
+                            </div>
+                            <div className="summary-meta-row">
+                              <span>Suites</span>
+                              <strong>
+                                {dashboard?.testing.suiteCount ?? 0}
+                              </strong>
+                            </div>
+                          </div>
+                          <p className="summary-supporting-copy">
+                            {dashboard?.testing.detail}
+                          </p>
+                        </div>
+                      </Link>
+
+                      <Link
+                        href="/calendar"
+                        prefetch={false}
+                        className="summary-panel summary-panel-link summary-panel-accent-teal"
+                        aria-label="Open calendar"
+                      >
+                        <div className="summary-panel-heading">
+                          <p className="summary-panel-eyebrow">
+                            Calendar Updates
+                          </p>
+                          <h2>Upcoming schedule</h2>
+                        </div>
+                        <div className="summary-metric-stack">
+                          <strong className="summary-metric-value">
+                            {dashboard?.calendar.upcomingCount ?? 0}
+                          </strong>
+                          <p className="summary-metric-caption">
+                            Upcoming events in the next 7 days
+                          </p>
+                          <p className="summary-supporting-copy">
+                            {dashboard?.calendar.statusLabel}
+                          </p>
+                          {dashboard?.calendar.connected &&
+                          dashboard.calendar.updates.length > 0 ? (
+                            <div className="summary-calendar-list">
+                              {dashboard.calendar.updates.map((update) => (
+                                <div
+                                  key={update.id}
+                                  className="summary-calendar-list-item"
+                                >
+                                  <strong>{update.title}</strong>
+                                  <span>{update.startsAtLabel}</span>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <p className="summary-supporting-copy">
+                              {dashboard?.calendar.connected
+                                ? "No upcoming events in the next week."
+                                : "Connect Google Calendar to surface sync status and upcoming events here."}
+                            </p>
+                          )}
+                        </div>
+                      </Link>
                     </section>
 
                     <section className="summary-detail-grid">
@@ -272,9 +453,12 @@ export default function SummaryPage() {
                         </div>
                         <div className="summary-progress-list">
                           {summary.areas.map((area) => (
-                            <div
+                            <Link
                               key={area.key}
-                              className="summary-progress-row"
+                              href={AREA_HREFS[area.key]}
+                              prefetch={false}
+                              className="summary-progress-row summary-inline-link"
+                              aria-label={`Open ${area.label}`}
                             >
                               <div className="summary-progress-row-head">
                                 <span>{area.label}</span>
@@ -292,7 +476,7 @@ export default function SummaryPage() {
                                   }}
                                 />
                               </div>
-                            </div>
+                            </Link>
                           ))}
                         </div>
                       </article>
@@ -325,9 +509,11 @@ export default function SummaryPage() {
                       </div>
                       <div className="summary-snapshot-grid">
                         {summary.areas.map((area) => (
-                          <article
+                          <Link
                             key={area.key}
-                            className="summary-snapshot-tile"
+                            href={AREA_HREFS[area.key]}
+                            prefetch={false}
+                            className="summary-snapshot-tile summary-inline-link"
                             style={{
                               borderColor: `color-mix(in srgb, var(${area.colorVar}) 36%, var(--border))`,
                             }}
@@ -340,7 +526,7 @@ export default function SummaryPage() {
                               <p>{area.label}</p>
                               <strong>{area.total}</strong>
                             </div>
-                          </article>
+                          </Link>
                         ))}
                       </div>
                     </section>

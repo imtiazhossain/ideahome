@@ -6,6 +6,9 @@ type SeedOptions = {
   features?: unknown[];
   enhancements?: unknown[];
   bugs?: unknown[];
+  expenses?: unknown[];
+  calendarStatus?: Record<string, unknown>;
+  calendarEvents?: unknown[];
 };
 
 async function seedAuthAndSummaryMocks(
@@ -16,6 +19,14 @@ async function seedAuthAndSummaryMocks(
     features = [],
     enhancements = [],
     bugs = [],
+    expenses = [],
+    calendarStatus = {
+      connected: true,
+      selectedCalendarId: "primary",
+      lastSyncedAt: new Date().toISOString(),
+      connectedAt: new Date().toISOString(),
+    },
+    calendarEvents = [],
   }: SeedOptions = {}
 ) {
   await page.addInitScript(() => {
@@ -99,6 +110,60 @@ async function seedAuthAndSummaryMocks(
       status: 200,
       contentType: "application/json",
       body: JSON.stringify([]),
+    });
+  });
+
+  await page.route("**/expenses*", async (route) => {
+    if (route.request().method() !== "GET") {
+      await route.continue();
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify(expenses),
+    });
+  });
+
+  await page.route("**/calendar/google/status*", async (route) => {
+    if (route.request().method() !== "GET") {
+      await route.continue();
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify(calendarStatus),
+    });
+  });
+
+  await page.route("**/calendar/events*", async (route) => {
+    if (route.request().method() !== "GET") {
+      await route.continue();
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify(calendarEvents),
+    });
+  });
+
+  await page.route("**/api/ui-tests*", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify([
+        {
+          file: "summary.spec.ts",
+          suites: [
+            {
+              name: "Summary",
+              tests: ["renders dashboard", "shows empty state"],
+            },
+          ],
+        },
+      ]),
     });
   });
 
@@ -195,6 +260,32 @@ test.describe("Summary page", () => {
           createdAt: new Date().toISOString(),
         },
       ],
+      expenses: [
+        {
+          id: "expense-1",
+          amount: 240,
+          description: "API monitoring",
+          date: new Date().toISOString(),
+          category: "Software",
+          projectId: "proj-summary",
+          createdAt: new Date().toISOString(),
+        },
+      ],
+      calendarEvents: [
+        {
+          id: "event-1",
+          provider: "google",
+          providerEventId: "evt-1",
+          title: "Weekly sync",
+          description: null,
+          startAt: new Date(Date.now() + 86400000).toISOString(),
+          endAt: new Date(Date.now() + 90000000).toISOString(),
+          isAllDay: false,
+          projectId: "proj-summary",
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        },
+      ],
     });
 
     await page.goto("/");
@@ -207,8 +298,12 @@ test.describe("Summary page", () => {
     );
     await expect(page.locator(".summary-stat-grid")).toBeVisible();
     await expect(page.locator(".summary-chart-grid")).toBeVisible();
+    await expect(page.locator(".summary-supplemental-grid")).toBeVisible();
     await expect(page.locator(".summary-detail-grid")).toBeVisible();
     await expect(page.locator(".summary-snapshot-grid")).toBeVisible();
+
+    await page.getByRole("link", { name: "Open Blockers" }).click();
+    await expect(page).toHaveURL(/\/bugs/);
   });
 
   test("shows empty-state guidance when project has no tracked work", async ({

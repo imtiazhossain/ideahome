@@ -1,4 +1,5 @@
 import React from "react";
+import Link from "next/link";
 import type { SummaryAreaMetric, SummaryTrendPoint } from "../../lib/summary";
 
 function polarToCartesian(
@@ -104,8 +105,10 @@ export function SummaryDonutChart({
 
 export function SummarySplitBarChart({
   areas,
+  getHref,
 }: {
   areas: SummaryAreaMetric[];
+  getHref?: (key: SummaryAreaMetric["key"]) => string;
 }) {
   const maxTotal = Math.max(1, ...areas.map((area) => area.total));
 
@@ -119,8 +122,9 @@ export function SummarySplitBarChart({
         const doneWidth =
           area.total === 0 ? 0 : (area.completed / maxTotal) * 100;
         const openWidth = area.total === 0 ? 0 : (area.open / maxTotal) * 100;
-        return (
-          <div key={area.key} className="summary-split-chart-row">
+        const href = getHref?.(area.key);
+        const rowContent = (
+          <>
             <div className="summary-split-chart-head">
               <span className="summary-split-chart-label">{area.label}</span>
               <span className="summary-split-chart-meta">
@@ -144,6 +148,26 @@ export function SummarySplitBarChart({
                 }}
               />
             </div>
+          </>
+        );
+
+        if (href) {
+          return (
+            <Link
+              key={area.key}
+              href={href}
+              prefetch={false}
+              className="summary-split-chart-row summary-inline-link"
+              aria-label={`Open ${area.label}`}
+            >
+              {rowContent}
+            </Link>
+          );
+        }
+
+        return (
+          <div key={area.key} className="summary-split-chart-row">
+            {rowContent}
           </div>
         );
       })}
