@@ -345,7 +345,7 @@ export function ProjectNavBar({
   const suppressTabClickRef = useRef(false);
   const dragSensors = useSensors(
     useSensor(PointerSensor, {
-      activationConstraint: { distance: 8 },
+      activationConstraint: { distance: 25 },
     })
   );
 
@@ -501,6 +501,10 @@ export function ProjectNavBar({
   const handleTabsDragEnd = useCallback(
     (event: DragEndEvent) => {
       setDraggingTabId(null);
+      suppressTabClickRef.current = true;
+      window.setTimeout(() => {
+        suppressTabClickRef.current = false;
+      }, 180);
       if (!tabsDragEnabled) return;
       const { active, over } = event;
       if (!over || active.id === over.id) return;
@@ -513,16 +517,16 @@ export function ProjectNavBar({
       const [moved] = next.splice(from, 1);
       next.splice(to, 0, moved);
       setTabOrder(next);
-      suppressTabClickRef.current = true;
-      window.setTimeout(() => {
-        suppressTabClickRef.current = false;
-      }, 180);
     },
     [tabsDragEnabled, tabOrder, setTabOrder]
   );
 
   const handleTabsDragCancel = useCallback(() => {
     setDraggingTabId(null);
+    suppressTabClickRef.current = true;
+    window.setTimeout(() => {
+      suppressTabClickRef.current = false;
+    }, 180);
   }, []);
 
   return (
