@@ -39,6 +39,7 @@ const SECTION_LINKS: {
   { tabId: "expenses", label: "Finances", href: "/finances" },
   { tabId: "code", label: "Code", href: "/code" },
   { tabId: "pages", label: "Pages", href: "/pages" },
+  { tabId: "settings", label: "Settings", href: "/settings" },
 ];
 
 export interface AppLayoutProps {

@@ -14,7 +14,6 @@ import { IconColorizer } from "../components/icons/IconColorizer";
 import { IconEdit } from "../components/icons/IconEdit";
 import { UiCheckbox } from "../components/UiCheckbox";
 import { SectionLoadingSpinner } from "../components/SectionLoadingSpinner";
-import { UiDatePickerField } from "../components/UiDatePickerField";
 import { UiDateTimePickerField } from "../components/UiDateTimePickerField";
 import { UiInput } from "../components/UiInput";
 import { UiMenuDropdown } from "../components/UiMenuDropdown";
@@ -70,15 +69,15 @@ const EVENT_COLOR_PRESETS = [
   },
   {
     id: "teal",
-    background: "rgba(20, 184, 166, 0.16)",
-    border: "rgba(20, 184, 166, 0.42)",
-    dot: "#2dd4bf",
+    background: "rgba(6, 182, 212, 0.18)",
+    border: "rgba(8, 145, 178, 0.46)",
+    dot: "#22d3ee",
   },
   {
     id: "green",
-    background: "rgba(34, 197, 94, 0.16)",
-    border: "rgba(34, 197, 94, 0.4)",
-    dot: "#4ade80",
+    background: "rgba(132, 204, 22, 0.18)",
+    border: "rgba(101, 163, 13, 0.46)",
+    dot: "#a3e635",
   },
   {
     id: "amber",
@@ -1201,25 +1200,6 @@ export default function CalendarPage() {
                       </button>
                     </div>
 
-                    <UiDatePickerField
-                      className="calendar-date-filter"
-                      label="Selected day"
-                      value={selectedDate}
-                      ariaLabel="Calendar day picker"
-                      onChange={(value) => {
-                        handleDaySelection(value, { jumpToEditor: true });
-                        const selected = parseYMD(value);
-                        if (selected) {
-                          setViewDate(
-                            new Date(
-                              selected.getFullYear(),
-                              selected.getMonth(),
-                              1
-                            )
-                          );
-                        }
-                      }}
-                    />
                   </div>
 
                   <div className="calendar-month-weekdays">
@@ -1607,7 +1587,7 @@ export default function CalendarPage() {
                   </ul>
 
                   <div ref={eventEditorRef} className="calendar-event-editor">
-                    <h4>{editingEventId ? "Edit event" : "Create event"}</h4>
+                    <h4>{editingEventId ? "Edit event" : "Create Event"}</h4>
                     <div
                       className={
                         "calendar-event-editor-field" +
@@ -1692,7 +1672,7 @@ export default function CalendarPage() {
                         checked={isAllDay}
                         onChange={(event) => setIsAllDay(event.target.checked)}
                       />
-                      <span>All day</span>
+                      <span>All Day</span>
                     </div>
                     <div className="calendar-event-editor-actions">
                       {!editingEventId || hasEditingEventChanges ? (
@@ -1701,7 +1681,7 @@ export default function CalendarPage() {
                           size="md"
                           onClick={() => void handleSaveEvent()}
                         >
-                          {editingEventId ? "Save changes" : "Create event"}
+                          {editingEventId ? "Save changes" : "Create Event"}
                         </Button>
                       ) : null}
                     </div>

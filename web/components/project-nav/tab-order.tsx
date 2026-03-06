@@ -24,6 +24,7 @@ import {
   IconHomeBulby,
   IconIdeas,
   IconPages,
+  IconSettings,
   IconTimeline,
   IconTodo,
 } from "../icons";
@@ -55,6 +56,7 @@ export type ProjectNavTabId =
   | "expenses"
   | "code"
   | "pages"
+  | "settings"
   | `custom-${string}`;
 
 /** Breakpoint below which the Code tab is hidden (mobile). */
@@ -111,6 +113,12 @@ export const TABS: {
     desktopOnly: true,
   },
   { id: "pages", label: "Pages", icon: <IconPages />, href: "/pages" },
+  {
+    id: "settings",
+    label: "Settings",
+    icon: <IconSettings />,
+    href: "/settings",
+  },
 ];
 
 function loadHiddenTabIds(): ProjectNavTabId[] {

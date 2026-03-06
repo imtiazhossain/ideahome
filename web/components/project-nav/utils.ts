@@ -30,6 +30,7 @@ const COMPACT_TAB_LABELS: Record<string, string> = {
   expenses: "Exp",
   code: "Code",
   pages: "Pages",
+  settings: "Prefs",
 };
 
 export function getCompactTabLabel(tabId: string, label: string): string {

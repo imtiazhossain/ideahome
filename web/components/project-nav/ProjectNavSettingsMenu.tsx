@@ -340,15 +340,6 @@ export function ProjectNavSettingsMenu({
           )}
         </div>
       )}
-      <button
-        type="button"
-        className="project-nav-settings-btn"
-        onClick={() => setSettingsMenuOpen((o) => !o)}
-        aria-label="Settings"
-        aria-expanded={settingsMenuOpen}
-      >
-        <IconSettings />
-      </button>
     </div>
   );
 }

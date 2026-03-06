@@ -7,6 +7,7 @@ import type {
 } from "react-plaid-link";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+import { IconGrip } from "../../components/IconGrip";
 
 /** Mount only when token exists; opens link once ready. */
 export function PlaidLinkLauncher({
@@ -87,15 +88,13 @@ export function SortableFinancesSection({
       {children(
         <button
           type="button"
-          className="finances-section-drag-handle"
+          className="finances-section-drag-handle code-page-section-drag-handle features-list-drag-handle"
           aria-label="Drag to reorder section"
           title="Drag to reorder section"
           {...attributes}
           {...listeners}
         >
-          <span className="finances-section-drag-handle-dot" />
-          <span className="finances-section-drag-handle-dot" />
-          <span className="finances-section-drag-handle-dot" />
+          <IconGrip />
         </button>
       )}
     </div>
