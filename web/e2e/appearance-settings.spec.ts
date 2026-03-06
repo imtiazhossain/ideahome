@@ -75,7 +75,9 @@ test.describe("Appearance settings", () => {
 
   test("preview/cancel/save and persist per mode", async ({ page }) => {
     await page.goto("/settings");
-    await expect(page.getByRole("heading", { name: "Appearance settings" })).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Appearance settings" })
+    ).toBeVisible();
     const saveButton = page.locator(".settings-actions .ui-btn--primary");
 
     const initialLightScheme = await page.evaluate(() =>
@@ -87,7 +89,9 @@ test.describe("Appearance settings", () => {
 
     await expect
       .poll(async () =>
-        page.evaluate(() => document.documentElement.getAttribute("data-color-scheme"))
+        page.evaluate(() =>
+          document.documentElement.getAttribute("data-color-scheme")
+        )
       )
       .toBe("ocean");
 
@@ -95,7 +99,9 @@ test.describe("Appearance settings", () => {
 
     await expect
       .poll(async () =>
-        page.evaluate(() => document.documentElement.getAttribute("data-color-scheme"))
+        page.evaluate(() =>
+          document.documentElement.getAttribute("data-color-scheme")
+        )
       )
       .toBe(initialLightScheme);
 
@@ -107,12 +113,16 @@ test.describe("Appearance settings", () => {
     await page.getByRole("button", { name: "Light mode" }).click();
     await expect
       .poll(async () =>
-        page.evaluate(() => document.documentElement.getAttribute("data-color-scheme"))
+        page.evaluate(() =>
+          document.documentElement.getAttribute("data-color-scheme")
+        )
       )
       .toBe("ocean");
   });
 
-  test("failed save applies locally and shows retry notice", async ({ page }) => {
+  test("failed save applies locally and shows retry notice", async ({
+    page,
+  }) => {
     await page.unroute("**/users/me/appearance");
     await page.route("**/users/me/appearance", async (route, request) => {
       if (request.method() === "GET") {
@@ -130,7 +140,10 @@ test.describe("Appearance settings", () => {
     });
     await page.route("**/users/me/appearance", async (route, request) => {
       if (request.method() === "PUT") {
-        await route.fulfill({ status: 500, body: JSON.stringify({ message: "boom" }) });
+        await route.fulfill({
+          status: 500,
+          body: JSON.stringify({ message: "boom" }),
+        });
         return;
       }
       await route.continue();
@@ -143,7 +156,9 @@ test.describe("Appearance settings", () => {
 
     await expect
       .poll(async () =>
-        page.evaluate(() => document.documentElement.getAttribute("data-color-scheme"))
+        page.evaluate(() =>
+          document.documentElement.getAttribute("data-color-scheme")
+        )
       )
       .toBe("forest");
 
@@ -151,8 +166,42 @@ test.describe("Appearance settings", () => {
     await page.getByRole("button", { name: "Light mode" }).click();
     await expect
       .poll(async () =>
-        page.evaluate(() => document.documentElement.getAttribute("data-color-scheme"))
+        page.evaluate(() =>
+          document.documentElement.getAttribute("data-color-scheme")
+        )
       )
       .toBe("forest");
+  });
+
+  test("manages navigation visibility and Bulby from the settings page", async ({
+    page,
+  }) => {
+    await page.goto("/settings");
+
+    await expect(
+      page.getByRole("heading", { name: "Navigation" })
+    ).toBeVisible();
+    const todoRow = page.locator(".settings-list-row-toggle", {
+      hasText: "To-Do",
+    });
+    const todoCheckbox = todoRow.locator('input[type="checkbox"]');
+    await expect(todoCheckbox).toBeChecked();
+    await todoCheckbox.click();
+    await expect(todoCheckbox).not.toBeChecked();
+
+    const hideBulbyButton = page.getByRole("button", {
+      name: "Hide Bulby chat",
+    });
+    await hideBulbyButton.click();
+    await expect(
+      page.getByRole("button", { name: "Show Bulby chat" })
+    ).toBeVisible();
+    await expect
+      .poll(async () =>
+        page.evaluate(() =>
+          window.localStorage.getItem("bulby-chatbox-trigger-hidden")
+        )
+      )
+      .toBe("1");
   });
 });

@@ -482,7 +482,7 @@ export default function CodePage() {
       onCreateProject={layout.createProjectByName}
       onRenameProject={layout.renameProjectById}
     >
-      <div className="tests-page-content expenses-page-content">
+      <div className="code-page-content">
         <div className="code-page">
           <header className="code-page-header">
             <h1 className="code-page-title">Code</h1>

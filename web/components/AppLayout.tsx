@@ -28,7 +28,7 @@ const SECTION_LINKS: {
   { tabId: "todo", label: "To-Do", href: "/todo" },
   { tabId: "ideas", label: "Ideas", href: "/ideas" },
   { tabId: "enhancements", label: "Enhancements", href: "/enhancements" },
-  { tabId: "summary", label: "Summary" },
+  { tabId: "summary", label: "Summary", href: "/summary" },
   { tabId: "timeline", label: "Timeline" },
   { tabId: "board", label: "Dashboard", href: "/" },
   { tabId: "tests", label: "Tests", href: "/tests" },
@@ -158,12 +158,8 @@ export function AppLayout({
 
   React.useEffect(() => {
     setBackendOffline(isBackendOffline());
-    const onBackendConnectivityChange = (
-      event: Event
-    ) => {
-      const detail = (
-        event as CustomEvent<{ offline?: unknown }>
-      ).detail;
+    const onBackendConnectivityChange = (event: Event) => {
+      const detail = (event as CustomEvent<{ offline?: unknown }>).detail;
       if (typeof detail?.offline === "boolean") {
         setBackendOffline(detail.offline);
         return;
@@ -546,11 +542,15 @@ export function AppLayout({
 
           <div className="main-page-scroll">
             {backendOffline ? (
-              <section className="app-offline-state" role="status" aria-live="polite">
+              <section
+                className="app-offline-state"
+                role="status"
+                aria-live="polite"
+              >
                 <IconBrokenBulb className="app-offline-state-icon" />
                 <p className="app-offline-state-title">
-                  Looks like the lights went out, we&apos;re going to turn them on
-                  right away.
+                  Looks like the lights went out, we&apos;re going to turn them
+                  on right away.
                 </p>
               </section>
             ) : (

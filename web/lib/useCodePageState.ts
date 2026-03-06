@@ -91,6 +91,7 @@ export function useCodePageState(
   const [sectionCollapsed, setSectionCollapsed] = useState<
     Record<string, boolean>
   >(DEFAULT_CODE_SECTION_COLLAPSED); // project flow diagram starts expanded
+  const auditStorageKey = `ideahome-code-token-audit${selectedProjectId ? `-${selectedProjectId}` : ""}`;
 
   const sectionOrderStorageKey = `ideahome-code-section-order${selectedProjectId ? `-${selectedProjectId}` : ""}`;
   const sectionCollapsedStorageKey = `ideahome-code-section-collapsed${selectedProjectId ? `-${selectedProjectId}` : ""}`;
@@ -201,6 +202,62 @@ export function useCodePageState(
       cancelled = true;
     };
   }, [selectedProjectId]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (!selectedProjectId) {
+      setPayload(null);
+      setWireframe(null);
+      setAuditRating(null);
+      setCodeRating(STAFF_CODE_RATING);
+      return;
+    }
+    try {
+      const raw = localStorage.getItem(auditStorageKey);
+      if (!raw) {
+        setPayload(null);
+        setWireframe(null);
+        setAuditRating(null);
+        setCodeRating(STAFF_CODE_RATING);
+        return;
+      }
+      const parsed = JSON.parse(raw) as {
+        payload?: AuditPayload | null;
+        auditRating?: number | null;
+      };
+      const nextPayload = parsed.payload ?? null;
+      const nextAuditRating =
+        typeof parsed.auditRating === "number" ? parsed.auditRating : null;
+      setPayload(nextPayload);
+      setWireframe(buildWireframe(nextPayload));
+      setAuditRating(nextAuditRating);
+      setCodeRating(deriveCodeRating(STAFF_CODE_RATING, nextAuditRating));
+    } catch {
+      setPayload(null);
+      setWireframe(null);
+      setAuditRating(null);
+      setCodeRating(STAFF_CODE_RATING);
+    }
+  }, [auditStorageKey, selectedProjectId]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !selectedProjectId) return;
+    try {
+      if (!payload && auditRating == null) {
+        localStorage.removeItem(auditStorageKey);
+        return;
+      }
+      localStorage.setItem(
+        auditStorageKey,
+        JSON.stringify({
+          payload,
+          auditRating,
+        })
+      );
+    } catch {
+      /* ignore */
+    }
+  }, [auditRating, auditStorageKey, payload, selectedProjectId]);
 
   const runAudit = useCallback(async () => {
     setRunning(true);
