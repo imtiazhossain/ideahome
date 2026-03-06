@@ -25,4 +25,24 @@ export class UsersController {
   ) {
     return this.svc.updateAppearancePreferences(requireUserId(req), body);
   }
+
+  @Get("me/bulby-memory")
+  getBulbyMemory(@Req() req: AuthenticatedRequest) {
+    return this.svc.getBulbyMemoryPreferences(requireUserId(req));
+  }
+
+  @Put("me/bulby-memory")
+  updateBulbyMemory(
+    @Req() req: AuthenticatedRequest,
+    @Body()
+    body: {
+      systemPrompt?: unknown;
+      orgContext?: unknown;
+      notes?: unknown;
+      appendNote?: unknown;
+      appendRuleEntry?: unknown;
+    }
+  ) {
+    return this.svc.updateBulbyMemoryPreferences(requireUserId(req), body ?? {});
+  }
 }

@@ -131,7 +131,7 @@ export class IdeaPlanService {
               {
                 role: "system",
                 content:
-                  "You directly fulfill the user's request and return strict JSON with a single field 'message'.",
+                  "You return strict JSON with a single field 'message'. Be truthful about app capabilities. Never claim you created, updated, deleted, sent, saved, or changed anything unless that action was actually executed by the app outside this model. If the request requires a side effect you cannot perform, say clearly that you could not complete it.",
               },
               { role: "user", content: userPrompt },
             ],

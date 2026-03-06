@@ -14,6 +14,7 @@ import {
   type AssistantChatMessage,
   type AssistantPlaybackStatus,
 } from "../components/IdeaAssistantPanel";
+import { formatTextForSpeech } from "./utils";
 
 export type UseCheckableListAssistantOptions = {
   items: Array<{ id: string; name: string }>;
@@ -514,6 +515,7 @@ export function useCheckableListAssistant(
     ) => {
       if (typeof window === "undefined") return;
       const restart = opts?.restart ?? false;
+      const speechText = formatTextForSpeech(message.text);
       const playBrowserSpeech = async () => {
         if (!("speechSynthesis" in window)) {
           throw new Error("Speech synthesis is not available in this browser.");
@@ -533,7 +535,7 @@ export function useCheckableListAssistant(
         const browserVoiceUri = selectedVoiceUri.startsWith("browser:")
           ? selectedVoiceUri.replace(/^browser:/, "")
           : selectedVoiceUri;
-        const utterance = new SpeechSynthesisUtterance(message.text);
+        const utterance = new SpeechSynthesisUtterance(speechText);
         const selectedVoice = synth
           .getVoices()
           .find((voice) => voice.voiceURI === browserVoiceUri);
@@ -610,7 +612,7 @@ export function useCheckableListAssistant(
 
           if (!canReuseSource) {
             const blob = await synthesizeIdeaChatSpeech(
-              message.text,
+              speechText,
               voiceId || undefined
             );
             const previousSrc = audio.src;

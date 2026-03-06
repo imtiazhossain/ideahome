@@ -11,22 +11,61 @@ import {
   combineAssistantContext,
 } from "@ideahome/shared-assistant";
 import {
+  ASSISTANT_VOICE_CHANGE_EVENT,
+  fetchCalendarEvents,
   fetchTodos,
   fetchIdeas,
   fetchBugs,
   fetchFeatures,
   generateListItemAssistantChat,
   getStoredOpenRouterModel,
+  getStoredAssistantVoiceUri,
   createTodo,
+  createIdea,
+  createBug,
+  createFeature,
+  createEnhancement,
+  createCalendarEvent,
+  CALENDAR_EVENTS_CHANGED_EVENT,
+  deleteCalendarEvent,
+  updateCalendarEvent,
   fetchExpenses,
+  synthesizeIdeaChatSpeech,
 } from "../lib/api";
 import { invalidateList } from "../lib/listCache";
 import {
   isExpenseOverviewQuery,
+  isLatestExpenseQuery,
+  summarizeLatestExpense,
   summarizeExpensesForDate,
   summarizeExpensesOverview,
   tryParseExpenseQuery,
 } from "../lib/assistantExpenses";
+import {
+  formatCalendarEventsAsContext,
+  getCalendarDayRange,
+  getCalendarContextRange,
+  isCalendarMutationRequest,
+  isCalendarQuestion,
+  summarizeMatchingCalendarEvents,
+  summarizeCalendarEventsForDay,
+  tryParseCalendarDeleteIntent,
+  tryParseCalendarEditIntent,
+  tryParseCalendarCreateFollowUp,
+  tryParseCalendarCreateIntent,
+  tryParseCalendarCreateRequest,
+  tryParseCalendarEventLookupQuery,
+  tryParseCalendarDayQuery,
+} from "../lib/assistantCalendar";
+import {
+  appendBulbyRuleEntry,
+  buildBulbyIntelligenceContext,
+  extractRememberNote,
+  initializeBulbyMemory,
+  saveBulbyMemoryNote,
+} from "../lib/bulbyMemory";
+import { formatTextForSpeech } from "../lib/utils";
+import { IconMic, IconPlay, IconStop } from "./icons";
 
 const BULBY_POSITION_KEY = "bulby-chatbox-position";
 
@@ -132,28 +171,300 @@ function storePosition(pos: DragPosition | null) {
 
 const BULBY_ITEM_NAME = "General";
 
-/** If the message asks to add something to the to-do list, return the item name; otherwise null. */
-function parseAddToTodoIntent(message: string): string | null {
+type AddListTarget = "todos" | "ideas" | "bugs" | "features" | "enhancements";
+
+type AddToListIntent = {
+  target: AddListTarget;
+  name: string;
+};
+
+type ProjectOption = { id: string; name: string };
+
+type MatchProjectResult =
+  | { kind: "match"; project: ProjectOption }
+  | { kind: "ambiguous"; names: string[] }
+  | { kind: "none" };
+
+/** Parse commands like "switch to the Rocky project" and return the target name phrase. */
+function parseSwitchProjectIntent(message: string): string | null {
   const trimmed = message.trim();
-  const quoted = /add\s+(?:"([^"]*)"|'([^']*)')\s+to\s+(?:my\s+)?(?:the\s+)?(?:to\s*[- ]?do\s*)?list/i.exec(
-    trimmed
-  );
-  if (quoted) return (quoted[1] ?? quoted[2] ?? "").trim() || null;
-  const unquoted = /add\s+(.+?)\s+to\s+(?:my\s+)?(?:the\s+)?(?:to\s*[- ]?do\s*)?list/i.exec(
-    trimmed
-  );
-  if (unquoted) return unquoted[1].trim() || null;
-  const short = /add\s+(?:"([^"]*)"|'([^']*)'|(.+?))\s+to\s+todo/i.exec(
-    trimmed
-  );
-  if (short) return (short[1] ?? short[2] ?? short[3] ?? "").trim() || null;
+  if (!trimmed) return null;
+
+  const patterns = [
+    /^(?:can you\s+)?(?:please\s+)?(?:switch|change|set)\s+(?:me\s+)?(?:to\s+)?(?:the\s+)?(.+?)\s+project[.!?]*$/i,
+    /^(?:can you\s+)?(?:please\s+)?(?:switch|change|set)\s+project\s+to\s+(.+?)[.!?]*$/i,
+    /^(?:open|use|select)\s+(?:the\s+)?(.+?)\s+project[.!?]*$/i,
+  ];
+  for (const pattern of patterns) {
+    const match = pattern.exec(trimmed);
+    const candidate = match?.[1]?.trim();
+    if (candidate) return candidate;
+  }
   return null;
 }
 
+function normalizeProjectPhrase(raw: string): string {
+  return raw
+    .toLowerCase()
+    .replace(/^["']|["']$/g, "")
+    .replace(/\bproject\b/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function capitalizeFirstCharacter(value: string): string {
+  if (!value) return value;
+  return value.charAt(0).toUpperCase() + value.slice(1);
+}
+
+function normalizeDraftForDisplayAndRouting(raw: string): string {
+  const trimmed = raw.trim();
+  if (!trimmed) return trimmed;
+  if (/[?!.]$/.test(trimmed)) return trimmed;
+
+  const lower = trimmed.toLowerCase();
+  const looksLikeQuestion =
+    /^(what|when|where|who|whom|whose|which|why|how)\b/.test(lower) ||
+    /^(can|could|would|should|will|is|are|am|do|does|did|have|has|had)\b/.test(lower) ||
+    /^tell me\b/.test(lower) ||
+    /^show me\b/.test(lower);
+
+  return looksLikeQuestion ? `${trimmed}?` : trimmed;
+}
+
+function matchProjectByName(
+  projects: ProjectOption[],
+  query: string
+): MatchProjectResult {
+  const normalizedQuery = normalizeProjectPhrase(query);
+  if (!normalizedQuery) return { kind: "none" };
+
+  const indexed = projects
+    .map((project) => ({
+      project,
+      normalized: normalizeProjectPhrase(project.name),
+    }))
+    .filter((entry) => entry.normalized.length > 0);
+
+  const exact = indexed.filter((entry) => entry.normalized === normalizedQuery);
+  if (exact.length === 1) return { kind: "match", project: exact[0].project };
+  if (exact.length > 1) {
+    return {
+      kind: "ambiguous",
+      names: exact.map((entry) => entry.project.name),
+    };
+  }
+
+  const partial = indexed.filter(
+    (entry) =>
+      entry.normalized.includes(normalizedQuery) ||
+      normalizedQuery.includes(entry.normalized)
+  );
+  if (partial.length === 1) return { kind: "match", project: partial[0].project };
+  if (partial.length > 1) {
+    return {
+      kind: "ambiguous",
+      names: partial.map((entry) => entry.project.name),
+    };
+  }
+
+  return { kind: "none" };
+}
+
+/** If the message asks to add something to a list, return target list + item name; otherwise null. */
+function parseAddToListIntent(message: string): AddToListIntent | null {
+  const trimmed = message.trim();
+  const quoted = /add\s+(?:"([^"]*)"|'([^']*)')\s+to\s+(?:my\s+)?(?:the\s+)?([a-z][a-z\s-]*?)(?:\s+list)?$/i.exec(
+    trimmed
+  );
+  if (quoted) {
+    const item = (quoted[1] ?? quoted[2] ?? "").trim();
+    const target = resolveListTarget(quoted[3] ?? "");
+    if (!item || !target) return null;
+    return { target, name: capitalizeFirstCharacter(item) };
+  }
+  const unquoted = /add\s+(.+?)\s+to\s+(?:my\s+)?(?:the\s+)?([a-z][a-z\s-]*?)(?:\s+list)?$/i.exec(
+    trimmed
+  );
+  if (unquoted) {
+    const item = unquoted[1].trim();
+    const target = resolveListTarget(unquoted[2] ?? "");
+    if (!item || !target) return null;
+    return { target, name: capitalizeFirstCharacter(item) };
+  }
+  return null;
+}
+
+function resolveListTarget(raw: string): AddListTarget | null {
+  const phrase = raw.trim().toLowerCase();
+  if (!phrase) return null;
+  if (
+    phrase.includes("todo") ||
+    phrase.includes("to-do") ||
+    phrase.includes("to do")
+  ) {
+    return "todos";
+  }
+  if (phrase.includes("idea")) return "ideas";
+  if (phrase.includes("bug")) return "bugs";
+  if (phrase.includes("feature")) return "features";
+  if (phrase.includes("enhancement")) return "enhancements";
+  return null;
+}
+
+function getListTabLabel(target: AddListTarget): string {
+  if (target === "todos") return "To-Do";
+  if (target === "ideas") return "Ideas";
+  if (target === "bugs") return "Bugs";
+  if (target === "features") return "Features";
+  return "Enhancements";
+}
+
+function getListPhrase(target: AddListTarget): string {
+  if (target === "todos") return "to-do list";
+  if (target === "ideas") return "ideas list";
+  if (target === "bugs") return "bugs list";
+  if (target === "features") return "features list";
+  return "enhancements list";
+}
+
+async function createItemForListIntent(
+  intent: AddToListIntent,
+  projectId: string
+): Promise<void> {
+  const payload = { projectId, name: intent.name, done: false };
+  if (intent.target === "todos") {
+    await createTodo(payload);
+    return;
+  }
+  if (intent.target === "ideas") {
+    await createIdea(payload);
+    return;
+  }
+  if (intent.target === "bugs") {
+    await createBug(payload);
+    return;
+  }
+  if (intent.target === "features") {
+    await createFeature(payload);
+    return;
+  }
+  await createEnhancement(payload);
+}
+
+function invalidateListForIntent(target: AddListTarget, projectId: string) {
+  invalidateList(target, projectId);
+}
+
 type ChatMessage = { id: string; role: "user" | "assistant"; text: string };
+type AssistantPlaybackStatus = "idle" | "playing" | "paused";
+type PendingCalendarCreate = { title: string };
 
 function createMessageId(): string {
   return `bulby-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+}
+
+function formatCalendarCreateSuccess(event: {
+  title: string;
+  startAt: string;
+  endAt: string;
+  isAllDay: boolean;
+}): string {
+  const start = new Date(event.startAt);
+  const end = new Date(event.endAt);
+  if (event.isAllDay) {
+    const dateLabel = new Intl.DateTimeFormat(undefined, {
+      month: "long",
+      day: "numeric",
+      year: "numeric",
+    }).format(start);
+    return `Added "${event.title}" to your calendar for ${dateLabel}.`;
+  }
+  const whenLabel = new Intl.DateTimeFormat(undefined, {
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(start);
+  const endLabel = new Intl.DateTimeFormat(undefined, {
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(end);
+  return `Added "${event.title}" to your calendar for ${whenLabel} to ${endLabel}.`;
+}
+
+function notifyCalendarEventsChanged(projectId: string): void {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(
+    new CustomEvent(CALENDAR_EVENTS_CHANGED_EVENT, {
+      detail: { projectId },
+    })
+  );
+}
+
+async function logBulbyRule(input: {
+  kind: "learning" | "rule" | "action";
+  title: string;
+  detail: string;
+}): Promise<void> {
+  try {
+    await appendBulbyRuleEntry(input);
+  } catch {
+    // Keep Bulby responsive even if memory sync fails.
+  }
+}
+
+function formatCalendarEditSuccess(event: {
+  title: string;
+  startAt: string;
+}): string {
+  const whenLabel = new Intl.DateTimeFormat(undefined, {
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(new Date(event.startAt));
+  return `Updated your calendar event to "${event.title}" for ${whenLabel}.`;
+}
+
+function formatCalendarDeleteSuccess(count: number): string {
+  return count === 1
+    ? "Deleted the matching calendar event."
+    : `Deleted ${count} matching calendar events.`;
+}
+
+function isLikelyAppMutationRequest(text: string): boolean {
+  const normalized = text.trim().toLowerCase();
+  if (!normalized) return false;
+  const hasMutationVerb =
+    /\b(add|create|schedule|put|edit|rename|change|update|delete|remove|cancel|complete|mark|move)\b/.test(
+      normalized
+    );
+  if (!hasMutationVerb) return false;
+  return /\b(todo|to-do|idea|bug|feature|enhancement|calendar|event|events|expense|project|projects)\b/.test(
+    normalized
+  );
+}
+
+function findMatchingCalendarEvents(
+  events: Array<{
+    id: string;
+    title: string;
+    description: string | null;
+    location: string | null;
+  }>,
+  searchText: string
+) {
+  const tokens = searchText
+    .split(/\s+/)
+    .map((token) => token.trim().toLowerCase())
+    .filter(Boolean);
+  return events.filter((event) => {
+    const haystack = `${event.title} ${event.description ?? ""} ${event.location ?? ""}`.toLowerCase();
+    return tokens.every((token) => haystack.includes(token));
+  });
 }
 
 /** Fetch project lists and format as context via shared module (token-optimized). */
@@ -176,19 +487,54 @@ async function buildAppContextBlock(projectId: string): Promise<string> {
   }
 }
 
+async function buildCalendarContextBlock(projectId: string): Promise<string> {
+  try {
+    const { start, end } = getCalendarContextRange();
+    const events = await fetchCalendarEvents(projectId, start, end);
+    return formatCalendarEventsAsContext(events);
+  } catch {
+    return "";
+  }
+}
+
 export interface BulbyChatboxProps {
   /** Current project id; use first project as fallback when none selected. */
   projectId: string;
+  projects: ProjectOption[];
+  onSwitchProject?: (id: string) => void;
 }
 
-export function BulbyChatbox({ projectId }: BulbyChatboxProps) {
+export function BulbyChatbox({
+  projectId,
+  projects,
+  onSwitchProject,
+}: BulbyChatboxProps) {
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputValue, setInputValue] = useState("");
   const [loading, setLoading] = useState(false);
   const [loadingStatus, setLoadingStatus] = useState("Thinking...");
+  const [recording, setRecording] = useState(false);
+  const [voiceRepliesEnabled, setVoiceRepliesEnabled] = useState(false);
+  const [playbackStatus, setPlaybackStatus] =
+    useState<AssistantPlaybackStatus>("idle");
+  const [pendingCalendarCreate, setPendingCalendarCreate] =
+    useState<PendingCalendarCreate | null>(null);
+  const [selectedVoiceUri, setSelectedVoiceUri] = useState<string>(
+    () => getStoredAssistantVoiceUri() ?? ""
+  );
   const threadRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
+  const speechRecognitionRef = useRef<any | null>(null);
+  const assistantAudioRef = useRef<HTMLAudioElement | null>(null);
+  const assistantAudioMetaRef = useRef<{
+    messageId: string | null;
+    voiceUri: string | null;
+  }>({ messageId: null, voiceUri: null });
+  const assistantSpeechMetaRef = useRef<{ messageId: string | null }>({
+    messageId: null,
+  });
+  const spokenMessageIdRef = useRef<string | null>(null);
   const chatboxRef = useRef<HTMLDivElement | null>(null);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const panelRef = useRef<HTMLDivElement | null>(null);
@@ -203,6 +549,7 @@ export function BulbyChatbox({ projectId }: BulbyChatboxProps) {
   useEffect(() => {
     setPosition(loadStoredPosition() ?? getDefaultPosition());
     setTriggerHiddenState(getTriggerHidden());
+    void initializeBulbyMemory();
   }, []);
   const dragRef = useRef<{ startX: number; startY: number; offsetX: number; offsetY: number; moved: boolean } | null>(null);
   /** Last position when trigger was in viewport; used to restore when unhiding. */
@@ -250,10 +597,38 @@ export function BulbyChatbox({ projectId }: BulbyChatboxProps) {
     openRef.current = open;
   }, [open]);
 
-  useEffect(() => {
+  const scrollThreadToBottom = useCallback(() => {
     const el = threadRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
-  }, [messages, loading]);
+    if (!el) return;
+    el.scrollTop = el.scrollHeight;
+  }, []);
+
+  useEffect(() => {
+    scrollThreadToBottom();
+  }, [messages, loading, scrollThreadToBottom]);
+
+  useEffect(() => {
+    if (!open) return;
+    const raf1 = requestAnimationFrame(() => scrollThreadToBottom());
+    const raf2 = requestAnimationFrame(() => scrollThreadToBottom());
+    return () => {
+      cancelAnimationFrame(raf1);
+      cancelAnimationFrame(raf2);
+    };
+  }, [open, scrollThreadToBottom]);
+
+  useEffect(() => {
+    const syncVoice = () =>
+      setSelectedVoiceUri(getStoredAssistantVoiceUri() ?? "");
+    syncVoice();
+    if (typeof window === "undefined") return;
+    window.addEventListener(ASSISTANT_VOICE_CHANGE_EVENT, syncVoice);
+    window.addEventListener("storage", syncVoice);
+    return () => {
+      window.removeEventListener(ASSISTANT_VOICE_CHANGE_EVENT, syncVoice);
+      window.removeEventListener("storage", syncVoice);
+    };
+  }, []);
 
   const focusInputToEnd = useCallback(() => {
     const el = inputRef.current;
@@ -265,6 +640,22 @@ export function BulbyChatbox({ projectId }: BulbyChatboxProps) {
     } catch {
       // Some browsers may not support setSelectionRange on textarea; ignore.
     }
+  }, []);
+
+  const syncInputViewport = useCallback(() => {
+    const el = inputRef.current;
+    if (!el) return;
+    requestAnimationFrame(() => {
+      el.scrollTop = el.scrollHeight;
+      if (document.activeElement === el) {
+        const len = el.value.length;
+        try {
+          el.setSelectionRange(len, len);
+        } catch {
+          // Some browsers may not support setSelectionRange on textarea; ignore.
+        }
+      }
+    });
   }, []);
 
   useEffect(() => {
@@ -290,6 +681,11 @@ export function BulbyChatbox({ projectId }: BulbyChatboxProps) {
     const raf = requestAnimationFrame(() => focusInputToEnd());
     return () => cancelAnimationFrame(raf);
   }, [open, loading, messages.length, focusInputToEnd]);
+
+  useEffect(() => {
+    if (!recording) return;
+    syncInputViewport();
+  }, [inputValue, recording, syncInputViewport]);
 
   const lockPanelHeight = useCallback(() => {
     const rect = panelRef.current?.getBoundingClientRect();
@@ -327,6 +723,23 @@ export function BulbyChatbox({ projectId }: BulbyChatboxProps) {
       if (unlockPanelHeightRafRef.current != null) {
         cancelAnimationFrame(unlockPanelHeightRafRef.current);
         unlockPanelHeightRafRef.current = null;
+      }
+      if (speechRecognitionRef.current) {
+        try {
+          speechRecognitionRef.current.stop();
+        } catch {
+          // ignore
+        }
+      }
+      if (typeof window !== "undefined" && "speechSynthesis" in window) {
+        window.speechSynthesis.cancel();
+      }
+      if (assistantAudioRef.current) {
+        assistantAudioRef.current.pause();
+        if (assistantAudioRef.current.src.startsWith("blob:")) {
+          URL.revokeObjectURL(assistantAudioRef.current.src);
+        }
+        assistantAudioRef.current.src = "";
       }
     }
   }, []);
@@ -525,8 +938,183 @@ export function BulbyChatbox({ projectId }: BulbyChatboxProps) {
     ]);
   }, []);
 
-  const sendMessage = useCallback(async () => {
-    const draft = inputValue.trim();
+  const getLatestAssistantMessage = useCallback(
+    () =>
+      [...messages]
+        .reverse()
+        .find((message) => message.role === "assistant" && message.text.trim()),
+    [messages]
+  );
+
+  const pauseAssistantPlayback = useCallback(() => {
+    if (assistantAudioRef.current && !assistantAudioRef.current.paused) {
+      assistantAudioRef.current.pause();
+      setPlaybackStatus("paused");
+      return;
+    }
+    if (typeof window !== "undefined" && "speechSynthesis" in window) {
+      const synth = window.speechSynthesis;
+      if (
+        assistantSpeechMetaRef.current.messageId &&
+        synth.speaking &&
+        !synth.paused
+      ) {
+        synth.pause();
+        setPlaybackStatus("paused");
+      }
+    }
+  }, []);
+
+  const playAssistantMessage = useCallback(
+    async (message: { id: string; text: string }, opts?: { restart?: boolean }) => {
+      if (typeof window === "undefined") return;
+      const restart = opts?.restart ?? false;
+      const speechText = formatTextForSpeech(message.text);
+      const playBrowserSpeech = async () => {
+        if (!("speechSynthesis" in window)) {
+          throw new Error("Speech synthesis is not available in this browser.");
+        }
+        const synth = window.speechSynthesis;
+        const sameSpeechMessage = assistantSpeechMetaRef.current.messageId === message.id;
+        if (sameSpeechMessage && synth.speaking && synth.paused && !restart) {
+          synth.resume();
+          setPlaybackStatus("playing");
+          return;
+        }
+        synth.cancel();
+        const browserVoiceUri = selectedVoiceUri.startsWith("browser:")
+          ? selectedVoiceUri.replace(/^browser:/, "")
+          : selectedVoiceUri;
+        const utterance = new SpeechSynthesisUtterance(speechText);
+        const selectedVoice = synth
+          .getVoices()
+          .find((voice) => voice.voiceURI === browserVoiceUri);
+        if (selectedVoice) utterance.voice = selectedVoice;
+        utterance.rate = 1;
+        utterance.pitch = 1;
+        utterance.onend = () => setPlaybackStatus("idle");
+        utterance.onerror = () => setPlaybackStatus("idle");
+        assistantSpeechMetaRef.current = { messageId: message.id };
+        synth.speak(utterance);
+        setPlaybackStatus("playing");
+      };
+
+      if (assistantAudioRef.current) {
+        assistantAudioRef.current.pause();
+      }
+      if ("speechSynthesis" in window) {
+        window.speechSynthesis.cancel();
+      }
+
+      if (selectedVoiceUri.startsWith("elevenlabs:")) {
+        const voiceId = selectedVoiceUri.replace(/^elevenlabs:/, "").trim();
+        if (!assistantAudioRef.current) {
+          assistantAudioRef.current = new Audio();
+        }
+        const audio = assistantAudioRef.current;
+        audio.preload = "auto";
+        audio.volume = 1;
+        audio.onplay = () => setPlaybackStatus("playing");
+        audio.onpause = () => {
+          if (!audio.ended) setPlaybackStatus("paused");
+        };
+        audio.onended = () => setPlaybackStatus("idle");
+        audio.onerror = () => setPlaybackStatus("idle");
+
+        try {
+          const canReuseSource =
+            assistantAudioMetaRef.current.messageId === message.id &&
+            assistantAudioMetaRef.current.voiceUri === selectedVoiceUri &&
+            Boolean(audio.src);
+          if (!canReuseSource) {
+            const blob = await synthesizeIdeaChatSpeech(
+              speechText,
+              voiceId || undefined
+            );
+            const previousSrc = audio.src;
+            const nextUrl = URL.createObjectURL(blob);
+            audio.pause();
+            audio.src = nextUrl;
+            if (previousSrc?.startsWith("blob:")) {
+              URL.revokeObjectURL(previousSrc);
+            }
+            assistantAudioMetaRef.current = {
+              messageId: message.id,
+              voiceUri: selectedVoiceUri,
+            };
+          }
+          if (restart) audio.currentTime = 0;
+          await audio.play();
+          setPlaybackStatus("playing");
+          return;
+        } catch {
+          assistantAudioMetaRef.current = { messageId: null, voiceUri: null };
+        }
+      }
+
+      await playBrowserSpeech();
+    },
+    [selectedVoiceUri]
+  );
+
+  const resumeAssistantPlayback = useCallback(
+    async (message: { id: string; text: string }) => {
+      if (assistantAudioRef.current && assistantAudioMetaRef.current.messageId === message.id) {
+        await assistantAudioRef.current.play();
+        setPlaybackStatus("playing");
+        return;
+      }
+      if (typeof window !== "undefined" && "speechSynthesis" in window) {
+        const synth = window.speechSynthesis;
+        if (
+          assistantSpeechMetaRef.current.messageId === message.id &&
+          synth.speaking &&
+          synth.paused
+        ) {
+          synth.resume();
+          setPlaybackStatus("playing");
+          return;
+        }
+      }
+      await playAssistantMessage(message);
+    },
+    [playAssistantMessage]
+  );
+
+  const handleVoiceReplyControl = useCallback(async () => {
+    const latestAssistant = getLatestAssistantMessage();
+    if (!latestAssistant) {
+      appendAssistantMessage("No assistant response to play yet.");
+      return;
+    }
+    setVoiceRepliesEnabled(true);
+    try {
+      if (playbackStatus === "playing") {
+        pauseAssistantPlayback();
+        return;
+      }
+      if (playbackStatus === "paused") {
+        await resumeAssistantPlayback(latestAssistant);
+        return;
+      }
+      await playAssistantMessage(latestAssistant, { restart: true });
+    } catch {
+      appendAssistantMessage(
+        "Voice playback failed. Check browser sound and try a different voice."
+      );
+      setPlaybackStatus("idle");
+    }
+  }, [
+    appendAssistantMessage,
+    getLatestAssistantMessage,
+    pauseAssistantPlayback,
+    playbackStatus,
+    playAssistantMessage,
+    resumeAssistantPlayback,
+  ]);
+
+  const sendMessage = useCallback(async (draftOverride?: string) => {
+    const draft = normalizeDraftForDisplayAndRouting(draftOverride ?? inputValue);
     if (!draft || loading || !projectId) return;
 
     const userMessage: ChatMessage = {
@@ -537,29 +1125,59 @@ export function BulbyChatbox({ projectId }: BulbyChatboxProps) {
     setMessages((prev) => [...prev, userMessage]);
     setInputValue("");
 
-    const addToTodoName = parseAddToTodoIntent(draft);
-    if (addToTodoName) {
+    const switchProjectPhrase = parseSwitchProjectIntent(draft);
+    if (switchProjectPhrase) {
+      const matched = matchProjectByName(projects, switchProjectPhrase);
+      if (matched.kind === "match") {
+        if (matched.project.id === projectId) {
+          appendAssistantMessage(`You're already in the ${matched.project.name} project.`);
+        } else if (onSwitchProject) {
+          onSwitchProject(matched.project.id);
+          appendAssistantMessage(`Switched to the ${matched.project.name} project.`);
+        } else {
+          appendAssistantMessage("Project switching is unavailable right now.");
+        }
+      } else if (matched.kind === "ambiguous") {
+        appendAssistantMessage(
+          `I found multiple matches: ${matched.names.slice(0, 5).join(", ")}. Tell me the exact project name.`
+        );
+      } else {
+        const available = projects.slice(0, 6).map((p) => p.name).join(", ");
+        appendAssistantMessage(
+          available
+            ? `I couldn't find "${switchProjectPhrase}". Available projects: ${available}.`
+            : `I couldn't find "${switchProjectPhrase}" because no projects are available yet.`
+        );
+      }
+      return;
+    }
+
+    const addIntent = parseAddToListIntent(draft);
+    if (addIntent) {
       lockPanelHeight();
       setLoading(true);
       try {
-        await createTodo({
-          projectId,
-          name: addToTodoName,
-          done: false,
-        });
-        invalidateList("todos", projectId);
+        await createItemForListIntent(addIntent, projectId);
+        invalidateListForIntent(addIntent.target, projectId);
         appendAssistantMessage(
-          `Added "${addToTodoName}" to your to-do list. Check the To-Do tab to see it.`
+          `Added "${addIntent.name}" to your ${getListPhrase(addIntent.target)}. Check the ${getListTabLabel(addIntent.target)} tab to see it.`
         );
       } catch (err) {
         appendAssistantMessage(
           err instanceof Error
             ? err.message
-            : "Couldn't add that to your to-do list. Try again."
+            : `Couldn't add that to your ${getListPhrase(addIntent.target)}. Try again.`
         );
       } finally {
         setLoading(false);
       }
+      return;
+    }
+
+    const rememberNote = extractRememberNote(draft);
+    if (rememberNote) {
+      await saveBulbyMemoryNote(rememberNote);
+      appendAssistantMessage(`Saved to memory: "${rememberNote}"`);
       return;
     }
 
@@ -604,10 +1222,268 @@ export function BulbyChatbox({ projectId }: BulbyChatboxProps) {
       return;
     }
 
+    if (isLatestExpenseQuery(draft)) {
+      lockPanelHeight();
+      setLoading(true);
+      setLoadingStatus("Looking up your expenses...");
+      try {
+        const expenses = await fetchExpenses(projectId);
+        const summary = summarizeLatestExpense(expenses);
+        appendAssistantMessage(summary);
+      } catch (err) {
+        appendAssistantMessage(
+          err instanceof Error
+            ? err.message
+            : "I couldn't look up your expenses right now. Try again."
+        );
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
+
+    if (pendingCalendarCreate) {
+      const followUpIntent = tryParseCalendarCreateFollowUp(
+        draft,
+        pendingCalendarCreate.title
+      );
+      if (!followUpIntent) {
+        appendAssistantMessage(
+          `I still need the time for "${pendingCalendarCreate.title}". For example: "11:59 p.m. today".`
+        );
+        return;
+      }
+      lockPanelHeight();
+      setLoading(true);
+      setLoadingStatus("Adding to your calendar...");
+      try {
+        const created = await createCalendarEvent(projectId, followUpIntent);
+        setPendingCalendarCreate(null);
+        notifyCalendarEventsChanged(projectId);
+        await logBulbyRule({
+          kind: "action",
+          title: "Calendar event created",
+          detail: `Created "${created.title}" for project ${projectId}.`,
+        });
+        appendAssistantMessage(formatCalendarCreateSuccess(created));
+      } catch (err) {
+        appendAssistantMessage(
+          err instanceof Error
+            ? err.message
+            : "I couldn't add that to your calendar right now. Try again."
+        );
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
+
+    const calendarCreateIntent = tryParseCalendarCreateIntent(draft);
+    if (calendarCreateIntent) {
+      lockPanelHeight();
+      setLoading(true);
+      setLoadingStatus("Adding to your calendar...");
+      try {
+        const created = await createCalendarEvent(projectId, calendarCreateIntent);
+        setPendingCalendarCreate(null);
+        notifyCalendarEventsChanged(projectId);
+        await logBulbyRule({
+          kind: "action",
+          title: "Calendar event created",
+          detail: `Created "${created.title}" for project ${projectId}.`,
+        });
+        appendAssistantMessage(formatCalendarCreateSuccess(created));
+      } catch (err) {
+        appendAssistantMessage(
+          err instanceof Error
+            ? err.message
+            : "I couldn't add that to your calendar right now. Try again."
+        );
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
+
+    const calendarCreateRequest = tryParseCalendarCreateRequest(draft);
+    if (calendarCreateRequest) {
+      setPendingCalendarCreate({ title: calendarCreateRequest.title });
+      await logBulbyRule({
+        kind: "rule",
+        title: "Calendar create requires time",
+        detail: `Asked for missing time before creating "${calendarCreateRequest.title}".`,
+      });
+      appendAssistantMessage(
+        `Please specify the time you would like to add "${calendarCreateRequest.title}" to your calendar.`
+      );
+      return;
+    }
+
+    const calendarEditIntent = tryParseCalendarEditIntent(draft);
+    if (calendarEditIntent) {
+      lockPanelHeight();
+      setLoading(true);
+      setLoadingStatus("Updating your calendar...");
+      try {
+        const range = calendarEditIntent.dayQuery
+          ? getCalendarDayRange(calendarEditIntent.dayQuery)
+          : getCalendarContextRange();
+        const events = await fetchCalendarEvents(projectId, range.start, range.end);
+        const matches = findMatchingCalendarEvents(events, calendarEditIntent.searchText);
+        if (matches.length === 0) {
+          appendAssistantMessage("I couldn't find that calendar event to update.");
+          return;
+        }
+        if (matches.length > 1) {
+          appendAssistantMessage("I found multiple matching calendar events. Please be more specific.");
+          return;
+        }
+        const match = matches[0];
+        const updated = await updateCalendarEvent(projectId, match.id, {
+          title: calendarEditIntent.newTitle,
+        });
+        notifyCalendarEventsChanged(projectId);
+        await logBulbyRule({
+          kind: "action",
+          title: "Calendar event updated",
+          detail: `Renamed "${match.title}" to "${updated.title}" for project ${projectId}.`,
+        });
+        appendAssistantMessage(formatCalendarEditSuccess(updated));
+      } catch (err) {
+        appendAssistantMessage(
+          err instanceof Error
+            ? err.message
+            : "I couldn't update that calendar event right now. Try again."
+        );
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
+
+    const calendarDeleteIntent = tryParseCalendarDeleteIntent(draft);
+    if (calendarDeleteIntent) {
+      lockPanelHeight();
+      setLoading(true);
+      setLoadingStatus("Deleting from your calendar...");
+      try {
+        const range = calendarDeleteIntent.dayQuery
+          ? getCalendarDayRange(calendarDeleteIntent.dayQuery)
+          : getCalendarContextRange();
+        const events = await fetchCalendarEvents(projectId, range.start, range.end);
+        const matches = findMatchingCalendarEvents(events, calendarDeleteIntent.searchText);
+        if (matches.length === 0) {
+          appendAssistantMessage("I couldn't find that calendar event to delete.");
+          return;
+        }
+        await Promise.all(
+          matches.map((event) => deleteCalendarEvent(projectId, event.id))
+        );
+        notifyCalendarEventsChanged(projectId);
+        await logBulbyRule({
+          kind: "action",
+          title: "Calendar event deleted",
+          detail: `Deleted ${matches.length} matching calendar event(s) for project ${projectId}.`,
+        });
+        appendAssistantMessage(formatCalendarDeleteSuccess(matches.length));
+      } catch (err) {
+        appendAssistantMessage(
+          err instanceof Error
+            ? err.message
+            : "I couldn't delete that calendar event right now. Try again."
+        );
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
+
+    if (isCalendarMutationRequest(draft)) {
+      await logBulbyRule({
+        kind: "rule",
+        title: "Truthfulness rule applied",
+        detail: `Refused unsupported calendar mutation: "${draft}".`,
+      });
+      appendAssistantMessage(
+        "I couldn't complete that calendar action. I can only confirm it after the calendar API succeeds."
+      );
+      return;
+    }
+
+    const calendarQuery = tryParseCalendarDayQuery(draft);
+    if (calendarQuery) {
+      lockPanelHeight();
+      setLoading(true);
+      setLoadingStatus("Checking your calendar...");
+      try {
+        const { start, end, dayStart, dayEnd } = getCalendarDayRange(calendarQuery);
+        const events = await fetchCalendarEvents(projectId, start, end);
+        const summary = summarizeCalendarEventsForDay(
+          events,
+          calendarQuery,
+          dayStart,
+          dayEnd
+        );
+        appendAssistantMessage(summary);
+      } catch (err) {
+        appendAssistantMessage(
+          err instanceof Error
+            ? err.message
+            : "I couldn't look up your calendar right now. Try again."
+        );
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
+
+    const calendarEventLookup = tryParseCalendarEventLookupQuery(draft);
+    if (calendarEventLookup) {
+      lockPanelHeight();
+      setLoading(true);
+      setLoadingStatus("Searching your calendar...");
+      try {
+        const { start, end } = getCalendarContextRange();
+        const events = await fetchCalendarEvents(projectId, start, end);
+        const summary = summarizeMatchingCalendarEvents(events, calendarEventLookup);
+        appendAssistantMessage(summary);
+      } catch (err) {
+        appendAssistantMessage(
+          err instanceof Error
+            ? err.message
+            : "I couldn't search your calendar right now. Try again."
+        );
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
+
+    if (isLikelyAppMutationRequest(draft)) {
+      await logBulbyRule({
+        kind: "rule",
+        title: "Truthfulness rule applied",
+        detail: `Refused unsupported app mutation: "${draft}".`,
+      });
+      appendAssistantMessage(
+        "I couldn't complete that action here. I will only confirm app changes after the API succeeds."
+      );
+      return;
+    }
+
     const prior = [...messages, userMessage];
     const conversationContext = buildIdeaChatContext(prior, draft);
-    const appContext = await buildAppContextBlock(projectId);
-    const context = combineAssistantContext(appContext, conversationContext);
+    const [appContext, calendarContext] = await Promise.all([
+      buildAppContextBlock(projectId),
+      isCalendarQuestion(draft) ? buildCalendarContextBlock(projectId) : Promise.resolve(""),
+    ]);
+    const intelligenceContext = await buildBulbyIntelligenceContext();
+    const appWithCalendarContext = combineAssistantContext(appContext, calendarContext);
+    const baseContext = combineAssistantContext(
+      appWithCalendarContext,
+      conversationContext
+    );
+    const context = combineAssistantContext(baseContext, intelligenceContext);
     const includeWeb = shouldUseWebSearch(draft);
     const model = getStoredOpenRouterModel() ?? undefined;
 
@@ -633,7 +1509,83 @@ export function BulbyChatbox({ projectId }: BulbyChatboxProps) {
     } finally {
       setLoading(false);
     }
-  }, [inputValue, loading, messages, projectId, appendAssistantMessage]);
+  }, [inputValue, loading, messages, projectId, projects, onSwitchProject, appendAssistantMessage]);
+
+  const toggleVoiceRecording = useCallback(async () => {
+    if (speechRecognitionRef.current && recording) {
+      speechRecognitionRef.current.stop();
+      return;
+    }
+
+    const SpeechRecognitionCtor =
+      typeof window !== "undefined"
+        ? (window as any).SpeechRecognition ||
+          (window as any).webkitSpeechRecognition
+        : null;
+    if (!SpeechRecognitionCtor) {
+      appendAssistantMessage("Voice input is not supported in this browser.");
+      return;
+    }
+
+    let finalTranscript = "";
+    const recognition = new SpeechRecognitionCtor();
+    speechRecognitionRef.current = recognition;
+    recognition.lang = "en-US";
+    recognition.interimResults = true;
+    recognition.maxAlternatives = 1;
+    recognition.continuous = false;
+    setRecording(true);
+
+    recognition.onresult = (event: any) => {
+      let transcript = "";
+      for (let i = event.resultIndex; i < event.results.length; i += 1) {
+        const piece = event.results[i]?.[0]?.transcript ?? "";
+        if (event.results[i].isFinal) finalTranscript += piece;
+        transcript += piece;
+      }
+      const merged = (finalTranscript || transcript).trim();
+      setInputValue(merged);
+      syncInputViewport();
+    };
+
+    recognition.onerror = (event: any) => {
+      appendAssistantMessage(
+        `Voice input error: ${String(event?.error ?? "unknown error")}`
+      );
+    };
+
+    recognition.onend = () => {
+      setRecording(false);
+      if (speechRecognitionRef.current === recognition) {
+        speechRecognitionRef.current = null;
+      }
+      const transcript = finalTranscript.trim();
+      if (transcript) {
+        void sendMessage(transcript);
+      }
+    };
+
+    try {
+      recognition.start();
+    } catch {
+      setRecording(false);
+      appendAssistantMessage(
+        "Could not start voice input. Please allow microphone access."
+      );
+    }
+  }, [appendAssistantMessage, recording, sendMessage, syncInputViewport]);
+
+  useEffect(() => {
+    if (!voiceRepliesEnabled || loading) return;
+    const latestAssistant = [...messages]
+      .reverse()
+      .find((message) => message.role === "assistant" && message.text.trim());
+    if (!latestAssistant) return;
+    if (spokenMessageIdRef.current === latestAssistant.id) return;
+    if (playbackStatus !== "idle") return;
+    spokenMessageIdRef.current = latestAssistant.id;
+    void playAssistantMessage(latestAssistant, { restart: true });
+  }, [messages, loading, playbackStatus, playAssistantMessage, voiceRepliesEnabled]);
 
   if (!projectId) return null;
 
@@ -641,6 +1593,14 @@ export function BulbyChatbox({ projectId }: BulbyChatboxProps) {
     if (typeof document !== "undefined") return createPortal(null, document.body);
     return null;
   }
+
+  const voiceButtonLabel =
+    playbackStatus === "playing"
+      ? "Pause voice reply"
+      : playbackStatus === "paused"
+        ? "Resume voice reply"
+        : "Play voice reply";
+  const isPlaybackActive = playbackStatus !== "idle";
 
   const content = (
     <div
@@ -733,10 +1693,43 @@ export function BulbyChatbox({ projectId }: BulbyChatboxProps) {
                   void sendMessage();
                 }
               }}
-              placeholder="Ask Bulby anything..."
+              placeholder={messages.length > 0 ? "Ask Bulby a follow-up..." : "Ask Bulby anything..."}
               rows={1}
               aria-label="Ask Bulby"
             />
+            <button
+              type="button"
+              className={`idea-chat-voice-btn${recording ? " is-recording" : ""}`}
+              onPointerDown={(e) => e.preventDefault()}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                void toggleVoiceRecording();
+              }}
+              disabled={loading}
+              aria-label={recording ? "Stop recording" : "Record voice message"}
+              title={recording ? "Stop recording" : "Record voice message"}
+            >
+              {recording ? <IconStop size={14} /> : <IconMic size={14} />}
+            </button>
+            <button
+              type="button"
+              className={`idea-chat-voice-btn${isPlaybackActive || voiceRepliesEnabled ? " is-active" : ""}`}
+              onPointerDown={(e) => e.preventDefault()}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                void handleVoiceReplyControl();
+              }}
+              aria-label={voiceButtonLabel}
+              title={voiceButtonLabel}
+            >
+              {playbackStatus === "playing" ? (
+                <IconStop size={12} />
+              ) : (
+                <IconPlay size={12} />
+              )}
+            </button>
             <button
               type="button"
               className="idea-chat-send-btn"

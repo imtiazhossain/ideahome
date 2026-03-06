@@ -6,14 +6,120 @@ export type ParsedExpenseQuery = {
   displayDate: string;
 };
 
+function formatIsoDateForDisplay(value: string | null | undefined): string {
+  if (!value) return "an unknown date";
+  const parsed = new Date(`${value}T00:00:00`);
+  if (Number.isNaN(parsed.getTime())) return value;
+  return parsed.toLocaleDateString("en-US", {
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
+const SMALL_NUMBER_WORDS = [
+  "zero",
+  "one",
+  "two",
+  "three",
+  "four",
+  "five",
+  "six",
+  "seven",
+  "eight",
+  "nine",
+  "ten",
+  "eleven",
+  "twelve",
+  "thirteen",
+  "fourteen",
+  "fifteen",
+  "sixteen",
+  "seventeen",
+  "eighteen",
+  "nineteen",
+] as const;
+
+const TENS_WORDS = [
+  "",
+  "",
+  "twenty",
+  "thirty",
+  "forty",
+  "fifty",
+  "sixty",
+  "seventy",
+  "eighty",
+  "ninety",
+] as const;
+
+function integerToWords(value: number): string {
+  if (!Number.isFinite(value)) return "zero";
+  if (value < 0) return `minus ${integerToWords(Math.abs(value))}`;
+  if (value < 20) return SMALL_NUMBER_WORDS[value];
+  if (value < 100) {
+    const tens = Math.floor(value / 10);
+    const remainder = value % 10;
+    return remainder === 0
+      ? TENS_WORDS[tens]
+      : `${TENS_WORDS[tens]}-${SMALL_NUMBER_WORDS[remainder]}`;
+  }
+  if (value < 1000) {
+    const hundreds = Math.floor(value / 100);
+    const remainder = value % 100;
+    return remainder === 0
+      ? `${SMALL_NUMBER_WORDS[hundreds]} hundred`
+      : `${SMALL_NUMBER_WORDS[hundreds]} hundred and ${integerToWords(remainder)}`;
+  }
+
+  const scales = [
+    { value: 1_000_000_000, label: "billion" },
+    { value: 1_000_000, label: "million" },
+    { value: 1_000, label: "thousand" },
+  ] as const;
+
+  for (const scale of scales) {
+    if (value >= scale.value) {
+      const major = Math.floor(value / scale.value);
+      const remainder = value % scale.value;
+      if (remainder === 0) {
+        return `${integerToWords(major)} ${scale.label}`;
+      }
+      const separator = remainder < 100 ? " and " : " ";
+      return `${integerToWords(major)} ${scale.label}${separator}${integerToWords(remainder)}`;
+    }
+  }
+
+  return String(value);
+}
+
+function formatCurrencyForSpeech(amount: number): string {
+  const safeAmount = Number.isFinite(amount) ? Math.max(0, amount) : 0;
+  const rounded = Math.round(safeAmount * 100);
+  const dollars = Math.floor(rounded / 100);
+  const cents = rounded % 100;
+  const dollarWords = `${integerToWords(dollars)} dollar${dollars === 1 ? "" : "s"}`;
+  if (cents === 0) return dollarWords;
+  return `${dollarWords} and ${integerToWords(cents)} cent${cents === 1 ? "" : "s"}`;
+}
+
+function isExpenseKeywordMessage(message: string): boolean {
+  return /(expense|expenses|spend|spent|spending|cost|purchase|transaction)/.test(
+    message.toLowerCase()
+  );
+}
+
 /** Detect overview-style expense questions (e.g. "current" or "total" expenses) without a specific date. */
 export function isExpenseOverviewQuery(message: string): boolean {
   const lower = message.toLowerCase();
-  if (!/(expense|expenses|spend|spent|spending|cost|purchase)/.test(lower)) {
+  if (!isExpenseKeywordMessage(message)) {
     return false;
   }
   // Explicit date queries are handled separately by tryParseExpenseQuery.
   if (/(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})/.test(message)) {
+    return false;
+  }
+  if (isLatestExpenseQuery(message)) {
     return false;
   }
   // Common phrasings where the user is clearly asking about their expenses data.
@@ -29,9 +135,24 @@ export function isExpenseOverviewQuery(message: string): boolean {
   return false;
 }
 
-export function tryParseExpenseQuery(message: string): ParsedExpenseQuery | null {
+export function isLatestExpenseQuery(message: string): boolean {
   const lower = message.toLowerCase();
-  if (!/(expense|expenses|spend|spent|spending|cost|purchase)/.test(lower)) {
+  if (!isExpenseKeywordMessage(message)) {
+    return false;
+  }
+  return (
+    /\b(latest|most recent|newest)\b.*\b(expense|expenses|purchase|transaction)\b/.test(
+      lower
+    ) ||
+    /\b(last)\b.*\b(expense|purchase|transaction)\b/.test(lower) ||
+    /\bwhat (was|is)\b.*\b(latest|most recent|newest|last)\b.*\b(expense|purchase|transaction)\b/.test(
+      lower
+    )
+  );
+}
+
+export function tryParseExpenseQuery(message: string): ParsedExpenseQuery | null {
+  if (!isExpenseKeywordMessage(message)) {
     return null;
   }
   const dateMatch = /(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})/.exec(message);
@@ -192,3 +313,39 @@ export function summarizeExpensesOverview(allExpenses: Expense[]): string {
   return [baseLine, ...categoryLines, ...expenseLines].join("\n");
 }
 
+export function summarizeLatestExpense(allExpenses: Expense[]): string {
+  if (!Array.isArray(allExpenses) || allExpenses.length === 0) {
+    return "You currently have no expenses recorded in this project. Add expenses in the Finances tab to start tracking them.";
+  }
+
+  const latest = [...allExpenses].sort((a, b) => {
+    const dateCompare = (b.date || "").localeCompare(a.date || "");
+    if (dateCompare !== 0) return dateCompare;
+    return (b.createdAt || "").localeCompare(a.createdAt || "");
+  })[0];
+
+  if (!latest) {
+    return "I couldn't determine your latest expense from the current project data.";
+  }
+
+  const amount = Number(latest.amount);
+  const safeAmount = Number.isFinite(amount) ? amount : 0;
+  const description =
+    typeof latest.description === "string" && latest.description.trim()
+      ? latest.description.trim()
+      : "Expense";
+  const category =
+    typeof latest.category === "string" && latest.category.trim()
+      ? latest.category.trim()
+      : "Uncategorized";
+  const source =
+    latest.source === "plaid"
+      ? " imported from Plaid"
+      : latest.source === "manual"
+        ? " added manually"
+        : "";
+
+  return `Your latest recorded expense was ${description} on ${
+    formatIsoDateForDisplay(latest.date)
+  } in ${category} for ${formatCurrencyForSpeech(safeAmount)}${source}.`;
+}

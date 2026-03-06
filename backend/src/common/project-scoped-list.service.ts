@@ -3,7 +3,7 @@ import {
   InternalServerErrorException,
   NotFoundException,
 } from "@nestjs/common";
-import type { Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import { verifyProjectForUser } from "./org-scope";
 import { PrismaService } from "../prisma.service";
 
@@ -111,6 +111,26 @@ export class ProjectScopedListService {
     return ids;
   }
 
+  private isPrismaRecordNotFoundError(error: unknown): boolean {
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === "P2025"
+    ) {
+      return true;
+    }
+    // In some runtime layouts (multiple prisma bundles), instanceof can fail.
+    // Fall back to code-based detection so we still map stale-record races to 404.
+    if (
+      typeof error === "object" &&
+      error !== null &&
+      "code" in error &&
+      (error as { code?: unknown }).code === "P2025"
+    ) {
+      return true;
+    }
+    return false;
+  }
+
   async list(
     projectId: string,
     userId: string,
@@ -177,12 +197,26 @@ export class ProjectScopedListService {
       data.done = body.done;
     }
     if (body.order !== undefined) data.order = this.normalizeOrder(body.order);
-    return this.delegate.update({ where: { id }, data });
+    try {
+      return await this.delegate.update({ where: { id }, data });
+    } catch (error) {
+      if (this.isPrismaRecordNotFoundError(error)) {
+        throw new NotFoundException(`${this.entityName} not found`);
+      }
+      throw error;
+    }
   }
 
   async remove(id: string, userId: string): Promise<any> {
     await this.verifyItemAccess(id, userId);
-    return this.delegate.delete({ where: { id } });
+    try {
+      return await this.delegate.delete({ where: { id } });
+    } catch (error) {
+      if (this.isPrismaRecordNotFoundError(error)) {
+        throw new NotFoundException(`${this.entityName} not found`);
+      }
+      throw error;
+    }
   }
 
   async reorder(
@@ -226,7 +260,14 @@ export class ProjectScopedListService {
         data: { order: index },
       })
     );
-    await this.prisma.$transaction(updates);
+    try {
+      await this.prisma.$transaction(updates);
+    } catch (error) {
+      if (this.isPrismaRecordNotFoundError(error)) {
+        throw new NotFoundException(`${this.entityName} not found`);
+      }
+      throw error;
+    }
     return this.list(safeProjectId, userId);
   }
 }

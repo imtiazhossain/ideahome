@@ -171,6 +171,70 @@ export function formatCurrency(amount: number): string {
   }).format(amount);
 }
 
+/** Normalize UI-oriented text into more natural speech input for TTS engines. */
+export function formatTextForSpeech(text: string): string {
+  const normalized = text.replace(/\r\n/g, "\n").trim();
+  if (!normalized) return "";
+
+  const lines = normalized
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  if (lines.length === 0) return "";
+
+  const monthNameByAbbreviation: Record<string, string> = {
+    Jan: "January",
+    Feb: "February",
+    Mar: "March",
+    Apr: "April",
+    Jun: "June",
+    Jul: "July",
+    Aug: "August",
+    Sep: "September",
+    Sept: "September",
+    Oct: "October",
+    Nov: "November",
+    Dec: "December",
+  };
+
+  function humanizeSpeechLine(line: string): string {
+    let result = line;
+
+    result = result.replace(
+      /\b(Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)\.?\s+(\d{1,2}),\s+(\d{4})\b/g,
+      (_, month: string, day: string, year: string) =>
+        `${monthNameByAbbreviation[month] ?? month} ${day}, ${year}`
+    );
+
+    result = result.replace(
+      /\b([A-Z][a-z]+ \d{1,2}, \d{4})\s+(\d{1,2}:\d{2}\s?(?:AM|PM))\s*:\s*/g,
+      "$1 at $2. "
+    );
+
+    result = result.replace(
+      /\b(\d{1,2}:\d{2}\s?(?:AM|PM))\s*:\s*/g,
+      "$1. "
+    );
+
+    return result.replace(/\s+/g, " ").trim();
+  }
+
+  return lines
+    .map((line) => {
+      const withoutBullet = line.replace(/^[-*•]\s+/, "").trim();
+      if (!withoutBullet) return "";
+      const speechLine = humanizeSpeechLine(withoutBullet);
+      if (/:$/.test(speechLine)) {
+        return `${speechLine.slice(0, -1)}.`;
+      }
+      if (/[.!?]$/.test(speechLine)) return speechLine;
+      return `${speechLine}.`;
+    })
+    .filter(Boolean)
+    .join(" ");
+}
+
 /** Format an ISO date string as relative time (e.g. "2 min ago", "yesterday"). */
 export function formatRelativeTime(isoString: string): string {
   const date = new Date(isoString);

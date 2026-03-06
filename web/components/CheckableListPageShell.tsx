@@ -6,6 +6,7 @@ import { CheckableList } from "./CheckableList";
 import { IconUndo } from "./IconUndo";
 import { IconTrash } from "./IconTrash";
 import { IconCopy } from "./icons";
+import { IconBrokenBulb } from "./icons/IconBrokenBulb";
 import { SectionLoadingSpinner } from "./SectionLoadingSpinner";
 import { ErrorBanner } from "./ErrorBanner";
 import { UiMenuDropdown } from "./UiMenuDropdown";
@@ -98,6 +99,7 @@ export function CheckableListPageShell({
       <div className="tests-page-content">
         {isBackendOfflineError ? (
           <section className="tests-page-offline-state" role="status" aria-live="polite">
+            <IconBrokenBulb className="tests-page-offline-state-icon" />
             <p className="tests-page-offline-state-title">
               Looks like the lights went out, we&apos;re going to turn them on
               right away.

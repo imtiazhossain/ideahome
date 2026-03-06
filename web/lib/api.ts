@@ -45,6 +45,8 @@ export {
   sendErrorReportEmail,
 } from "./api/http";
 
+export const CALENDAR_EVENTS_CHANGED_EVENT = "ideahome-calendar-events-changed";
+
 export {
   fetchProjects,
   fetchProjectMembers,
@@ -175,10 +177,15 @@ export {
   fetchUsers,
   fetchMyAppearancePrefs,
   updateMyAppearancePrefs,
+  fetchMyBulbyMemoryPrefs,
+  updateMyBulbyMemoryPrefs,
   APPEARANCE_PRESETS,
   type User,
   type AppearancePresetId,
   type AppearancePreferences,
+  type BulbyOrgContext,
+  type BulbyRuleEntry,
+  type BulbyMemoryPreferences,
 } from "./api/users";
 
 export {

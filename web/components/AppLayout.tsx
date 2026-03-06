@@ -17,6 +17,7 @@ import { AppDrawer } from "./AppDrawer";
 import { BulbyChatbox } from "./BulbyChatbox";
 import { DeleteProjectModal } from "./DeleteProjectModal";
 import { ProjectNavBar, useIsMobile, useTabOrder } from "./ProjectNavBar";
+import { IconBrokenBulb } from "./icons/IconBrokenBulb";
 import type { ProjectNavTabId } from "./ProjectNavBar";
 
 const SECTION_LINKS: {
@@ -545,6 +546,7 @@ export function AppLayout({
           <div className="main-page-scroll">
             {backendOffline ? (
               <section className="app-offline-state" role="status" aria-live="polite">
+                <IconBrokenBulb className="app-offline-state-icon" />
                 <p className="app-offline-state-title">
                   Looks like the lights went out, we&apos;re going to turn them on
                   right away.
@@ -559,6 +561,8 @@ export function AppLayout({
       {!backendOffline ? (
         <BulbyChatbox
           projectId={selectedProjectId || orderedProjects[0]?.id || ""}
+          projects={orderedProjects}
+          onSwitchProject={setSelectedProjectId}
         />
       ) : null}
       {projectToDelete ? (
