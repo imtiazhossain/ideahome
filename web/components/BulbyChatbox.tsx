@@ -1207,9 +1207,15 @@ export function BulbyChatbox({
       setLoading(true);
       setLoadingStatus("Checking Google Weather API...");
       try {
-        const { latitude, longitude } = await getBrowserPosition();
-        const weather = await fetchCurrentWeather({ latitude, longitude });
-        overrideWeatherContext = `\n\n=== GOOGLE WEATHER API DATA ===\nUser's Current Location: ${weather.locationLabel} (Lat: ${latitude}, Lon: ${longitude})\nTemperature: ${weather.temperatureF}°F\nFeels Like: ${weather.apparentTemperatureF}°F\nCondition: ${weather.condition}\nWind: ${weather.windMph} mph\nPrecipitation: ${weather.precipitationIn} in\nIs Day: ${weather.isDay ? "Yes" : "No"}\n\nCRITICAL RULES:\n1. Never make up the weather.\n2. Never lie about the weather.\n3. Never lie about the location.\n4. You must tell the user the weather for where they are using the exact data above if they ask about their area.\n5. If they ask about a DIFFERENT location, rely entirely on your web search capabilities instead.\n================================\n`;
+        const namedLocation = extractWeatherLocation(draft);
+        let weather;
+        if (namedLocation) {
+          weather = await fetchCurrentWeather({ location: namedLocation });
+        } else {
+          const { latitude, longitude } = await getBrowserPosition();
+          weather = await fetchCurrentWeather({ latitude, longitude });
+        }
+        overrideWeatherContext = `\n\n=== GOOGLE WEATHER API DATA ===\nAPI Provided Location: ${weather.locationLabel} (Lat: ${weather.latitude}, Lon: ${weather.longitude})\nTemperature: ${weather.temperatureF}°F\nFeels Like: ${weather.apparentTemperatureF}°F\nCondition: ${weather.condition}\nWind: ${weather.windMph} mph\nPrecipitation: ${weather.precipitationIn} in\nIs Day: ${weather.isDay ? "Yes" : "No"}\n\nCRITICAL RULES:\n1. Never make up the weather.\n2. Never lie about the weather.\n3. Never lie about the location.\n4. You must tell the user the weather for where they are using the exact data above if they ask about their area.\n5. Answer based entirely on the API Provided Location above. Do not fallback to search unless the API data is explicitly mismatched.\n================================\n`;
       } catch (err) {
         overrideWeatherContext = `\n\n=== GOOGLE WEATHER API ===\nUser's current location is unavailable. Remind them to allow location access if they ask about their area.\nCRITICAL RULES:\n1. Never make up the weather.\n2. Never lie about the weather.\n3. Never lie about the location.\n4. If they ask for a named location, use your web search results.\n==========================\n`;
       } finally {
