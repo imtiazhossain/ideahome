@@ -3,6 +3,8 @@ import type { CurrentWeather } from "./api";
 const WEATHER_QUERY_RE =
   /\b(weather|forecast|temperature|temp|rain|snow|humidity|wind|sunny|cloudy|storm|storms|thunder|hot|cold)\b/i;
 
+const SAVED_LOCATION_KEY = "ideahome-bulby-saved-location";
+
 export function isWeatherQuery(text: string): boolean {
   return WEATHER_QUERY_RE.test(text);
 }
@@ -10,7 +12,7 @@ export function isWeatherQuery(text: string): boolean {
 /**
  * Tries to extract a named location from a weather query.
  * Returns the location string (e.g. "Houston Texas") or null if none found.
- * When null, the caller should fall back to GPS.
+ * When null, the caller should fall back to saved location or GPS.
  */
 export function extractWeatherLocation(text: string): string | null {
   const t = text.trim();
@@ -41,6 +43,54 @@ export function extractWeatherLocation(text: string): string | null {
 
   return null;
 }
+
+// ── Saved location ─────────────────────────────────────────────────
+
+/**
+ * Detect "I'm in Houston", "my location is Dallas TX", "I live in London",
+ * "set my location to NYC", etc.  Returns the city string or null.
+ */
+export function extractSetLocationIntent(text: string): string | null {
+  const t = text.trim();
+  if (!t) return null;
+
+  const patterns: RegExp[] = [
+    /\b(?:i'?m|i am|we(?:'re| are))\s+(?:in|at|near|from)\s+([A-Za-z][A-Za-z\s,.'\-]{1,60}?)(?:\s+right\s+now)?[.!?]*$/i,
+    /\bmy\s+(?:location|city|town|area|place)\s+is\s+([A-Za-z][A-Za-z\s,.'\-]{1,60}?)[.!?]*$/i,
+    /\bi\s+live\s+in\s+([A-Za-z][A-Za-z\s,.'\-]{1,60}?)[.!?]*$/i,
+    /\bset\s+(?:my\s+)?location\s+(?:to|as)\s+([A-Za-z][A-Za-z\s,.'\-]{1,60}?)[.!?]*$/i,
+    /\blocation\s*[:=]\s*([A-Za-z][A-Za-z\s,.'\-]{1,60}?)[.!?]*$/i,
+  ];
+
+  for (const re of patterns) {
+    const match = re.exec(t);
+    if (match?.[1]) {
+      const candidate = match[1].trim().replace(/[,\s]+$/, "");
+      if (candidate.length >= 2) return candidate;
+    }
+  }
+  return null;
+}
+
+/** Persist the user's home location to localStorage. */
+export function saveBulbyLocation(location: string): void {
+  if (typeof window === "undefined") return;
+  const trimmed = location.trim();
+  if (trimmed) {
+    localStorage.setItem(SAVED_LOCATION_KEY, trimmed);
+  } else {
+    localStorage.removeItem(SAVED_LOCATION_KEY);
+  }
+}
+
+/** Read the user's saved home location (if any). */
+export function getSavedBulbyLocation(): string | null {
+  if (typeof window === "undefined") return null;
+  const raw = localStorage.getItem(SAVED_LOCATION_KEY);
+  return raw?.trim() || null;
+}
+
+// ── Formatting helpers ─────────────────────────────────────────────
 
 export function formatCurrentWeatherSummary(report: CurrentWeather): string {
   const where = report.locationLabel || "your area";

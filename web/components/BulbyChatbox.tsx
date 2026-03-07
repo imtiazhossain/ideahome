@@ -365,13 +365,7 @@ function invalidateListForIntent(target: AddListTarget, projectId: string) {
   invalidateList(target, projectId);
 }
 
-type TokenUsageData = {
-  promptTokens: number;
-  completionTokens: number;
-  totalTokens: number;
-};
-
-type ChatMessage = { id: string; role: "user" | "assistant"; text: string; tokenUsage?: TokenUsageData | null };
+type ChatMessage = { id: string; role: "user" | "assistant"; text: string };
 type AssistantPlaybackStatus = "idle" | "playing" | "paused";
 type PendingCalendarCreate = { title: string };
 
@@ -947,10 +941,10 @@ export function BulbyChatbox({
     [handleDragStart]
   );
 
-  const appendAssistantMessage = useCallback((text: string, tokenUsage?: TokenUsageData | null) => {
+  const appendAssistantMessage = useCallback((text: string) => {
     setMessages((prev) => [
       ...prev,
-      { id: createMessageId(), role: "assistant", text, tokenUsage: tokenUsage ?? null },
+      { id: createMessageId(), role: "assistant", text },
     ]);
   }, []);
 
@@ -1547,19 +1541,17 @@ export function BulbyChatbox({
         context,
         model ?? undefined,
         includeWeb
-      ) as { message?: string; tokenUsage?: TokenUsageData | null };
-      const tokenUsage = result.tokenUsage ?? null;
-      if (tokenUsage) {
+      ) as { message?: string; tokenUsage?: { promptTokens: number; completionTokens: number; totalTokens: number } | null };
+      if (result.tokenUsage) {
         recordTokenUsage({
           promptText: draft,
-          promptTokens: tokenUsage.promptTokens,
-          completionTokens: tokenUsage.completionTokens,
-          totalTokens: tokenUsage.totalTokens,
+          promptTokens: result.tokenUsage.promptTokens,
+          completionTokens: result.tokenUsage.completionTokens,
+          totalTokens: result.tokenUsage.totalTokens,
         });
       }
       appendAssistantMessage(
-        typeof result.message === "string" ? result.message : "Done.",
-        tokenUsage
+        typeof result.message === "string" ? result.message : "Done."
       );
     } catch (err) {
       appendAssistantMessage(
@@ -1731,23 +1723,6 @@ export function BulbyChatbox({
                     {line}
                   </p>
                 ))}
-                {msg.role === "assistant" && msg.tokenUsage && (
-                  <div
-                    style={{
-                      display: "flex",
-                      gap: "0.75rem",
-                      marginTop: "6px",
-                      fontSize: "0.7rem",
-                      opacity: 0.55,
-                      fontFamily: "monospace",
-                      flexWrap: "wrap",
-                    }}
-                  >
-                    <span title="Prompt tokens (your input)">⬆ {msg.tokenUsage.promptTokens}</span>
-                    <span title="Completion tokens (AI output)">⬇ {msg.tokenUsage.completionTokens}</span>
-                    <span title="Total tokens">Σ {msg.tokenUsage.totalTokens}</span>
-                  </div>
-                )}
               </div>
             ))}
             {loading && (
