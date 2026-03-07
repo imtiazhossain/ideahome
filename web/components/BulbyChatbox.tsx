@@ -364,7 +364,13 @@ function invalidateListForIntent(target: AddListTarget, projectId: string) {
   invalidateList(target, projectId);
 }
 
-type ChatMessage = { id: string; role: "user" | "assistant"; text: string };
+type TokenUsageData = {
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+};
+
+type ChatMessage = { id: string; role: "user" | "assistant"; text: string; tokenUsage?: TokenUsageData | null };
 type AssistantPlaybackStatus = "idle" | "playing" | "paused";
 type PendingCalendarCreate = { title: string };
 
@@ -940,10 +946,10 @@ export function BulbyChatbox({
     [handleDragStart]
   );
 
-  const appendAssistantMessage = useCallback((text: string) => {
+  const appendAssistantMessage = useCallback((text: string, tokenUsage?: TokenUsageData | null) => {
     setMessages((prev) => [
       ...prev,
-      { id: createMessageId(), role: "assistant", text },
+      { id: createMessageId(), role: "assistant", text, tokenUsage: tokenUsage ?? null },
     ]);
   }, []);
 
@@ -1540,9 +1546,11 @@ export function BulbyChatbox({
         context,
         model ?? undefined,
         includeWeb
-      );
+      ) as { message?: string; tokenUsage?: TokenUsageData | null };
+      const tokenUsage = result.tokenUsage ?? null;
       appendAssistantMessage(
-        typeof result.message === "string" ? result.message : "Done."
+        typeof result.message === "string" ? result.message : "Done.",
+        tokenUsage
       );
     } catch (err) {
       appendAssistantMessage(
@@ -1714,6 +1722,23 @@ export function BulbyChatbox({
                     {line}
                   </p>
                 ))}
+                {msg.role === "assistant" && msg.tokenUsage && (
+                  <div
+                    style={{
+                      display: "flex",
+                      gap: "0.75rem",
+                      marginTop: "6px",
+                      fontSize: "0.7rem",
+                      opacity: 0.55,
+                      fontFamily: "monospace",
+                      flexWrap: "wrap",
+                    }}
+                  >
+                    <span title="Prompt tokens (your input)">⬆ {msg.tokenUsage.promptTokens}</span>
+                    <span title="Completion tokens (AI output)">⬇ {msg.tokenUsage.completionTokens}</span>
+                    <span title="Total tokens">Σ {msg.tokenUsage.totalTokens}</span>
+                  </div>
+                )}
               </div>
             ))}
             {loading && (

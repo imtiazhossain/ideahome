@@ -142,6 +142,7 @@ export class IdeasService {
       todos: [],
       previewGifUrl,
       message: action.message,
+      tokenUsage: action.tokenUsage ?? null,
     };
   }
 
@@ -186,6 +187,7 @@ export class IdeasService {
       todos: [],
       previewGifUrl,
       message: action.message,
+      tokenUsage: action.tokenUsage ?? null,
     };
   }
 

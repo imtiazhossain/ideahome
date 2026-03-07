@@ -25,6 +25,11 @@ type OpenAiChatCompletionResponse = {
       content?: unknown;
     };
   }>;
+  usage?: {
+    prompt_tokens?: number;
+    completion_tokens?: number;
+    total_tokens?: number;
+  };
 };
 
 type OpenAiErrorResponse = {
@@ -42,8 +47,15 @@ type ActionMessagePayload = {
   message: string;
 };
 
+export type TokenUsage = {
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+};
+
 export type IdeaActionResponse = {
   message: string;
+  tokenUsage?: TokenUsage;
 };
 
 export type ElevenLabsVoice = {
@@ -212,7 +224,8 @@ export class IdeaPlanService {
     if (!message) {
       throw new InternalServerErrorException("AI action response was invalid");
     }
-    return { message };
+    const tokenUsage = this.extractTokenUsage(payload);
+    return { message, ...(tokenUsage ? { tokenUsage } : {}) };
   }
 
   async generateActionItems(input: {
@@ -659,6 +672,27 @@ export class IdeaPlanService {
     const payload = raw as Partial<ActionMessagePayload>;
     if (typeof payload.message !== "string") return "";
     return payload.message.trim();
+  }
+
+  private extractTokenUsage(
+    payload: OpenAiChatCompletionResponse
+  ): TokenUsage | null {
+    const usage = payload.usage;
+    if (!usage) return null;
+    const promptTokens =
+      typeof usage.prompt_tokens === "number" ? usage.prompt_tokens : 0;
+    const completionTokens =
+      typeof usage.completion_tokens === "number"
+        ? usage.completion_tokens
+        : 0;
+    const totalTokens =
+      typeof usage.total_tokens === "number"
+        ? usage.total_tokens
+        : promptTokens + completionTokens;
+    if (promptTokens === 0 && completionTokens === 0 && totalTokens === 0) {
+      return null;
+    }
+    return { promptTokens, completionTokens, totalTokens };
   }
 
   private extractMessageContent(payload: OpenAiChatCompletionResponse): string {
