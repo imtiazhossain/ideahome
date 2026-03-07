@@ -1,5 +1,11 @@
-import React, { useMemo } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { CollapsibleSection } from "./CollapsibleSection";
+import {
+  getTokenUsageHistory,
+  clearTokenUsageHistory,
+  generatePromptSuggestion,
+  type TokenUsageEntry,
+} from "../lib/tokenUsageHistory";
 
 export function TokenUsageGraph({
   collapsed,
@@ -10,21 +16,34 @@ export function TokenUsageGraph({
   onToggle: () => void;
   dragHandle: React.ReactNode;
 }) {
-  // Mock data for token usage over the past 7 days
-  const data = useMemo(
-    () => [
-      { day: "Mon", input: 12000, output: 4500 },
-      { day: "Tue", input: 8500, output: 3000 },
-      { day: "Wed", input: 15400, output: 5200 },
-      { day: "Thu", input: 11000, output: 4800 },
-      { day: "Fri", input: 22000, output: 8500 },
-      { day: "Sat", input: 4500, output: 1200 },
-      { day: "Sun", input: 7000, output: 2500 },
-    ],
-    []
-  );
+  const [entries, setEntries] = useState<TokenUsageEntry[]>([]);
 
-  const maxTokens = Math.max(...data.map((d) => d.input + d.output));
+  const refreshEntries = useCallback(() => {
+    setEntries(getTokenUsageHistory());
+  }, []);
+
+  useEffect(() => {
+    refreshEntries();
+    const handler = () => refreshEntries();
+    window.addEventListener("ideahome-token-usage-updated", handler);
+    return () =>
+      window.removeEventListener("ideahome-token-usage-updated", handler);
+  }, [refreshEntries]);
+
+  // Show most recent 20 prompts
+  const visible = useMemo(() => entries.slice(-20), [entries]);
+  const maxTokens = useMemo(
+    () => Math.max(1, ...visible.map((e) => e.totalTokens)),
+    [visible]
+  );
+  const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
+  const selectedEntry =
+    selectedIndex != null ? visible[selectedIndex] ?? null : null;
+
+  const handleClear = useCallback(() => {
+    clearTokenUsageHistory();
+    setSelectedIndex(null);
+  }, []);
 
   return (
     <CollapsibleSection
@@ -37,113 +56,246 @@ export function TokenUsageGraph({
       headerTrailing={dragHandle}
     >
       <p className="code-page-repos-copy">
-        Monitor your AI coding assistant prompt token usage (Model: Antigravity). By making prompts more
-        efficient, you reduce cost and improve latency.
+        Real-time prompt-by-prompt token usage from Bulby chat (Model:
+        Antigravity). Click any bar for details and efficiency suggestions.
       </p>
 
-      <div
-        style={{
-          marginTop: "1.5rem",
-          padding: "1rem",
-          backgroundColor: "var(--color-bg-secondary)",
-          borderRadius: "8px",
-        }}
-      >
+      {visible.length === 0 ? (
         <div
           style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "flex-end",
-            height: "200px",
-            gap: "1rem",
-            paddingBottom: "1rem",
-            borderBottom: "1px solid var(--color-border)",
+            padding: "2rem 1rem",
+            textAlign: "center",
+            color: "var(--color-text-secondary)",
+            fontSize: "0.9rem",
           }}
         >
-          {data.map((d, i) => {
-            const inputHeight = `${(d.input / maxTokens) * 100}%`;
-            const outputHeight = `${(d.output / maxTokens) * 100}%`;
-            return (
+          No prompts recorded yet. Send a message to Bulby to start tracking
+          token usage.
+        </div>
+      ) : (
+        <>
+          {/* Chart */}
+          <div
+            style={{
+              marginTop: "1.5rem",
+              padding: "1rem",
+              backgroundColor: "var(--color-bg-secondary)",
+              borderRadius: "8px",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "flex-end",
+                height: "180px",
+                gap: "4px",
+                paddingBottom: "1rem",
+                borderBottom: "1px solid var(--color-border)",
+              }}
+            >
+              {visible.map((entry, i) => {
+                const inputPct = (entry.promptTokens / maxTokens) * 100;
+                const outputPct = (entry.completionTokens / maxTokens) * 100;
+                const isSelected = selectedIndex === i;
+                return (
+                  <div
+                    key={entry.id}
+                    onClick={() =>
+                      setSelectedIndex(isSelected ? null : i)
+                    }
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      justifyContent: "flex-end",
+                      flex: 1,
+                      height: "100%",
+                      gap: "1px",
+                      cursor: "pointer",
+                      opacity: isSelected ? 1 : 0.75,
+                      transition: "opacity 0.15s ease",
+                      minWidth: 0,
+                    }}
+                    title={`#${i + 1}: ${entry.promptTokens} in / ${entry.completionTokens} out`}
+                  >
+                    <div
+                      style={{
+                        backgroundColor: isSelected
+                          ? "rgba(255, 180, 60, 0.9)"
+                          : "rgba(100, 150, 255, 0.8)",
+                        height: `${outputPct}%`,
+                        width: "100%",
+                        borderRadius: "3px 3px 0 0",
+                        transition: "height 0.3s ease, background-color 0.15s ease",
+                        minHeight: outputPct > 0 ? "2px" : 0,
+                      }}
+                    />
+                    <div
+                      style={{
+                        backgroundColor: isSelected
+                          ? "rgba(255, 180, 60, 0.5)"
+                          : "rgba(100, 150, 255, 0.4)",
+                        height: `${inputPct}%`,
+                        width: "100%",
+                        borderRadius: "0 0 3px 3px",
+                        transition: "height 0.3s ease, background-color 0.15s ease",
+                        minHeight: inputPct > 0 ? "2px" : 0,
+                      }}
+                    />
+                    <span
+                      style={{
+                        fontSize: "0.6rem",
+                        color: "var(--color-text-secondary)",
+                        textAlign: "center",
+                        marginTop: "4px",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {i + 1}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+            {/* Legend */}
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginTop: "0.75rem",
+                flexWrap: "wrap",
+                gap: "0.5rem",
+              }}
+            >
               <div
-                key={i}
                 style={{
                   display: "flex",
-                  flexDirection: "column",
-                  justifyContent: "flex-end",
-                  flex: 1,
-                  height: "100%",
-                  gap: "2px",
+                  gap: "1.5rem",
+                  fontSize: "0.8rem",
+                  color: "var(--color-text-secondary)",
                 }}
               >
                 <div
                   style={{
-                    backgroundColor: "rgba(100, 150, 255, 0.8)",
-                    height: outputHeight,
-                    width: "100%",
-                    borderRadius: "4px 4px 0 0",
-                    transition: "height 0.3s ease",
-                  }}
-                  title={`Output: ${d.output} tokens`}
-                />
-                <div
-                  style={{
-                    backgroundColor: "rgba(100, 150, 255, 0.4)",
-                    height: inputHeight,
-                    width: "100%",
-                    borderRadius: "0 0 4px 4px",
-                    transition: "height 0.3s ease",
-                  }}
-                  title={`Input: ${d.input} tokens`}
-                />
-                <span
-                  style={{
-                    fontSize: "0.75rem",
-                    color: "var(--color-text-secondary)",
-                    textAlign: "center",
-                    marginTop: "0.5rem",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "0.4rem",
                   }}
                 >
-                  {d.day}
-                </span>
+                  <div
+                    style={{
+                      width: "10px",
+                      height: "10px",
+                      backgroundColor: "rgba(100, 150, 255, 0.4)",
+                      borderRadius: "2px",
+                    }}
+                  />
+                  Input
+                </div>
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "0.4rem",
+                  }}
+                >
+                  <div
+                    style={{
+                      width: "10px",
+                      height: "10px",
+                      backgroundColor: "rgba(100, 150, 255, 0.8)",
+                      borderRadius: "2px",
+                    }}
+                  />
+                  Output
+                </div>
               </div>
-            );
-          })}
-        </div>
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "center",
-            gap: "2rem",
-            marginTop: "1rem",
-            fontSize: "0.85rem",
-            color: "var(--color-text-secondary)",
-          }}
-        >
-          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-            <div
-              style={{
-                width: "12px",
-                height: "12px",
-                backgroundColor: "rgba(100, 150, 255, 0.4)",
-                borderRadius: "2px",
-              }}
-            />
-            Input Tokens (Prompt)
+              <button
+                type="button"
+                className="code-page-run-btn"
+                style={{ fontSize: "0.75rem", padding: "4px 10px" }}
+                onClick={handleClear}
+              >
+                Clear history
+              </button>
+            </div>
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-            <div
-              style={{
-                width: "12px",
-                height: "12px",
-                backgroundColor: "rgba(100, 150, 255, 0.8)",
-                borderRadius: "2px",
-              }}
-            />
-            Output Tokens (Response)
-          </div>
-        </div>
-      </div>
 
+          {/* Selected prompt detail */}
+          {selectedEntry && (
+            <div
+              style={{
+                marginTop: "1rem",
+                padding: "1rem",
+                backgroundColor: "var(--color-bg-secondary)",
+                borderRadius: "8px",
+                borderLeft: "3px solid rgba(255, 180, 60, 0.8)",
+              }}
+            >
+              <div
+                style={{
+                  fontSize: "0.75rem",
+                  color: "var(--color-text-secondary)",
+                  marginBottom: "0.5rem",
+                  fontFamily: "monospace",
+                }}
+              >
+                Prompt #{(selectedIndex ?? 0) + 1} ·{" "}
+                {new Date(selectedEntry.timestamp).toLocaleString()}
+              </div>
+              <div
+                style={{
+                  fontSize: "0.85rem",
+                  padding: "0.5rem 0.75rem",
+                  backgroundColor: "var(--color-bg-primary, var(--bg))",
+                  borderRadius: "6px",
+                  maxHeight: "80px",
+                  overflow: "auto",
+                  marginBottom: "0.75rem",
+                  fontStyle: "italic",
+                  color: "var(--color-text-secondary)",
+                }}
+              >
+                &ldquo;
+                {selectedEntry.promptText.length > 200
+                  ? selectedEntry.promptText.slice(0, 200) + "…"
+                  : selectedEntry.promptText}
+                &rdquo;
+              </div>
+              <div
+                style={{
+                  display: "flex",
+                  gap: "1.5rem",
+                  fontSize: "0.8rem",
+                  fontFamily: "monospace",
+                  marginBottom: "0.75rem",
+                }}
+              >
+                <span>⬆ {selectedEntry.promptTokens} input</span>
+                <span>⬇ {selectedEntry.completionTokens} output</span>
+                <span>Σ {selectedEntry.totalTokens} total</span>
+              </div>
+              <div
+                style={{
+                  fontSize: "0.85rem",
+                  padding: "0.6rem 0.75rem",
+                  backgroundColor: "rgba(100, 150, 255, 0.08)",
+                  borderRadius: "6px",
+                  lineHeight: 1.5,
+                }}
+              >
+                <strong style={{ fontSize: "0.75rem" }}>💡 Suggestion:</strong>{" "}
+                {generatePromptSuggestion(selectedEntry)}
+              </div>
+            </div>
+          )}
+        </>
+      )}
+
+      {/* General tips */}
       <div style={{ marginTop: "2rem" }}>
         <h4
           style={{ fontSize: "1rem", marginBottom: "1rem", fontWeight: "600" }}
@@ -161,25 +313,26 @@ export function TokenUsageGraph({
           }}
         >
           <li>
-            <strong>Be Specific and Contextual:</strong> Before making a broad
-            query, isolate the exact component. Don't upload an entire file if
-            you only need help with one function.
+            <strong>Be Specific and Contextual:</strong> Isolate the exact
+            component instead of uploading entire files.
           </li>
           <li>
-            <strong>Provide Clear Objectives upfront:</strong> Start with "Write
-            a React function that sorts an array" rather than giving context
-            first. Let the agent know the immediate goal to avoid meandering
-            reasoning steps.
+            <strong>Lead with the Objective:</strong> Start with &quot;Write a
+            React function that…&quot; rather than giving context first.
           </li>
           <li>
-            <strong>Limit Output Scope:</strong> If you only need a snippet,
-            state <em>"Show only the modified lines of code"</em> or{" "}
-            <em>"Do not explain the code, just provide the implementation."</em>
+            <strong>Limit Output Scope:</strong> Say{" "}
+            <em>&quot;Show only the modified lines&quot;</em> to avoid verbose
+            responses.
           </li>
           <li>
-            <strong>Reference Existing Knowledge:</strong> Instead of re-pasting
-            rules inside your prompt, point the agent to specific rule files or
-            docs if it already has access to them.
+            <strong>Reference, Don&apos;t Repeat:</strong> Point to rule files
+            or docs the agent already has access to.
+          </li>
+          <li>
+            <strong>Skip Filler Words:</strong> &quot;Fix the login
+            bug&quot; uses fewer tokens than &quot;Could you please fix the
+            login bug for me?&quot;
           </li>
         </ul>
       </div>

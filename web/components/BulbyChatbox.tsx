@@ -72,6 +72,7 @@ import {
   extractWeatherLocation,
   readWeatherErrorMessage,
 } from "../lib/assistantWeather";
+import { recordTokenUsage } from "../lib/tokenUsageHistory";
 import { formatTextForSpeech } from "../lib/utils";
 import { IconMic, IconPlay, IconStop } from "./icons";
 
@@ -1548,6 +1549,14 @@ export function BulbyChatbox({
         includeWeb
       ) as { message?: string; tokenUsage?: TokenUsageData | null };
       const tokenUsage = result.tokenUsage ?? null;
+      if (tokenUsage) {
+        recordTokenUsage({
+          promptText: draft,
+          promptTokens: tokenUsage.promptTokens,
+          completionTokens: tokenUsage.completionTokens,
+          totalTokens: tokenUsage.totalTokens,
+        });
+      }
       appendAssistantMessage(
         typeof result.message === "string" ? result.message : "Done.",
         tokenUsage

@@ -130,37 +130,56 @@ export class WeatherService {
     if (!trimmed) {
       throw new BadRequestException("Location query is required");
     }
-    const response = await this.fetchJson<OpenMeteoForwardGeocodeResponse>(
-      "https://geocoding-api.open-meteo.com/v1/search?" +
-        new URLSearchParams({
-          name: trimmed,
-          count: "1",
-          language: "en",
-          format: "json",
-        }).toString(),
-      "forward geocode"
-    );
-    const first = response.results?.[0];
-    if (!first) {
-      throw new NotFoundException(
-        `No location found for "${trimmed}". Try a city name like "Houston, TX" or "London, UK".`
+
+    // Try the full query first, then progressively strip trailing words as
+    // fallback.  Open-Meteo's geocoding API treats multi-word input as a
+    // single city name, so "Dallas Texas" returns nothing while "Dallas"
+    // correctly resolves.
+    const candidates = [trimmed];
+    if (/[\s,]/.test(trimmed)) {
+      const words = trimmed.split(/[\s,]+/).filter(Boolean);
+      if (words.length >= 2) {
+        candidates.push(words.slice(0, -1).join(" ")); // e.g. "Dallas"
+      }
+      if (words.length >= 3) {
+        candidates.push(words[0]); // first word only
+      }
+    }
+
+    for (const candidate of candidates) {
+      const response = await this.fetchJson<OpenMeteoForwardGeocodeResponse>(
+        "https://geocoding-api.open-meteo.com/v1/search?" +
+          new URLSearchParams({
+            name: candidate,
+            count: "1",
+            language: "en",
+            format: "json",
+          }).toString(),
+        "forward geocode"
       );
+      const first = response.results?.[0];
+      if (first) {
+        const latitude = this.readNumber(first.latitude);
+        const longitude = this.readNumber(first.longitude);
+        if (latitude === null || longitude === null) {
+          throw new BadGatewayException("Geocoding provider returned invalid coordinates");
+        }
+        const name = typeof first.name === "string" ? first.name.trim() : "";
+        const admin1 = typeof first.admin1 === "string" ? first.admin1.trim() : "";
+        const countryCode =
+          typeof first.country_code === "string" ? first.country_code.trim().toUpperCase() : "";
+        const parts = [name, admin1 || countryCode].filter(Boolean);
+        return {
+          latitude,
+          longitude,
+          label: parts.length > 0 ? parts.join(", ") : trimmed,
+        };
+      }
     }
-    const latitude = this.readNumber(first.latitude);
-    const longitude = this.readNumber(first.longitude);
-    if (latitude === null || longitude === null) {
-      throw new BadGatewayException("Geocoding provider returned invalid coordinates");
-    }
-    const name = typeof first.name === "string" ? first.name.trim() : "";
-    const admin1 = typeof first.admin1 === "string" ? first.admin1.trim() : "";
-    const countryCode =
-      typeof first.country_code === "string" ? first.country_code.trim().toUpperCase() : "";
-    const parts = [name, admin1 || countryCode].filter(Boolean);
-    return {
-      latitude,
-      longitude,
-      label: parts.length > 0 ? parts.join(", ") : trimmed,
-    };
+
+    throw new BadRequestException(
+      `Could not find coordinates for "${trimmed}". Try a simpler city name like "Houston" or "London".`
+    );
   }
 
   private async fetchJson<T>(url: string, label: string): Promise<T> {
