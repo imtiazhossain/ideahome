@@ -80,6 +80,7 @@
     "dev:web": "pnpm --filter web dev",
     "web:restart": "bash ./scripts/restart-web.sh",
     "web:status": "bash ./scripts/status-web.sh",
+    "backend:restart": "bash ./scripts/restart-backend.sh",
     "dev:mobile": "pnpm --filter mobile start",
     "db:up": "docker compose up -d || docker-compose up -d",
     "db:down": "docker compose down -v || docker-compose down -v",

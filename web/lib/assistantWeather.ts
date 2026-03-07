@@ -136,15 +136,15 @@ export function getBrowserPosition(): Promise<{ latitude: number; longitude: num
       },
       (error) => {
         if (error.code === error.PERMISSION_DENIED) {
-          reject(new Error("User denied geolocation."));
+          reject(new Error("User denied geolocation. Please enable Location Services in System Settings > Privacy & Security, then allow your browser to use location."));
           return;
         }
         reject(new Error(error.message || "Geolocation failed."));
       },
       {
-        enableHighAccuracy: false,
-        timeout: 10000,
-        maximumAge: 10 * 60 * 1000,
+        enableHighAccuracy: true,
+        timeout: 15000,
+        maximumAge: 0,
       }
     );
   });

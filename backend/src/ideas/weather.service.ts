@@ -131,55 +131,93 @@ export class WeatherService {
       throw new BadRequestException("Location query is required");
     }
 
-    // Try the full query first, then progressively strip trailing words as
-    // fallback.  Open-Meteo's geocoding API treats multi-word input as a
-    // single city name, so "Dallas Texas" returns nothing while "Dallas"
-    // correctly resolves.
-    const candidates = [trimmed];
-    if (/[\s,]/.test(trimmed)) {
-      const words = trimmed.split(/[\s,]+/).filter(Boolean);
-      if (words.length >= 2) {
-        candidates.push(words.slice(0, -1).join(" ")); // e.g. "Dallas"
-      }
-      if (words.length >= 3) {
-        candidates.push(words[0]); // first word only
-      }
+    // Step 1: Try the full query as-is (works for single-word cities and
+    // some multi-word city names like "New York" or "San Francisco").
+    const fullResponse = await this.fetchJson<OpenMeteoForwardGeocodeResponse>(
+      "https://geocoding-api.open-meteo.com/v1/search?" +
+        new URLSearchParams({
+          name: trimmed,
+          count: "1",
+          language: "en",
+          format: "json",
+        }).toString(),
+      "forward geocode"
+    );
+    const fullFirst = fullResponse.results?.[0];
+    if (fullFirst) {
+      return this.buildGeocodeResult(fullFirst, trimmed);
     }
 
-    for (const candidate of candidates) {
-      const response = await this.fetchJson<OpenMeteoForwardGeocodeResponse>(
-        "https://geocoding-api.open-meteo.com/v1/search?" +
-          new URLSearchParams({
-            name: candidate,
-            count: "1",
-            language: "en",
-            format: "json",
-          }).toString(),
-        "forward geocode"
-      );
-      const first = response.results?.[0];
-      if (first) {
-        const latitude = this.readNumber(first.latitude);
-        const longitude = this.readNumber(first.longitude);
-        if (latitude === null || longitude === null) {
-          throw new BadGatewayException("Geocoding provider returned invalid coordinates");
+    // Step 2: For multi-word queries like "Blairstown New Jersey", strip
+    // trailing words to get the city name, then use the stripped words as
+    // context to pick the right result from multiple matches.
+    if (/[\s,]/.test(trimmed)) {
+      const words = trimmed.split(/[\s,]+/).filter(Boolean);
+
+      // Try stripping last word(s) as state/country context
+      for (let dropCount = 1; dropCount < words.length; dropCount++) {
+        const cityPart = words.slice(0, words.length - dropCount).join(" ");
+        const contextPart = words.slice(words.length - dropCount).join(" ").toLowerCase();
+
+        if (cityPart.length < 2) continue;
+
+        const response = await this.fetchJson<OpenMeteoForwardGeocodeResponse>(
+          "https://geocoding-api.open-meteo.com/v1/search?" +
+            new URLSearchParams({
+              name: cityPart,
+              count: "5",
+              language: "en",
+              format: "json",
+            }).toString(),
+          "forward geocode with context"
+        );
+        const results = response.results ?? [];
+        if (results.length === 0) continue;
+
+        // Try to find a result whose state/country matches the context
+        const contextMatch = results.find((r) => {
+          const admin1 = typeof r.admin1 === "string" ? r.admin1.toLowerCase() : "";
+          const countryCode = typeof r.country_code === "string" ? r.country_code.toLowerCase() : "";
+          return (
+            admin1.includes(contextPart) ||
+            contextPart.includes(admin1) ||
+            countryCode === contextPart
+          );
+        });
+
+        if (contextMatch) {
+          return this.buildGeocodeResult(contextMatch, trimmed);
         }
-        const name = typeof first.name === "string" ? first.name.trim() : "";
-        const admin1 = typeof first.admin1 === "string" ? first.admin1.trim() : "";
-        const countryCode =
-          typeof first.country_code === "string" ? first.country_code.trim().toUpperCase() : "";
-        const parts = [name, admin1 || countryCode].filter(Boolean);
-        return {
-          latitude,
-          longitude,
-          label: parts.length > 0 ? parts.join(", ") : trimmed,
-        };
+
+        // No context match — fall back to the first (most relevant) result
+        return this.buildGeocodeResult(results[0], trimmed);
       }
     }
 
     throw new BadRequestException(
       `Could not find coordinates for "${trimmed}". Try a simpler city name like "Houston" or "London".`
     );
+  }
+
+  private buildGeocodeResult(
+    result: NonNullable<OpenMeteoForwardGeocodeResponse["results"]>[number],
+    fallbackLabel: string
+  ): GeocodeResult {
+    const latitude = this.readNumber(result.latitude);
+    const longitude = this.readNumber(result.longitude);
+    if (latitude === null || longitude === null) {
+      throw new BadGatewayException("Geocoding provider returned invalid coordinates");
+    }
+    const name = typeof result.name === "string" ? result.name.trim() : "";
+    const admin1 = typeof result.admin1 === "string" ? result.admin1.trim() : "";
+    const countryCode =
+      typeof result.country_code === "string" ? result.country_code.trim().toUpperCase() : "";
+    const parts = [name, admin1 || countryCode].filter(Boolean);
+    return {
+      latitude,
+      longitude,
+      label: parts.length > 0 ? parts.join(", ") : fallbackLabel,
+    };
   }
 
   private async fetchJson<T>(url: string, label: string): Promise<T> {

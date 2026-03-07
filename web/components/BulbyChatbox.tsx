@@ -70,6 +70,9 @@ import {
   getBrowserPosition,
   isWeatherQuery,
   extractWeatherLocation,
+  extractSetLocationIntent,
+  saveBulbyLocation,
+  getSavedBulbyLocation,
   readWeatherErrorMessage,
 } from "../lib/assistantWeather";
 import { recordTokenUsage } from "../lib/tokenUsageHistory";
@@ -1196,6 +1199,13 @@ export function BulbyChatbox({
       return;
     }
 
+    const locationIntent = extractSetLocationIntent(draft);
+    if (locationIntent) {
+      saveBulbyLocation(locationIntent);
+      appendAssistantMessage(`Got it! I've saved your location as "${locationIntent}". I'll use this for weather queries from now on.`);
+      return;
+    }
+
     const rememberNote = extractRememberNote(draft);
     if (rememberNote) {
       await saveBulbyMemoryNote(rememberNote);
@@ -1209,9 +1219,12 @@ export function BulbyChatbox({
       setLoadingStatus("Checking Google Weather API...");
       try {
         const namedLocation = extractWeatherLocation(draft);
+        const savedLocation = getSavedBulbyLocation();
         let weather;
         if (namedLocation) {
           weather = await fetchCurrentWeather({ location: namedLocation });
+        } else if (savedLocation) {
+          weather = await fetchCurrentWeather({ location: savedLocation });
         } else {
           const { latitude, longitude } = await getBrowserPosition();
           weather = await fetchCurrentWeather({ latitude, longitude });

@@ -72,6 +72,53 @@ export function clearTokenUsageHistory(): void {
 }
 
 /**
+ * Compute an efficiency score (0–100) for a single prompt.
+ *
+ * Factors:
+ *   Prompt brevity      – 40 pts  (full at ≤50 tokens, 0 at 500+)
+ *   Input/Output ratio  – 30 pts  (full when ratio ≤ 0.5, 0 at 3+)
+ *   No filler words     – 15 pts  (full if no politeness/filler detected)
+ *   Word economy        – 15 pts  (full at ≤20 words, 0 at 80+)
+ */
+export function computeEfficiencyScore(entry: TokenUsageEntry): number {
+  const { promptText, promptTokens, completionTokens } = entry;
+
+  // 1. Prompt brevity (40 pts) – linear from 50→500 tokens
+  const brevity =
+    promptTokens <= 50
+      ? 40
+      : promptTokens >= 500
+        ? 0
+        : Math.round(40 * (1 - (promptTokens - 50) / 450));
+
+  // 2. Input / Output ratio (30 pts) – ratio = promptTokens / completionTokens
+  const ratio = completionTokens > 0 ? promptTokens / completionTokens : 0;
+  const ratioScore =
+    ratio <= 0.5
+      ? 30
+      : ratio >= 3
+        ? 0
+        : Math.round(30 * (1 - (ratio - 0.5) / 2.5));
+
+  // 3. Filler-word penalty (15 pts)
+  const hasFiller = /please|could you|would you|can you|i want you to/i.test(
+    promptText
+  );
+  const fillerScore = hasFiller ? 0 : 15;
+
+  // 4. Word economy (15 pts) – linear from 20→80 words
+  const wordCount = promptText.trim().split(/\s+/).length;
+  const wordScore =
+    wordCount <= 20
+      ? 15
+      : wordCount >= 80
+        ? 0
+        : Math.round(15 * (1 - (wordCount - 20) / 60));
+
+  return Math.max(0, Math.min(100, brevity + ratioScore + fillerScore + wordScore));
+}
+
+/**
  * Generate a per-prompt efficiency suggestion based on the token counts.
  */
 export function generatePromptSuggestion(entry: TokenUsageEntry): string {

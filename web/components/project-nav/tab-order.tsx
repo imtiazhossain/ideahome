@@ -92,7 +92,7 @@ export const TABS: {
     href: "/enhancements",
   },
   { id: "summary", label: "Summary", icon: <IconGlobe />, href: "/summary" },
-  { id: "timeline", label: "Timeline", icon: <IconTimeline /> },
+  { id: "timeline", label: "Timeline", icon: <IconTimeline />, href: "/timeline" },
   { id: "board", label: "Board", icon: <IconBoard />, href: "/" },
   { id: "tests", label: "Tests", icon: <IconBeaker />, href: "/tests" },
   {
@@ -103,7 +103,7 @@ export const TABS: {
   },
   { id: "list", label: "Features", icon: <IconFeatures />, href: "/features" },
   { id: "forms", label: "Bugs", icon: <IconBug />, href: "/bugs" },
-  { id: "goals", label: "Goals", icon: <IconGoals /> },
+  { id: "goals", label: "Goals", icon: <IconGoals />, href: "/goals" },
   {
     id: "expenses",
     label: "Finances",

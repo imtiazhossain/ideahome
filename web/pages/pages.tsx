@@ -410,14 +410,24 @@ export default function PagesPage() {
   );
 
   const handleAddSection = useCallback(() => {
-    setSections((prev) => [
-      ...prev,
-      {
-        id: makeSectionId(),
-        title: `Section ${prev.length + 1}`,
-        content: "",
-      },
-    ]);
+    setSections((prev) => {
+      let title = "New Page";
+      if (prev.some((s) => s.title === title)) {
+        let counter = 2;
+        while (prev.some((s) => s.title === `New Page ${counter}`)) {
+          counter++;
+        }
+        title = `New Page ${counter}`;
+      }
+      return [
+        ...prev,
+        {
+          id: makeSectionId(),
+          title,
+          content: "",
+        },
+      ];
+    });
   }, []);
 
   const handleDeleteSection = useCallback((sectionId: string) => {

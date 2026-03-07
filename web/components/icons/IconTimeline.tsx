@@ -13,10 +13,9 @@ export function IconTimeline() {
       strokeLinejoin="round"
       aria-hidden
     >
-      <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
-      <line x1="16" y1="2" x2="16" y2="6" />
-      <line x1="8" y1="2" x2="8" y2="6" />
-      <line x1="3" y1="10" x2="21" y2="10" />
+      <path d="M8 6h10" />
+      <path d="M6 12h9" />
+      <path d="M11 18h7" />
     </svg>
   );
 }

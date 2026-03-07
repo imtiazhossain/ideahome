@@ -4,8 +4,15 @@ import {
   getTokenUsageHistory,
   clearTokenUsageHistory,
   generatePromptSuggestion,
+  computeEfficiencyScore,
   type TokenUsageEntry,
 } from "../lib/tokenUsageHistory";
+
+function scoreColor(score: number): string {
+  if (score >= 75) return "#4ade80";
+  if (score >= 50) return "#facc15";
+  return "#f87171";
+}
 
 export function TokenUsageGraph({
   collapsed,
@@ -48,7 +55,7 @@ export function TokenUsageGraph({
   return (
     <CollapsibleSection
       sectionId="code-token-usage"
-      title="Prompt Token Usage Tracker"
+      title="Bulby Token Usage Tracker"
       collapsed={collapsed}
       onToggle={onToggle}
       sectionClassName="code-page-body-section"
@@ -98,6 +105,7 @@ export function TokenUsageGraph({
                 const inputPct = (entry.promptTokens / maxTokens) * 100;
                 const outputPct = (entry.completionTokens / maxTokens) * 100;
                 const isSelected = selectedIndex === i;
+                const score = computeEfficiencyScore(entry);
                 return (
                   <div
                     key={entry.id}
@@ -116,7 +124,7 @@ export function TokenUsageGraph({
                       transition: "opacity 0.15s ease",
                       minWidth: 0,
                     }}
-                    title={`#${i + 1}: ${entry.promptTokens} in / ${entry.completionTokens} out`}
+                    title={`#${i + 1}: ${entry.promptTokens} in / ${entry.completionTokens} out · Score: ${score}/100`}
                   >
                     <div
                       style={{
@@ -154,6 +162,18 @@ export function TokenUsageGraph({
                       }}
                     >
                       {i + 1}
+                    </span>
+                    <span
+                      style={{
+                        fontSize: "0.55rem",
+                        fontWeight: 700,
+                        color: scoreColor(score),
+                        textAlign: "center",
+                        marginTop: "1px",
+                        lineHeight: 1,
+                      }}
+                    >
+                      {score}
                     </span>
                   </div>
                 );
@@ -272,12 +292,78 @@ export function TokenUsageGraph({
                   fontSize: "0.8rem",
                   fontFamily: "monospace",
                   marginBottom: "0.75rem",
+                  alignItems: "center",
                 }}
               >
                 <span>⬆ {selectedEntry.promptTokens} input</span>
                 <span>⬇ {selectedEntry.completionTokens} output</span>
                 <span>Σ {selectedEntry.totalTokens} total</span>
               </div>
+              {/* Efficiency score badge */}
+              {(() => {
+                const score = computeEfficiencyScore(selectedEntry);
+                const color = scoreColor(score);
+                return (
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "0.75rem",
+                      marginBottom: "0.75rem",
+                      padding: "0.6rem 0.75rem",
+                      backgroundColor: "rgba(100, 150, 255, 0.06)",
+                      borderRadius: "8px",
+                    }}
+                  >
+                    <div
+                      style={{
+                        width: "48px",
+                        height: "48px",
+                        borderRadius: "50%",
+                        border: `3px solid ${color}`,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        flexShrink: 0,
+                      }}
+                    >
+                      <span
+                        style={{
+                          fontSize: "1rem",
+                          fontWeight: 700,
+                          color,
+                          fontFamily: "monospace",
+                        }}
+                      >
+                        {score}
+                      </span>
+                    </div>
+                    <div>
+                      <div
+                        style={{
+                          fontSize: "0.8rem",
+                          fontWeight: 600,
+                          marginBottom: "2px",
+                        }}
+                      >
+                        Efficiency Score
+                      </div>
+                      <div
+                        style={{
+                          fontSize: "0.75rem",
+                          color: "var(--color-text-secondary)",
+                        }}
+                      >
+                        {score >= 75
+                          ? "Excellent — lean and effective prompt"
+                          : score >= 50
+                            ? "Decent — room for improvement"
+                            : "Low — try shortening your prompt"}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
               <div
                 style={{
                   fontSize: "0.85rem",
