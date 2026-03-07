@@ -18,6 +18,8 @@ describe("IdeasController", () => {
     generatePlan: jest.fn(),
     generateAssistantChat: jest.fn(),
     generateListAssistantChat: jest.fn(),
+    getCurrentWeather: jest.fn(),
+    getWeatherByCity: jest.fn(),
   };
 
   beforeEach(async () => {
@@ -178,5 +180,27 @@ describe("IdeasController", () => {
       "u1@example.com",
       undefined
     );
+  });
+
+  it("getCurrentWeather delegates to service with coordinates", async () => {
+    mockSvc.getCurrentWeather.mockResolvedValue({ temperatureF: 72 });
+    await controller.getCurrentWeather(
+      undefined,
+      "40.7128",
+      "-74.0060",
+      req as any
+    );
+    expect(mockSvc.getCurrentWeather).toHaveBeenCalledWith(40.7128, -74.006);
+  });
+
+  it("getCurrentWeather delegates to service with location string", async () => {
+    mockSvc.getWeatherByCity.mockResolvedValue({ temperatureF: 75 });
+    await controller.getCurrentWeather(
+      "Houston Texas",
+      undefined,
+      undefined,
+      req as any
+    );
+    expect(mockSvc.getWeatherByCity).toHaveBeenCalledWith("Houston Texas");
   });
 });

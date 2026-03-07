@@ -379,6 +379,7 @@ export declare function pathIdeasAssistantChat(): string;
 export declare function pathIdeasOpenrouterModels(): string;
 export declare function pathIdeasElevenlabsVoices(): string;
 export declare function pathIdeasTts(): string;
+export declare function pathIdeasWeather(): string;
 export declare function pathAuthProviders(): string;
 export declare function pathAuthGoogle(): string;
 export declare function pathAuthApple(): string;

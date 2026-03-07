@@ -5,6 +5,7 @@ import {
   BULBY_TRIGGER_VISIBILITY_EVENT,
 } from "../components/BulbyChatbox";
 import { IconTrash } from "../components/IconTrash";
+import { ProjectSettingsPanel } from "../components/ProjectSettingsPanel";
 import { UiCheckbox } from "../components/UiCheckbox";
 import { UiSelect } from "../components/UiSelect";
 import { IconChevronDown, IconChevronUp } from "../components/icons";
@@ -45,6 +46,12 @@ const PRESET_DETAILS: Record<
 };
 
 const SETTINGS_SECTIONS = [
+  {
+    id: "project",
+    eyebrow: "Management",
+    title: "Project details",
+    description: "Manage project name, team members, invites, and deletion.",
+  },
   {
     id: "overview",
     eyebrow: "System",
@@ -431,6 +438,15 @@ export default function SettingsPage() {
           </nav>
 
           <div className="settings-content">
+            <ProjectSettingsPanel
+              projectId={layout.selectedProjectId ?? undefined}
+              projectName={layout.projectDisplayName}
+              onRenameProject={layout.renameProjectById}
+              onDeleteProject={(id, name) => {
+                layout.setProjectToDelete({ id, name });
+              }}
+            />
+
             <section
               className="settings-panel"
               aria-labelledby="workspace-settings-title"

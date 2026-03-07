@@ -26,6 +26,7 @@ export const CODE_PAGE_SECTION_IDS = [
   "code-health",
   "code-wireframe",
   "code-project-flow",
+  "code-token-usage",
 ] as const;
 const DEFAULT_CODE_SECTION_COLLAPSED: Record<string, boolean> = {
   "code-project-flow": false,

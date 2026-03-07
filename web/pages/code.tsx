@@ -22,6 +22,7 @@ import { CodeHealthSection } from "../components/CodeHealthSection";
 import { CollapsibleSection } from "../components/CollapsibleSection";
 import { IconGrip } from "../components/IconGrip";
 import { ProjectFlowDiagram } from "../components/ProjectFlowDiagram";
+import { TokenUsageGraph } from "../components/TokenUsageGraph";
 import {
   buildCodeRatingSuggestions,
   readJsonIfAvailable,
@@ -728,6 +729,15 @@ function renderCodeSectionInner(
           </>
         )}
       </CollapsibleSection>
+    );
+  }
+  if (sectionId === "code-token-usage") {
+    return (
+      <TokenUsageGraph
+        collapsed={isSectionCollapsed("code-token-usage")}
+        onToggle={() => toggleSection("code-token-usage")}
+        dragHandle={dragHandle}
+      />
     );
   }
   if (sectionId === "code-audit") {

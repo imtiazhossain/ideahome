@@ -3,6 +3,7 @@ import { BadRequestException, NotFoundException } from "@nestjs/common";
 import { IdeasService } from "./ideas.service";
 import { PrismaService } from "../prisma.service";
 import { IdeaPlanService } from "./idea-plan.service";
+import { WeatherService } from "./weather.service";
 
 describe("IdeasService", () => {
   let service: IdeasService;
@@ -32,6 +33,10 @@ describe("IdeasService", () => {
     searchWeb: jest.fn(),
     listElevenLabsVoices: jest.fn(),
     synthesizeElevenLabsSpeech: jest.fn(),
+  };
+  const mockWeatherService = {
+    getCurrentWeather: jest.fn(),
+    geocodeCity: jest.fn(),
   };
 
   beforeEach(async () => {
@@ -76,6 +81,7 @@ describe("IdeasService", () => {
         IdeasService,
         { provide: IdeaPlanService, useValue: mockIdeaPlanService },
         { provide: PrismaService, useValue: mockPrisma },
+        { provide: WeatherService, useValue: mockWeatherService },
       ],
     }).compile();
 
@@ -290,6 +296,35 @@ describe("IdeasService", () => {
       await expect(
         service.generateListAssistantChat("p1", "user-1", "   ")
       ).rejects.toThrow(BadRequestException);
+    });
+  });
+
+  describe("getWeatherByCity", () => {
+    it("geocodes the city and returns weather with the resolved label", async () => {
+      mockWeatherService.geocodeCity.mockResolvedValue({
+        latitude: 29.7604,
+        longitude: -95.3698,
+        label: "Houston, Texas",
+      });
+      mockWeatherService.getCurrentWeather.mockResolvedValue({
+        latitude: 29.7604,
+        longitude: -95.3698,
+        locationLabel: "Houston, Texas",
+        observedAt: "2026-03-07T00:00",
+        temperatureF: 72,
+        apparentTemperatureF: 70,
+        condition: "clear",
+        windMph: 5,
+        precipitationIn: 0,
+        isDay: true,
+      });
+
+      const result = await service.getWeatherByCity("Houston Texas");
+
+      expect(mockWeatherService.geocodeCity).toHaveBeenCalledWith("Houston Texas");
+      expect(mockWeatherService.getCurrentWeather).toHaveBeenCalledWith(29.7604, -95.3698);
+      expect(result.locationLabel).toBe("Houston, Texas");
+      expect(result.temperatureF).toBe(72);
     });
   });
 });

@@ -97,6 +97,7 @@ export {
   pathIdeasElevenlabsVoices,
   pathIdeasOpenrouterModels,
   pathIdeasTts,
+  pathIdeasWeather,
   pathChecklistList,
   pathChecklistItem,
   pathChecklistReorder,

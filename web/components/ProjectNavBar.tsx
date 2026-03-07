@@ -39,7 +39,6 @@ import {
   getCompactTabLabel,
   getSettingsButtonVisibleStorageKey,
 } from "./project-nav/utils";
-import { ProjectSettingsModal } from "./ProjectSettingsModal";
 import { ProjectNavSearch } from "./project-nav/ProjectNavSearch";
 import { ProjectNavSettingsMenu } from "./project-nav/ProjectNavSettingsMenu";
 import { useProjectNavSettings } from "./project-nav/useProjectNavSettings";
@@ -282,7 +281,6 @@ export function ProjectNavBar({
   );
   const [projectSearchOpen, setProjectSearchOpen] = useState(false);
   const [authMenuOpen, setAuthMenuOpen] = useState(false);
-  const [projectSettingsOpen, setProjectSettingsOpen] = useState(false);
   const [loadingTabId, setLoadingTabId] = useState<ProjectNavTabId | null>(
     null
   );
@@ -549,7 +547,9 @@ export function ProjectNavBar({
               <button
                 type="button"
                 className="project-nav-project-name-btn"
-                onClick={() => setProjectSettingsOpen(true)}
+                onClick={() => {
+                  void router.push("/settings#project");
+                }}
                 disabled={!selectedProjectId}
                 title={
                   selectedProjectId
@@ -858,20 +858,6 @@ export function ProjectNavBar({
           </div>
         </form>
       </AccessibleModal>
-      <ProjectSettingsModal
-        open={projectSettingsOpen}
-        onClose={() => setProjectSettingsOpen(false)}
-        projectId={selectedProjectId}
-        projectName={projectName}
-        onRenameProject={onRenameProject}
-        onDeleteProject={
-          onDeleteProjectClick
-            ? () => {
-                onDeleteProjectClick();
-              }
-            : undefined
-        }
-      />
     </header>
   );
 }

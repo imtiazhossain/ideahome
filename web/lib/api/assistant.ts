@@ -5,9 +5,22 @@ import {
   pathIdeasElevenlabsVoices,
   pathIdeasOpenrouterModels,
   pathIdeasTts,
+  pathIdeasWeather,
 } from "@ideahome/shared";
 
 export type ElevenLabsVoice = { id: string; name: string };
+export type CurrentWeather = {
+  latitude: number;
+  longitude: number;
+  locationLabel: string;
+  observedAt: string | null;
+  temperatureF: number;
+  apparentTemperatureF: number;
+  condition: string;
+  windMph: number;
+  precipitationIn: number;
+  isDay: boolean;
+};
 
 type RequestMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 
@@ -136,6 +149,25 @@ export function createAssistantApi<TIdea, TChatResult>(deps: {
     });
   }
 
+  async function fetchCurrentWeather(
+    coords:
+      | { latitude: number; longitude: number }
+      | { location: string }
+  ): Promise<CurrentWeather> {
+    let params: URLSearchParams;
+    if ("location" in coords) {
+      params = new URLSearchParams({ location: coords.location });
+    } else {
+      params = new URLSearchParams({
+        latitude: String(coords.latitude),
+        longitude: String(coords.longitude),
+      });
+    }
+    return deps.requestJson<CurrentWeather>(`${pathIdeasWeather()}?${params.toString()}`, {
+      errorMessage: "Failed to fetch weather",
+    });
+  }
+
   return {
     generateIdeaPlan,
     generateIdeaAssistantChat,
@@ -143,5 +175,6 @@ export function createAssistantApi<TIdea, TChatResult>(deps: {
     fetchOpenRouterModels,
     fetchElevenLabsVoices,
     synthesizeIdeaChatSpeech,
+    fetchCurrentWeather,
   };
 }

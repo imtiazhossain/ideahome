@@ -92,6 +92,10 @@ async function mockBulbyApis(page: Page) {
   });
 
   await page.route("**/ideas*", async (route) => {
+    if (route.request().url().includes("/ideas/weather")) {
+      await route.continue();
+      return;
+    }
     const method = route.request().method();
     if (method === "OPTIONS") {
       await route.fulfill({
@@ -386,6 +390,88 @@ test.describe("Bulby chatbox", () => {
     await input.press("Enter");
 
     await expect(panel.getByText(/Design review/)).toBeVisible();
+    expect(assistantCalls).toBe(0);
+  });
+
+  test("answers weather questions from browser location without assistant fallback", async ({
+    page,
+  }) => {
+    let assistantCalls = 0;
+    await page.addInitScript(() => {
+      Object.defineProperty(navigator, "geolocation", {
+        configurable: true,
+        value: {
+          getCurrentPosition(success: PositionCallback) {
+            success({
+              coords: {
+                latitude: 40.7128,
+                longitude: -74.006,
+                accuracy: 1,
+                altitude: null,
+                altitudeAccuracy: null,
+                heading: null,
+                speed: null,
+                toJSON: () => ({}),
+              },
+              timestamp: Date.now(),
+              toJSON: () => ({}),
+            } as GeolocationPosition);
+          },
+        },
+      });
+    });
+
+    await page.route("**/ideas/weather*", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        headers: {
+          "access-control-allow-origin": "*",
+          "access-control-allow-methods": "GET,POST,OPTIONS",
+          "access-control-allow-headers": "*",
+        },
+        body: JSON.stringify({
+          latitude: 40.7128,
+          longitude: -74.006,
+          locationLabel: "New York, NY",
+          observedAt: "2026-03-06T15:00:00-05:00",
+          temperatureF: 61.4,
+          apparentTemperatureF: 59.2,
+          condition: "partly cloudy",
+          windMph: 8.1,
+          precipitationIn: 0,
+          isDay: true,
+        }),
+      });
+    });
+
+    await page.route("**/ideas/assistant-chat*", async (route) => {
+      assistantCalls += 1;
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        headers: {
+          "access-control-allow-origin": "*",
+          "access-control-allow-methods": "GET,POST,OPTIONS",
+          "access-control-allow-headers": "*",
+        },
+        body: JSON.stringify({ message: "Generic assistant fallback." }),
+      });
+    });
+
+    await page.goto("/");
+    await page.getByRole("button", { name: "Open Bulby chat" }).click();
+
+    const panel = page.locator(".bulby-chatbox-panel").first();
+    const input = panel.getByRole("textbox", { name: "Ask Bulby" }).first();
+    await input.fill("what's the weather?");
+    await input.press("Enter");
+
+    await expect(
+      panel.getByText(
+        "Right now in New York, NY it's 61F and partly cloudy. It feels like 59F with 8 mph wind."
+      )
+    ).toBeVisible();
     expect(assistantCalls).toBe(0);
   });
 

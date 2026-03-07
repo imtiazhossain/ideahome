@@ -69,6 +69,7 @@ const DEFAULT_ORG_CONTEXT: BulbyOrgContext = {
     "Never claim a bug action succeeded unless the bug API actually succeeded.",
     "If a bug action is unsupported or fails, say so clearly instead of implying it was completed.",
     "After successful bug create, update, or delete actions, refresh the visible bug state.",
+    "For weather questions, only report data fetched from the real-time weather tool; never invent, guess, or approximate weather conditions. If weather data is unavailable, say so clearly.",
   ],
 };
 
@@ -160,6 +161,14 @@ const DEFAULT_RULE_ENTRIES: BulbyRuleEntry[] = [
     detail:
       "Calendar questions for today, explicit dates, weeks, and date ranges must answer from synced calendar data instead of generic assistant text.",
     createdAtIso: "2026-03-06T00:00:00.000Z",
+  },
+  {
+    id: "baseline-weather-truthfulness",
+    kind: "rule",
+    title: "Weather truthfulness",
+    detail:
+      "Bulby must only report weather from the live weather API result. Never fabricate, guess, or approximate temperatures, conditions, or locations. If weather data could not be fetched, say so clearly.",
+    createdAtIso: "2026-03-07T00:00:00.000Z",
   },
 ];
 

@@ -220,11 +220,36 @@ export function formatTextForSpeech(text: string): string {
     return result.replace(/\s+/g, " ").trim();
   }
 
+  function humanizeUnits(line: string): string {
+    let result = line;
+
+    // "38F" or "38 F" -> "38 degrees Fahrenheit"
+    result = result.replace(
+      /\b(\d+)\s*F\b/g,
+      "$1 degrees Fahrenheit"
+    );
+
+    // "38C" or "38 C" -> "38 degrees Celsius"
+    result = result.replace(
+      /\b(\d+)\s*C\b/g,
+      "$1 degrees Celsius"
+    );
+
+    // "6 mph" -> "6 miles per hour"
+    result = result.replace(
+      /\b(\d+)\s*mph\b/g,
+      "$1 miles per hour"
+    );
+
+    return result;
+  }
+
   return lines
     .map((line) => {
       const withoutBullet = line.replace(/^[-*•]\s+/, "").trim();
       if (!withoutBullet) return "";
-      const speechLine = humanizeSpeechLine(withoutBullet);
+      let speechLine = humanizeSpeechLine(withoutBullet);
+      speechLine = humanizeUnits(speechLine);
       if (/:$/.test(speechLine)) {
         return `${speechLine.slice(0, -1)}.`;
       }

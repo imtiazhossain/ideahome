@@ -223,6 +223,10 @@ function pathIdeasTts() {
   return "/ideas/tts";
 }
 
+function pathIdeasWeather() {
+  return "/ideas/weather";
+}
+
 function pathAuthProviders() {
   return "/auth/providers";
 }
@@ -568,6 +572,7 @@ const sharedConfig = {
   pathIdeasElevenlabsVoices,
   pathIdeasOpenrouterModels,
   pathIdeasTts,
+  pathIdeasWeather,
   pathOrganizations,
   pathOrganizationsEnsure,
   pathProjectById,

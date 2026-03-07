@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   AUTH_CHANGE_EVENT,
   ASSISTANT_VOICE_CHANGE_EVENT,
+  isSkipLoginDev,
 } from "./api";
 
 const DEFAULT_OPENROUTER_MODELS = [
@@ -30,16 +31,22 @@ function parseCsvValues(raw: string | undefined): string[] {
 
 const INITIAL_OPENROUTER_MODEL_OPTIONS = (() => {
   const fromEnv = parseCsvValues(
-    readPublicEnv("NEXT_PUBLIC_OPENROUTER_MODEL_OPTIONS")
+    process.env.NEXT_PUBLIC_OPENROUTER_MODEL_OPTIONS ??
+      readPublicEnv("NEXT_PUBLIC_OPENROUTER_MODEL_OPTIONS")
   );
   return fromEnv.length > 0 ? fromEnv : DEFAULT_OPENROUTER_MODELS;
 })();
 
 const OPENROUTER_MODEL_SWITCHER_EMAILS = new Set(
   parseCsvValues(
-    readPublicEnv("NEXT_PUBLIC_OPENROUTER_MODEL_SWITCHER_EMAILS")
+    process.env.NEXT_PUBLIC_OPENROUTER_MODEL_SWITCHER_EMAILS ??
+      readPublicEnv("NEXT_PUBLIC_OPENROUTER_MODEL_SWITCHER_EMAILS")
   ).map((email) => email.toLowerCase())
 );
+const DEV_OPENROUTER_SWITCHER_EMAIL =
+  OPENROUTER_MODEL_SWITCHER_EMAILS.size === 1
+    ? Array.from(OPENROUTER_MODEL_SWITCHER_EMAILS)[0] ?? null
+    : null;
 
 export function useAssistantSettings() {
   const [currentUserEmail, setCurrentUserEmail] =
@@ -61,7 +68,9 @@ export function useAssistantSettings() {
       const api = await import("./api");
       if (cancelled) return;
       const syncFromAuth = () => {
-        const email = api.getUserEmailFromToken();
+        const email =
+          api.getUserEmailFromToken() ??
+          (isSkipLoginDev() ? DEV_OPENROUTER_SWITCHER_EMAIL : null);
         setCurrentUserEmail(email);
         setSelectedVoiceUri(api.getStoredAssistantVoiceUri() ?? "");
         const stored = api.getStoredOpenRouterModel();

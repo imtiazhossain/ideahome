@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -25,13 +26,22 @@ export class IdeasController {
 
   constructor(private readonly svc: IdeasService) {}
 
-  @Get()
-  list(
-    @Query("projectId") projectId: string,
-    @Query("search") search: string | undefined,
+  @Get("weather")
+  getCurrentWeather(
+    @Query("location") location: string | undefined,
+    @Query("latitude") latitudeRaw: string | undefined,
+    @Query("longitude") longitudeRaw: string | undefined,
     @Req() req: AuthenticatedRequest
   ) {
-    return this.svc.list(projectId, requireUserId(req), search);
+    requireUserId(req);
+    const locationTrimmed = (location ?? "").trim();
+    if (locationTrimmed) {
+      return this.svc.getWeatherByCity(locationTrimmed);
+    }
+    return this.svc.getCurrentWeather(
+      this.normalizeCoordinate(latitudeRaw, "latitude"),
+      this.normalizeCoordinate(longitudeRaw, "longitude")
+    );
   }
 
   @Get("openrouter-models")
@@ -52,6 +62,15 @@ export class IdeasController {
       (query ?? "").trim(),
       Number.isFinite(limit) ? limit : undefined
     );
+  }
+
+  @Get()
+  list(
+    @Query("projectId") projectId: string,
+    @Query("search") search: string | undefined,
+    @Req() req: AuthenticatedRequest
+  ) {
+    return this.svc.list(projectId, requireUserId(req), search);
   }
 
   @Get("elevenlabs-voices")
@@ -193,5 +212,16 @@ export class IdeasController {
   private normalizeItemName(itemName?: string): string {
     if (typeof itemName !== "string") return "";
     return itemName.trim().slice(0, this.maxItemNameLength);
+  }
+
+  private normalizeCoordinate(
+    raw: string | undefined,
+    label: "latitude" | "longitude"
+  ): number {
+    const value = Number(raw);
+    if (!Number.isFinite(value)) {
+      throw new BadRequestException(`${label} is required`);
+    }
+    return value;
   }
 }

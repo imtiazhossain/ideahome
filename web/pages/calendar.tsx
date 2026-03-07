@@ -411,7 +411,7 @@ export default function CalendarPage() {
           (EVENT_COLOR_PRESETS.some((preset) => preset.id === value) ||
             isHexColor(value))
         ) {
-          nextMap[key] = value;
+          nextMap[key] = value as EventColorValue;
         }
       }
       setEventColorMap(nextMap);

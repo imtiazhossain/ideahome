@@ -47,3 +47,10 @@ export async function getBulbyMemory() {
   const { data } = await client.get("/users/me/bulby-memory");
   return data;
 }
+
+export async function getWeather(location: string) {
+  const client = getClient();
+  const params = new URLSearchParams({ location: location.trim() });
+  const { data } = await client.get(`/ideas/weather?${params.toString()}`);
+  return data;
+}

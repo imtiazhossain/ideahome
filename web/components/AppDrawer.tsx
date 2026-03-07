@@ -1,14 +1,4 @@
 import React, { useEffect, useState } from "react";
-import NextLink from "next/link";
-
-/** Typed alias to avoid React 18/19 type conflict in monorepo (Link vs ReactNode). */
-const Link = NextLink as React.ComponentType<{
-  href: string;
-  prefetch?: boolean;
-  onClick?: () => void;
-  className?: string;
-  children?: React.ReactNode;
-}>;
 import {
   setStoredAssistantVoiceUri,
   setStoredOpenRouterModel,
@@ -107,7 +97,7 @@ export interface AppDrawerProps {
 
 /**
  * Reusable left sidepanel (drawer) used by AppLayout. Same UI across all pages:
- * Projects list, Sections nav, and bottom settings. Change this component once
+ * Projects list and bottom settings. Change this component once
  * to update the sidebar everywhere.
  */
 export function AppDrawer({
@@ -317,81 +307,6 @@ export function AppDrawer({
                       <IconTrash />
                     </button>
                   )}
-                </div>
-              ))}
-              <div className="drawer-nav-label-row drawer-nav-label-row-sections">
-                <div className="drawer-nav-label">Sections</div>
-                <button
-                  type="button"
-                  className="drawer-nav-label-add-btn"
-                  onClick={onAddTab}
-                  aria-label="Add tab"
-                  title="Add tab"
-                >
-                  +
-                </button>
-              </div>
-              {creatingSection && (
-                <div className="drawer-nav-section-row">
-                  <input
-                    ref={creatingSectionInputRef as React.RefObject<HTMLInputElement>}
-                    type="text"
-                    className="drawer-nav-item drawer-nav-item-input"
-                    value={creatingSectionName}
-                    onChange={(e) => setCreatingSectionName(e.target.value)}
-                    onBlur={submitNewSection}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault();
-                        submitNewSection();
-                      }
-                      if (e.key === "Escape") {
-                        e.preventDefault();
-                        onCancelCreatingSection?.();
-                      }
-                    }}
-                    placeholder="Section Name?"
-                    aria-label="Section Name"
-                  />
-                </div>
-              )}
-              {visibleOrderedNavLinks.map(({ href, label, tabId }) => (
-                <div key={tabId} className="drawer-nav-section-row">
-                  {href ? (
-                    <Link
-                      href={href}
-                      prefetch={false}
-                      onClick={closeDrawerOnMobile}
-                      className={`drawer-nav-item ${activeTab === tabId ? "is-selected" : ""}`}
-                    >
-                      {label}
-                    </Link>
-                  ) : (
-                    <button
-                      type="button"
-                      className={`drawer-nav-item ${activeTab === tabId ? "is-selected" : ""}`}
-                      onClick={closeDrawerOnMobile}
-                      title={label}
-                    >
-                      {label}
-                    </button>
-                  )}
-                  <span className="drawer-nav-row-actions">
-                    <button
-                      type="button"
-                      className="drawer-nav-item-reorder"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        moveNavTab(tabId, "up");
-                      }}
-                      aria-label={`Move ${label} up`}
-                      title="Move up"
-                      disabled={visibleOrderedNavLinks[0]?.tabId === tabId}
-                    >
-                      ▲
-                    </button>
-                  </span>
                 </div>
               ))}
             </nav>

@@ -1,4 +1,8 @@
-import { createAssistantApi, type ElevenLabsVoice } from "./assistant";
+import {
+  createAssistantApi,
+  type CurrentWeather,
+  type ElevenLabsVoice,
+} from "./assistant";
 import {
   createCheckableApis,
   type Bug,
@@ -21,6 +25,7 @@ export type {
   Feature,
   Enhancement,
   ElevenLabsVoice,
+  CurrentWeather,
 };
 
 const checkableApis = createCheckableApis({
@@ -56,6 +61,7 @@ export const generateListItemAssistantChat =
 export const fetchOpenRouterModels = assistantApi.fetchOpenRouterModels;
 export const fetchElevenLabsVoices = assistantApi.fetchElevenLabsVoices;
 export const synthesizeIdeaChatSpeech = assistantApi.synthesizeIdeaChatSpeech;
+export const fetchCurrentWeather = assistantApi.fetchCurrentWeather;
 
 export const fetchBugs = bugApi.fetch;
 export const fetchBugSearch = bugApi.search;

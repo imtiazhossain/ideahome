@@ -4,6 +4,7 @@ import { verifyProjectForUser } from "../common/org-scope";
 import { ProjectScopedListService } from "../common/project-scoped-list.service";
 import { PrismaService } from "../prisma.service";
 import { IdeaPlanService } from "./idea-plan.service";
+import { WeatherService } from "./weather.service";
 
 @Injectable()
 export class IdeasService {
@@ -11,7 +12,8 @@ export class IdeasService {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly ideaPlanService: IdeaPlanService
+    private readonly ideaPlanService: IdeaPlanService,
+    private readonly weatherService: WeatherService
   ) {
     this.listService = new ProjectScopedListService(prisma, "idea", "Idea");
   }
@@ -57,6 +59,17 @@ export class IdeasService {
 
   async synthesizeElevenLabsSpeech(text: string, voiceId?: string) {
     return this.ideaPlanService.synthesizeElevenLabsSpeech(text, voiceId);
+  }
+
+  async getCurrentWeather(latitude: number, longitude: number) {
+    return this.weatherService.getCurrentWeather(latitude, longitude);
+  }
+
+  async getWeatherByCity(location: string) {
+    const geo = await this.weatherService.geocodeCity(location);
+    const weather = await this.weatherService.getCurrentWeather(geo.latitude, geo.longitude);
+    // Override the locationLabel with what the geocoder resolved so it's accurate
+    return { ...weather, locationLabel: geo.label };
   }
 
   async generatePlan(

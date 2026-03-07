@@ -78,6 +78,21 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           properties: {},
         },
       },
+      {
+        name: "get_weather",
+        description:
+          "Get real-time weather for a given location (city, region, or country). Always use this tool when the user asks about weather for a specific place. Never guess or fabricate weather data.",
+        inputSchema: {
+          type: "object",
+          properties: {
+            location: {
+              type: "string",
+              description: "The city or place name to get weather for, e.g. \"Houston Texas\" or \"London UK\".",
+            },
+          },
+          required: ["location"],
+        },
+      },
     ],
   };
 });
@@ -127,6 +142,17 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       const memory = await api.getBulbyMemory();
       return {
         content: [{ type: "text", text: JSON.stringify(memory, null, 2) }],
+      };
+    }
+
+    if (name === "get_weather") {
+      const { location } = args as { location: string };
+      if (!location?.trim()) {
+        throw new Error("Missing location argument");
+      }
+      const weather = await api.getWeather(location);
+      return {
+        content: [{ type: "text", text: JSON.stringify(weather, null, 2) }],
       };
     }
 
