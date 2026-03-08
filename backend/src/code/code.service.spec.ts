@@ -279,5 +279,71 @@ describe("CodeService", () => {
         "- Update the Prompt Coach Prompt to encompass the recent enhancements to the prompt efficiency tool."
       );
     });
+
+    it("keeps first-person feature requests aligned to the original task", () => {
+      const prompt =
+        "I want to be able to filter the Prompt Efficiency Tracker chart by the last 5 data points.";
+
+      const result = (service as any).buildStructuredPromptFallback(prompt);
+
+      expect(result).toContain(
+        "Task: Enable the ability to filter the Prompt Efficiency Tracker chart by the last 5 data points."
+      );
+      expect(result).toContain("Return the implementation changes and a brief summary of what changed.");
+      expect(result).not.toContain("x-axis labels");
+    });
+
+    it("rejects unrelated optimized prompts and falls back to the original request", () => {
+      const originalPrompt =
+        "I want to be able to filter the Prompt Efficiency Tracker chart by the last 5 data points.";
+      const unrelatedCandidate = [
+        "Task: Align the x-axis labels with the data points.",
+        "Constraints:",
+        "- Preserve existing behavior unless needed for the requested fix.",
+        "Output: Return only a compact Markdown bullet list of the required chart changes in 3 bullets.",
+        "Success criteria:",
+        "- X-axis labels align with their data points.",
+      ].join("\n");
+
+      const result = (service as any).repairOptimizedPrompt(
+        originalPrompt,
+        unrelatedCandidate
+      );
+
+      expect(result).toContain("last 5 data points");
+      expect(result).toContain("Prompt Efficiency Tracker chart");
+      expect(result).not.toContain("x-axis labels");
+    });
+
+    it("dedupes repeated task text across constraints and success criteria", () => {
+      const originalPrompt =
+        "I want to be able to filter the Prompt Efficiency Tracker chart to see only the last 5 prompt data points.";
+      const repetitiveCandidate = [
+        "Task: I want to be able to filter the Prompt Efficiency Tracker chart to see only the last 5 prompt data points.",
+        "Constraints:",
+        "- I want to be able to filter the Prompt Efficiency Tracker chart to see only the last 5 prompt data points.",
+        "Output: Return only a compact Markdown bullet list of the required chart changes in 3 bullets.",
+        "Success criteria:",
+        "- I want to be able to filter the Prompt Efficiency Tracker chart to see only the last 5 prompt data points.",
+      ].join("\n");
+
+      const result = (service as any).repairOptimizedPrompt(
+        originalPrompt,
+        repetitiveCandidate
+      );
+
+      expect(result).toContain(
+        "Task: Enable the ability to filter the Prompt Efficiency Tracker chart to see only the last 5 prompt data points."
+      );
+      expect(result).toContain(
+        "Output: Return the implementation changes and a brief summary of what changed."
+      );
+      expect(result).toContain(
+        "- It is possible to filter the Prompt Efficiency Tracker chart to see only the last 5 prompt data points."
+      );
+      expect(result).not.toContain(
+        "- I want to be able to filter the Prompt Efficiency Tracker chart to see only the last 5 prompt data points."
+      );
+    });
   });
 });

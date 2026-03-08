@@ -1,5 +1,8 @@
 import React from "react";
-import { buildShareablePromptCoachTemplate } from "@ideahome/shared";
+import {
+  buildShareablePromptCoachTemplate,
+  toUiTitleCase,
+} from "@ideahome/shared";
 import type {
   PromptEfficiencyBreakdown,
   PromptUsageDetailEntry,
@@ -8,6 +11,7 @@ import type {
 } from "@ideahome/shared";
 
 export type SourceFilter = "all" | PromptUsageSource;
+export type ChartRangeFilter = "all" | "last-5";
 export type ViewMode = "project" | "mine";
 export type OptimizerAttachment = {
   id: string;
@@ -32,6 +36,11 @@ export const SOURCE_LABELS: Record<SourceFilter, string> = {
   "bulby-openrouter": "Bulby / OpenRouter",
   "gpt-openai": "GPT / OpenAI",
   "codex-estimated": "Codex (estimated)",
+};
+
+export const CHART_RANGE_LABELS: Record<ChartRangeFilter, string> = {
+  all: toUiTitleCase("all"),
+  "last-5": toUiTitleCase("last 5"),
 };
 
 export const SERIES = [
@@ -80,6 +89,26 @@ export const OPTIMIZER_METRIC_TIPS = {
   instructionDensity:
     "How much actionable guidance is packed into the prompt. Higher scores mean more signal per line, with concrete requirements instead of filler.",
 } as const;
+
+export function buildEfficiencyScoreTip({
+  promptCount,
+  selectedEntry,
+  viewMode,
+}: {
+  promptCount: number;
+  selectedEntry: PromptUsageDetailEntry | null;
+  viewMode: ViewMode;
+}): string {
+  if (selectedEntry) {
+    return "This is a 0-100 score for one prompt. It adds brevity (0-35), output efficiency (0-30), redundancy control (0-20), and instruction density (0-15), so higher scores mean a shorter, clearer prompt with less repeated wording.";
+  }
+
+  if (viewMode === "project") {
+    return "This project score is estimated from aggregate token data in this view. It starts at 100, then drops when average prompt tokens rise above 40 and when the overall prompt-to-completion ratio rises above 0.85. Redundancy control and instruction density stay at full points here because project view does not include raw prompt text.";
+  }
+
+  return `This is the average 0-100 score across the ${promptCount === 1 ? "visible prompt" : `${promptCount} visible prompts`} in My prompts. Each prompt score adds brevity (0-35), output efficiency (0-30), redundancy control (0-20), and instruction density (0-15).`;
+}
 
 export function clamp(n: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, n));
@@ -184,6 +213,34 @@ export async function copyOptimizerPayload(
   return "text";
 }
 
+export function InfoTip({
+  label,
+  tip,
+  className,
+}: {
+  label: string;
+  tip: string;
+  className?: string;
+}) {
+  const classes = ["prompt-usage-metric-tip", className]
+    .filter(Boolean)
+    .join(" ");
+
+  return (
+    <span className={classes} tabIndex={0} aria-label={`${label} info`}>
+      i
+      <span
+        className="prompt-usage-metric-tip-content"
+        role="tooltip"
+        aria-hidden="true"
+      >
+        <strong>{label}</strong>
+        <span>{tip}</span>
+      </span>
+    </span>
+  );
+}
+
 export function MetricLabelWithTip({
   label,
   tip,
@@ -194,21 +251,7 @@ export function MetricLabelWithTip({
   return (
     <span className="prompt-usage-metric-label">
       <span>{label}</span>
-      <span
-        className="prompt-usage-metric-tip"
-        tabIndex={0}
-        aria-label={`${label} info`}
-      >
-        i
-        <span
-          className="prompt-usage-metric-tip-content"
-          role="tooltip"
-          aria-hidden="true"
-        >
-          <strong>{label}</strong>
-          <span>{tip}</span>
-        </span>
-      </span>
+      <InfoTip label={label} tip={tip} />
     </span>
   );
 }
@@ -574,8 +617,31 @@ function rewritePromptTextAsTaskAction(text: string): string {
   if (!normalized) {
     return text;
   }
-  const rewritten = rewriteIssueAsTaskAction(normalized);
+  const rewritten =
+    rewriteIssueAsTaskAction(normalized) ??
+    rewriteIntentAsTaskAction(normalized);
   return `${capitalizeSentence(rewritten ?? normalized)}.`;
+}
+
+function rewriteIntentAsTaskAction(text: string): string {
+  const normalized = text.trim().replace(/[.!?]+$/g, "");
+  if (!normalized) return normalized;
+
+  const wantAbilityMatch = normalized.match(
+    /^(?:i\s+(?:want|need|would like))(?:\s+to\s+be\s+able\s+to|\s+to)?\s+(.+)$/i
+  );
+  if (wantAbilityMatch?.[1]) {
+    return `Enable the ability to ${wantAbilityMatch[1].trim()}`;
+  }
+
+  const lookingForMatch = normalized.match(
+    /^i(?:'m| am)\s+looking\s+to\s+(.+)$/i
+  );
+  if (lookingForMatch?.[1]) {
+    return lookingForMatch[1].trim();
+  }
+
+  return normalized;
 }
 
 function rewriteIssueAsTaskAction(text: string): string | null {
@@ -655,6 +721,18 @@ function rewriteIssueAsSuccessOutcome(text: string): string | null {
 function rewriteGenericTaskAsSuccessOutcome(text: string): string | null {
   const normalized = text.trim().replace(/[.!?]+$/g, "");
   if (!normalized) return null;
+
+  const enableAbilityMatch = normalized.match(
+    /^enable\s+the\s+ability\s+to\s+(.+)$/i
+  );
+  if (enableAbilityMatch?.[1]) {
+    return `It is possible to ${enableAbilityMatch[1].trim()}`;
+  }
+
+  const enableMatch = normalized.match(/^enable\s+(.+)$/i);
+  if (enableMatch?.[1]) {
+    return `${enableMatch[1].trim()} is enabled`;
+  }
 
   const updateToMatch = normalized.match(/^update\s+(.+?)\s+to\s+(.+)$/i);
   if (updateToMatch?.[1] && updateToMatch?.[2]) {
@@ -758,52 +836,243 @@ function capitalizeSentence(text: string): string {
   return `${trimmed.charAt(0).toUpperCase()}${trimmed.slice(1)}`;
 }
 
-export function normalizeOptimizedPromptText(promptText: string): string {
-  const normalized = promptText.replace(/\r\n/g, "\n").trim();
-  if (!normalized) return normalized;
-  const shouldCanonicalize =
-    isStructuredOptimizerPrompt(normalized) ||
-    /\b(?:isn't working|is not working|doesn't work|does not work|tends to glitch|glitches?|is broken|fails to)\b/i.test(
-      normalized
-    ) ||
-    /\b(chart|graph|x-axis|data points?|horizontal scroll(?:ing)?)\b/i.test(
-      normalized
-    ) ||
-    /\bPreserve the original intent and scope\b/i.test(normalized) ||
-    /\bUse direct, concise wording with no filler\b/i.test(normalized) ||
-    /\bFix spelling, grammar, and syntax\b/i.test(normalized) ||
-    /\bDo not introduce unrelated changes\b/i.test(normalized) ||
-    /\bthis looks bad\b/i.test(normalized);
-  if (!shouldCanonicalize) {
-    return normalized;
+function ensureTrailingPeriod(text: string): string {
+  const trimmed = text.trim();
+  if (!trimmed) return trimmed;
+  return /[.!?]$/.test(trimmed) ? trimmed : `${trimmed}.`;
+}
+
+function normalizeOptimizerSentenceForComparison(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/[.!?]/g, "")
+    .replace(
+      /\b(?:the|a|an|is|are|was|were|be|being|been|as|requested|result|success|criteria)\b/g,
+      " "
+    )
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function isMirroredSectionText(primary: string, comparison: string): boolean {
+  const normalizedPrimary = normalizeOptimizerSentenceForComparison(primary);
+  const normalizedComparison =
+    normalizeOptimizerSentenceForComparison(comparison);
+  if (!normalizedPrimary || !normalizedComparison) return false;
+  return (
+    normalizedPrimary === normalizedComparison ||
+    normalizedPrimary.includes(normalizedComparison) ||
+    normalizedComparison.includes(normalizedPrimary)
+  );
+}
+
+function parseStructuredOptimizerPrompt(promptText: string): {
+  task: string;
+  context: string;
+  constraints: string[];
+  output: string;
+  successCriteria: string[];
+} {
+  const lines = promptText
+    .replace(/\r\n/g, "\n")
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+  let currentSection: "constraints" | "success" | null = null;
+  const parsed = {
+    task: "",
+    context: "",
+    constraints: [] as string[],
+    output: "",
+    successCriteria: [] as string[],
+  };
+
+  for (const line of lines) {
+    const taskMatch = line.match(/^task\s*:\s*(.+)$/i);
+    if (taskMatch) {
+      parsed.task = taskMatch[1].trim();
+      currentSection = null;
+      continue;
+    }
+    const contextMatch = line.match(/^(?:context|background)\s*:\s*(.+)$/i);
+    if (contextMatch) {
+      parsed.context = contextMatch[1].trim();
+      currentSection = null;
+      continue;
+    }
+    const outputMatch = line.match(/^(?:output|return)\s*:\s*(.+)$/i);
+    if (outputMatch) {
+      parsed.output = outputMatch[1].trim();
+      currentSection = null;
+      continue;
+    }
+    if (/^constraints\s*:/i.test(line)) {
+      const inlineValue = line.replace(/^constraints\s*:/i, "").trim();
+      if (inlineValue) parsed.constraints.push(inlineValue);
+      currentSection = "constraints";
+      continue;
+    }
+    if (/^success criteria\s*:/i.test(line)) {
+      const inlineValue = line.replace(/^success criteria\s*:/i, "").trim();
+      if (inlineValue) parsed.successCriteria.push(inlineValue);
+      currentSection = "success";
+      continue;
+    }
+
+    const normalizedLine = line.replace(/^[*-]\s*/, "").trim();
+    if (!normalizedLine) continue;
+    if (currentSection === "constraints") {
+      parsed.constraints.push(normalizedLine);
+      continue;
+    }
+    if (currentSection === "success") {
+      parsed.successCriteria.push(normalizedLine);
+    }
   }
 
-  const edits = buildRelevantPromptEdits(normalized);
-  const constraints = buildRelevantPromptConstraints(normalized);
-  const successCriteria = buildRelevantPromptSuccessCriteria(normalized, edits);
-  const firstNonEmptyLine =
-    normalized
-      .split("\n")
-      .find((line) => line.trim().length > 0)
-      ?.trim() ?? "";
-  const task =
-    edits.map(stripOptimizerSectionLabel).slice(0, 3).join(" ") ||
-    stripOptimizerSectionLabel(firstNonEmptyLine) ||
-    normalized;
-  const output = /\b(chart|graph)\b/i.test(normalized)
-    ? "Return only a compact Markdown bullet list of the required chart changes in 3 bullets."
-    : "Return only a compact Markdown bullet list of the required result in 3 bullets.";
+  return parsed;
+}
+
+function inferOptimizerOutput(promptText: string, task: string): string {
+  const normalized = [promptText, task].join(" ").replace(/\s+/g, " ").trim();
+  if (
+    /\b(json|yaml|csv|table|markdown|bullet|bullets|list|sentence|paragraph)\b/i.test(
+      normalized
+    )
+  ) {
+    return "Return only the requested output in the format described above.";
+  }
+  if (
+    /\b(fix|implement|build|create|add|remove|update|refactor|filter|sort|align|chart|graph|component|page|screen|api|endpoint|query|bug|feature)\b/i.test(
+      normalized
+    )
+  ) {
+    return "Return the implementation changes and a brief summary of what changed.";
+  }
+  if (/\b(analyze|review|audit|compare|evaluate|assess)\b/i.test(normalized)) {
+    return "Return a concise analysis with the main findings first.";
+  }
+  return "Return a concise response that completes the request.";
+}
+
+function shouldReplaceOptimizerOutput(
+  output: string,
+  task: string,
+  sourcePrompt: string
+): boolean {
+  const normalized = output.trim();
+  if (!normalized) return true;
+  if (isMirroredSectionText(normalized, task)) return true;
+  const isLegacyOptimizerOutput =
+    /^return only a compact markdown bullet list of the required (?:chart )?(?:changes|result) in 3 bullets\.?$/i.test(
+      normalized
+    );
+  return (
+    isLegacyOptimizerOutput &&
+    !/\b(markdown|bullet|bullets|list)\b/i.test(sourcePrompt)
+  );
+}
+
+function looksLikeSuccessOutcome(text: string): boolean {
+  const normalized = text.trim().toLowerCase();
+  if (!normalized) return false;
+  return (
+    /\bdoes not\b/.test(normalized) ||
+    /\bis working\b/.test(normalized) ||
+    /\bcan\b/.test(normalized) ||
+    /\bis updated\b/.test(normalized) ||
+    /\bis added\b/.test(normalized) ||
+    /\bis removed\b/.test(normalized) ||
+    /\bis enabled\b/.test(normalized) ||
+    /\bit is possible to\b/.test(normalized) ||
+    /\bworks as expected\b/.test(normalized)
+  );
+}
+
+function buildFallbackSuccessCriterion(task: string): string {
+  const rewritten = rewriteGenericTaskAsSuccessOutcome(task);
+  return ensureTrailingPeriod(
+    capitalizeSentence(
+      rewritten ??
+        "The requested change is implemented and behaves as specified"
+    )
+  );
+}
+
+function normalizeSuccessCriterion(text: string, task: string): string {
+  const normalized = text
+    .trim()
+    .replace(/^[*-]\s*/, "")
+    .replace(/[.!?]+$/g, "");
+  if (!normalized) return "";
+  if (
+    isMirroredSectionText(normalized, task) ||
+    /^(?:i\s+(?:want|need|would like)|i(?:'m| am)\s+looking\s+to)\b/i.test(
+      normalized
+    )
+  ) {
+    return buildFallbackSuccessCriterion(task);
+  }
+  if (looksLikeSuccessOutcome(normalized)) {
+    return ensureTrailingPeriod(capitalizeSentence(normalized));
+  }
+  return ensureTrailingPeriod(
+    capitalizeSentence(rewriteTextAsSuccessOutcome(normalized) ?? normalized)
+  );
+}
+
+export function normalizeOptimizedPromptText(
+  promptText: string,
+  sourcePrompt = ""
+): string {
+  const normalized = promptText.replace(/\r\n/g, "\n").trim();
+  if (!normalized) return normalized;
+  const compact = normalized
+    .split("\n")
+    .map((line) => line.replace(/[ \t]+$/g, ""))
+    .join("\n");
+  if (!isStructuredOptimizerPrompt(compact)) {
+    return compact;
+  }
+
+  const parsed = parseStructuredOptimizerPrompt(compact);
+  const taskSource = parsed.task || sourcePrompt || compact;
+  const task = ensureTrailingPeriod(
+    capitalizeSentence(rewriteIntentAsTaskAction(taskSource))
+  );
+  const output = shouldReplaceOptimizerOutput(parsed.output, task, sourcePrompt)
+    ? ensureTrailingPeriod(inferOptimizerOutput(sourcePrompt || compact, task))
+    : ensureTrailingPeriod(parsed.output);
+
+  const constraints = parsed.constraints
+    .map((line) => line.replace(/^[*-]\s*/, "").trim())
+    .filter(Boolean)
+    .filter((line) => !isMirroredSectionText(line, task))
+    .filter((line) => !isMirroredSectionText(line, sourcePrompt))
+    .filter((line) => !isMirroredSectionText(line, output))
+    .filter((line, index, list) => list.indexOf(line) === index);
+
+  const successCriteria = parsed.successCriteria
+    .map((line) => normalizeSuccessCriterion(line, task))
+    .filter(Boolean)
+    .filter((line) => !isMirroredSectionText(line, output))
+    .filter((line, index, list) => list.indexOf(line) === index);
 
   return [
     `Task: ${task}`,
+    parsed.context ? `Context: ${parsed.context}` : "",
     "Constraints:",
     ...(constraints.length > 0
-      ? constraints.map((line) => `- ${line}`)
+      ? constraints.map((line) => `- ${ensureTrailingPeriod(line)}`)
       : ["- Preserve existing behavior unless needed for the requested fix."]),
     `Output: ${output}`,
     "Success criteria:",
-    ...successCriteria.map((line) => `- ${line}`),
-  ].join("\n");
+    ...(successCriteria.length > 0
+      ? successCriteria.map((line) => `- ${ensureTrailingPeriod(line)}`)
+      : [`- ${buildFallbackSuccessCriterion(task)}`]),
+  ]
+    .filter(Boolean)
+    .join("\n");
 }
 
 export function summarizeProviderNote(note: string | null): string | null {

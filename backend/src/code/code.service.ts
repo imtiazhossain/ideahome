@@ -318,13 +318,15 @@ export class CodeService {
           {
             role: "system",
             content:
-              "You rewrite prompts for AI models. Produce a strict, compact, paste-ready prompt block. Keep the user's intent and context, fix spelling/grammar/syntax, remove filler and redundancy, use direct instructions, and include explicit output format and constraints. Never output meta-instructions like 'ask for' or 'provide a template'. Return strict JSON only.",
+              "You rewrite prompts for AI models. Produce a strict, compact, paste-ready prompt block. Keep the user's intent and context, fix spelling/grammar/syntax, remove filler and redundancy, use direct instructions, and include explicit output format and constraints. Never introduce unrelated tasks, UI details, success criteria, or outputs that are not supported by the user's prompt. If details are missing, keep the request minimal and explicit instead of guessing. Never output meta-instructions like 'ask for' or 'provide a template'. Return strict JSON only.",
           },
           {
             role: "user",
             content: [
               "Rewrite the following prompt into a structured prompt block that is ready to paste into Codex/OpenAI.",
               "Preserve the original intent and context.",
+              "Do not invent requirements that are not grounded in the prompt.",
+              "If the prompt is underspecified, preserve that ambiguity instead of making up specifics.",
               "Improve spelling, grammar, syntax, and wording for clarity and token efficiency.",
               "Use a strict compact format with explicit: Task, Context, Constraints, Output format, Success criteria.",
               "Return a structuredPrompt and short notes.",
@@ -492,16 +494,16 @@ export class CodeService {
     if (!trimmedCandidate || this.isMetaTemplatePrompt(trimmedCandidate)) {
       return originalFallback;
     }
-    const normalizedCandidate = this.buildStructuredPromptFallback(trimmedCandidate);
-    const best = this.pickBestOptimizerPrompt([
-      normalizedCandidate,
-      originalFallback,
-    ]);
-    const originalScore = this.scoreOptimizerPrompt(originalPrompt);
-    if (this.scoreOptimizerPrompt(best) <= originalScore) {
+    const normalizedCandidate = this.sanitizeStructuredOptimizerPrompt(
+      originalPrompt,
+      this.isStructuredPrompt(trimmedCandidate)
+        ? trimmedCandidate
+        : this.buildStructuredPromptFallback(trimmedCandidate)
+    );
+    if (!this.isOptimizerPromptAligned(originalPrompt, normalizedCandidate)) {
       return originalFallback;
     }
-    return best;
+    return normalizedCandidate;
   }
 
   private repairOptimizationNotes(
@@ -722,13 +724,9 @@ export class CodeService {
               .trim();
     }
 
-    const prefersChartOutput =
-      /\b(chart|graph|x-axis|data points?)\b/i.test(
-        [rawPromptBody, task, output].join(" ")
-      ) || actionItems.some((item) => /\b(chart|graph|x-axis|data points?)\b/i.test(item));
-    const canonicalOutput = prefersChartOutput
-      ? "Return only a compact Markdown bullet list of the required chart changes in 3 bullets."
-      : "Return only a compact Markdown bullet list of the required result in 3 bullets.";
+    task = this.rewriteIntentAsTaskAction(task);
+
+    const canonicalOutput = this.inferOptimizerOutput(rawPromptBody, task);
     const outputBreakdown = output
       ? this.buildOptimizerPromptBreakdown(`Output: ${this.ensureTrailingPeriod(output)}`)
       : null;
@@ -764,6 +762,8 @@ export class CodeService {
       )
     )
       .filter((line) => !this.isBoilerplateOptimizerConstraint(line))
+      .filter((line) => !this.isMirroredSectionText(line, task))
+      .filter((line) => !this.isMirroredSectionText(line, rawPromptBody))
       .slice(0, 4);
     const constraints =
       taskSpecificConstraints.length > 0
@@ -782,12 +782,10 @@ export class CodeService {
         ].map((line) => this.ensureTrailingPeriod(line))
       )
     )
+      .map((line) => this.normalizeSuccessCriterion(line, task))
+      .filter(Boolean)
       .slice(0, 4)
-      .map((line) =>
-        this.isMirroredSuccessCriterion(task, line)
-          ? this.buildFallbackSuccessCriterion(task)
-          : line
-      );
+      .filter((line, index, list) => list.indexOf(line) === index);
 
     const sections = [
       `Task: ${this.ensureTrailingPeriod(task)}`,
@@ -800,6 +798,139 @@ export class CodeService {
     ].filter(Boolean);
 
     return sections.join("\n");
+  }
+
+  private sanitizeStructuredOptimizerPrompt(
+    originalPrompt: string,
+    candidatePrompt: string
+  ): string {
+    const parsed = this.parseStructuredOptimizerPrompt(candidatePrompt);
+    const fallback = this.parseStructuredOptimizerPrompt(
+      this.buildStructuredPromptFallback(originalPrompt)
+    );
+    const taskSource = parsed.task || fallback.task || originalPrompt;
+    const task = this.ensureTrailingPeriod(
+      this.capitalizeSentence(this.rewriteIntentAsTaskAction(taskSource))
+    );
+
+    const output = this.shouldReplaceOptimizerOutput(
+      parsed.output,
+      task,
+      originalPrompt
+    )
+      ? this.inferOptimizerOutput(originalPrompt, task)
+      : this.ensureTrailingPeriod(parsed.output || fallback.output);
+
+    const constraintCandidates = parsed.constraints
+      .map((line) => line.replace(/^[*-]\s*/, "").trim())
+      .filter(Boolean)
+      .filter((line) => !this.isBoilerplateOptimizerConstraint(line))
+      .filter((line) => !this.isMirroredSectionText(line, task))
+      .filter((line) => !this.isMirroredSectionText(line, originalPrompt))
+      .filter((line) => !this.isMirroredSectionText(line, output));
+    const constraints = (
+      constraintCandidates.length > 0 ? constraintCandidates : fallback.constraints
+    ).slice(0, 4);
+
+    const successCandidates = (
+      parsed.successCriteria.length > 0
+        ? parsed.successCriteria
+        : fallback.successCriteria
+    )
+      .map((line) => this.normalizeSuccessCriterion(line, task))
+      .filter(Boolean)
+      .filter((line) => !this.isMirroredSectionText(line, output))
+      .filter((line, index, list) => list.indexOf(line) === index);
+    const successCriteria =
+      successCandidates.length > 0
+        ? successCandidates.slice(0, 4)
+        : [this.buildFallbackSuccessCriterion(task)];
+
+    const sections = [
+      `Task: ${task}`,
+      parsed.context
+        ? `Context: ${parsed.context}`
+        : fallback.context
+          ? `Context: ${fallback.context}`
+          : "",
+      "Constraints:",
+      ...(constraints.length > 0
+        ? constraints.map((line) => `- ${this.ensureTrailingPeriod(line)}`)
+        : ["- Preserve existing behavior unless needed for the requested fix."]),
+      `Output: ${output}`,
+      "Success criteria:",
+      ...successCriteria.map((line) => `- ${this.ensureTrailingPeriod(line)}`),
+    ].filter(Boolean);
+
+    return sections.join("\n");
+  }
+
+  private parseStructuredOptimizerPrompt(promptText: string): {
+    task: string;
+    context: string;
+    constraints: string[];
+    output: string;
+    successCriteria: string[];
+  } {
+    const lines = promptText
+      .replace(/\r\n/g, "\n")
+      .split("\n")
+      .map((line) => line.trim())
+      .filter(Boolean);
+    let currentSection: "constraints" | "success" | null = null;
+    const parsed = {
+      task: "",
+      context: "",
+      constraints: [] as string[],
+      output: "",
+      successCriteria: [] as string[],
+    };
+
+    for (const line of lines) {
+      const taskMatch = line.match(/^task\s*:\s*(.+)$/i);
+      if (taskMatch) {
+        parsed.task = taskMatch[1].trim();
+        currentSection = null;
+        continue;
+      }
+      const contextMatch = line.match(/^(?:context|background)\s*:\s*(.+)$/i);
+      if (contextMatch) {
+        parsed.context = contextMatch[1].trim();
+        currentSection = null;
+        continue;
+      }
+      const outputMatch = line.match(/^(?:output|return)\s*:\s*(.+)$/i);
+      if (outputMatch) {
+        parsed.output = outputMatch[1].trim();
+        currentSection = null;
+        continue;
+      }
+      if (/^constraints\s*:/i.test(line)) {
+        const inlineValue = line.replace(/^constraints\s*:/i, "").trim();
+        if (inlineValue) parsed.constraints.push(inlineValue);
+        currentSection = "constraints";
+        continue;
+      }
+      if (/^success criteria\s*:/i.test(line)) {
+        const inlineValue = line.replace(/^success criteria\s*:/i, "").trim();
+        if (inlineValue) parsed.successCriteria.push(inlineValue);
+        currentSection = "success";
+        continue;
+      }
+
+      const normalizedLine = line.replace(/^[*-]\s*/, "").trim();
+      if (!normalizedLine) continue;
+      if (currentSection === "constraints") {
+        parsed.constraints.push(normalizedLine);
+        continue;
+      }
+      if (currentSection === "success") {
+        parsed.successCriteria.push(normalizedLine);
+        continue;
+      }
+    }
+
+    return parsed;
   }
 
   private extractPromptActions(text: string): string[] {
@@ -989,9 +1120,29 @@ export class CodeService {
       return text;
     }
     const issueTask = this.rewriteIssueAsTaskAction(normalized);
+    const intentTask = this.rewriteIntentAsTaskAction(normalized);
     return this.ensureTrailingPeriod(
-      this.capitalizeSentence(issueTask ?? normalized)
+      this.capitalizeSentence(issueTask ?? intentTask ?? normalized)
     );
+  }
+
+  private rewriteIntentAsTaskAction(text: string): string {
+    const normalized = text.trim().replace(/[.!?]+$/g, "");
+    if (!normalized) return normalized;
+
+    const wantAbilityMatch = normalized.match(
+      /^(?:i\s+(?:want|need|would like))(?:\s+to\s+be\s+able\s+to|\s+to)?\s+(.+)$/i
+    );
+    if (wantAbilityMatch?.[1]) {
+      return `Enable the ability to ${wantAbilityMatch[1].trim()}`;
+    }
+
+    const lookingForMatch = normalized.match(/^i(?:'m| am)\s+looking\s+to\s+(.+)$/i);
+    if (lookingForMatch?.[1]) {
+      return `${lookingForMatch[1].trim()}`;
+    }
+
+    return normalized;
   }
 
   private rewriteIssueAsTaskAction(text: string): string | null {
@@ -1071,6 +1222,18 @@ export class CodeService {
   private rewriteGenericTaskAsSuccessOutcome(text: string): string | null {
     const normalized = text.trim().replace(/[.!?]+$/g, "");
     if (!normalized) return null;
+
+    const enableAbilityMatch = normalized.match(
+      /^enable\s+the\s+ability\s+to\s+(.+)$/i
+    );
+    if (enableAbilityMatch?.[1]) {
+      return `It is possible to ${enableAbilityMatch[1].trim()}`;
+    }
+
+    const enableMatch = normalized.match(/^enable\s+(.+)$/i);
+    if (enableMatch?.[1]) {
+      return `${enableMatch[1].trim()} is enabled`;
+    }
 
     const updateToMatch = normalized.match(/^update\s+(.+?)\s+to\s+(.+)$/i);
     if (updateToMatch?.[1] && updateToMatch?.[2]) {
@@ -1153,6 +1316,62 @@ export class CodeService {
     return (
       normalizedCriterion.includes(normalizedTask) ||
       normalizedTask.includes(normalizedCriterion)
+    );
+  }
+
+  private isMirroredSectionText(primary: string, comparison: string): boolean {
+    const normalizedPrimary =
+      this.normalizeOptimizerSentenceForComparison(primary);
+    const normalizedComparison =
+      this.normalizeOptimizerSentenceForComparison(comparison);
+    if (!normalizedPrimary || !normalizedComparison) {
+      return false;
+    }
+    return (
+      normalizedPrimary === normalizedComparison ||
+      normalizedPrimary.includes(normalizedComparison) ||
+      normalizedComparison.includes(normalizedPrimary)
+    );
+  }
+
+  private normalizeSuccessCriterion(text: string, task: string): string {
+    const normalized = text
+      .trim()
+      .replace(/^[*-]\s*/, "")
+      .replace(/[.!?]+$/g, "");
+    if (!normalized) {
+      return "";
+    }
+    if (
+      this.isMirroredSuccessCriterion(task, normalized) ||
+      /^(?:i\s+(?:want|need|would like)|i(?:'m| am)\s+looking\s+to)\b/i.test(
+        normalized
+      )
+    ) {
+      return this.buildFallbackSuccessCriterion(task);
+    }
+    if (this.looksLikeSuccessOutcome(normalized)) {
+      return this.ensureTrailingPeriod(this.capitalizeSentence(normalized));
+    }
+    const rewritten = this.rewriteTextAsSuccessOutcome(normalized);
+    return this.ensureTrailingPeriod(
+      this.capitalizeSentence(rewritten ?? normalized)
+    );
+  }
+
+  private looksLikeSuccessOutcome(text: string): boolean {
+    const normalized = text.trim().toLowerCase();
+    if (!normalized) return false;
+    return (
+      /\bdoes not\b/.test(normalized) ||
+      /\bis working\b/.test(normalized) ||
+      /\bcan\b/.test(normalized) ||
+      /\bis updated\b/.test(normalized) ||
+      /\bis added\b/.test(normalized) ||
+      /\bis removed\b/.test(normalized) ||
+      /\bis enabled\b/.test(normalized) ||
+      /\bit is possible to\b/.test(normalized) ||
+      /\bworks as expected\b/.test(normalized)
     );
   }
 
@@ -1260,6 +1479,151 @@ export class CodeService {
     const trimmed = text.trim();
     if (!trimmed) return trimmed;
     return /[.!?]$/.test(trimmed) ? trimmed : `${trimmed}.`;
+  }
+
+  private inferOptimizerOutput(rawPromptBody: string, task: string): string {
+    const normalized = [rawPromptBody, task].join(" ").replace(/\s+/g, " ").trim();
+    if (
+      /\b(json|yaml|csv|table|markdown|bullet|bullets|list|sentence|paragraph)\b/i.test(
+        normalized
+      )
+    ) {
+      return "Return only the requested output in the format described above.";
+    }
+    if (
+      /\b(fix|implement|build|create|add|remove|update|refactor|filter|sort|align|chart|graph|component|page|screen|api|endpoint|query|bug|feature)\b/i.test(
+        normalized
+      )
+    ) {
+      return "Return the implementation changes and a brief summary of what changed.";
+    }
+    if (/\b(analyze|review|audit|compare|evaluate|assess)\b/i.test(normalized)) {
+      return "Return a concise analysis with the main findings first.";
+    }
+    return "Return a concise response that completes the request.";
+  }
+
+  private shouldReplaceOptimizerOutput(
+    output: string,
+    task: string,
+    originalPrompt: string
+  ): boolean {
+    const normalized = output.trim();
+    if (!normalized) return true;
+    if (this.isMirroredSectionText(normalized, task)) return true;
+    const isLegacyOptimizerOutput =
+      /^return only a compact markdown bullet list of the required (?:chart )?(?:changes|result) in 3 bullets\.?$/i.test(
+        normalized
+      );
+    if (
+      isLegacyOptimizerOutput &&
+      !/\b(markdown|bullet|bullets|list)\b/i.test(originalPrompt)
+    ) {
+      return true;
+    }
+    return false;
+  }
+
+  private isOptimizerPromptAligned(
+    originalPrompt: string,
+    candidatePrompt: string
+  ): boolean {
+    const original = originalPrompt.trim().toLowerCase();
+    const candidate = candidatePrompt.trim().toLowerCase();
+    if (!original || !candidate) return false;
+    if (candidate.includes(original)) return true;
+
+    const originalNumbers = Array.from(new Set(original.match(/\b\d+\b/g) ?? []));
+    if (
+      originalNumbers.length > 0 &&
+      originalNumbers.some((value) => !new RegExp(`\\b${value}\\b`).test(candidate))
+    ) {
+      return false;
+    }
+
+    const originalKeywords = this.extractSignificantOptimizerTerms(original);
+    const candidateKeywords = new Set(
+      this.extractSignificantOptimizerTerms(candidate)
+    );
+    if (originalKeywords.length === 0) return true;
+
+    const overlapCount = originalKeywords.filter((term) =>
+      Array.from(candidateKeywords).some(
+        (candidateTerm) =>
+          candidateTerm === term ||
+          candidateTerm.includes(term) ||
+          term.includes(candidateTerm)
+      )
+    ).length;
+    const overlapRatio = overlapCount / originalKeywords.length;
+    if (overlapRatio >= 0.5) {
+      return true;
+    }
+
+    const originalPhrases = this.extractSignificantOptimizerPhrases(original);
+    if (originalPhrases.length === 0) {
+      return overlapRatio >= 0.34;
+    }
+    return originalPhrases.some((phrase) => candidate.includes(phrase));
+  }
+
+  private extractSignificantOptimizerTerms(text: string): string[] {
+    const stopwords = new Set([
+      "the",
+      "and",
+      "for",
+      "with",
+      "that",
+      "this",
+      "from",
+      "into",
+      "only",
+      "then",
+      "than",
+      "when",
+      "where",
+      "what",
+      "want",
+      "need",
+      "able",
+      "make",
+      "much",
+      "more",
+      "less",
+      "just",
+      "your",
+      "have",
+      "will",
+      "would",
+      "could",
+      "should",
+      "task",
+      "context",
+      "constraints",
+      "output",
+      "success",
+      "criteria",
+      "return",
+      "prompt",
+    ]);
+
+    return Array.from(
+      new Set(
+        text
+          .split(/[^a-z0-9]+/i)
+          .map((term) => term.trim().toLowerCase())
+          .filter((term) => term.length >= 3 && !stopwords.has(term))
+      )
+    );
+  }
+
+  private extractSignificantOptimizerPhrases(text: string): string[] {
+    const tokens = this.extractSignificantOptimizerTerms(text);
+    const phrases: string[] = [];
+    for (let index = 0; index < tokens.length - 1; index += 1) {
+      phrases.push(`${tokens[index]} ${tokens[index + 1]}`);
+    }
+    return Array.from(new Set(phrases));
   }
 
   private pickBestOptimizerPrompt(candidates: string[]): string {

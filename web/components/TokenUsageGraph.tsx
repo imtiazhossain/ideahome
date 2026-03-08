@@ -24,7 +24,9 @@ import { CollapsibleSection } from "./CollapsibleSection";
 import { IconRerun } from "./IconRerun";
 import { IconCopy } from "./icons/IconCopy";
 import {
+  CHART_RANGE_LABELS,
   DEFAULT_CHART_HEIGHT,
+  InfoTip,
   MAX_CHART_HEIGHT,
   MAX_VISIBLE_POINTS,
   MIN_CHART_HEIGHT,
@@ -33,6 +35,7 @@ import {
   SHAREABLE_TEMPLATE,
   SOURCE_LABELS,
   SourcePill,
+  type ChartRangeFilter,
   type ChartPoint,
   type OptimizerAttachment,
   type SourceFilter,
@@ -40,6 +43,7 @@ import {
   MetricLabelWithTip,
   analyzeOptimizerPrompt,
   average,
+  buildEfficiencyScoreTip,
   buildComparisonNotes,
   buildTrendPolyline,
   clamp,
@@ -56,6 +60,10 @@ import {
   summarizeProviderNote,
 } from "./tokenUsageGraphUtils";
 
+const CHART_Y_AXIS_WIDTH = 64;
+const TOOLTIP_EDGE_THRESHOLD = 120;
+const TOOLTIP_GAP = 14;
+
 export function TokenUsageGraph({
   collapsed,
   onToggle,
@@ -69,6 +77,8 @@ export function TokenUsageGraph({
 }) {
   const [viewMode, setViewMode] = useState<ViewMode>("project");
   const [sourceFilter, setSourceFilter] = useState<SourceFilter>("all");
+  const [chartRangeFilter, setChartRangeFilter] =
+    useState<ChartRangeFilter>("all");
   const [trendPoints, setTrendPoints] = useState<PromptUsageTrendPoint[]>([]);
   const [mineEntries, setMineEntries] = useState<PromptUsageDetailEntry[]>([]);
   const [loading, setLoading] = useState(false);
@@ -114,6 +124,7 @@ export function TokenUsageGraph({
   const [hoveredPoint, setHoveredPoint] = useState<{
     left: number;
     top: number;
+    transform: string;
     point: ChartPoint;
   } | null>(null);
   const [selectionMessage, setSelectionMessage] = useState<string | null>(null);
@@ -284,14 +295,24 @@ export function TokenUsageGraph({
     void refresh();
   }, [refresh]);
 
+  const visibleTrendPoints = useMemo(
+    () => (chartRangeFilter === "last-5" ? trendPoints.slice(-5) : trendPoints),
+    [chartRangeFilter, trendPoints]
+  );
+
+  const visibleMineEntries = useMemo(
+    () => (chartRangeFilter === "last-5" ? mineEntries.slice(-5) : mineEntries),
+    [chartRangeFilter, mineEntries]
+  );
+
   const visiblePoints = useMemo(() => {
     if (viewMode === "project") {
-      return trendPoints.map((point) => ({
+      return visibleTrendPoints.map((point) => ({
         ...point,
         entry: null,
       }));
     }
-    return mineEntries.map((entry) => ({
+    return visibleMineEntries.map((entry) => ({
       id: entry.id,
       timestamp: entry.timestamp,
       source: entry.source,
@@ -301,12 +322,27 @@ export function TokenUsageGraph({
       promptCount: 1,
       entry,
     }));
-  }, [mineEntries, trendPoints, viewMode]);
+  }, [viewMode, visibleMineEntries, visibleTrendPoints]);
 
-  const selectedEntry = useMemo(
-    () => mineEntries.find((entry) => entry.id === selectedId) ?? null,
-    [mineEntries, selectedId]
+  const visibleMineEntryIds = useMemo(
+    () => new Set(visibleMineEntries.map((entry) => entry.id)),
+    [visibleMineEntries]
   );
+
+  const selectedEntry = useMemo(() => {
+    const entry = mineEntries.find((candidate) => candidate.id === selectedId);
+    if (!entry || !visibleMineEntryIds.has(entry.id)) return null;
+    return entry;
+  }, [mineEntries, selectedId, visibleMineEntryIds]);
+
+  useEffect(() => {
+    if (!selectedId || visibleMineEntryIds.has(selectedId)) return;
+    setSelectedId(null);
+  }, [selectedId, visibleMineEntryIds]);
+
+  useEffect(() => {
+    setHoveredPoint(null);
+  }, [visiblePoints]);
 
   const seriesValues = useMemo(() => {
     return visiblePoints.flatMap((point) => {
@@ -351,9 +387,9 @@ export function TokenUsageGraph({
   );
 
   const overallSummary = useMemo(() => {
-    if (mineEntries.length === 0) return null;
+    if (visibleMineEntries.length === 0) return null;
     const hintFrequency = new Map<string, number>();
-    for (const entry of mineEntries) {
+    for (const entry of visibleMineEntries) {
       for (const hint of entry.improvementHints) {
         hintFrequency.set(hint, (hintFrequency.get(hint) ?? 0) + 1);
       }
@@ -364,35 +400,37 @@ export function TokenUsageGraph({
       .map(([hint]) => hint);
 
     return {
-      promptCount: mineEntries.length,
+      promptCount: visibleMineEntries.length,
       efficiencyScore: average(
-        mineEntries.map((entry) => entry.efficiencyScore)
+        visibleMineEntries.map((entry) => entry.efficiencyScore)
       ),
-      promptTokens: mineEntries.reduce(
+      promptTokens: visibleMineEntries.reduce(
         (sum, entry) => sum + entry.promptTokens,
         0
       ),
-      completionTokens: mineEntries.reduce(
+      completionTokens: visibleMineEntries.reduce(
         (sum, entry) => sum + entry.completionTokens,
         0
       ),
-      totalTokens: mineEntries.reduce(
+      totalTokens: visibleMineEntries.reduce(
         (sum, entry) => sum + entry.totalTokens,
         0
       ),
       promptWordCount: average(
-        mineEntries.map((entry) => entry.promptWordCount)
+        visibleMineEntries.map((entry) => entry.promptWordCount)
       ),
       breakdown: {
-        brevity: average(mineEntries.map((entry) => entry.breakdown.brevity)),
+        brevity: average(
+          visibleMineEntries.map((entry) => entry.breakdown.brevity)
+        ),
         outputEfficiency: average(
-          mineEntries.map((entry) => entry.breakdown.outputEfficiency)
+          visibleMineEntries.map((entry) => entry.breakdown.outputEfficiency)
         ),
         redundancyPenalty: average(
-          mineEntries.map((entry) => entry.breakdown.redundancyPenalty)
+          visibleMineEntries.map((entry) => entry.breakdown.redundancyPenalty)
         ),
         instructionDensity: average(
-          mineEntries.map((entry) => entry.breakdown.instructionDensity)
+          visibleMineEntries.map((entry) => entry.breakdown.instructionDensity)
         ),
       },
       improvementHints:
@@ -402,23 +440,23 @@ export function TokenUsageGraph({
               "Write direct task-first prompts and keep only the context that changes the answer.",
             ],
     };
-  }, [mineEntries]);
+  }, [visibleMineEntries]);
 
   const projectSummary = useMemo(() => {
-    if (trendPoints.length === 0) return null;
-    const totalPromptCount = trendPoints.reduce(
+    if (visibleTrendPoints.length === 0) return null;
+    const totalPromptCount = visibleTrendPoints.reduce(
       (sum, point) => sum + point.promptCount,
       0
     );
-    const totalPromptTokens = trendPoints.reduce(
+    const totalPromptTokens = visibleTrendPoints.reduce(
       (sum, point) => sum + point.promptTokens,
       0
     );
-    const totalCompletionTokens = trendPoints.reduce(
+    const totalCompletionTokens = visibleTrendPoints.reduce(
       (sum, point) => sum + point.completionTokens,
       0
     );
-    const totalTokens = trendPoints.reduce(
+    const totalTokens = visibleTrendPoints.reduce(
       (sum, point) => sum + point.totalTokens,
       0
     );
@@ -468,7 +506,42 @@ export function TokenUsageGraph({
         "Add tighter output constraints so completions stay shorter and more predictable.",
       ],
     };
-  }, [trendPoints]);
+  }, [visibleTrendPoints]);
+
+  const summaryPromptCount =
+    viewMode === "project"
+      ? (projectSummary?.promptCount ?? 0)
+      : (overallSummary?.promptCount ?? 0);
+
+  const efficiencyScoreTip = useMemo(
+    () =>
+      buildEfficiencyScoreTip({
+        promptCount: summaryPromptCount,
+        selectedEntry,
+        viewMode,
+      }),
+    [selectedEntry, summaryPromptCount, viewMode]
+  );
+
+  const activeSummary =
+    viewMode === "project" ? projectSummary : overallSummary;
+  const activeEfficiencyScore = selectedEntry
+    ? selectedEntry.efficiencyScore
+    : (activeSummary?.efficiencyScore ?? 0);
+  const activeImprovementHints = selectedEntry
+    ? selectedEntry.improvementHints
+    : (activeSummary?.improvementHints ?? []);
+  const atPeakEfficiency = activeEfficiencyScore >= 100;
+  const improvementHeading = selectedEntry
+    ? atPeakEfficiency
+      ? "This Prompt Is Already Lean"
+      : "How to Reduce Tokens Next Time"
+    : atPeakEfficiency
+      ? "No Immediate Priorities"
+      : "Top Improvement Priorities";
+  const improvementEmptyState = selectedEntry
+    ? "This prompt already scores 100/100 under the current scoring model."
+    : "This view already scores 100/100 under the current scoring model.";
 
   const handleCopyTemplate = useCallback(async () => {
     if (!navigator.clipboard?.writeText) return;
@@ -618,7 +691,8 @@ export function TokenUsageGraph({
       try {
         const result = await optimizeProjectPrompt(projectId, prompt);
         const structuredPrompt = normalizeOptimizedPromptText(
-          result.structuredPrompt?.trim() || result.optimizedPrompt.trim()
+          result.structuredPrompt?.trim() || result.optimizedPrompt.trim(),
+          prompt
         );
         const sourcePrompt =
           runInputType === "original"
@@ -755,18 +829,45 @@ export function TokenUsageGraph({
 
   const handlePointHover = useCallback(
     (point: ChartPoint, x: number, y: number) => {
+      const viewport = chartViewportRef.current;
+      const viewportWidth = viewport?.clientWidth ?? width;
+      const viewportLeft = viewport?.offsetLeft ?? CHART_Y_AXIS_WIDTH;
+      const viewportScrollLeft = viewport?.scrollLeft ?? 0;
+      const viewportX = x - viewportScrollLeft;
+      const nearLeftEdge = viewportX <= TOOLTIP_EDGE_THRESHOLD;
+      const nearRightEdge = viewportWidth - viewportX <= TOOLTIP_EDGE_THRESHOLD;
+      const translateX = nearLeftEdge ? "0%" : nearRightEdge ? "-100%" : "-50%";
+      const translateY =
+        y <= TOOLTIP_EDGE_THRESHOLD
+          ? `${TOOLTIP_GAP}px`
+          : `calc(-100% - ${TOOLTIP_GAP}px)`;
       setHoveredPoint({
-        left: clamp((x / width) * 100, 8, 92),
-        top: clamp((y / height) * 100, 12, 84),
+        left: clamp(
+          viewportLeft + viewportX,
+          viewportLeft + 12,
+          viewportLeft + viewportWidth - 12
+        ),
+        top: clamp(y, 12, height - 12),
+        transform: `translate(${translateX}, ${translateY})`,
         point,
       });
     },
     [height, width]
   );
 
+  const handleChartScroll = useCallback(() => {
+    setHoveredPoint(null);
+  }, []);
+
   const handlePointSelect = useCallback(
     (point: ChartPoint) => {
       const matchedEntry = point.entry ?? findMatchingEntry(point);
+      if (matchedEntry && !visibleMineEntryIds.has(matchedEntry.id)) {
+        setSelectionMessage(
+          `This prompt falls outside the ${CHART_RANGE_LABELS[chartRangeFilter]} range. Switch to ${CHART_RANGE_LABELS.all} to inspect it.`
+        );
+        return;
+      }
       if (matchedEntry) {
         setSelectionMessage(null);
         setViewMode("mine");
@@ -783,7 +884,7 @@ export function TokenUsageGraph({
         "No prompt details are available for this point yet."
       );
     },
-    [findMatchingEntry, viewMode]
+    [chartRangeFilter, findMatchingEntry, viewMode, visibleMineEntryIds]
   );
 
   const toggleSeries = useCallback(
@@ -916,12 +1017,33 @@ export function TokenUsageGraph({
                   ))}
                   <button
                     type="button"
-                    className="prompt-usage-outlier-btn"
+                    className={`prompt-usage-outlier-btn${
+                      showOutliers ? "" : " is-active"
+                    }`}
                     onClick={() => setShowOutliers((current) => !current)}
                     aria-pressed={!showOutliers}
                   >
                     {showOutliers ? "Hide outliers" : "Show outliers"}
                   </button>
+                  <div
+                    className="prompt-usage-range-pills"
+                    role="group"
+                    aria-label="Chart range"
+                  >
+                    {(["all", "last-5"] as const).map((range) => (
+                      <button
+                        key={range}
+                        type="button"
+                        className={`prompt-usage-outlier-btn${
+                          chartRangeFilter === range ? " is-active" : ""
+                        }`}
+                        onClick={() => setChartRangeFilter(range)}
+                        aria-pressed={chartRangeFilter === range}
+                      >
+                        {CHART_RANGE_LABELS[range]}
+                      </button>
+                    ))}
+                  </div>
                 </div>
                 <div className="prompt-usage-chart-wrap">
                   <div className="prompt-usage-chart-frame">
@@ -944,6 +1066,7 @@ export function TokenUsageGraph({
                     <div
                       ref={chartViewportRef}
                       className="prompt-usage-chart-scroll"
+                      onScroll={handleChartScroll}
                     >
                       <div
                         className="prompt-usage-chart-track"
@@ -1102,37 +1225,6 @@ export function TokenUsageGraph({
                               );
                             })}
                           </svg>
-                          {hoveredPoint ? (
-                            <div
-                              className="prompt-usage-tooltip"
-                              style={{
-                                left: `${hoveredPoint.left}%`,
-                                top: `${hoveredPoint.top}%`,
-                              }}
-                            >
-                              <strong>
-                                {formatTimestamp(hoveredPoint.point.timestamp)}
-                              </strong>
-                              <span>
-                                Total{" "}
-                                {hoveredPoint.point.totalTokens.toLocaleString()}
-                              </span>
-                              <span>
-                                Prompt{" "}
-                                {hoveredPoint.point.promptTokens.toLocaleString()}
-                              </span>
-                              <span>
-                                Completion{" "}
-                                {hoveredPoint.point.completionTokens.toLocaleString()}
-                              </span>
-                              {hoveredPoint.point.entry ? (
-                                <span>
-                                  Score{" "}
-                                  {hoveredPoint.point.entry.efficiencyScore}/100
-                                </span>
-                              ) : null}
-                            </div>
-                          ) : null}
                         </div>
                         <div
                           className="prompt-usage-axis-labels"
@@ -1154,6 +1246,38 @@ export function TokenUsageGraph({
                         </div>
                       </div>
                     </div>
+                    {hoveredPoint ? (
+                      <div
+                        className="prompt-usage-tooltip"
+                        role="tooltip"
+                        style={{
+                          left: `${hoveredPoint.left}px`,
+                          top: `${hoveredPoint.top}px`,
+                          transform: hoveredPoint.transform,
+                        }}
+                      >
+                        <strong>
+                          {formatTimestamp(hoveredPoint.point.timestamp)}
+                        </strong>
+                        <span>
+                          Total{" "}
+                          {hoveredPoint.point.totalTokens.toLocaleString()}
+                        </span>
+                        <span>
+                          Prompt{" "}
+                          {hoveredPoint.point.promptTokens.toLocaleString()}
+                        </span>
+                        <span>
+                          Completion{" "}
+                          {hoveredPoint.point.completionTokens.toLocaleString()}
+                        </span>
+                        {hoveredPoint.point.entry ? (
+                          <span>
+                            Score {hoveredPoint.point.entry.efficiencyScore}/100
+                          </span>
+                        ) : null}
+                      </div>
+                    ) : null}
                   </div>
                 </div>
                 <p className="prompt-usage-footnote">
@@ -1183,11 +1307,21 @@ export function TokenUsageGraph({
                         ? "Project trend"
                         : "Current filter"}
                   </p>
-                  <h3>
-                    {selectedEntry
-                      ? "Prompt Analysis"
-                      : "Overall Prompt Efficiency"}
-                  </h3>
+                  <div className="prompt-usage-detail-title">
+                    <h3>
+                      {selectedEntry
+                        ? "Prompt Analysis"
+                        : "Overall Prompt Efficiency"}
+                    </h3>
+                    <InfoTip
+                      label={
+                        selectedEntry
+                          ? "Prompt Efficiency Score"
+                          : "Overall Prompt Efficiency"
+                      }
+                      tip={efficiencyScoreTip}
+                    />
+                  </div>
                   <p>
                     {selectedEntry
                       ? formatTimestamp(selectedEntry.timestamp)
@@ -1356,22 +1490,18 @@ export function TokenUsageGraph({
                 </p>
               )}
               <div className="prompt-usage-hints">
-                <h4>
-                  {selectedEntry
-                    ? "How to Reduce Tokens Next Time"
-                    : "Top Improvement Priorities"}
-                </h4>
-                <ul>
-                  {(
-                    selectedEntry?.improvementHints ??
-                    (viewMode === "project"
-                      ? projectSummary?.improvementHints
-                      : overallSummary?.improvementHints) ??
-                    []
-                  ).map((hint) => (
-                    <li key={hint}>{hint}</li>
-                  ))}
-                </ul>
+                <h4>{improvementHeading}</h4>
+                {atPeakEfficiency && !selectedEntry ? (
+                  <p>{improvementEmptyState}</p>
+                ) : activeImprovementHints.length > 0 ? (
+                  <ul>
+                    {activeImprovementHints.map((hint) => (
+                      <li key={hint}>{hint}</li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p>{improvementEmptyState}</p>
+                )}
               </div>
               {selectedEntry ? (
                 <div className="prompt-usage-actions">
