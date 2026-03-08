@@ -317,7 +317,7 @@ export default function TestsPage() {
                     type="button"
                     className="test-run-control test-run-control--play drawer-nav-suite-run"
                     onClick={runAllUiTests}
-                    title="Run all UI tests"
+                    title="Run All UI Tests"
                     aria-label="Run all UI tests"
                   />
                 )}
@@ -327,7 +327,7 @@ export default function TestsPage() {
                 className="tests-page-section-refresh"
                 onClick={() => loadUiTestsList(true)}
                 disabled={uiTestsLoading}
-                title="Refresh automated UI tests list"
+                title="Refresh Automated UI Tests List"
                 aria-label="Refresh automated UI tests list"
               >
                 <svg
@@ -460,7 +460,7 @@ export default function TestsPage() {
                                       e.stopPropagation();
                                       runInlineTest(testName);
                                     }}
-                                    title="Run this test"
+                                    title="Run This Test"
                                     aria-label={`Run ${testName}`}
                                   />
                                 )}
@@ -474,7 +474,7 @@ export default function TestsPage() {
                                     test: testName,
                                   })
                                 }
-                                title="Run this test (opens modal). Select text to copy."
+                                title="Run This Test (Opens Modal). Select Text to Copy."
                               >
                                 {testName}
                               </button>
@@ -485,7 +485,7 @@ export default function TestsPage() {
                                   e.stopPropagation();
                                   void navigator.clipboard.writeText(testName);
                                 }}
-                                title="Copy test name"
+                                title="Copy Test Name"
                                 aria-label="Copy test name"
                               >
                                 <svg
@@ -516,7 +516,7 @@ export default function TestsPage() {
                                     e.stopPropagation();
                                     setViewRunModal({ testName, result });
                                   }}
-                                  title="View recording and console output"
+                                  title="View Recording and Console Output"
                                 >
                                   View run
                                 </button>
@@ -549,7 +549,7 @@ export default function TestsPage() {
             }}
           >
             <div className="modal-header">
-              <h2>Run automated test</h2>
+              <h2>Run Automated Test</h2>
               <CloseButton className="modal-close" onClick={closeRunTestModal} />
             </div>
             <p style={{ margin: "0 0 8px", fontWeight: 600 }}>
@@ -888,7 +888,7 @@ export default function TestsPage() {
             }}
           >
             <div className="modal-header">
-              <h2>Test run: {viewRunModal.testName}</h2>
+              <h2>Test Run: {viewRunModal.testName}</h2>
               <CloseButton
                 className="modal-close"
                 onClick={() => setViewRunModal(null)}

@@ -38,6 +38,12 @@ export type IdeaAssistantChatResult = {
   todos: Todo[];
   previewGifUrl?: string | null;
   message?: string;
+  tokenUsage?: {
+    promptTokens: number;
+    completionTokens: number;
+    totalTokens: number;
+  } | null;
+  tokenSource?: "bulby-openrouter" | "gpt-openai" | null;
 };
 
 export type Bug = {

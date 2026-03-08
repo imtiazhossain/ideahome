@@ -77,6 +77,7 @@ type CreateOrUpdateEventInput = {
   startAt?: string;
   endAt?: string;
   isAllDay?: boolean;
+  allDayDate?: string | null;
   timeZone?: string | null;
   status?: string;
 };
@@ -500,6 +501,19 @@ export class CalendarService {
     return chunks;
   }
 
+  private normalizeAllDayDate(value: string | null | undefined): string | null {
+    const normalized = typeof value === "string" ? value.trim() : "";
+    if (!normalized) return null;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(normalized)) {
+      throw new BadRequestException("allDayDate must be in YYYY-MM-DD format");
+    }
+    const parsed = new Date(`${normalized}T00:00:00.000Z`);
+    if (Number.isNaN(parsed.getTime())) {
+      throw new BadRequestException("allDayDate must be a valid date");
+    }
+    return normalized;
+  }
+
   private toGoogleEventPayload(input: CreateOrUpdateEventInput): Record<string, unknown> {
     const title = input.title?.trim();
     if (!title) {
@@ -524,9 +538,10 @@ export class CalendarService {
       status: input.status?.trim() || "confirmed",
     };
     if (input.isAllDay) {
-      const endDateExclusive = new Date(endAt);
+      const startDate = this.normalizeAllDayDate(input.allDayDate) ?? startAt.toISOString().slice(0, 10);
+      const endDateExclusive = new Date(`${startDate}T00:00:00.000Z`);
       endDateExclusive.setUTCDate(endDateExclusive.getUTCDate() + 1);
-      payload.start = { date: startAt.toISOString().slice(0, 10) };
+      payload.start = { date: startDate };
       payload.end = { date: endDateExclusive.toISOString().slice(0, 10) };
     } else {
       payload.start = {
@@ -1040,6 +1055,12 @@ export class CalendarService {
       startAt: input.startAt ?? existing.startAt.toISOString(),
       endAt: input.endAt ?? existing.endAt.toISOString(),
       isAllDay: input.isAllDay ?? existing.isAllDay,
+      allDayDate:
+        input.allDayDate !== undefined
+          ? input.allDayDate
+          : existing.isAllDay
+            ? existing.startAt.toISOString().slice(0, 10)
+            : null,
       timeZone: input.timeZone ?? existing.timeZone,
       status: input.status ?? existing.status,
     });

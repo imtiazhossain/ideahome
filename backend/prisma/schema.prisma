@@ -32,6 +32,7 @@ model User {
   accounts        Account[]
   calendarConnections CalendarConnection[]
   calendarEvents  CalendarEvent[]
+  promptUsageEvents PromptUsageEvent[]
   createdAt       DateTime  @default(now())
 }
 
@@ -65,6 +66,7 @@ model Project {
   calendarEvents   CalendarEvent[]
   taxDocuments     TaxDocument[]
   codeRepositories CodeRepository[]
+  promptUsageEvents PromptUsageEvent[]
   createdAt        DateTime  @default(now())
 }
 
@@ -242,6 +244,28 @@ model CodeAnalysisRun {
   codeRepositoryId String
   payload         Json           // stored AuditPayload / analysis result
   createdAt       DateTime       @default(now())
+}
+
+model PromptUsageEvent {
+  id               String   @id @default(cuid())
+  project          Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectId        String
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId           String
+  source           String
+  promptText       String
+  promptTokens     Int
+  completionTokens Int
+  totalTokens      Int
+  promptWordCount  Int
+  efficiencyScore  Int
+  improvementHints Json
+  breakdown        Json
+  createdAt        DateTime @default(now())
+
+  @@index([projectId, createdAt])
+  @@index([projectId, source, createdAt])
+  @@index([userId, projectId, createdAt])
 }
 
 model PlaidItem {

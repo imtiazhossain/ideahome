@@ -281,7 +281,7 @@ function SortableItem({
       {...attributes}
       {...listeners}
       aria-label="Drag to reorder"
-      title="Drag to reorder"
+      title="Drag to Reorder"
     >
       <IconGrip />
     </span>

@@ -146,7 +146,7 @@ export function IssueDetailModalFormFields({
                           updateCases(next);
                         }}
                         aria-label="Remove test case"
-                        title="Remove test case"
+                        title="Remove Test Case"
                       />
                     )}
                   </div>
@@ -161,7 +161,7 @@ export function IssueDetailModalFormFields({
                       ])
                     }
                     aria-label="Add test case"
-                    title="Add test case"
+                    title="Add Test Case"
                   >
                     +
                   </button>

@@ -103,7 +103,7 @@ export function ErrorBanner({ message, onDismiss, style }: ErrorBannerProps) {
           if (sending) return;
           setReportOpen(false);
         }}
-        title="Report error"
+        title="Report Error"
       >
         <div className="modal-body">
           <div className="form-group">

@@ -62,6 +62,11 @@ export {
   updateProject,
   deleteProject,
   fetchProjectCodeRepositories,
+  fetchProjectPromptUsageTrend,
+  fetchMyPromptUsage,
+  clearMyPromptUsage,
+  fetchCodexPromptUsage,
+  optimizeProjectPrompt,
   createGithubRepositoryForProject,
   type Organization,
   type ProjectMember,
@@ -69,6 +74,7 @@ export {
   type Project,
   type ProjectCodeRepository,
   type ProjectCodeAnalysisRun,
+  type PromptOptimizationResponse,
 } from "./api/projects";
 
 export {

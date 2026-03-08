@@ -285,7 +285,7 @@ function SortablePagesSection({
       {...attributes}
       {...listeners}
       aria-label="Drag to reorder section"
-      title="Drag to reorder section"
+      title="Drag to Reorder Section"
     >
       <IconGrip />
     </span>
@@ -327,11 +327,21 @@ export default function PagesPage() {
   const [sectionPendingDelete, setSectionPendingDelete] =
     useState<PageSection | null>(null);
   const textareaRefs = useRef<Record<string, HTMLTextAreaElement | null>>({});
+  const hydratedSectionsStorageKeyRef = useRef<string | null>(null);
+  const hydratedCollapsedStorageKeyRef = useRef<string | null>(null);
+  const sectionsStorageKey = selectedProjectId
+    ? `ideahome-pages-sections-${selectedProjectId}`
+    : null;
+  const collapsedSectionsStorageKey = selectedProjectId
+    ? `ideahome-pages-collapsed-sections-${selectedProjectId}`
+    : null;
 
   useEffect(() => {
     if (!selectedProjectId) {
       setSections([DEFAULT_SECTION]);
       setCollapsedSections({});
+      hydratedSectionsStorageKeyRef.current = null;
+      hydratedCollapsedStorageKeyRef.current = null;
       return;
     }
     const loadedSections = loadSectionsFromStorage(selectedProjectId);
@@ -365,22 +375,33 @@ export default function PagesPage() {
     } catch {
       setCollapsedSections({});
     }
-  }, [selectedProjectId]);
+    hydratedSectionsStorageKeyRef.current = sectionsStorageKey;
+    hydratedCollapsedStorageKeyRef.current = collapsedSectionsStorageKey;
+  }, [collapsedSectionsStorageKey, sectionsStorageKey, selectedProjectId]);
 
   useEffect(() => {
-    if (!selectedProjectId || typeof window === "undefined") return;
+    if (
+      !sectionsStorageKey ||
+      typeof window === "undefined" ||
+      hydratedSectionsStorageKeyRef.current !== sectionsStorageKey
+    ) {
+      return;
+    }
     try {
-      localStorage.setItem(
-        `ideahome-pages-sections-${selectedProjectId}`,
-        JSON.stringify(sections)
-      );
+      localStorage.setItem(sectionsStorageKey, JSON.stringify(sections));
     } catch {
       // ignore storage errors
     }
-  }, [sections, selectedProjectId]);
+  }, [sections, sectionsStorageKey]);
 
   useEffect(() => {
-    if (!selectedProjectId || typeof window === "undefined") return;
+    if (
+      !collapsedSectionsStorageKey ||
+      typeof window === "undefined" ||
+      hydratedCollapsedStorageKeyRef.current !== collapsedSectionsStorageKey
+    ) {
+      return;
+    }
     try {
       const validSectionIds = new Set(sections.map((section) => section.id));
       const persisted: Record<string, boolean> = {};
@@ -389,13 +410,13 @@ export default function PagesPage() {
         persisted[id] = true;
       }
       localStorage.setItem(
-        `ideahome-pages-collapsed-sections-${selectedProjectId}`,
+        collapsedSectionsStorageKey,
         JSON.stringify(persisted)
       );
     } catch {
       // ignore storage errors
     }
-  }, [collapsedSections, sections, selectedProjectId]);
+  }, [collapsedSections, collapsedSectionsStorageKey, sections]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -595,13 +616,13 @@ export default function PagesPage() {
     () => [
       { id: "h1", label: "H1", title: "Heading 1" },
       { id: "h2", label: "H2", title: "Heading 2" },
-      { id: "bullet", label: "• List", title: "Bulleted list" },
-      { id: "numbered", label: "1. List", title: "Numbered list" },
-      { id: "check", label: "☑ Task", title: "Checklist item" },
+      { id: "bullet", label: "• List", title: "Bulleted List" },
+      { id: "numbered", label: "1. List", title: "Numbered List" },
+      { id: "check", label: "☑ Task", title: "Checklist Item" },
       { id: "bold", label: "B", title: "Bold" },
       { id: "italic", label: "I", title: "Italic" },
       { id: "link", label: "Link", title: "Link" },
-      { id: "code", label: "{ }", title: "Code block" },
+      { id: "code", label: "{ }", title: "Code Block" },
     ],
     []
   );
@@ -770,7 +791,7 @@ export default function PagesPage() {
                           />
                         </div>
                         <div className="pages-preview-column">
-                          <h3 className="pages-preview-title">Page preview</h3>
+                          <h3 className="pages-preview-title">Page Preview</h3>
                           <div className="pages-preview-surface">
                             {renderConfluencePreview(section.content)}
                           </div>
@@ -782,7 +803,7 @@ export default function PagesPage() {
                           className="pages-section-delete-icon"
                           onClick={() => setSectionPendingDelete(section)}
                           aria-label={`Delete ${section.title || "section"}`}
-                          title="Delete section"
+                          title="Delete Section"
                         >
                           <IconTrash />
                         </button>
@@ -797,7 +818,7 @@ export default function PagesPage() {
       </div>
       {sectionPendingDelete ? (
         <ConfirmModal
-          title="Delete section"
+          title="Delete Section"
           message={
             <>
               Delete &quot;

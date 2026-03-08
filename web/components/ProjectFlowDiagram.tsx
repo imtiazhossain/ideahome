@@ -17,7 +17,7 @@ type FlowGroup = {
 const FLOW_GROUPS: FlowGroup[] = [
   {
     id: "root",
-    title: "pnpm monorepo",
+    title: "pnpm Monorepo",
     subtitle: "workspace scripts",
     tone: "root",
     nodes: ["dev:backend", "dev:web", "dev:app", "db:*", "test:e2e*"],

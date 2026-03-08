@@ -113,6 +113,7 @@ export type CreateCalendarEventInput = {
   startAt: string;
   endAt: string;
   isAllDay?: boolean;
+  allDayDate?: string | null;
   timeZone?: string | null;
 };
 
@@ -123,6 +124,7 @@ export type UpdateCalendarEventInput = {
   startAt?: string;
   endAt?: string;
   isAllDay?: boolean;
+  allDayDate?: string | null;
   timeZone?: string | null;
   status?: string;
 };
@@ -380,6 +382,9 @@ export declare function pathIdeasOpenrouterModels(): string;
 export declare function pathIdeasElevenlabsVoices(): string;
 export declare function pathIdeasTts(): string;
 export declare function pathIdeasWeather(): string;
+export declare function pathProjectPromptUsageTrend(projectId: string): string;
+export declare function pathProjectMyPromptUsage(projectId: string): string;
+export declare function pathProjectMyPromptUsageClear(projectId: string): string;
 export declare function pathAuthProviders(): string;
 export declare function pathAuthGoogle(): string;
 export declare function pathAuthApple(): string;

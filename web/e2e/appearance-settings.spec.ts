@@ -9,7 +9,7 @@ test.afterEach(async ({ page }) => {
   await page.close();
 });
 
-test.describe("Appearance settings", () => {
+test.describe("Appearance Settings", () => {
   test.beforeEach(async ({ page }) => {
     await page.addInitScript(() => {
       localStorage.setItem("ideahome_token", "e2e-token");
@@ -69,14 +69,14 @@ test.describe("Appearance settings", () => {
     await page.goto("/settings");
     await expect(page).toHaveURL(/\/settings/);
     await expect(
-      page.getByRole("heading", { name: "Appearance settings" })
+      page.getByRole("heading", { name: "Appearance Settings" })
     ).toBeVisible();
   });
 
   test("preview/cancel/save and persist per mode", async ({ page }) => {
     await page.goto("/settings");
     await expect(
-      page.getByRole("heading", { name: "Appearance settings" })
+      page.getByRole("heading", { name: "Appearance Settings" })
     ).toBeVisible();
     const saveButton = page.locator(".settings-actions .ui-btn--primary");
 
@@ -181,7 +181,7 @@ test.describe("Appearance settings", () => {
     await expect(
       page.getByRole("heading", { name: "Navigation" })
     ).toBeVisible();
-    const todoRow = page.locator(".settings-list-row-toggle", {
+    const todoRow = page.locator(".settings-list-row", {
       hasText: "To-Do",
     });
     const todoCheckbox = todoRow.locator('input[type="checkbox"]');

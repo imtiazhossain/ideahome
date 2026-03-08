@@ -44,3 +44,50 @@ export type AssistantChatMessage = {
   role: "user" | "assistant";
   text: string;
 };
+
+export type PromptUsageSource =
+  | "bulby-openrouter"
+  | "gpt-openai"
+  | "codex-estimated";
+
+export type PromptUsageTrendMode = "project" | "mine";
+
+export type PromptEfficiencyBreakdown = {
+  brevity: number;
+  outputEfficiency: number;
+  redundancyPenalty: number;
+  instructionDensity: number;
+};
+
+export type PromptUsageTrendPoint = {
+  timestamp: string;
+  totalTokens: number;
+  promptTokens: number;
+  completionTokens: number;
+  promptCount: number;
+};
+
+export type PromptUsageDetailEntry = {
+  id: string;
+  timestamp: string;
+  source: PromptUsageSource;
+  promptText: string;
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+  promptWordCount: number;
+  efficiencyScore: number;
+  improvementHints: string[];
+  breakdown: PromptEfficiencyBreakdown;
+};
+
+export type PromptUsageTrendResponse = {
+  mode: PromptUsageTrendMode;
+  source: PromptUsageSource | "all";
+  points: PromptUsageTrendPoint[];
+};
+
+export type PromptUsageMineResponse = {
+  source: PromptUsageSource | "all";
+  entries: PromptUsageDetailEntry[];
+};

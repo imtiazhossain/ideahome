@@ -9,7 +9,24 @@ export type {
   PendingCommentAttachment,
   TestExecutionResult,
   AssistantChatMessage,
+  PromptUsageSource,
+  PromptUsageTrendMode,
+  PromptEfficiencyBreakdown,
+  PromptUsageTrendPoint,
+  PromptUsageDetailEntry,
+  PromptUsageTrendResponse,
+  PromptUsageMineResponse,
 } from "./types";
+
+export {
+  buildPromptEfficiencyBreakdown,
+  computePromptEfficiencyScore,
+  buildPromptImprovementHints,
+  buildOptimizedPrompt,
+  buildPromptUsageDetail,
+  buildShareablePromptCoachTemplate,
+  type PromptUsageMetricsInput,
+} from "./promptUsage";
 
 export {
   BUILT_IN_TABS,
@@ -19,6 +36,8 @@ export {
   isAppTab,
   isCustomListTab,
 } from "./tabs";
+
+export { toUiTitleCase } from "./uiTitleCase";
 
 // Re-export config and path helpers so web and app can use one package
 export {
@@ -98,6 +117,9 @@ export {
   pathIdeasOpenrouterModels,
   pathIdeasTts,
   pathIdeasWeather,
+  pathProjectPromptUsageTrend,
+  pathProjectMyPromptUsage,
+  pathProjectMyPromptUsageClear,
   pathChecklistList,
   pathChecklistItem,
   pathChecklistReorder,

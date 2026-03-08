@@ -9,6 +9,7 @@ import {
   ServiceUnavailableException,
   UnauthorizedException,
 } from "@nestjs/common";
+import type { PromptUsageSource } from "../code/prompt-usage";
 import { WebSearchResult, WebSearchService } from "./web-search.service";
 
 export type IdeaPlan = {
@@ -56,6 +57,7 @@ export type TokenUsage = {
 export type IdeaActionResponse = {
   message: string;
   tokenUsage?: TokenUsage;
+  tokenSource?: PromptUsageSource;
 };
 
 export type ElevenLabsVoice = {
@@ -225,7 +227,17 @@ export class IdeaPlanService {
       throw new InternalServerErrorException("AI action response was invalid");
     }
     const tokenUsage = this.extractTokenUsage(payload);
-    return { message, ...(tokenUsage ? { tokenUsage } : {}) };
+    return {
+      message,
+      ...(tokenUsage ? { tokenUsage } : {}),
+      ...(tokenUsage
+        ? {
+            tokenSource: this.resolvePromptUsageSource(
+              input.preferredModel ?? models[0] ?? this.defaultOpenRouterModel
+            ),
+          }
+        : {}),
+    };
   }
 
   async generateActionItems(input: {
@@ -712,6 +724,14 @@ export class IdeaPlanService {
     }
     if (raw == null) return "";
     return String(raw);
+  }
+
+  private resolvePromptUsageSource(model: string): PromptUsageSource {
+    const normalized = model.trim().toLowerCase();
+    if (normalized.startsWith("openai/") || normalized.includes("/gpt")) {
+      return "gpt-openai";
+    }
+    return "bulby-openrouter";
   }
 
   private parseJsonLikeContent(content: string): unknown | null {

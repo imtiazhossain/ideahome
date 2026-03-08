@@ -227,6 +227,18 @@ function pathIdeasWeather() {
   return "/ideas/weather";
 }
 
+function pathProjectPromptUsageTrend(projectId) {
+  return `/code/projects/${enc(projectId)}/prompt-usage/trend`;
+}
+
+function pathProjectMyPromptUsage(projectId) {
+  return `/code/projects/${enc(projectId)}/prompt-usage/mine`;
+}
+
+function pathProjectMyPromptUsageClear(projectId) {
+  return `/code/projects/${enc(projectId)}/prompt-usage/mine`;
+}
+
 function pathAuthProviders() {
   return "/auth/providers";
 }
@@ -573,6 +585,9 @@ const sharedConfig = {
   pathIdeasOpenrouterModels,
   pathIdeasTts,
   pathIdeasWeather,
+  pathProjectPromptUsageTrend,
+  pathProjectMyPromptUsage,
+  pathProjectMyPromptUsageClear,
   pathOrganizations,
   pathOrganizationsEnsure,
   pathProjectById,

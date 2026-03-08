@@ -169,7 +169,7 @@ export function IssueDetailModalRecordings({
                                   setEditingRecordingId(rec.id);
                                   setEditingRecordingName(displayLabel);
                                 }}
-                                title="Click to edit name"
+                                title="Click to Edit Name"
                                 role="button"
                                 tabIndex={0}
                                 onKeyDown={(e) => {

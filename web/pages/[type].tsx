@@ -21,7 +21,7 @@ export default function CheckableListTypePage() {
       <div className="app-layout">
         <main className="main-content">
           <div style={{ padding: 24 }}>
-            <h1>Page not found</h1>
+            <h1>Page Not Found</h1>
             <p>The page &quot;{type || "(empty)"}&quot; does not exist.</p>
             <a href="/">Go home</a>
           </div>

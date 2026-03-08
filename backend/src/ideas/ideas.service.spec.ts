@@ -2,6 +2,7 @@ import { Test, TestingModule } from "@nestjs/testing";
 import { BadRequestException, NotFoundException } from "@nestjs/common";
 import { IdeasService } from "./ideas.service";
 import { PrismaService } from "../prisma.service";
+import { CodeService } from "../code/code.service";
 import { IdeaPlanService } from "./idea-plan.service";
 import { WeatherService } from "./weather.service";
 
@@ -38,6 +39,9 @@ describe("IdeasService", () => {
     getCurrentWeather: jest.fn(),
     geocodeCity: jest.fn(),
   };
+  const mockCodeService = {
+    recordPromptUsage: jest.fn(),
+  };
 
   beforeEach(async () => {
     jest.clearAllMocks();
@@ -57,6 +61,12 @@ describe("IdeasService", () => {
     });
     mockIdeaPlanService.generateActionResponse.mockResolvedValue({
       message: "Hello!",
+      tokenUsage: {
+        promptTokens: 22,
+        completionTokens: 41,
+        totalTokens: 63,
+      },
+      tokenSource: "gpt-openai",
     });
     mockIdeaPlanService.listAvailableModels.mockResolvedValue([
       "openai/gpt-5-mini",
@@ -82,6 +92,7 @@ describe("IdeasService", () => {
         { provide: IdeaPlanService, useValue: mockIdeaPlanService },
         { provide: PrismaService, useValue: mockPrisma },
         { provide: WeatherService, useValue: mockWeatherService },
+        { provide: CodeService, useValue: mockCodeService },
       ],
     }).compile();
 
@@ -240,7 +251,7 @@ describe("IdeasService", () => {
         id: "i1",
         name: "Idea One",
         projectId: "p1",
-        project: { name: "Project A", organizationId: "o1" },
+        project: { id: "p1", name: "Project A", organizationId: "o1" },
       });
 
       const result = await service.generateAssistantChat("i1", "user-1");
@@ -256,6 +267,16 @@ describe("IdeasService", () => {
       expect(result.createdCount).toBe(0);
       expect(result.todos).toEqual([]);
       expect(result.message).toBe("Hello!");
+      expect(result.tokenSource).toBe("gpt-openai");
+      expect(mockCodeService.recordPromptUsage).toHaveBeenCalledWith({
+        projectId: "p1",
+        userId: "user-1",
+        source: "gpt-openai",
+        promptText: "Idea One",
+        promptTokens: 22,
+        completionTokens: 41,
+        totalTokens: 63,
+      });
     });
   });
 
@@ -284,6 +305,15 @@ describe("IdeasService", () => {
       expect(result.createdCount).toBe(0);
       expect(result.todos).toEqual([]);
       expect(result.message).toBe("Hello!");
+      expect(mockCodeService.recordPromptUsage).toHaveBeenCalledWith({
+        projectId: "p1",
+        userId: "user-1",
+        source: "gpt-openai",
+        promptText: "Fix login bug",
+        promptTokens: 22,
+        completionTokens: 41,
+        totalTokens: 63,
+      });
     });
 
     it("throws on missing projectId", async () => {

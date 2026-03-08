@@ -158,7 +158,7 @@ export default function SummaryPage() {
 
             {!selectedProjectId ? (
               <section className="summary-empty-state" aria-live="polite">
-                <h2>No project selected</h2>
+                <h2>No Project Selected</h2>
                 <p>
                   Select a project to see progress, blocker pressure, and recent
                   momentum.
@@ -247,7 +247,7 @@ export default function SummaryPage() {
 
                 {summary.totalItems === 0 ? (
                   <section className="summary-empty-state" aria-live="polite">
-                    <h2>No project data yet</h2>
+                    <h2>No Project Data Yet</h2>
                     <p>
                       Add to-dos, features, ideas, enhancements, or bugs to
                       populate charts and reveal progress over time.
@@ -259,7 +259,7 @@ export default function SummaryPage() {
                       <article className="summary-panel">
                         <div className="summary-panel-heading">
                           <p className="summary-panel-eyebrow">Work Mix</p>
-                          <h2>Open vs completed by area</h2>
+                          <h2>Open vs Completed by Area</h2>
                         </div>
                         <SummarySplitBarChart
                           areas={summary.areas}
@@ -277,7 +277,7 @@ export default function SummaryPage() {
                           <p className="summary-panel-eyebrow">
                             Recent Activity
                           </p>
-                          <h2>7-day movement</h2>
+                          <h2>7-Day Movement</h2>
                         </div>
                         <div
                           className="summary-trend-legend"
@@ -305,7 +305,7 @@ export default function SummaryPage() {
                       >
                         <div className="summary-panel-heading">
                           <p className="summary-panel-eyebrow">Expenses</p>
-                          <h2>Spend snapshot</h2>
+                          <h2>Spend Snapshot</h2>
                         </div>
                         <div className="summary-metric-stack">
                           <strong className="summary-metric-value">
@@ -360,7 +360,7 @@ export default function SummaryPage() {
                           <p className="summary-panel-eyebrow">
                             Testing Health
                           </p>
-                          <h2>Coverage readiness</h2>
+                          <h2>Coverage Readiness</h2>
                         </div>
                         <div className="summary-metric-stack">
                           <strong className="summary-metric-value">
@@ -407,7 +407,7 @@ export default function SummaryPage() {
                           <p className="summary-panel-eyebrow">
                             Calendar Updates
                           </p>
-                          <h2>Upcoming schedule</h2>
+                          <h2>Upcoming Schedule</h2>
                         </div>
                         <div className="summary-metric-stack">
                           <strong className="summary-metric-value">
@@ -449,7 +449,7 @@ export default function SummaryPage() {
                           <p className="summary-panel-eyebrow">
                             Progress by Area
                           </p>
-                          <h2>Completion detail</h2>
+                          <h2>Completion Detail</h2>
                         </div>
                         <div className="summary-progress-list">
                           {summary.areas.map((area) => (
@@ -486,7 +486,7 @@ export default function SummaryPage() {
                           <p className="summary-panel-eyebrow">
                             Attention Needed
                           </p>
-                          <h2>Signals to watch</h2>
+                          <h2>Signals to Watch</h2>
                         </div>
                         <div className="summary-insight-list">
                           {summary.insights.map((insight) => (
@@ -505,7 +505,7 @@ export default function SummaryPage() {
                     <section className="summary-panel summary-snapshot-panel">
                       <div className="summary-panel-heading">
                         <p className="summary-panel-eyebrow">Snapshot</p>
-                        <h2>Workload by category</h2>
+                        <h2>Workload by Category</h2>
                       </div>
                       <div className="summary-snapshot-grid">
                         {summary.areas.map((area) => (

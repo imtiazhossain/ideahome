@@ -75,8 +75,7 @@ import {
   getSavedBulbyLocation,
   readWeatherErrorMessage,
 } from "../lib/assistantWeather";
-import { recordTokenUsage } from "../lib/tokenUsageHistory";
-import { formatTextForSpeech } from "../lib/utils";
+import { formatTextForSpeech, splitTextForSpeech } from "../lib/utils";
 import { IconMic, IconPlay, IconStop } from "./icons";
 
 const BULBY_POSITION_KEY = "bulby-chatbox-position";
@@ -700,6 +699,21 @@ export function BulbyChatbox({
     syncInputViewport();
   }, [inputValue, recording, syncInputViewport]);
 
+  const stopAssistantPlayback = useCallback(() => {
+    playbackIdRef.current += 1;
+    assistantSpeechMetaRef.current = { messageId: null };
+    assistantAudioMetaRef.current = { messageId: null, voiceUri: null };
+    if (typeof window !== "undefined" && "speechSynthesis" in window) {
+      window.speechSynthesis.cancel();
+    }
+    const audio = assistantAudioRef.current;
+    if (audio) {
+      audio.pause();
+      audio.currentTime = 0;
+    }
+    setPlaybackStatus("idle");
+  }, []);
+
   const lockPanelHeight = useCallback(() => {
     const rect = panelRef.current?.getBoundingClientRect();
     if (!rect) return;
@@ -744,18 +758,15 @@ export function BulbyChatbox({
           // ignore
         }
       }
-      if (typeof window !== "undefined" && "speechSynthesis" in window) {
-        window.speechSynthesis.cancel();
-      }
+      stopAssistantPlayback();
       if (assistantAudioRef.current) {
-        assistantAudioRef.current.pause();
         if (assistantAudioRef.current.src.startsWith("blob:")) {
           URL.revokeObjectURL(assistantAudioRef.current.src);
         }
         assistantAudioRef.current.src = "";
       }
     }
-  }, []);
+  }, [stopAssistantPlayback]);
 
   useEffect(() => {
     setPosition(loadStoredPosition());
@@ -999,18 +1010,52 @@ export function BulbyChatbox({
         const browserVoiceUri = selectedVoiceUri.startsWith("browser:")
           ? selectedVoiceUri.replace(/^browser:/, "")
           : selectedVoiceUri;
-        const utterance = new SpeechSynthesisUtterance(speechText);
         const selectedVoice = synth
           .getVoices()
           .find((voice) => voice.voiceURI === browserVoiceUri);
-        if (selectedVoice) utterance.voice = selectedVoice;
-        utterance.rate = 1;
-        utterance.pitch = 1;
-        utterance.onend = () => setPlaybackStatus("idle");
-        utterance.onerror = () => setPlaybackStatus("idle");
+        const speechChunks = splitTextForSpeech(speechText);
+        if (speechChunks.length === 0) {
+          setPlaybackStatus("idle");
+          return;
+        }
+
         assistantSpeechMetaRef.current = { messageId: message.id };
-        synth.speak(utterance);
+        let remainingChunks = speechChunks.length;
+        let failed = false;
+        for (const chunk of speechChunks) {
+          const utterance = new SpeechSynthesisUtterance(chunk);
+          if (selectedVoice) utterance.voice = selectedVoice;
+          utterance.rate = 1;
+          utterance.pitch = 1;
+          utterance.onend = () => {
+            if (
+              currentPlaybackId !== playbackIdRef.current ||
+              assistantSpeechMetaRef.current.messageId !== message.id
+            ) {
+              return;
+            }
+            remainingChunks -= 1;
+            if (remainingChunks === 0 && !failed) {
+              setPlaybackStatus("idle");
+            }
+          };
+          utterance.onerror = () => {
+            if (
+              currentPlaybackId !== playbackIdRef.current ||
+              assistantSpeechMetaRef.current.messageId !== message.id
+            ) {
+              return;
+            }
+            failed = true;
+            setPlaybackStatus("idle");
+          };
+          synth.speak(utterance);
+        }
         setPlaybackStatus("playing");
+        await new Promise((resolve) => setTimeout(resolve, 400));
+        if (!synth.speaking && !synth.pending) {
+          throw new Error("Browser speech did not start");
+        }
       };
 
       if (assistantAudioRef.current) {
@@ -1136,6 +1181,13 @@ export function BulbyChatbox({
     playAssistantMessage,
     resumeAssistantPlayback,
   ]);
+
+  const handleCloseChat = useCallback(() => {
+    stopAssistantPlayback();
+    setMessages([]);
+    setInputValue("");
+    setOpen(false);
+  }, [stopAssistantPlayback]);
 
   const sendMessage = useCallback(async (draftOverride?: string) => {
     const draft = normalizeDraftForDisplayAndRouting(draftOverride ?? inputValue);
@@ -1318,7 +1370,7 @@ export function BulbyChatbox({
         notifyCalendarEventsChanged(projectId);
         await logBulbyRule({
           kind: "action",
-          title: "Calendar event created",
+          title: "Calendar Event Created",
           detail: `Created "${created.title}" for project ${projectId}.`,
         });
         appendAssistantMessage(formatCalendarCreateSuccess(created));
@@ -1345,7 +1397,7 @@ export function BulbyChatbox({
         notifyCalendarEventsChanged(projectId);
         await logBulbyRule({
           kind: "action",
-          title: "Calendar event created",
+          title: "Calendar Event Created",
           detail: `Created "${created.title}" for project ${projectId}.`,
         });
         appendAssistantMessage(formatCalendarCreateSuccess(created));
@@ -1366,7 +1418,7 @@ export function BulbyChatbox({
       setPendingCalendarCreate({ title: calendarCreateRequest.title });
       await logBulbyRule({
         kind: "rule",
-        title: "Calendar create requires time",
+        title: "Calendar Create Requires Time",
         detail: `Asked for missing time before creating "${calendarCreateRequest.title}".`,
       });
       appendAssistantMessage(
@@ -1401,7 +1453,7 @@ export function BulbyChatbox({
         notifyCalendarEventsChanged(projectId);
         await logBulbyRule({
           kind: "action",
-          title: "Calendar event updated",
+          title: "Calendar Event Updated",
           detail: `Renamed "${match.title}" to "${updated.title}" for project ${projectId}.`,
         });
         appendAssistantMessage(formatCalendarEditSuccess(updated));
@@ -1438,7 +1490,7 @@ export function BulbyChatbox({
         notifyCalendarEventsChanged(projectId);
         await logBulbyRule({
           kind: "action",
-          title: "Calendar event deleted",
+          title: "Calendar Event Deleted",
           detail: `Deleted ${matches.length} matching calendar event(s) for project ${projectId}.`,
         });
         appendAssistantMessage(formatCalendarDeleteSuccess(matches.length));
@@ -1457,7 +1509,7 @@ export function BulbyChatbox({
     if (isCalendarMutationRequest(draft)) {
       await logBulbyRule({
         kind: "rule",
-        title: "Truthfulness rule applied",
+        title: "Truthfulness Rule Applied",
         detail: `Refused unsupported calendar mutation: "${draft}".`,
       });
       appendAssistantMessage(
@@ -1518,7 +1570,7 @@ export function BulbyChatbox({
     if (isLikelyAppMutationRequest(draft)) {
       await logBulbyRule({
         kind: "rule",
-        title: "Truthfulness rule applied",
+        title: "Truthfulness Rule Applied",
         detail: `Refused unsupported app mutation: "${draft}".`,
       });
       appendAssistantMessage(
@@ -1555,14 +1607,6 @@ export function BulbyChatbox({
         model ?? undefined,
         includeWeb
       ) as { message?: string; tokenUsage?: { promptTokens: number; completionTokens: number; totalTokens: number } | null };
-      if (result.tokenUsage) {
-        recordTokenUsage({
-          promptText: draft,
-          promptTokens: result.tokenUsage.promptTokens,
-          completionTokens: result.tokenUsage.completionTokens,
-          totalTokens: result.tokenUsage.totalTokens,
-        });
-      }
       appendAssistantMessage(
         typeof result.message === "string" ? result.message : "Done."
       );
@@ -1705,13 +1749,9 @@ export function BulbyChatbox({
             <CloseButton
               className="bulby-chatbox-close"
               size="sm"
-              onClick={() => {
-                setMessages([]);
-                setInputValue("");
-                setOpen(false);
-              }}
-              aria-label="Close chat"
-              title="Close chat"
+              onClick={handleCloseChat}
+              aria-label="Close Chat"
+              title="Close Chat"
             />
           </div>
           <div className="idea-chat-thread" ref={threadRef}>

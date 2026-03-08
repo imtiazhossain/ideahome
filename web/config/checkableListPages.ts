@@ -4,6 +4,7 @@
  */
 import type { ListCacheKey } from "../lib/listCache";
 import type { ProjectNavTabId } from "../components/ProjectNavBar";
+import { toUiTitleCase } from "@ideahome/shared";
 import { createLegacyListStorage } from "../lib/legacyListStorage";
 import {
   createBug,
@@ -103,11 +104,11 @@ export const CHECKABLE_LIST_PAGES: Record<
 > = {
   features: {
     listType: "features",
-    title: "Features · Idea Home",
+    title: `${toUiTitleCase("features")} · Idea Home`,
     activeTab: "list",
-    pageTitle: "Features",
+    pageTitle: toUiTitleCase("features"),
     itemLabel: "feature",
-    listTitle: "Feature List",
+    listTitle: toUiTitleCase("feature list"),
     emptyMessage: "It's dark in here...\nTurn the lights on by adding something.",
     addPlaceholder: "Let's add some stars in the sky…",
     addGuardMessage: "Select a project to add features.",
@@ -125,11 +126,11 @@ export const CHECKABLE_LIST_PAGES: Record<
   },
   todo: {
     listType: "todos",
-    title: "To-Do · Idea Home",
+    title: `${toUiTitleCase("to-do")} · Idea Home`,
     activeTab: "todo",
-    pageTitle: "To-Do",
+    pageTitle: toUiTitleCase("to-do"),
     itemLabel: "to-do",
-    listTitle: "To-Do List",
+    listTitle: toUiTitleCase("to-do list"),
     emptyMessage: "It's dark in here...\nTurn the lights on by adding something.",
     addPlaceholder: "Let's keep the lights on…",
     addGuardMessage: "Select a project to add to-dos.",
@@ -148,11 +149,11 @@ export const CHECKABLE_LIST_PAGES: Record<
   },
   bugs: {
     listType: "bugs",
-    title: "Bugs · Idea Home",
+    title: `${toUiTitleCase("bugs")} · Idea Home`,
     activeTab: "forms",
-    pageTitle: "Bugs",
+    pageTitle: toUiTitleCase("bugs"),
     itemLabel: "bug",
-    listTitle: "Bug List",
+    listTitle: toUiTitleCase("bug list"),
     emptyMessage: "It's dark in here...\nTurn the lights on by adding something.",
     addPlaceholder: "No one wants a broken bulb...",
     addGuardMessage: "Select a project to add bugs.",
@@ -170,11 +171,11 @@ export const CHECKABLE_LIST_PAGES: Record<
   },
   ideas: {
     listType: "ideas",
-    title: "Ideas · Idea Home",
+    title: `${toUiTitleCase("ideas")} · Idea Home`,
     activeTab: "ideas",
-    pageTitle: "Ideas",
+    pageTitle: toUiTitleCase("ideas"),
     itemLabel: "idea",
-    listTitle: "Ideas List",
+    listTitle: toUiTitleCase("ideas list"),
     emptyMessage: "It's dark in here...\nTurn the lights on by adding something.",
     addPlaceholder: "Your ideas light me up!",
     addGuardMessage: "Select a project to add ideas.",
@@ -192,11 +193,11 @@ export const CHECKABLE_LIST_PAGES: Record<
   },
   enhancements: {
     listType: "enhancements",
-    title: "Enhancements · Idea Home",
+    title: `${toUiTitleCase("enhancements")} · Idea Home`,
     activeTab: "enhancements",
-    pageTitle: "Enhancements",
+    pageTitle: toUiTitleCase("enhancements"),
     itemLabel: "enhancement",
-    listTitle: "Enhancements List",
+    listTitle: toUiTitleCase("enhancements list"),
     emptyMessage: "It's dark in here...\nTurn the lights on by adding something.",
     addPlaceholder: "Let's brighten things up!",
     addGuardMessage: "Select a project to add enhancements.",

@@ -186,6 +186,7 @@ export class CalendarController {
       startAt?: string;
       endAt?: string;
       isAllDay?: boolean;
+      allDayDate?: string | null;
       timeZone?: string | null;
     },
     @Req() req: AuthenticatedRequest
@@ -209,6 +210,7 @@ export class CalendarController {
       startAt?: string;
       endAt?: string;
       isAllDay?: boolean;
+      allDayDate?: string | null;
       timeZone?: string | null;
       status?: string;
     },

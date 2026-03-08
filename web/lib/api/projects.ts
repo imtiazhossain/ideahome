@@ -1,4 +1,7 @@
 import {
+  pathProjectMyPromptUsage,
+  pathProjectMyPromptUsageClear,
+  pathProjectPromptUsageTrend,
   pathOrganizations,
   pathOrganizationsEnsure,
   pathProjectById,
@@ -9,11 +12,16 @@ import {
 import type {
   CreateProjectInput,
   Organization as SharedOrganization,
+  PromptUsageDetailEntry,
+  PromptUsageSource,
+  PromptUsageTrendPoint,
+  PromptUsageMineResponse,
+  PromptUsageTrendResponse,
   Project as SharedProject,
   UpdateProjectInput,
   User as SharedUser,
 } from "@ideahome/shared";
-import { requestJson, requestVoid } from "./http";
+import { apiFetch, requestJson, requestVoid, readResponseMessage } from "./http";
 
 export type User = SharedUser;
 export type Organization = SharedOrganization;
@@ -48,6 +56,81 @@ export type ProjectCodeAnalysisRun = {
   payload: unknown;
   createdAt: string;
 };
+
+export type CodexPromptUsageResponse = {
+  entries: PromptUsageDetailEntry[];
+  points: PromptUsageTrendPoint[];
+  importedSessions: number;
+};
+
+export type PromptOptimizationResponse = {
+  structuredPrompt?: string;
+  optimizedPrompt: string;
+  notes: string[];
+  tokenUsage:
+    | {
+        promptTokens: number;
+        completionTokens: number;
+        totalTokens: number;
+      }
+    | null;
+  source: PromptUsageSource;
+};
+
+export async function fetchProjectPromptUsageTrend(
+  projectId: string,
+  source: "all" | PromptUsageSource = "all"
+): Promise<PromptUsageTrendResponse> {
+  const normalizedSource = source === "codex-estimated" ? "all" : source;
+  const path = `${pathProjectPromptUsageTrend(projectId)}?source=${encodeURIComponent(normalizedSource)}`;
+  return requestJson<PromptUsageTrendResponse>(path, {
+    errorMessage: "Failed to load prompt usage trend",
+  });
+}
+
+export async function fetchMyPromptUsage(
+  projectId: string,
+  source: "all" | PromptUsageSource = "all"
+): Promise<PromptUsageMineResponse> {
+  const normalizedSource = source === "codex-estimated" ? "all" : source;
+  const path = `${pathProjectMyPromptUsage(projectId)}?source=${encodeURIComponent(normalizedSource)}`;
+  return requestJson<PromptUsageMineResponse>(path, {
+    errorMessage: "Failed to load your prompt usage",
+  });
+}
+
+export async function clearMyPromptUsage(projectId: string): Promise<void> {
+  return requestVoid(pathProjectMyPromptUsageClear(projectId), {
+    method: "DELETE",
+    errorMessage: "Failed to clear your prompt history",
+  });
+}
+
+export async function fetchCodexPromptUsage(): Promise<CodexPromptUsageResponse> {
+  const response = await apiFetch("/api/codex-prompt-usage", {
+    method: "GET",
+  });
+  if (!response.ok) {
+    const message =
+      (await readResponseMessage(response)) ?? "Failed to load Codex prompt usage";
+    throw new Error(message);
+  }
+  return response.json();
+}
+
+export async function optimizeProjectPrompt(
+  projectId: string,
+  prompt: string
+): Promise<PromptOptimizationResponse> {
+  return requestJson<PromptOptimizationResponse>(
+    `/code/projects/${encodeURIComponent(projectId)}/prompt-optimize`,
+    {
+      method: "POST",
+      body: { prompt },
+      errorMessage: "Failed to optimize prompt",
+    }
+  );
+}
 
 export async function fetchProjectCodeRepositories(
   projectId: string

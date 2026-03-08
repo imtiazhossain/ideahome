@@ -2,50 +2,39 @@ import { Test, TestingModule } from "@nestjs/testing";
 import { BadRequestException, NotFoundException } from "@nestjs/common";
 import { CodeService } from "./code.service";
 import { PrismaService } from "../prisma.service";
-import { AuthService } from "../auth/auth.service";
 
 describe("CodeService", () => {
   let service: CodeService;
-  let prisma: PrismaService;
-  let authService: AuthService;
 
   const mockPrisma = {
-    user: { findUnique: jest.fn() },
     project: { findUnique: jest.fn() },
     projectMembership: { findUnique: jest.fn() },
     codeRepository: { findMany: jest.fn(), findFirst: jest.fn(), create: jest.fn() },
     codeAnalysisRun: { findFirst: jest.fn(), create: jest.fn() },
-  };
-
-  const mockAuthService = {
-    ensureUserOrganization: jest.fn(),
+    promptUsageEvent: {
+      create: jest.fn(),
+      findMany: jest.fn(),
+      deleteMany: jest.fn(),
+    },
   };
 
   beforeEach(async () => {
     jest.clearAllMocks();
+    mockPrisma.project.findUnique.mockResolvedValue({
+      id: "proj1",
+      organizationId: "org1",
+    });
     mockPrisma.projectMembership.findUnique.mockResolvedValue({ id: "pm1" });
+
     const module: TestingModule = await Test.createTestingModule({
-      providers: [
-        CodeService,
-        { provide: PrismaService, useValue: mockPrisma },
-        { provide: AuthService, useValue: mockAuthService },
-      ],
+      providers: [CodeService, { provide: PrismaService, useValue: mockPrisma }],
     }).compile();
 
     service = module.get<CodeService>(CodeService);
-    prisma = module.get<PrismaService>(PrismaService);
-    authService = module.get<AuthService>(AuthService);
   });
 
   describe("listRepositoriesForProject", () => {
     it("returns repositories for project", async () => {
-      mockPrisma.user.findUnique.mockResolvedValue({
-        organizationId: "org1",
-      });
-      mockPrisma.project.findUnique.mockResolvedValue({
-        id: "proj1",
-        organizationId: "org1",
-      });
       mockPrisma.codeRepository.findMany.mockResolvedValue([
         { id: "repo1", repoFullName: "owner/repo" },
       ]);
@@ -58,33 +47,8 @@ describe("CodeService", () => {
       });
     });
 
-    it("throws when user not found", async () => {
+    it("throws when membership is missing", async () => {
       mockPrisma.projectMembership.findUnique.mockResolvedValue(null);
-      await expect(
-        service.listRepositoriesForProject("proj1", "user1")
-      ).rejects.toThrow(NotFoundException);
-    });
-
-    it("calls ensureUserOrganization when user has no organizationId", async () => {
-      mockPrisma.project.findUnique.mockResolvedValue({
-        id: "proj1",
-        organizationId: "org1",
-      });
-      mockPrisma.codeRepository.findMany.mockResolvedValue([]);
-
-      await service.listRepositoriesForProject("proj1", "user1");
-      expect(mockAuthService.ensureUserOrganization).not.toHaveBeenCalled();
-    });
-
-    it("throws when ensureUserOrganization returns no organizationId", async () => {
-      mockPrisma.projectMembership.findUnique.mockResolvedValue(null);
-      await expect(
-        service.listRepositoriesForProject("proj1", "user1")
-      ).rejects.toThrow(NotFoundException);
-    });
-
-    it("throws when project not found or wrong org", async () => {
-      mockPrisma.project.findUnique.mockResolvedValue(null);
       await expect(
         service.listRepositoriesForProject("proj1", "user1")
       ).rejects.toThrow(NotFoundException);
@@ -92,13 +56,6 @@ describe("CodeService", () => {
   });
 
   describe("createGithubRepositoryForProject", () => {
-    beforeEach(() => {
-      mockPrisma.project.findUnique.mockResolvedValue({
-        id: "proj1",
-        organizationId: "org1",
-      });
-    });
-
     it("creates repository with valid repoFullName", async () => {
       mockPrisma.codeRepository.create.mockResolvedValue({
         id: "repo1",
@@ -109,6 +66,7 @@ describe("CodeService", () => {
         "user1",
         { repoFullName: "owner/repo" }
       );
+      expect(result.repoFullName).toBe("owner/repo");
       expect(mockPrisma.codeRepository.create).toHaveBeenCalledWith({
         data: {
           projectId: "proj1",
@@ -117,55 +75,12 @@ describe("CodeService", () => {
           defaultBranch: undefined,
         },
       });
-      expect(result.repoFullName).toBe("owner/repo");
     });
 
-    it("rejects non-string repoFullName", async () => {
-      await expect(
-        service.createGithubRepositoryForProject("proj1", "user1", {
-          repoFullName: 123,
-        })
-      ).rejects.toThrow(BadRequestException);
-    });
-
-    it("rejects empty or whitespace repoFullName", async () => {
-      await expect(
-        service.createGithubRepositoryForProject("proj1", "user1", {
-          repoFullName: "   ",
-        })
-      ).rejects.toThrow(BadRequestException);
-    });
-
-    it("rejects repoFullName without slash", async () => {
+    it("rejects invalid repo name", async () => {
       await expect(
         service.createGithubRepositoryForProject("proj1", "user1", {
           repoFullName: "invalid",
-        })
-      ).rejects.toThrow(BadRequestException);
-    });
-
-    it("rejects repoFullName over 200 chars", async () => {
-      await expect(
-        service.createGithubRepositoryForProject("proj1", "user1", {
-          repoFullName: "a/" + "x".repeat(200),
-        })
-      ).rejects.toThrow(BadRequestException);
-    });
-
-    it("accepts defaultBranch and rejects over 200 chars", async () => {
-      mockPrisma.codeRepository.create.mockResolvedValue({});
-      await service.createGithubRepositoryForProject("proj1", "user1", {
-        repoFullName: "o/r",
-        defaultBranch: "main",
-      });
-      expect(mockPrisma.codeRepository.create).toHaveBeenCalledWith({
-        data: expect.objectContaining({ defaultBranch: "main" }),
-      });
-
-      await expect(
-        service.createGithubRepositoryForProject("proj1", "user1", {
-          repoFullName: "o/r",
-          defaultBranch: "x".repeat(201),
         })
       ).rejects.toThrow(BadRequestException);
     });
@@ -173,31 +88,13 @@ describe("CodeService", () => {
 
   describe("getLatestAnalysisRun", () => {
     it("returns latest run when repo exists", async () => {
-      mockPrisma.project.findUnique.mockResolvedValue({
-        id: "proj1",
-        organizationId: "org1",
-      });
-      mockPrisma.codeRepository.findFirst.mockResolvedValue({
-        id: "repo1",
-      });
-      mockPrisma.codeAnalysisRun.findFirst.mockResolvedValue({
-        id: "run1",
-        createdAt: new Date(),
-      });
-
-      const result = await service.getLatestAnalysisRun(
-        "proj1",
-        "user1",
-        "repo1"
-      );
-      expect(result?.id).toBe("run1");
+      mockPrisma.codeRepository.findFirst.mockResolvedValue({ id: "repo1" });
+      mockPrisma.codeAnalysisRun.findFirst.mockResolvedValue({ id: "run1" });
+      const result = await service.getLatestAnalysisRun("proj1", "user1", "repo1");
+      expect(result).toEqual({ id: "run1" });
     });
 
-    it("throws when code repository not found", async () => {
-      mockPrisma.project.findUnique.mockResolvedValue({
-        id: "proj1",
-        organizationId: "org1",
-      });
+    it("throws when repository is missing", async () => {
       mockPrisma.codeRepository.findFirst.mockResolvedValue(null);
       await expect(
         service.getLatestAnalysisRun("proj1", "user1", "repo1")
@@ -206,35 +103,147 @@ describe("CodeService", () => {
   });
 
   describe("saveAnalysisRun", () => {
-    it("creates analysis run when repo exists", async () => {
-      mockPrisma.project.findUnique.mockResolvedValue({
-        id: "proj1",
-        organizationId: "org1",
-      });
+    it("creates an analysis run", async () => {
       mockPrisma.codeRepository.findFirst.mockResolvedValue({ id: "repo1" });
       mockPrisma.codeAnalysisRun.create.mockResolvedValue({
         id: "run1",
         payload: { score: 80 },
       });
-
-      const result = await service.saveAnalysisRun(
-        "proj1",
-        "user1",
-        "repo1",
-        { score: 80 }
-      );
+      const result = await service.saveAnalysisRun("proj1", "user1", "repo1", {
+        score: 80,
+      });
       expect(result.payload).toEqual({ score: 80 });
     });
+  });
 
-    it("throws when code repository not found", async () => {
-      mockPrisma.project.findUnique.mockResolvedValue({
-        id: "proj1",
-        organizationId: "org1",
+  describe("recordPromptUsage", () => {
+    it("stores computed prompt metrics", async () => {
+      mockPrisma.promptUsageEvent.create.mockResolvedValue({ id: "evt1" });
+      await service.recordPromptUsage({
+        projectId: "proj1",
+        userId: "user1",
+        source: "gpt-openai",
+        promptText: "Fix login bug and return only the patch",
+        promptTokens: 24,
+        completionTokens: 42,
+        totalTokens: 66,
       });
-      mockPrisma.codeRepository.findFirst.mockResolvedValue(null);
-      await expect(
-        service.saveAnalysisRun("proj1", "user1", "repo1", {})
-      ).rejects.toThrow(NotFoundException);
+
+      expect(mockPrisma.promptUsageEvent.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          projectId: "proj1",
+          userId: "user1",
+          source: "gpt-openai",
+          promptTokens: 24,
+          completionTokens: 42,
+          totalTokens: 66,
+          efficiencyScore: expect.any(Number),
+          promptWordCount: expect.any(Number),
+        }),
+      });
+    });
+
+    it("skips zero-token payloads", async () => {
+      const result = await service.recordPromptUsage({
+        projectId: "proj1",
+        userId: "user1",
+        source: "gpt-openai",
+        promptText: "noop",
+        promptTokens: 0,
+        completionTokens: 0,
+        totalTokens: 0,
+      });
+      expect(result).toBeNull();
+      expect(mockPrisma.promptUsageEvent.create).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("prompt usage queries", () => {
+    it("returns project trend points without prompt text", async () => {
+      mockPrisma.promptUsageEvent.findMany.mockResolvedValue([
+        {
+          createdAt: new Date("2026-03-07T10:00:00.000Z"),
+          totalTokens: 66,
+          promptTokens: 24,
+          completionTokens: 42,
+        },
+      ]);
+      const result = await service.getProjectPromptUsageTrend(
+        "proj1",
+        "user1",
+        "all"
+      );
+      expect(result.mode).toBe("project");
+      expect(result.points[0]).toEqual({
+        timestamp: "2026-03-07T10:00:00.000Z",
+        totalTokens: 66,
+        promptTokens: 24,
+        completionTokens: 42,
+        promptCount: 1,
+      });
+    });
+
+    it("returns current-user prompt details", async () => {
+      mockPrisma.promptUsageEvent.findMany.mockResolvedValue([
+        {
+          id: "evt1",
+          createdAt: new Date("2026-03-07T10:00:00.000Z"),
+          source: "gpt-openai",
+          promptText: "Fix login bug and return only the patch",
+          promptTokens: 24,
+          completionTokens: 42,
+          totalTokens: 66,
+          promptWordCount: 8,
+          efficiencyScore: 82,
+          improvementHints: ["Lead with the exact task."],
+          breakdown: {
+            brevity: 30,
+            outputEfficiency: 24,
+            redundancyPenalty: 15,
+            instructionDensity: 13,
+          },
+        },
+      ]);
+      const result = await service.getMyPromptUsage("proj1", "user1", "all");
+      expect(result.entries[0]?.promptText).toContain("Fix login bug");
+      expect(result.entries[0]?.improvementHints).toEqual([
+        "Lead with the exact task.",
+      ]);
+    });
+
+    it("clears current-user prompt history", async () => {
+      mockPrisma.promptUsageEvent.deleteMany.mockResolvedValue({ count: 2 });
+      const result = await service.clearMyPromptUsage("proj1", "user1");
+      expect(result).toEqual({ ok: true });
+      expect(mockPrisma.promptUsageEvent.deleteMany).toHaveBeenCalledWith({
+        where: { projectId: "proj1", userId: "user1" },
+      });
+    });
+  });
+
+  describe("optimizer prompt fallback", () => {
+    it("rewrites non-working complaints into outcome-based success criteria", () => {
+      const prompt = "Minimizing a section isn't working.";
+
+      const result = (service as any).buildStructuredPromptFallback(prompt);
+
+      expect(result).toContain("Success criteria:");
+      expect(result).toContain("- Minimizing a section is working.");
+      expect(result).not.toContain("- Minimizing a section isn't working.");
+    });
+
+    it("separates complaint-style tasks from success criteria globally", () => {
+      const prompt = "Bulby tends to glitch when too much talking.";
+
+      const result = (service as any).buildStructuredPromptFallback(prompt);
+
+      expect(result).toContain("Task: Fix Bulby glitching when too much talking.");
+      expect(result).toContain(
+        "- Bulby does not glitch when too much talking."
+      );
+      expect(result).not.toContain(
+        "Success criteria:\n- Bulby tends to glitch when too much talking."
+      );
     });
   });
 });

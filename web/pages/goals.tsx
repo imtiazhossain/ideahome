@@ -223,7 +223,7 @@ export default function GoalsPage() {
           </div>
         ) : !selectedProjectId ? (
           <section className="goals-empty-state">
-            <h2>No project selected</h2>
+            <h2>No Project Selected</h2>
             <p>Select a project to start setting goals.</p>
           </section>
         ) : (
@@ -310,7 +310,7 @@ export default function GoalsPage() {
             {goals.length === 0 && !addingGoal && (
               <div className="goals-empty-state">
                 <IconGoals />
-                <h3>No goals set yet</h3>
+                <h3>No Goals Set Yet</h3>
                 <p>Track your project objectives here to stay focused.</p>
                 <button className="btn btn-primary" onClick={startAdd}>Set your first goal</button>
               </div>

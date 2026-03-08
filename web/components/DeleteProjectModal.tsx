@@ -19,7 +19,7 @@ export function DeleteProjectModal({
 }: DeleteProjectModalProps) {
   return (
     <ConfirmModal
-      title="Delete project"
+      title="Delete Project"
       message={
         <>
           Delete &quot;{project.name}&quot;? This will permanently remove the

@@ -904,7 +904,7 @@ export default function Home() {
         >
           <div className="modal board-add-column-modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
-              <h2>Add column</h2>
+              <h2>Add Column</h2>
               <CloseButton
                 className="modal-close"
                 onClick={() => setAddColumnModalOpen(false)}
@@ -972,7 +972,7 @@ export default function Home() {
 
       {issueToDelete && (
         <ConfirmModal
-          title="Delete issue"
+          title="Delete Issue"
           message={
             <>
               Delete &quot;{issueToDelete.title || "Untitled"}&quot;? This will
@@ -991,7 +991,7 @@ export default function Home() {
 
       {deleteAllConfirmOpen && (
         <ConfirmModal
-          title="Delete all issues"
+          title="Delete All Issues"
           message={
             selectedProjectId
               ? "Permanently delete all issues in this project?"

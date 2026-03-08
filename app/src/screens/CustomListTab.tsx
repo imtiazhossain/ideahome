@@ -228,7 +228,7 @@ export function CustomListTab({
         </View>
       </AppCard>
 
-      <AppCard title="List options">
+      <AppCard title="List Options">
         <AppButton
           label={`Delete list "${listName}"`}
           variant="secondary"

@@ -9,6 +9,7 @@ import { useRouter } from "next/router";
 import { AppLayout } from "../components/AppLayout";
 import { Button } from "../components/Button";
 import { CloseButton } from "../components/CloseButton";
+import { ColorPickerPopover } from "../components/ColorPickerPopover";
 import { ConfirmModal } from "../components/ConfirmModal";
 import { IconColorizer } from "../components/icons/IconColorizer";
 import { IconEdit } from "../components/icons/IconEdit";
@@ -118,6 +119,11 @@ function toYMD(date: Date): string {
   return `${year}-${month}-${day}`;
 }
 
+function getEventDayKey(event: CalendarEvent): string {
+  if (event.isAllDay) return event.startAt.slice(0, 10);
+  return toYMD(new Date(event.startAt));
+}
+
 function parseYMD(value: string): Date | null {
   const parsed = new Date(`${value}T00:00:00`);
   if (Number.isNaN(parsed.getTime())) return null;
@@ -170,7 +176,10 @@ function formatEventTime(event: CalendarEvent): string {
 }
 
 function formatEventDate(event: CalendarEvent): string {
-  const start = new Date(event.startAt);
+  const start = event.isAllDay
+    ? parseYMD(event.startAt.slice(0, 10))
+    : new Date(event.startAt);
+  if (!start) return event.startAt.slice(0, 10);
   return start.toLocaleDateString(undefined, {
     month: "short",
     day: "numeric",
@@ -459,7 +468,7 @@ export default function CalendarPage() {
   const eventsByDate = useMemo(() => {
     const map = new Map<string, CalendarEvent[]>();
     for (const event of events) {
-      const day = toYMD(new Date(event.startAt));
+      const day = getEventDayKey(event);
       const existing = map.get(day);
       if (existing) existing.push(event);
       else map.set(day, [event]);
@@ -469,7 +478,10 @@ export default function CalendarPage() {
 
   const selectedDayEvents = useMemo(() => {
     return [...(eventsByDate.get(selectedDate) ?? [])].sort(
-      (a, b) => new Date(a.startAt).getTime() - new Date(b.startAt).getTime()
+      (a, b) => {
+        if (a.isAllDay !== b.isAllDay) return a.isAllDay ? -1 : 1;
+        return new Date(a.startAt).getTime() - new Date(b.startAt).getTime();
+      }
     );
   }, [eventsByDate, selectedDate]);
 
@@ -808,6 +820,10 @@ export default function CalendarPage() {
         startAt: parsedStartAt.toISOString(),
         endAt: parsedEndAt.toISOString(),
         isAllDay,
+        allDayDate: isAllDay ? selectedDate : null,
+        timeZone: isAllDay
+          ? Intl.DateTimeFormat().resolvedOptions().timeZone || null
+          : null,
       };
       if (editingEventId) {
         await updateCalendarEvent(selectedProjectId, editingEventId, payload);
@@ -1399,162 +1415,57 @@ export default function CalendarPage() {
                                     }
                                   >
                                     {isColorPickerOpen ? (
-                                      <div className="calendar-event-color-picker">
-                                        <span className="calendar-event-color-picker-label">
-                                          Color for all "{event.title}" events
-                                        </span>
-                                        <div className="calendar-event-color-picker-swatches">
-                                          {EVENT_COLOR_PRESETS.map((preset) => {
-                                            const selected =
-                                              colorPreset?.presetId ===
-                                              preset.id;
-                                            return (
-                                              <button
-                                                key={preset.id}
-                                                type="button"
-                                                className={
-                                                  "calendar-event-color-swatch" +
-                                                  (selected
-                                                    ? " is-selected"
-                                                    : "")
-                                                }
-                                                aria-label={`${preset.id} color`}
-                                                aria-pressed={selected}
-                                                title={preset.id}
-                                                style={{
-                                                  background: preset.dot,
-                                                }}
-                                                onClick={() =>
-                                                  handleEventColorSelect(
-                                                    event.title,
-                                                    preset.id
-                                                  )
-                                                }
-                                              />
-                                            );
-                                          })}
-                                          <button
-                                            type="button"
-                                            className={
-                                              "calendar-event-color-swatch calendar-event-color-swatch-custom" +
-                                              (colorPreset?.isCustom
-                                                ? " is-selected"
-                                                : "")
-                                            }
-                                            aria-label="Choose custom color"
-                                            title="Custom color"
-                                            onClick={() =>
-                                              handleOpenCustomColorEditor(
-                                                event.id,
-                                                event.title
-                                              )
-                                            }
-                                          >
-                                            <span className="calendar-event-color-swatch-custom-inner" />
-                                          </button>
-                                        </div>
-                                        {isCustomColorEditorOpen ? (
-                                          <div className="calendar-event-custom-color-panel">
-                                            <div className="calendar-event-custom-color-header">
-                                              <span>Custom color</span>
-                                              <span
-                                                className="calendar-event-custom-color-preview"
-                                                style={{
-                                                  background: customHexValue,
-                                                }}
-                                              />
-                                            </div>
-                                            <div className="calendar-event-custom-color-sliders">
-                                              {(
-                                                [
-                                                  ["R", "r"],
-                                                  ["G", "g"],
-                                                  ["B", "b"],
-                                                ] as const
-                                              ).map(([label, channel]) => (
-                                                <label
-                                                  key={channel}
-                                                  className="calendar-event-custom-color-slider"
-                                                >
-                                                  <span>{label}</span>
-                                                  <input
-                                                    type="range"
-                                                    min="0"
-                                                    max="255"
-                                                    value={
-                                                      customColorDraft[channel]
-                                                    }
-                                                    onChange={(inputEvent) =>
-                                                      handleCustomColorDraftChannel(
-                                                        channel,
-                                                        Number(
-                                                          inputEvent.target
-                                                            .value
-                                                        )
-                                                      )
-                                                    }
-                                                  />
-                                                  <strong>
-                                                    {customColorDraft[channel]}
-                                                  </strong>
-                                                </label>
-                                              ))}
-                                            </div>
-                                            <div className="calendar-event-custom-color-hex">
-                                              <label
-                                                htmlFor={`calendar-event-custom-hex-${event.id}`}
-                                              >
-                                                Hex
-                                              </label>
-                                              <UiInput
-                                                id={`calendar-event-custom-hex-${event.id}`}
-                                                value={customHexValue.toUpperCase()}
-                                                onChange={(inputEvent) =>
-                                                  handleCustomColorDraftHex(
-                                                    inputEvent.target.value
-                                                  )
-                                                }
-                                                className="calendar-event-custom-color-input"
-                                                style={{
-                                                  width: `${customHexValue.length + 4}ch`,
-                                                }}
-                                              />
-                                            </div>
-                                            <div className="calendar-event-custom-color-actions">
-                                              {hasCustomColorChange ? (
-                                                <Button
-                                                  variant="ghost"
-                                                  size="sm"
-                                                  onClick={() =>
-                                                    setCustomColorEditorEventId(
-                                                      null
-                                                    )
-                                                  }
-                                                >
-                                                  Cancel
-                                                </Button>
-                                              ) : null}
-                                              {hasCustomColorChange ? (
-                                                <Button
-                                                  variant="secondary"
-                                                  size="sm"
-                                                  onClick={() => {
-                                                    handleEventColorSelect(
-                                                      event.title,
-                                                      customHexValue
-                                                    );
-                                                    setCustomColorEditorEventId(
-                                                      null
-                                                    );
-                                                  }}
-                                                >
-                                                  Apply
-                                                </Button>
-                                              ) : null}
-                                            </div>
-                                          </div>
-                                        ) : null}
-                                      </div>
+                                      <ColorPickerPopover
+                                        label={`Color for all "${event.title}" events`}
+                                        presets={EVENT_COLOR_PRESETS.map((preset) => ({
+                                          id: preset.id,
+                                          label:
+                                            preset.id.charAt(0).toUpperCase() +
+                                            preset.id.slice(1),
+                                          dot: preset.dot,
+                                        }))}
+                                        value={colorPreset?.dot ?? "#60a5fa"}
+                                        isCustomSelected={Boolean(
+                                          colorPreset?.isCustom
+                                        )}
+                                        customPanelOpen={isCustomColorEditorOpen}
+                                        customHexInput={customHexValue.toUpperCase()}
+                                        customPreviewColor={customHexValue}
+                                        customDraft={customColorDraft}
+                                        customDoneLabel="Apply"
+                                        showCancelButton={hasCustomColorChange}
+                                        onSelectPreset={(presetId) =>
+                                          handleEventColorSelect(
+                                            event.title,
+                                            presetId as EventColorPreset["id"]
+                                          )
+                                        }
+                                        onToggleCustom={() =>
+                                          handleOpenCustomColorEditor(
+                                            event.id,
+                                            event.title
+                                          )
+                                        }
+                                        onCustomDraftChannel={
+                                          handleCustomColorDraftChannel
+                                        }
+                                        onCustomHexInputChange={
+                                          handleCustomColorDraftHex
+                                        }
+                                        onCancelCustom={() =>
+                                          setCustomColorEditorEventId(null)
+                                        }
+                                        onDismissCustom={() =>
+                                          setCustomColorEditorEventId(null)
+                                        }
+                                        onDoneCustom={() => {
+                                          handleEventColorSelect(
+                                            event.title,
+                                            customHexValue
+                                          );
+                                          setCustomColorEditorEventId(null);
+                                        }}
+                                      />
                                     ) : null}
                                     <button
                                       type="button"
@@ -1587,7 +1498,7 @@ export default function CalendarPage() {
                   </ul>
 
                   <div ref={eventEditorRef} className="calendar-event-editor">
-                    <h4>{editingEventId ? "Edit event" : "Create Event"}</h4>
+                    <h4>{editingEventId ? "Edit Event" : "Create Event"}</h4>
                     <div
                       className={
                         "calendar-event-editor-field" +

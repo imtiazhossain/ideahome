@@ -6,6 +6,10 @@ Use `web/components/Text.tsx` for all new headings, labels, helper copy, and inl
 
 Do not add one-off text styling when a supported `Text` variant/tone already fits.
 
+Use standard title case for built-in UI titles and headings: capitalize major words, keep short prepositions, articles, and conjunctions lowercase unless they are the first word, and never rewrite user-entered names.
+
+Use `toUiTitleCase` from `@ideahome/shared` for new built-in titles that are generated or defined in central config.
+
 ## Variants
 
 - `display`: large page/hero headings

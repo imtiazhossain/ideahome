@@ -165,6 +165,9 @@ function startChild() {
 }
 
 const ticker = setInterval(ensureVendorChunkLink, 250);
+// Always start from a clean dist dir so `next dev` does not inherit
+// production build artifacts from a previous `next build`.
+clearDistDir();
 ensureVendorChunkLink();
 startChild();
 

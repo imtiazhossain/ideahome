@@ -19,11 +19,9 @@ import { restrictToWindowEdges } from "@dnd-kit/modifiers";
 import { CSS } from "@dnd-kit/utilities";
 import { AUTH_CHANGE_EVENT, getStoredToken } from "../lib/api/auth";
 import { logout } from "../lib/api/session";
-import {
-  addCustomList,
-  getCustomListTabId,
-  getCustomLists,
-} from "../lib/customLists";
+import { getCustomTabHref } from "../lib/customTabs";
+import { useCustomTabs } from "../lib/useCustomTabs";
+import { CustomTabIconPreview } from "./CustomTabIcon";
 import {
   IconChevronDown,
   IconHomeBulby,
@@ -31,9 +29,6 @@ import {
   IconLogout,
   IconProfile,
 } from "./icons";
-import { AccessibleModal } from "./AccessibleModal";
-import { ErrorBanner } from "./ErrorBanner";
-import { IconFromName } from "./IconFromName";
 import { IconPlus } from "./IconPlus";
 import {
   getCompactTabLabel,
@@ -96,6 +91,7 @@ export interface ProjectNavBarProps {
   showSettingsButton?: boolean;
   /** Open global appearance settings page. */
   onOpenAppearanceSettings?: () => void;
+  onOpenCreateTabModal?: () => void;
 }
 
 interface ProjectNavAuthMenuProps {
@@ -152,8 +148,8 @@ function ProjectNavAuthMenu({
               className="project-nav-auth-menu-item project-nav-auth-menu-item--icon project-nav-auth-menu-item--logout"
               role="menuitem"
               onClick={handleLogout}
-              aria-label="Log out"
-              title="Log out"
+              aria-label="Log Out"
+              title="Log Out"
             >
               <IconLogout />
             </button>
@@ -164,8 +160,8 @@ function ProjectNavAuthMenu({
               className="project-nav-auth-menu-item project-nav-auth-menu-item--icon project-nav-auth-menu-item--login"
               role="menuitem"
               onClick={() => setAuthMenuOpen(false)}
-              aria-label="Log in"
-              title="Log in"
+              aria-label="Log In"
+              title="Log In"
             >
               <IconLogin />
             </Link>
@@ -230,6 +226,7 @@ export function ProjectNavBar({
   onRenameProject,
   showSettingsButton = true,
   onOpenAppearanceSettings,
+  onOpenCreateTabModal,
 }: ProjectNavBarProps) {
   const router = useRouter();
   const {
@@ -257,23 +254,8 @@ export function ProjectNavBar({
     settingsMenuRef,
     closeSettingsMenu,
   } = useProjectNavSettings();
-  const [createListModalOpen, setCreateListModalOpen] = useState(false);
-  const [createListName, setCreateListName] = useState("");
-  const [createListError, setCreateListError] = useState<string | null>(null);
-  const [customLists, setCustomLists] = useState<
-    ReturnType<typeof getCustomLists>
-  >([]);
-
-  useEffect(() => {
-    const syncCustomLists = () => setCustomLists(getCustomLists());
-    syncCustomLists();
-    window.addEventListener("storage", syncCustomLists);
-    window.addEventListener(AUTH_CHANGE_EVENT, syncCustomLists);
-    return () => {
-      window.removeEventListener("storage", syncCustomLists);
-      window.removeEventListener(AUTH_CHANGE_EVENT, syncCustomLists);
-    };
-  }, []);
+  const resolvedProjectId = selectedProjectId ?? projectId ?? "";
+  const customTabs = useCustomTabs(resolvedProjectId);
 
   const [compactTabs, setCompactTabs] = useState(false);
   const [draggingTabId, setDraggingTabId] = useState<ProjectNavTabId | null>(
@@ -437,13 +419,18 @@ export function ProjectNavBar({
         if (builtIn) return builtIn;
         if (typeof id === "string" && id.startsWith("custom-")) {
           const slug = id.slice(7);
-          const list = customLists.find((l) => l.slug === slug);
-          if (list)
+          const customTab = customTabs.find((entry) => entry.slug === slug);
+          if (customTab)
             return {
               id,
-              label: list.name,
-              icon: <IconFromName name={list.name} />,
-              href: `/list/${list.slug}`,
+              label: customTab.name,
+              icon: (
+                <CustomTabIconPreview
+                  icon={customTab.icon}
+                  fallbackName={customTab.name}
+                />
+              ),
+              href: getCustomTabHref(customTab),
             };
         }
         return null;
@@ -536,8 +523,8 @@ export function ProjectNavBar({
               type="button"
               className="drawer-toggle drawer-logo project-nav-drawer-toggle"
               onClick={onOpenDrawer}
-              aria-label="Expand sidebar"
-              title="Expand sidebar"
+              aria-label="Expand Sidebar"
+              title="Expand Sidebar"
             >
               <span className="drawer-logo-mark" role="img" aria-hidden="true">
                 <IconHomeBulby />
@@ -758,6 +745,15 @@ export function ProjectNavBar({
             </SortableContext>
           </DndContext>
         </div>
+        <button
+          type="button"
+          className="project-nav-add"
+          onClick={() => onOpenCreateTabModal?.()}
+          aria-label="Create Custom Tab"
+          title="Create Custom Tab"
+        >
+          <IconPlus />
+        </button>
         <ProjectNavSettingsMenu
           showSettingsButton={showSettingsButton}
           settingsButtonVisible={settingsButtonVisible}
@@ -784,13 +780,9 @@ export function ProjectNavBar({
           deleteTab={deleteTab}
           moveTabVisible={moveTabVisible}
           isMobile={isMobile}
-          customLists={customLists}
+          customTabs={customTabs}
           onAddClick={onAddClick}
-          onOpenCreateListModal={() => {
-            setCreateListName("");
-            setCreateListError(null);
-            setCreateListModalOpen(true);
-          }}
+          onOpenCreateTabModal={() => onOpenCreateTabModal?.()}
           onOpenAppearanceSettings={onOpenAppearanceSettings}
           onOpenSettingsRoute={() => {
             void router.push("/settings");
@@ -800,64 +792,6 @@ export function ProjectNavBar({
           projectsLength={projects?.length}
         />
       </nav>
-
-      <AccessibleModal
-        open={createListModalOpen}
-        onClose={() => setCreateListModalOpen(false)}
-        title="New list page"
-      >
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            setCreateListError(null);
-            const name = createListName.trim();
-            if (!name) {
-              setCreateListError("Enter a name for the list.");
-              return;
-            }
-            const list = addCustomList(name);
-            setCustomLists((prev) => [
-              ...prev.filter((entry) => entry.slug !== list.slug),
-              list,
-            ]);
-            const newTabId = getCustomListTabId(list.slug);
-            setTabOrder([...tabOrder, newTabId]);
-            setCreateListModalOpen(false);
-            setCreateListName("");
-            router.push(`/list/${list.slug}`);
-          }}
-        >
-          {createListError && (
-            <ErrorBanner
-              message={createListError}
-              style={{ marginBottom: 16 }}
-            />
-          )}
-          <div className="form-group">
-            <label htmlFor="create-list-name">Page name</label>
-            <input
-              id="create-list-name"
-              type="text"
-              value={createListName}
-              onChange={(e) => setCreateListName(e.target.value)}
-              placeholder="e.g. Reading list"
-              autoFocus
-            />
-          </div>
-          <div className="modal-actions">
-            <button
-              type="button"
-              className="btn btn-secondary"
-              onClick={() => setCreateListModalOpen(false)}
-            >
-              Cancel
-            </button>
-            <button type="submit" className="btn btn-primary">
-              Create
-            </button>
-          </div>
-        </form>
-      </AccessibleModal>
     </header>
   );
 }

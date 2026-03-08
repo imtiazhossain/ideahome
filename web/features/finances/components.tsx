@@ -90,7 +90,7 @@ export function SortableFinancesSection({
           type="button"
           className="finances-section-drag-handle code-page-section-drag-handle features-list-drag-handle"
           aria-label="Drag to reorder section"
-          title="Drag to reorder section"
+          title="Drag to Reorder Section"
           {...attributes}
           {...listeners}
         >

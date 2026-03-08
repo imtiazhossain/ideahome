@@ -1,9 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { toUiTitleCase } from "@ideahome/shared";
 import { AppLayout } from "../components/AppLayout";
 import {
   BULBY_TRIGGER_HIDDEN_KEY,
   BULBY_TRIGGER_VISIBILITY_EVENT,
 } from "../components/BulbyChatbox";
+import { ConfirmModal } from "../components/ConfirmModal";
 import { IconTrash } from "../components/IconTrash";
 import { ProjectSettingsPanel } from "../components/ProjectSettingsPanel";
 import { UiCheckbox } from "../components/UiCheckbox";
@@ -17,11 +19,12 @@ import {
   type ProjectNavTabId,
 } from "../components/project-nav/tab-order";
 import {
-  AUTH_CHANGE_EVENT,
   setStoredAssistantVoiceUri,
   setStoredOpenRouterModel,
 } from "../lib/api";
-import { getCustomListTabId, getCustomLists } from "../lib/customLists";
+import { deleteCustomTab, getCustomTabId } from "../lib/customTabs";
+import { useCustomTabs } from "../lib/useCustomTabs";
+import { CustomTabIconPreview } from "../components/CustomTabIcon";
 import { useAssistantSettings } from "../lib/useAssistantSettings";
 import { useProjectLayout } from "../lib/useProjectLayout";
 import { useTheme } from "../pages/_app";
@@ -49,33 +52,33 @@ const SETTINGS_SECTIONS = [
   {
     id: "project",
     eyebrow: "Management",
-    title: "Project details",
+    title: toUiTitleCase("project details"),
     description: "Manage project name, team members, invites, and deletion.",
   },
   {
     id: "overview",
     eyebrow: "System",
-    title: "Workspace",
+    title: toUiTitleCase("workspace"),
     description: "Current project context and saved preferences.",
   },
   {
     id: "appearance",
     eyebrow: "Display",
-    title: "Appearance settings",
+    title: toUiTitleCase("appearance settings"),
     description:
       "Preview palettes instantly and save the combination you want everywhere.",
   },
   {
     id: "navigation",
     eyebrow: "Structure",
-    title: "Navigation",
+    title: toUiTitleCase("navigation"),
     description:
       "Show, hide, reorder, and restore workspace sections from one place.",
   },
   {
     id: "assistant",
     eyebrow: "Automation",
-    title: "Assistant",
+    title: toUiTitleCase("assistant"),
     description:
       "Match the drawer controls for voice, model, and Bulby visibility.",
   },
@@ -85,21 +88,21 @@ const SECTION_LINKS: {
   label: string;
   tabId: ProjectNavTabId;
 }[] = [
-  { tabId: "todo", label: "To-Do" },
-  { tabId: "ideas", label: "Ideas" },
-  { tabId: "enhancements", label: "Enhancements" },
-  { tabId: "summary", label: "Summary" },
-  { tabId: "timeline", label: "Timeline" },
-  { tabId: "board", label: "Dashboard" },
-  { tabId: "tests", label: "Tests" },
-  { tabId: "calendar", label: "Calendar" },
-  { tabId: "list", label: "Features" },
-  { tabId: "forms", label: "Bugs" },
-  { tabId: "goals", label: "Goals" },
-  { tabId: "expenses", label: "Finances" },
-  { tabId: "code", label: "Code" },
-  { tabId: "pages", label: "Pages" },
-  { tabId: "settings", label: "Settings" },
+  { tabId: "todo", label: toUiTitleCase("to-do") },
+  { tabId: "ideas", label: toUiTitleCase("ideas") },
+  { tabId: "enhancements", label: toUiTitleCase("enhancements") },
+  { tabId: "summary", label: toUiTitleCase("summary") },
+  { tabId: "timeline", label: toUiTitleCase("timeline") },
+  { tabId: "board", label: toUiTitleCase("dashboard") },
+  { tabId: "tests", label: toUiTitleCase("tests") },
+  { tabId: "calendar", label: toUiTitleCase("calendar") },
+  { tabId: "list", label: toUiTitleCase("features") },
+  { tabId: "forms", label: toUiTitleCase("bugs") },
+  { tabId: "goals", label: toUiTitleCase("goals") },
+  { tabId: "expenses", label: toUiTitleCase("finances") },
+  { tabId: "code", label: toUiTitleCase("code") },
+  { tabId: "pages", label: toUiTitleCase("pages") },
+  { tabId: "settings", label: toUiTitleCase("settings") },
 ];
 
 function IconSun(props: React.SVGProps<SVGSVGElement>) {
@@ -128,6 +131,23 @@ function IconMoon(props: React.SVGProps<SVGSVGElement>) {
     </svg>
   );
 }
+
+function renderSettingsNavLabel(link: {
+  label: string;
+  isCustom?: boolean;
+}) {
+  return (
+    <span className="settings-list-label" title={link.label}>
+      {link.label}
+    </span>
+  );
+}
+
+type PendingCustomDelete = {
+  tabId: ProjectNavTabId;
+  slug: string;
+  label: string;
+};
 
 export default function SettingsPage() {
   const layout = useProjectLayout();
@@ -162,10 +182,10 @@ export default function SettingsPage() {
     saveState,
     saveError,
   } = useTheme();
-  const [customLists, setCustomLists] = useState<
-    ReturnType<typeof getCustomLists>
-  >([]);
+  const customTabs = useCustomTabs(layout.selectedProjectId ?? "");
   const [bulbyTriggerHidden, setBulbyTriggerHidden] = useState(false);
+  const [pendingCustomDelete, setPendingCustomDelete] =
+    useState<PendingCustomDelete | null>(null);
 
   const hasUnsavedChanges = useMemo(
     () =>
@@ -181,16 +201,13 @@ export default function SettingsPage() {
     ].label;
   const hiddenSet = useMemo(() => new Set(hiddenTabIds), [hiddenTabIds]);
 
-  useEffect(() => {
-    const syncCustomLists = () => setCustomLists(getCustomLists());
-    syncCustomLists();
-    window.addEventListener("storage", syncCustomLists);
-    window.addEventListener(AUTH_CHANGE_EVENT, syncCustomLists);
-    return () => {
-      window.removeEventListener("storage", syncCustomLists);
-      window.removeEventListener(AUTH_CHANGE_EVENT, syncCustomLists);
-    };
-  }, []);
+  const customTabsById = useMemo(
+    () =>
+      new Map(
+        customTabs.map((entry) => [getCustomTabId(entry.slug), entry] as const)
+      ),
+    [customTabs]
+  );
 
   useEffect(() => {
     try {
@@ -215,16 +232,13 @@ export default function SettingsPage() {
     const builtInById = new Map(
       SECTION_LINKS.map((link) => [link.tabId, link])
     );
-    const customById = new Map(
-      customLists.map((list) => [getCustomListTabId(list.slug), list] as const)
-    );
     const ordered = tabOrder
       .map((id) => {
         const builtIn = builtInById.get(id);
         if (builtIn) return builtIn;
         const custom =
           typeof id === "string" && id.startsWith("custom-")
-            ? customById.get(id as `custom-${string}`)
+            ? customTabsById.get(id as `custom-${string}`)
             : null;
         if (!custom) return null;
         return { label: custom.name, tabId: id };
@@ -241,7 +255,7 @@ export default function SettingsPage() {
       (link) => !ordered.some((item) => item.tabId === link.tabId)
     );
     return [...ordered, ...missing];
-  }, [customLists, tabOrder]);
+  }, [customTabsById, tabOrder]);
 
   const manageableNavLinks = useMemo(
     () =>
@@ -260,26 +274,41 @@ export default function SettingsPage() {
     [hiddenSet, manageableNavLinks, tabOrder]
   );
 
-  const sortedNavSections = useMemo(
+  const allVisibleNavLinks = useMemo(
     () =>
-      manageableNavLinks
-        .map((section) => ({
+      manageableNavLinks.filter(
+        (link) => tabOrder.includes(link.tabId) && !hiddenSet.has(link.tabId)
+      ),
+    [hiddenSet, manageableNavLinks, tabOrder]
+  );
+
+  const navSectionRows = useMemo(
+    () =>
+      manageableNavLinks.map((section) => {
+        const custom =
+          typeof section.tabId === "string" && section.tabId.startsWith("custom-")
+            ? customTabsById.get(section.tabId as `custom-${string}`) ?? null
+            : null;
+        return {
           ...section,
           visible:
             tabOrder.includes(section.tabId) && !hiddenSet.has(section.tabId),
-        }))
-        .sort((a, b) => {
-          if (a.visible !== b.visible) return a.visible ? -1 : 1;
-          return a.label.localeCompare(b.label, undefined, {
-            sensitivity: "base",
-          });
-        }),
-    [hiddenSet, manageableNavLinks, tabOrder]
+          isCustom: Boolean(custom),
+          customKind: custom?.kind ?? null,
+          customIcon: custom?.icon ?? null,
+        };
+      }),
+    [customTabsById, hiddenSet, manageableNavLinks, tabOrder]
+  );
+
+  const customNavSectionRows = useMemo(
+    () => navSectionRows.filter((section) => section.isCustom),
+    [navSectionRows]
   );
 
   const moveNavTab = useCallback(
     (tabId: ProjectNavTabId, direction: "up" | "down") => {
-      const visibleTabIds = visibleNavLinks.map((link) => link.tabId);
+      const visibleTabIds = allVisibleNavLinks.map((link) => link.tabId);
       const fromVisible = visibleTabIds.indexOf(tabId);
       if (fromVisible === -1) return;
       const toVisible = direction === "up" ? fromVisible - 1 : fromVisible + 1;
@@ -292,7 +321,7 @@ export default function SettingsPage() {
       [next[from], next[to]] = [next[to], next[from]];
       setTabOrder(next);
     },
-    [setTabOrder, tabOrder, visibleNavLinks]
+    [allVisibleNavLinks, setTabOrder, tabOrder]
   );
 
   const toggleTabVisibility = useCallback(
@@ -350,6 +379,28 @@ export default function SettingsPage() {
     setTabOrder(loadTabOrder([]));
   }, [deletedTabIds.length, setDeletedTabIds, setTabOrder]);
 
+  const permanentlyDeleteCustomTab = useCallback(() => {
+    if (!pendingCustomDelete || !layout.selectedProjectId) return;
+    deleteCustomTab(layout.selectedProjectId, pendingCustomDelete.slug);
+    setTabOrder(tabOrder.filter((id) => id !== pendingCustomDelete.tabId));
+    setHiddenTabIds(
+      hiddenTabIds.filter((id) => id !== pendingCustomDelete.tabId)
+    );
+    setDeletedTabIds(
+      deletedTabIds.filter((id) => id !== pendingCustomDelete.tabId)
+    );
+    setPendingCustomDelete(null);
+  }, [
+    deletedTabIds,
+    hiddenTabIds,
+    layout.selectedProjectId,
+    pendingCustomDelete,
+    setDeletedTabIds,
+    setHiddenTabIds,
+    setTabOrder,
+    tabOrder,
+  ]);
+
   const toggleBulbyTrigger = useCallback(() => {
     const next = !bulbyTriggerHidden;
     setBulbyTriggerHidden(next);
@@ -393,6 +444,16 @@ export default function SettingsPage() {
       onCreateProject={layout.createProjectByName}
       onRenameProject={layout.renameProjectById}
     >
+      {pendingCustomDelete ? (
+        <ConfirmModal
+          title="Permanently Delete Custom Section?"
+          message={`"${pendingCustomDelete.label}" will be removed permanently. This also deletes its saved content and it cannot be restored.`}
+          confirmLabel="Delete permanently"
+          onClose={() => setPendingCustomDelete(null)}
+          onConfirm={permanentlyDeleteCustomTab}
+          danger
+        />
+      ) : null}
       <section className="settings-page" aria-label="Settings">
         <header className="settings-hero" id="overview">
           <div className="settings-hero-copy">
@@ -505,7 +566,7 @@ export default function SettingsPage() {
             >
               <div className="settings-panel-heading">
                 <p className="settings-panel-eyebrow">Display</p>
-                <h2 className="settings-panel-title">Appearance settings</h2>
+                <h2 className="settings-panel-title">Appearance Settings</h2>
                 <p className="settings-panel-description">
                   Preview color schemes instantly, then save to sync across
                   devices.
@@ -543,7 +604,7 @@ export default function SettingsPage() {
                   role="group"
                   aria-label="Light preset"
                 >
-                  <h3 className="settings-preset-group-title">Light preset</h3>
+                  <h3 className="settings-preset-group-title">Light Preset</h3>
                   {Object.entries(PRESET_DETAILS).map(([presetId, def]) => {
                     const id = presetId as AppearancePresetId;
                     const selected = draftPresets.lightPreset === id;
@@ -572,7 +633,7 @@ export default function SettingsPage() {
                   role="group"
                   aria-label="Dark preset"
                 >
-                  <h3 className="settings-preset-group-title">Dark preset</h3>
+                  <h3 className="settings-preset-group-title">Dark Preset</h3>
                   {Object.entries(PRESET_DETAILS).map(([presetId, def]) => {
                     const id = presetId as AppearancePresetId;
                     const selected = draftPresets.darkPreset === id;
@@ -701,7 +762,7 @@ export default function SettingsPage() {
               <div className="settings-tool-grid">
                 <article className="settings-tool-card">
                   <div className="settings-tool-heading">
-                    <h3 className="settings-tool-title">Visible order</h3>
+                    <h3 className="settings-tool-title">Visible Order</h3>
                     <p className="settings-tool-description">
                       Reorder the sections that are currently shown in the
                       workspace.
@@ -718,10 +779,19 @@ export default function SettingsPage() {
                         className="settings-list-row"
                         role="listitem"
                       >
-                        <span className="settings-list-label">
-                          {link.label}
-                        </span>
+                        {renderSettingsNavLabel({
+                          ...link,
+                          isCustom:
+                            typeof link.tabId === "string" &&
+                            link.tabId.startsWith("custom-"),
+                        })}
                         <div className="settings-list-actions">
+                          {typeof link.tabId === "string" &&
+                          link.tabId.startsWith("custom-") ? (
+                            <span className="settings-list-badge" title="Custom">
+                              C
+                            </span>
+                          ) : null}
                           <button
                             type="button"
                             className="settings-mini-btn"
@@ -749,7 +819,7 @@ export default function SettingsPage() {
                 <article className="settings-tool-card">
                   <div className="settings-tool-heading">
                     <h3 className="settings-tool-title">
-                      Show or hide sections
+                      Show or Hide Sections
                     </h3>
                     <p className="settings-tool-description">
                       Bring deleted sections back by turning them on again here.
@@ -760,14 +830,19 @@ export default function SettingsPage() {
                     role="list"
                     aria-label="Section visibility"
                   >
-                    {sortedNavSections.map((section) => (
-                      <label
+                    {navSectionRows.map((section) => (
+                      <div
                         key={section.tabId}
-                        className="settings-list-row settings-list-row-toggle"
+                        className="settings-list-row"
+                        role="listitem"
                       >
-                        <span className="settings-list-label">
-                          {section.label}
-                        </span>
+                        {renderSettingsNavLabel(section)}
+                        <div className="settings-list-actions">
+                          {section.isCustom ? (
+                            <span className="settings-list-badge" title="Custom">
+                              C
+                            </span>
+                          ) : null}
                         <UiCheckbox
                           checked={section.visible}
                           onChange={() =>
@@ -775,58 +850,65 @@ export default function SettingsPage() {
                           }
                           aria-label={`${section.visible ? "Hide" : "Show"} ${section.label}`}
                         />
-                      </label>
+                        </div>
+                      </div>
                     ))}
                   </div>
                 </article>
 
                 <article className="settings-tool-card">
                   <div className="settings-tool-heading">
-                    <h3 className="settings-tool-title">Delete sections</h3>
+                    <h3 className="settings-tool-title">Delete Custom Sections</h3>
                     <p className="settings-tool-description">
-                      Remove sections from the navigation entirely, then restore
-                      them when needed.
+                      Permanently remove custom sections and their saved content.
                     </p>
                   </div>
                   <div
                     className="settings-list"
                     role="list"
-                    aria-label="Delete navigation sections"
+                    aria-label="Delete custom navigation sections"
                   >
-                    {manageableNavLinks.map((link) => {
-                      const canDelete = tabOrder.length > 1;
+                    {customNavSectionRows.map((link) => {
+                      const customTab =
+                        typeof link.tabId === "string" &&
+                        link.tabId.startsWith("custom-")
+                          ? customTabsById.get(link.tabId as `custom-${string}`) ??
+                            null
+                          : null;
                       return (
                         <div
                           key={link.tabId}
                           className="settings-list-row"
                           role="listitem"
                         >
-                          <span className="settings-list-label">
-                            {link.label}
-                          </span>
-                          <button
-                            type="button"
-                            className="settings-mini-btn settings-mini-btn-danger"
-                            onClick={() => deleteSectionTab(link.tabId)}
-                            disabled={!canDelete}
-                            aria-label={`Delete ${link.label}`}
-                            title={`Delete ${link.label}`}
-                          >
-                            <IconTrash />
-                          </button>
+                          {renderSettingsNavLabel(link)}
+                          <div className="settings-list-actions">
+                            {link.isCustom ? (
+                              <span className="settings-list-badge" title="Custom">
+                                C
+                              </span>
+                            ) : null}
+                            {customTab ? (
+                              <button
+                                type="button"
+                                className="settings-mini-btn settings-mini-btn-danger"
+                                onClick={() =>
+                                  setPendingCustomDelete({
+                                    tabId: link.tabId,
+                                    slug: customTab.slug,
+                                    label: customTab.name,
+                                  })
+                                }
+                                aria-label={`Delete ${link.label}`}
+                                title={`Delete ${link.label}`}
+                              >
+                                <IconTrash />
+                              </button>
+                            ) : null}
+                          </div>
                         </div>
                       );
                     })}
-                  </div>
-                  <div className="settings-actions settings-actions-start">
-                    <button
-                      type="button"
-                      className="ui-btn ui-btn--secondary"
-                      onClick={restoreDeletedTabs}
-                      disabled={deletedTabIds.length === 0}
-                    >
-                      Restore deleted sections
-                    </button>
                   </div>
                 </article>
               </div>
@@ -854,7 +936,7 @@ export default function SettingsPage() {
               <div className="settings-tool-grid settings-tool-grid-assistant">
                 <article className="settings-tool-card">
                   <div className="settings-tool-heading">
-                    <h3 className="settings-tool-title">Assistant voice</h3>
+                    <h3 className="settings-tool-title">Assistant Voice</h3>
                     <p className="settings-tool-description">
                       Current selection: {selectedVoiceLabel}
                     </p>
@@ -881,7 +963,7 @@ export default function SettingsPage() {
                   ) : (
                     <div className="settings-note-card">
                       <strong className="settings-note-title">
-                        No voices available yet.
+                        No Voices Available Yet.
                       </strong>
                       <p className="settings-note-copy">
                         Browser and ElevenLabs voices will appear here when they
@@ -893,7 +975,7 @@ export default function SettingsPage() {
 
                 <article className="settings-tool-card">
                   <div className="settings-tool-heading">
-                    <h3 className="settings-tool-title">AI model</h3>
+                    <h3 className="settings-tool-title">AI Model</h3>
                     <p className="settings-tool-description">
                       {canManageOpenRouterModel
                         ? "Choose the OpenRouter model used for assistant responses."
@@ -922,7 +1004,7 @@ export default function SettingsPage() {
                   ) : (
                     <div className="settings-note-card">
                       <strong className="settings-note-title">
-                        Model follows your account.
+                        Model Follows Your Account.
                       </strong>
                       <p className="settings-note-copy">
                         Nothing is missing here. The switcher only appears for
@@ -934,7 +1016,7 @@ export default function SettingsPage() {
 
                 <article className="settings-tool-card">
                   <div className="settings-tool-heading">
-                    <h3 className="settings-tool-title">Bulby chat trigger</h3>
+                    <h3 className="settings-tool-title">Bulby Chat Trigger</h3>
                     <p className="settings-tool-description">
                       Hide or show the floating Bulby launcher across the app.
                     </p>
@@ -942,8 +1024,8 @@ export default function SettingsPage() {
                   <div className="settings-note-card">
                     <strong className="settings-note-title">
                       {bulbyTriggerHidden
-                        ? "Bulby launcher is hidden."
-                        : "Bulby launcher is visible."}
+                        ? "Bulby Launcher Is Hidden."
+                        : "Bulby Launcher Is Visible."}
                     </strong>
                     <p className="settings-note-copy">
                       This matches the eye toggle from the drawer settings

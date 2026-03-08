@@ -142,7 +142,7 @@ export function IssueDetailModalAutomatedTests({
                         type="button"
                         className="test-run-control test-run-control--play"
                         onClick={() => runTest(t)}
-                        title="Run this test"
+                        title="Run This Test"
                         aria-label={`Run ${t}`}
                       />
                     )}
@@ -151,7 +151,7 @@ export function IssueDetailModalAutomatedTests({
                     <Link
                       href={`/tests#test-${testNameToSlug(t)}`}
                       className="automated-tests-chip-text"
-                      title="Open this test on Tests page"
+                      title="Open This Test on Tests Page"
                     >
                       {t}
                     </Link>

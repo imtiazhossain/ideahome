@@ -4,6 +4,7 @@
  */
 
 import type { AppTab } from "./types";
+import { toUiTitleCase } from "./uiTitleCase";
 
 export const BUILT_IN_TABS: AppTab[] = [
   "board",
@@ -47,23 +48,23 @@ export const DEFAULT_TAB_ORDER: readonly AppTab[] = [
 ] as const;
 
 export const TAB_LABELS: Record<string, string> = {
-  board: "Board",
-  home: "Summary",
-  projects: "Projects",
-  issues: "Issues",
-  expenses: "Expenses",
-  features: "Features",
-  todos: "To-Do",
-  ideas: "Ideas",
-  bugs: "Bugs",
-  enhancements: "Enhancements",
-  tests: "Tests",
-  timeline: "Timeline",
-  calendar: "Calendar",
-  goals: "Goals",
-  development: "Code Health",
-  pages: "Pages",
-  settings: "Settings",
+  board: toUiTitleCase("board"),
+  home: toUiTitleCase("summary"),
+  projects: toUiTitleCase("projects"),
+  issues: toUiTitleCase("issues"),
+  expenses: toUiTitleCase("expenses"),
+  features: toUiTitleCase("features"),
+  todos: toUiTitleCase("to-do"),
+  ideas: toUiTitleCase("ideas"),
+  bugs: toUiTitleCase("bugs"),
+  enhancements: toUiTitleCase("enhancements"),
+  tests: toUiTitleCase("tests"),
+  timeline: toUiTitleCase("timeline"),
+  calendar: toUiTitleCase("calendar"),
+  goals: toUiTitleCase("goals"),
+  development: toUiTitleCase("code health"),
+  pages: toUiTitleCase("pages"),
+  settings: toUiTitleCase("settings"),
 };
 
 export function getTabLabel(tab: AppTab, customListName?: string): string {

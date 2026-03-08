@@ -48,7 +48,7 @@ export function SettingsTab({
         <Text style={s.body}>Email: {readUserEmailFromToken(token) || "unknown"}</Text>
         <Text style={s.body}>Current project: {selectedProject?.name ?? "none"}</Text>
       </AppCard>
-      <AppCard title="Custom lists">
+      <AppCard title="Custom Lists">
         <View style={s.stack}>
           <Text style={s.subtle}>Create a new list (e.g. Groceries, Packing). It will appear as a tab.</Text>
           <View style={s.inlineRow}>

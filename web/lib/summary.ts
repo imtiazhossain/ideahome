@@ -358,7 +358,7 @@ function buildInsights(params: {
     insights.push({
       id: "empty",
       tone: "neutral",
-      title: "No project work yet",
+      title: "No Project Work Yet",
       detail:
         "Add tasks, ideas, enhancements, features, or bugs to begin tracking momentum.",
     });
@@ -369,7 +369,7 @@ function buildInsights(params: {
     insights.push({
       id: "bugs-dominant",
       tone: "danger",
-      title: "Bug pressure is high",
+      title: "Bug Pressure Is High",
       detail: `${openBugs} open bugs are competing with ${completedItems} completed items.`,
     });
   }
@@ -378,7 +378,7 @@ function buildInsights(params: {
     insights.push({
       id: "large-backlog",
       tone: "warning",
-      title: "Backlog is building up",
+      title: "Backlog Is Building Up",
       detail: `${openItems} items remain open and only ${Math.round(completionRate)}% of tracked work is complete.`,
     });
   }
@@ -387,7 +387,7 @@ function buildInsights(params: {
     insights.push({
       id: "no-momentum",
       tone: "warning",
-      title: "No fresh movement this week",
+      title: "No Fresh Movement This Week",
       detail:
         "Nothing new was created in the last 7 days, which usually signals stalled planning or execution.",
     });
@@ -397,7 +397,7 @@ function buildInsights(params: {
     insights.push({
       id: "healthy-momentum",
       tone: "success",
-      title: "Momentum looks healthy",
+      title: "Momentum Looks Healthy",
       detail: `${momentumCompletedEstimate} of the ${momentumCount} items added this week are already marked done.`,
     });
   }
@@ -418,7 +418,7 @@ function buildInsights(params: {
     insights.push({
       id: "steady-state",
       tone: "success",
-      title: "Steady operating rhythm",
+      title: "Steady Operating Rhythm",
       detail:
         "The project has a balanced mix of open work and completion progress.",
     });

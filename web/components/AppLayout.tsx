@@ -1,20 +1,19 @@
 import React from "react";
+import { toUiTitleCase } from "@ideahome/shared";
 import Head from "next/head";
 import { useRouter } from "next/router";
 import {
-  addCustomList,
-  getCustomListTabId,
-  getCustomLists,
-} from "../lib/customLists";
-import {
-  AUTH_CHANGE_EVENT,
   BACKEND_CONNECTIVITY_CHANGE_EVENT,
   isBackendOffline,
 } from "../lib/api/auth";
+import { addCustomTab, getCustomTabHref, getCustomTabId } from "../lib/customTabs";
+import { useCustomTabs } from "../lib/useCustomTabs";
 import { useProjectOrder } from "../lib/useProjectOrder";
 import { useAssistantSettings } from "../lib/useAssistantSettings";
 import { AppDrawer } from "./AppDrawer";
 import { BulbyChatbox } from "./BulbyChatbox";
+import { RESERVED_CUSTOM_TAB_ICON_IDS } from "./CustomTabIcon";
+import { CreateCustomTabModal } from "./CreateCustomTabModal";
 import { DeleteProjectModal } from "./DeleteProjectModal";
 import { ProjectNavBar, useIsMobile, useTabOrder } from "./ProjectNavBar";
 import { IconBrokenBulb } from "./icons/IconBrokenBulb";
@@ -25,21 +24,25 @@ const SECTION_LINKS: {
   label: string;
   tabId: ProjectNavTabId;
 }[] = [
-  { tabId: "todo", label: "To-Do", href: "/todo" },
-  { tabId: "ideas", label: "Ideas", href: "/ideas" },
-  { tabId: "enhancements", label: "Enhancements", href: "/enhancements" },
-  { tabId: "summary", label: "Summary", href: "/summary" },
-  { tabId: "timeline", label: "Timeline", href: "/timeline" },
-  { tabId: "board", label: "Dashboard", href: "/" },
-  { tabId: "tests", label: "Tests", href: "/tests" },
-  { tabId: "calendar", label: "Calendar", href: "/calendar" },
-  { tabId: "list", label: "Features", href: "/features" },
-  { tabId: "forms", label: "Bugs", href: "/bugs" },
-  { tabId: "goals", label: "Goals", href: "/goals" },
-  { tabId: "expenses", label: "Finances", href: "/finances" },
-  { tabId: "code", label: "Code", href: "/code" },
-  { tabId: "pages", label: "Pages", href: "/pages" },
-  { tabId: "settings", label: "Settings", href: "/settings" },
+  { tabId: "todo", label: toUiTitleCase("to-do"), href: "/todo" },
+  { tabId: "ideas", label: toUiTitleCase("ideas"), href: "/ideas" },
+  {
+    tabId: "enhancements",
+    label: toUiTitleCase("enhancements"),
+    href: "/enhancements",
+  },
+  { tabId: "summary", label: toUiTitleCase("summary"), href: "/summary" },
+  { tabId: "timeline", label: toUiTitleCase("timeline"), href: "/timeline" },
+  { tabId: "board", label: toUiTitleCase("dashboard"), href: "/" },
+  { tabId: "tests", label: toUiTitleCase("tests"), href: "/tests" },
+  { tabId: "calendar", label: toUiTitleCase("calendar"), href: "/calendar" },
+  { tabId: "list", label: toUiTitleCase("features"), href: "/features" },
+  { tabId: "forms", label: toUiTitleCase("bugs"), href: "/bugs" },
+  { tabId: "goals", label: toUiTitleCase("goals"), href: "/goals" },
+  { tabId: "expenses", label: toUiTitleCase("finances"), href: "/finances" },
+  { tabId: "code", label: toUiTitleCase("code"), href: "/code" },
+  { tabId: "pages", label: toUiTitleCase("pages"), href: "/pages" },
+  { tabId: "settings", label: toUiTitleCase("settings"), href: "/settings" },
 ];
 
 export interface AppLayoutProps {
@@ -136,25 +139,19 @@ export function AppLayout({
     React.useState(false);
   const [creatingProject, setCreatingProject] = React.useState(false);
   const [creatingProjectName, setCreatingProjectName] = React.useState("");
-  const [creatingSection, setCreatingSection] = React.useState(false);
-  const [creatingSectionName, setCreatingSectionName] = React.useState("");
-  const [customLists, setCustomLists] = React.useState<
-    ReturnType<typeof getCustomLists>
-  >([]);
+  const [createCustomTabModalOpen, setCreateCustomTabModalOpen] =
+    React.useState(false);
   const [backendOffline, setBackendOffline] = React.useState(false);
   const creatingProjectInputRef = React.useRef<HTMLInputElement>(null);
-  const creatingSectionInputRef = React.useRef<HTMLInputElement>(null);
-
-  React.useEffect(() => {
-    const syncCustomLists = () => setCustomLists(getCustomLists());
-    syncCustomLists();
-    window.addEventListener("storage", syncCustomLists);
-    window.addEventListener(AUTH_CHANGE_EVENT, syncCustomLists);
-    return () => {
-      window.removeEventListener("storage", syncCustomLists);
-      window.removeEventListener(AUTH_CHANGE_EVENT, syncCustomLists);
-    };
-  }, []);
+  const customTabs = useCustomTabs(selectedProjectId);
+  const usedCustomIconIds = React.useMemo(
+    () =>
+      customTabs
+        .map((tab) => (tab.icon.type === "preset" ? tab.icon.presetId : null))
+        .filter((iconId): iconId is string => Boolean(iconId))
+        .filter((iconId) => !RESERVED_CUSTOM_TAB_ICON_IDS.includes(iconId as never)),
+    [customTabs]
+  );
 
   React.useEffect(() => {
     setBackendOffline(isBackendOffline());
@@ -192,10 +189,9 @@ export function AppLayout({
   } = useAssistantSettings();
   const orderedNavLinks = React.useMemo(() => {
     const byId = new Map(SECTION_LINKS.map((l) => [l.tabId, l]));
-    const customById = new Map<
-      string,
-      ReturnType<typeof getCustomLists>[number]
-    >(customLists.map((l) => [getCustomListTabId(l.slug), l]));
+    const customById = new Map<string, (typeof customTabs)[number]>(
+      customTabs.map((entry) => [getCustomTabId(entry.slug), entry] as const)
+    );
     const ordered = tabOrder
       .map((id) => {
         const builtIn = byId.get(id);
@@ -203,7 +199,7 @@ export function AppLayout({
         const custom = customById.get(id);
         if (!custom) return null;
         return {
-          href: `/list/${custom.slug}`,
+          href: getCustomTabHref(custom),
           label: custom.name,
           tabId: id,
         };
@@ -218,7 +214,7 @@ export function AppLayout({
       (link) => !ordered.some((item) => item.tabId === link.tabId)
     );
     return [...ordered, ...missing];
-  }, [customLists, tabOrder]);
+  }, [customTabs, tabOrder]);
 
   const visibleOrderedNavLinks = React.useMemo(
     () =>
@@ -342,27 +338,6 @@ export function AppLayout({
     setCreatingProjectName("");
   }, [creatingProjectName, onCreateProject, router]);
 
-  const submitNewSection = React.useCallback(() => {
-    const name = creatingSectionName.trim();
-    if (!name) {
-      setCreatingSection(false);
-      setCreatingSectionName("");
-      return;
-    }
-    const list = addCustomList(name);
-    setCustomLists((prev) => [
-      ...prev.filter((entry) => entry.slug !== list.slug),
-      list,
-    ]);
-    const id = getCustomListTabId(list.slug);
-    if (!tabOrder.includes(id)) {
-      setTabOrder([...tabOrder, id]);
-    }
-    setCreatingSection(false);
-    setCreatingSectionName("");
-    void router.push(`/list/${list.slug}`);
-  }, [creatingSectionName, router, setTabOrder, tabOrder]);
-
   const handleAddProject = React.useCallback(() => {
     setCreatingProject(true);
     setCreatingProjectName("");
@@ -370,8 +345,7 @@ export function AppLayout({
   }, [setEditingProjectId]);
 
   const handleAddTab = React.useCallback(() => {
-    setCreatingSection(true);
-    setCreatingSectionName("");
+    setCreateCustomTabModalOpen(true);
   }, []);
 
   const closeDrawerOnMobile = React.useCallback(() => {
@@ -421,10 +395,6 @@ export function AppLayout({
     if (creatingProject) creatingProjectInputRef.current?.focus();
   }, [creatingProject]);
 
-  React.useEffect(() => {
-    if (creatingSection) creatingSectionInputRef.current?.focus();
-  }, [creatingSection]);
-
   return (
     <>
       <Head>
@@ -469,15 +439,6 @@ export function AppLayout({
           onCancelCreatingProject={() => {
             setCreatingProject(false);
             setCreatingProjectName("");
-          }}
-          creatingSection={creatingSection}
-          creatingSectionName={creatingSectionName}
-          setCreatingSectionName={setCreatingSectionName}
-          creatingSectionInputRef={creatingSectionInputRef}
-          submitNewSection={submitNewSection}
-          onCancelCreatingSection={() => {
-            setCreatingSection(false);
-            setCreatingSectionName("");
           }}
           drawerSettingsRef={drawerSettingsRef}
           drawerSettingsOpen={drawerSettingsOpen}
@@ -538,6 +499,9 @@ export function AppLayout({
             onOpenAppearanceSettings={() => {
               void router.push("/settings");
             }}
+            onOpenCreateTabModal={() => {
+              setCreateCustomTabModalOpen(true);
+            }}
           />
 
           <div className="main-page-scroll">
@@ -574,6 +538,29 @@ export function AppLayout({
           onConfirm={() => handleDeleteProject(projectToDelete)}
         />
       ) : null}
+      <CreateCustomTabModal
+        open={createCustomTabModalOpen}
+        onClose={() => setCreateCustomTabModalOpen(false)}
+        usedIconIds={usedCustomIconIds}
+        onSubmit={async ({ name, kind, icon }) => {
+          if (!selectedProjectId) {
+            throw new Error("Select a project before creating a custom tab.");
+          }
+          const customTab = addCustomTab(selectedProjectId, {
+            name,
+            kind,
+            icon,
+          });
+          const tabId = getCustomTabId(customTab.slug);
+          if (!tabOrder.includes(tabId)) {
+            setTabOrder([...tabOrder, tabId]);
+          }
+          setHiddenTabIds(hiddenTabIds.filter((id) => id !== tabId));
+          setDeletedTabIds(deletedTabIds.filter((id) => id !== tabId));
+          setCreateCustomTabModalOpen(false);
+          await router.push(getCustomTabHref(customTab));
+        }}
+      />
     </>
   );
 }

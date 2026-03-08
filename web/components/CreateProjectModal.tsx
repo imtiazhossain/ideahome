@@ -39,11 +39,14 @@ export function CreateProjectModal({
 }: CreateProjectModalProps) {
   if (!open) return null;
 
+  const organizationNameFieldId = "create-project-org-name";
+  const projectNameFieldId = "create-project-name";
+
   return (
     <div className="modal-overlay" onClick={() => !submitting && onClose()}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
-          <h2>Create project</h2>
+          <h2>Create Project</h2>
           <CloseButton
             className="modal-close"
             onClick={() => !submitting && onClose()}
@@ -60,8 +63,10 @@ export function CreateProjectModal({
           )}
           {organizations.length === 0 ? (
             <div className="form-group">
-              <label>Organization name</label>
+              <label htmlFor={organizationNameFieldId}>Organization Name</label>
               <UiInput
+                id={organizationNameFieldId}
+                name="organizationName"
                 value={newOrgName}
                 onChange={(e) => setNewOrgName(e.target.value)}
                 placeholder="My Organization"
@@ -76,6 +81,7 @@ export function CreateProjectModal({
               <label htmlFor="create-project-org">Organization</label>
               <UiSelect
                 id="create-project-org"
+                name="organizationId"
                 value={newProjectOrgId}
                 onChange={(e) => setNewProjectOrgId(e.target.value)}
                 required
@@ -90,8 +96,10 @@ export function CreateProjectModal({
             </div>
           )}
           <div className="form-group">
-            <label>Project name</label>
+            <label htmlFor={projectNameFieldId}>Project Name</label>
             <UiInput
+              id={projectNameFieldId}
+              name="projectName"
               value={newProjectName}
               onChange={(e) => setNewProjectName(e.target.value)}
               placeholder="e.g. Engineering, Marketing"

@@ -1,4 +1,10 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   DndContext,
   closestCenter,
@@ -14,9 +20,12 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { restrictToWindowEdges } from "@dnd-kit/modifiers";
-import type { PlaidLinkError, PlaidLinkOnEventMetadata, PlaidLinkOnExitMetadata } from "react-plaid-link";
+import type {
+  PlaidLinkError,
+  PlaidLinkOnEventMetadata,
+  PlaidLinkOnExitMetadata,
+} from "react-plaid-link";
 import { useRouter } from "next/router";
-import { EXPENSE_CATEGORIES } from "@ideahome/shared";
 import {
   createTaxDocument,
   createExpense,
@@ -39,34 +48,24 @@ import {
   type Expense,
   type PlaidLinkedAccount,
 } from "../lib/api";
-import { formatCurrency, formatRelativeTime, toYYYYMMDD } from "../lib/utils";
+import { toYYYYMMDD } from "../lib/utils";
 import { useProjectLayout } from "../lib/useProjectLayout";
 import { AppLayout } from "../components/AppLayout";
-import { ExpenseCategoryDropdown } from "../components/ExpenseCategoryDropdown";
-import {
-  ExpensesDateFilterDropdown,
-  dayOfMonthOrdinal,
-  type DateFilterMode,
-} from "../components/ExpensesDateFilterDropdown";
-import { IconPlus } from "../components/IconPlus";
-import { IconTrash } from "../components/IconTrash";
-import { CalendarPickerPopup } from "../components/CalendarPickerPopup";
-import { ProjectSectionGuard } from "../components/ProjectSectionGuard";
+import { type DateFilterMode } from "../components/ExpensesDateFilterDropdown";
 import { SectionLoadingSpinner } from "../components/SectionLoadingSpinner";
-import { CollapsibleSection } from "../components/CollapsibleSection";
 import { useTheme } from "./_app";
-import { PlaidLinkLauncher, SortableFinancesSection } from "../features/finances/components";
+import {
+  PlaidLinkLauncher,
+  SortableFinancesSection,
+} from "../features/finances/components";
+import { FinancesSectionContent } from "../features/finances/sections";
 import {
   FINANCES_DRAGGABLE_SECTION_IDS,
-  MONTH_NAMES,
   TAX_CHECKLIST_ITEMS,
   clearStoredExpensesLegacy,
   defaultTaxChecklistState,
-  expenseInDateFilter,
   fileToBase64,
   filterAndSortExpenses,
-  formatBytes,
-  formatExpenseDateDisplay,
   getExpensesStorageKey,
   getTaxChecklistStorageKey,
   getTaxDocsStorageKey,
@@ -76,8 +75,6 @@ import {
   normalizeFinancesSectionOrder,
   readTaxTextPreview,
   saveStoredExpensesLegacy,
-  taxDocInsight,
-  taxKindLabel,
   type TaxChecklistState,
   type TaxDocument,
   type TaxDocumentKind,
@@ -151,19 +148,10 @@ export default function FinancialsPage() {
   const financesSectionOrderStorageKey = `ideahome-finances-section-order${selectedProjectId ? `-${selectedProjectId}` : ""}`;
   const financesSectionCollapsedStorageKey = `ideahome-finances-section-collapsed${selectedProjectId ? `-${selectedProjectId}` : ""}`;
   const linkedAccountsCollapsedStorageKey = `ideahome-finances-linked-accounts-collapsed${selectedProjectId ? `-${selectedProjectId}` : ""}`;
-  const [financesSectionOrder, setFinancesSectionOrder] = useState<string[]>(
-    () => {
-      if (typeof window === "undefined")
-        return [...FINANCES_DRAGGABLE_SECTION_IDS];
-      try {
-        const raw = localStorage.getItem(financesSectionOrderStorageKey);
-        if (!raw) return [...FINANCES_DRAGGABLE_SECTION_IDS];
-        return normalizeFinancesSectionOrder(JSON.parse(raw) as unknown);
-      } catch {
-        return [...FINANCES_DRAGGABLE_SECTION_IDS];
-      }
-    }
-  );
+  const [financesSectionOrder, setFinancesSectionOrder] = useState<string[]>([
+    ...FINANCES_DRAGGABLE_SECTION_IDS,
+  ]);
+  const hydratedFinancesSectionOrderKeyRef = useRef<string | null>(null);
   const [taxDocuments, setTaxDocuments] = useState<TaxDocument[]>([]);
   const [taxChecklist, setTaxChecklist] = useState<TaxChecklistState>(
     defaultTaxChecklistState
@@ -283,7 +271,13 @@ export default function FinancialsPage() {
   }, [linkedAccountsCollapsed, linkedAccountsCollapsedStorageKey]);
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
+    if (
+      typeof window === "undefined" ||
+      hydratedFinancesSectionOrderKeyRef.current !==
+        financesSectionOrderStorageKey
+    ) {
+      return;
+    }
     try {
       localStorage.setItem(
         financesSectionOrderStorageKey,
@@ -296,17 +290,20 @@ export default function FinancialsPage() {
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const key = `ideahome-finances-section-order${selectedProjectId ? `-${selectedProjectId}` : ""}`;
     try {
-      const raw = localStorage.getItem(key);
-      if (!raw) return;
-      setFinancesSectionOrder(
-        normalizeFinancesSectionOrder(JSON.parse(raw) as unknown)
-      );
+      const raw = localStorage.getItem(financesSectionOrderStorageKey);
+      if (!raw) {
+        setFinancesSectionOrder([...FINANCES_DRAGGABLE_SECTION_IDS]);
+      } else {
+        setFinancesSectionOrder(
+          normalizeFinancesSectionOrder(JSON.parse(raw) as unknown)
+        );
+      }
     } catch {
-      // ignore
+      setFinancesSectionOrder([...FINANCES_DRAGGABLE_SECTION_IDS]);
     }
-  }, [selectedProjectId]);
+    hydratedFinancesSectionOrderKeyRef.current = financesSectionOrderStorageKey;
+  }, [financesSectionOrderStorageKey]);
 
   const importedCount = expenses.filter((e) => e.source === "plaid").length;
   const plaidConnectButtonLoading =
@@ -1046,10 +1043,32 @@ export default function FinancialsPage() {
   const { filteredExpenses, expensesForSummary, total } = useMemo(
     () =>
       filterAndSortExpenses(expenses, {
-        dateFilterMode, filterDay, filterDayOfMonth, filterMonth, filterYear,
-        rangeStart, rangeEnd, categoryFilter, expenseSearchQuery, sortBy, sortDir,
+        dateFilterMode,
+        filterDay,
+        filterDayOfMonth,
+        filterMonth,
+        filterYear,
+        rangeStart,
+        rangeEnd,
+        categoryFilter,
+        expenseSearchQuery,
+        sortBy,
+        sortDir,
       }),
-    [expenses, dateFilterMode, filterDay, filterDayOfMonth, filterMonth, filterYear, rangeStart, rangeEnd, categoryFilter, expenseSearchQuery, sortBy, sortDir]
+    [
+      expenses,
+      dateFilterMode,
+      filterDay,
+      filterDayOfMonth,
+      filterMonth,
+      filterYear,
+      rangeStart,
+      rangeEnd,
+      categoryFilter,
+      expenseSearchQuery,
+      sortBy,
+      sortDir,
+    ]
   );
   const byCategory = expensesForSummary.reduce<Record<string, number>>(
     (acc, e) => {
@@ -1121,795 +1140,113 @@ export default function FinancialsPage() {
   const renderFinancesSection = (
     sectionId: string,
     dragHandle: React.ReactNode
-  ) => {
-    if (sectionId === "expenses-summary") {
-      return (
-        <CollapsibleSection
-          sectionId="expenses-summary"
-          title={
-            <>
-              Summary{" "}
-              {dateFilterMode !== "all" && (
-                <span className="expenses-summary-period" aria-hidden="true">
-                  {dateFilterMode === "day" && formatExpenseDateDisplay(filterDay)}
-                  {dateFilterMode === "dayOfMonth" &&
-                    `${dayOfMonthOrdinal(filterDayOfMonth)} of every month`}
-                  {dateFilterMode === "month" &&
-                    `${MONTH_NAMES[filterMonth - 1]} ${filterYear}`}
-                  {dateFilterMode === "year" && String(filterYear)}
-                  {dateFilterMode === "range" && `${rangeStart} – ${rangeEnd}`}
-                </span>
-              )}{" "}
-              <span
-                className="tests-page-section-count"
-                aria-label="Number of expenses"
-              >
-                {expensesForSummary.length} Expenses
-              </span>
-            </>
-          }
-          collapsed={isSectionCollapsed("expenses-summary")}
-          onToggle={() => toggleSection("expenses-summary")}
-          sectionClassName="expenses-summary-section"
-          headerTrailing={dragHandle}
-        >
-          <div className="expenses-summary-total" aria-label="Total amount">
-            {formatCurrency(total)}
-          </div>
-          {Object.keys(byCategory).length > 0 && (
-            <ul className="expenses-summary-list" aria-label="By category">
-              {Object.entries(byCategory)
-                .sort(([catA, sumA], [catB, sumB]) =>
-                  sumB !== sumA ? sumB - sumA : catA.localeCompare(catB)
-                )
-                .map(([cat, sum]) => (
-                  <li key={cat} className="expenses-summary-list-item">
-                    <button
-                      type="button"
-                      className={
-                        "expenses-summary-list-item-btn" +
-                        (categoryFilter === cat ? " is-selected" : "")
-                      }
-                      onClick={() =>
-                        setCategoryFilter((prev) => (prev === cat ? null : cat))
-                      }
-                      aria-pressed={categoryFilter === cat}
-                      aria-label={
-                        categoryFilter === cat
-                          ? `Show all categories (currently filtering by ${cat})`
-                          : `Show only ${cat} expenses`
-                      }
-                    >
-                      <span className="expenses-summary-category">{cat}</span>
-                      <span className="expenses-summary-amount">
-                        {formatCurrency(sum)}
-                      </span>
-                    </button>
-                  </li>
-                ))}
-            </ul>
-          )}
-        </CollapsibleSection>
-      );
-    }
-
-    if (sectionId === "expenses-financials") {
-      if (!isAuthenticated()) {
-        return (
-          <CollapsibleSection
-            sectionId="expenses-auth-notice"
-            title="Sync notice"
-            collapsed={isSectionCollapsed("expenses-auth-notice")}
-            onToggle={() => toggleSection("expenses-auth-notice")}
-            sectionClassName="expenses-auth-notice"
-            headerTrailing={dragHandle}
-          >
-            <p className="expenses-auth-notice-text" role="status">
-              Expenses are stored on this device only. Sign in to save them to
-              your account and sync across devices.
-            </p>
-          </CollapsibleSection>
-        );
-      }
-
-      return (
-        <CollapsibleSection
-          sectionId="expenses-plaid"
-          title="Link Financials"
-          collapsed={isSectionCollapsed("expenses-plaid")}
-          onToggle={() => toggleSection("expenses-plaid")}
-          sectionClassName="expenses-plaid-section"
-          headingId="expenses-plaid-heading"
-          headerTrailing={dragHandle}
-        >
-          <p className="expenses-plaid-desc">
-            Connect a bank or credit card to import transactions as expenses.
-          </p>
-          {plaidError && (
-            <p className="expenses-error-notice-text" role="alert">
-              {plaidError}
-            </p>
-          )}
-          <div className="expenses-plaid-actions">
-            <button
-              type="button"
-              className="project-nav-add expenses-plaid-connect-btn"
-              onClick={handleConnectPlaid}
-              onMouseEnter={prefetchPlaidLinkToken}
-              onFocus={prefetchPlaidLinkToken}
-              disabled={plaidConnectButtonLoading}
-              aria-label="Connect bank or card"
-              aria-busy={plaidConnectButtonLoading}
-            >
-              {plaidConnectButtonLoading && (
-                <span
-                  className="upload-spinner upload-spinner--btn"
-                  aria-hidden="true"
-                />
-              )}
-              <span className="expenses-plaid-connect-btn-text">
-                {plaidConnectButtonLoading ? "Connecting…" : "Connect bank or card"}
-              </span>
-            </button>
-            {linkedAccounts.length > 0 && selectedProjectId && (
-              <div className="expenses-plaid-action">
-                <button
-                  type="button"
-                  className="project-nav-add expenses-plaid-sync-btn"
-                  onClick={handleSyncPlaid}
-                  disabled={syncLoading}
-                  aria-label="Sync transactions into expenses"
-                  aria-busy={syncLoading}
-                >
-                  {syncLoading ? "Syncing…" : "Sync transactions"}
-                </button>
-                {lastSyncedAt != null && (
-                  <span className="expenses-plaid-last-synced" role="status">
-                    Last synced {formatRelativeTime(lastSyncedAt)}
-                  </span>
-                )}
-              </div>
-            )}
-          </div>
-          {linkedAccounts.length > 0 && (
-            <div className="expenses-plaid-linked-wrap">
-              <button
-                type="button"
-                className={
-                  "expenses-plaid-linked-toggle" +
-                  (linkedAccountsCollapsed ? " is-collapsed" : "")
-                }
-                onClick={() => setLinkedAccountsCollapsed((prev) => !prev)}
-                aria-expanded={!linkedAccountsCollapsed}
-                aria-controls="expenses-plaid-linked-list"
-              >
-                <span
-                  className="expenses-plaid-linked-toggle-chevron"
-                  aria-hidden="true"
-                >
-                  ▶
-                </span>
-                <span className="expenses-plaid-linked-toggle-label">
-                  Linked accounts
-                </span>
-                <span className="tests-page-section-count">
-                  {linkedAccounts.length}
-                </span>
-              </button>
-              {!linkedAccountsCollapsed && (
-                <ul
-                  id="expenses-plaid-linked-list"
-                  className="expenses-plaid-linked-list"
-                  aria-label="Linked accounts"
-                >
-                  {linkedAccounts.map((acc) => (
-                    <li key={acc.id} className="expenses-plaid-linked-item">
-                      {editingLinkedAccountId === acc.id ? (
-                        <input
-                          type="text"
-                          value={editingLinkedAccountName}
-                          onChange={(e) => setEditingLinkedAccountName(e.target.value)}
-                          onBlur={() =>
-                            saveLinkedAccountName(acc.id, editingLinkedAccountName)
-                          }
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") {
-                              e.currentTarget.blur();
-                            } else if (e.key === "Escape") {
-                              e.preventDefault();
-                              cancelEditingLinkedAccount();
-                            }
-                          }}
-                          autoFocus
-                          aria-label="Edit linked account name"
-                          className="expenses-item-description-input"
-                        />
-                      ) : (
-                        <span
-                          className="expenses-plaid-linked-name expenses-item-description-editable"
-                          role="button"
-                          tabIndex={0}
-                          onClick={() => startEditingLinkedAccount(acc)}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter" || e.key === " ") {
-                              e.preventDefault();
-                              startEditingLinkedAccount(acc);
-                            }
-                          }}
-                          title="Click to rename account"
-                          aria-label={`Rename ${acc.institutionName ?? "account"}`}
-                        >
-                          {acc.institutionName ?? "Bank or card"}
-                        </span>
-                      )}
-                      <button
-                        type="button"
-                        className="expenses-plaid-disconnect-btn"
-                        onClick={() => handleDisconnectPlaid(acc.id)}
-                        disabled={renamingLinkedAccountId === acc.id}
-                        aria-label={`Disconnect ${acc.institutionName ?? "account"}`}
-                      >
-                        Disconnect
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          )}
-          {importedCount > 0 && selectedProjectId && (
-            <div className="expenses-plaid-delete-imported-wrap">
-              {deleteImportedConfirming ? (
-                <>
-                  <span className="expenses-plaid-delete-imported-prompt">
-                    Delete all {importedCount} imported? Cannot be undone.
-                  </span>
-                  <div className="expenses-plaid-delete-imported-actions">
-                    <button
-                      type="button"
-                      className="expenses-plaid-delete-imported-btn expenses-plaid-delete-imported-cancel"
-                      onClick={handleDeleteAllImportedCancel}
-                      disabled={deleteImportedLoading}
-                      aria-label="Cancel"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="button"
-                      className="expenses-plaid-delete-imported-btn"
-                      onClick={handleDeleteAllImportedSubmit}
-                      disabled={deleteImportedLoading}
-                      aria-label={`Delete all ${importedCount} imported expenses`}
-                    >
-                      {deleteImportedLoading ? "Deleting…" : "Delete"}
-                    </button>
-                  </div>
-                </>
-              ) : (
-                <button
-                  type="button"
-                  className="expenses-plaid-delete-imported-btn"
-                  onClick={handleDeleteAllImportedConfirm}
-                  disabled={deleteImportedLoading}
-                  aria-label={`Delete all ${importedCount} imported expenses`}
-                >
-                  Delete all imported expenses ({importedCount})
-                </button>
-              )}
-            </div>
-          )}
-        </CollapsibleSection>
-      );
-    }
-
-    if (sectionId === "expenses-taxes") {
-      return (
-        <CollapsibleSection
-          sectionId="expenses-taxes"
-          title={
-            <>
-              Taxes{" "}
-              <span className="tests-page-section-count" aria-label="Tax documents count">
-                {taxDocuments.length} Docs
-              </span>
-            </>
-          }
-          collapsed={isSectionCollapsed("expenses-taxes")}
-          onToggle={() => toggleSection("expenses-taxes")}
-          sectionClassName="expenses-taxes-section"
-          headingId="expenses-taxes-heading"
-          headerTrailing={dragHandle}
-        >
-          <p className="expenses-taxes-desc">
-            Upload tax documents, organize what they likely mean, and track
-            filing readiness for this project.
-          </p>
-          <ProjectSectionGuard
-            projectsLoaded={projectsLoaded}
-            selectedProjectId={selectedProjectId}
-            message="Select a project to manage tax documents."
-            variant="list"
-          >
-            <div className="expenses-taxes-actions">
-              <input
-                ref={taxUploadInputRef}
-                type="file"
-                multiple
-                className="expenses-taxes-file-input"
-                onChange={handleTaxUpload}
-                accept=".pdf,.csv,.txt,.json,.jpg,.jpeg,.png,.webp,.heic,.doc,.docx,.xls,.xlsx"
-                aria-label="Upload tax documents"
-              />
-              <button
-                type="button"
-                className="project-nav-add expenses-taxes-upload-btn"
-                onClick={openTaxFilePicker}
-                disabled={taxUploading}
-                aria-busy={taxUploading}
-              >
-                {taxUploading ? "Processing…" : "Upload tax documents"}
-              </button>
-              {taxUploadError && (
-                <p className="expenses-error-notice-text" role="alert">
-                  {taxUploadError}
-                </p>
-              )}
-            </div>
-
-            <div className="expenses-taxes-readiness">
-              <p className="expenses-taxes-readiness-score">
-                <strong>{taxReadinessScore}%</strong> {taxReadinessLabel}
-              </p>
-              <p className="expenses-taxes-readiness-meta">
-                Checklist {taxChecklistCompleted}/{TAX_CHECKLIST_ITEMS.length}{" "}
-                complete
-              </p>
-              {missingTaxCoverageLabels.length > 0 ? (
-                <p className="expenses-taxes-readiness-missing">
-                  Missing: {missingTaxCoverageLabels.join(", ")}
-                </p>
-              ) : (
-                <p className="expenses-taxes-readiness-missing">
-                  Core document categories detected. Run a final review before
-                  filing.
-                </p>
-              )}
-            </div>
-
-            <ul className="expenses-taxes-checklist" aria-label="Tax filing checklist">
-              {TAX_CHECKLIST_ITEMS.map((item) => (
-                <li key={item.id} className="expenses-taxes-checklist-item">
-                  <label className="expenses-taxes-checklist-label">
-                    <input
-                      type="checkbox"
-                      checked={taxChecklist[item.id]}
-                      onChange={() => handleTaxChecklistToggle(item.id)}
-                    />{" "}
-                    {item.label}
-                  </label>
-                </li>
-              ))}
-            </ul>
-
-            {taxDocuments.length === 0 ? (
-              <p className="tests-page-section-desc finances-empty-state-msg">
-                No tax documents uploaded yet.
-              </p>
-            ) : (
-              <ul
-                className="expenses-taxes-doc-list"
-                aria-label="Uploaded tax documents"
-              >
-                {taxDocuments.map((doc) => (
-                  <li key={doc.id} className="expenses-taxes-doc-item">
-                    <div className="expenses-taxes-doc-header">
-                      <div>
-                        <p className="expenses-taxes-doc-name">{doc.fileName}</p>
-                        <p className="expenses-taxes-doc-meta">
-                          {taxKindLabel(doc.kind)} · {formatBytes(doc.sizeBytes)}
-                          {doc.taxYear != null ? ` · ${doc.taxYear}` : ""}
-                          {` · Uploaded ${new Date(doc.createdAt).toLocaleString()}`}
-                        </p>
-                      </div>
-                      <div className="expenses-taxes-doc-actions">
-                        {isAuthenticated() && (
-                          <button
-                            type="button"
-                            className="expenses-plaid-disconnect-btn"
-                            onClick={() => void handleTaxDownload(doc)}
-                            aria-label={`Download ${doc.fileName}`}
-                            title={`Download "${doc.fileName}"`}
-                          >
-                            Download
-                          </button>
-                        )}
-                        <button
-                          type="button"
-                          className="features-list-remove"
-                          onClick={() => void removeTaxDocument(doc.id)}
-                          aria-label={`Remove ${doc.fileName}`}
-                          title={`Remove "${doc.fileName}"`}
-                        >
-                          <IconTrash />
-                        </button>
-                      </div>
-                    </div>
-                    <p className="expenses-taxes-doc-insight">
-                      {taxDocInsight(doc.kind)}
-                    </p>
-                    {doc.textPreview && (
-                      <p className="expenses-taxes-doc-preview">
-                        <strong>Text preview:</strong> {doc.textPreview}
-                      </p>
-                    )}
-                    <label className="expenses-taxes-notes-label">
-                      Notes for filing
-                      <textarea
-                        className="expenses-input expenses-taxes-notes"
-                        value={doc.notes}
-                        spellCheck
-                        onChange={(e) =>
-                          setTaxDocuments((prev) =>
-                            prev.map((item) =>
-                              item.id === doc.id
-                                ? { ...item, notes: e.target.value }
-                                : item
-                            )
-                          )
-                        }
-                        onBlur={(e) =>
-                          void updateTaxDocumentNotes(doc.id, e.target.value)
-                        }
-                        placeholder="Add notes (what it is, where it belongs, follow-ups needed)."
-                        rows={2}
-                      />
-                    </label>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </ProjectSectionGuard>
-        </CollapsibleSection>
-      );
-    }
-
-    if (sectionId === "expenses-add-and-list") {
-      const listControls =
-        expenses.length > 0 ? (
-          <div className="expenses-list-controls">
-            <ExpensesDateFilterDropdown
-              mode={dateFilterMode}
-              filterDay={filterDay}
-              filterDayOfMonth={filterDayOfMonth}
-              filterMonth={filterMonth}
-              filterYear={filterYear}
-              rangeStart={rangeStart}
-              rangeEnd={rangeEnd}
-              onModeChange={setDateFilterMode}
-              onFilterDayChange={setFilterDay}
-              onFilterDayOfMonthChange={setFilterDayOfMonth}
-              onFilterMonthChange={setFilterMonth}
-              onFilterYearChange={setFilterYear}
-              onRangeStartChange={setRangeStart}
-              onRangeEndChange={setRangeEnd}
-              open={dateFilterOpen}
-              onOpenChange={setDateFilterOpen}
-            />
-            <div className="expenses-list-search-wrap">
-              <input
-                id="expenses-list-search"
-                type="search"
-                value={expenseSearchQuery}
-                onChange={(e) => setExpenseSearchQuery(e.target.value)}
-                placeholder="Search Expenses"
-                aria-label="Search expenses"
-                className="expenses-input expenses-list-search"
-              />
-            </div>
-          </div>
-        ) : null;
-
-      return (
-        <CollapsibleSection
-          sectionId="expenses-add-and-list"
-          title={
-            <>
-              Expenses{" "}
-              <span className="tests-page-section-count" aria-label="Count">
-                {categoryFilter
-                  ? `${filteredExpenses.length} of ${expenses.length} (${categoryFilter})`
-                  : expenseSearchQuery.trim()
-                    ? `${filteredExpenses.length} of ${expenses.length}`
-                    : dateFilterMode !== "all"
-                      ? `${filteredExpenses.length} of ${expenses.length}`
-                      : expenses.length}
-              </span>
-            </>
-          }
-          collapsed={isSectionCollapsed("expenses-add-and-list")}
-          onToggle={() => toggleSection("expenses-add-and-list")}
-          sectionClassName="expenses-add-section expenses-list-section"
-          headerTrailing={dragHandle}
-        >
-          <ProjectSectionGuard
-            projectsLoaded={projectsLoaded}
-            selectedProjectId={selectedProjectId}
-            message="Select a project to add expenses."
-            variant="add"
-          >
-            <form onSubmit={addExpense} className="expenses-form">
-              <div className="expenses-field expenses-field-date" ref={datePickerRef}>
-                <label htmlFor="expenses-date-trigger">Date</label>
-                <div className="expenses-date-control">
-                  <button
-                    type="button"
-                    id="expenses-date-trigger"
-                    className="expenses-input expenses-date-trigger"
-                    onClick={() => setDatePickerOpen((open) => !open)}
-                    aria-haspopup="dialog"
-                    aria-expanded={datePickerOpen}
-                    aria-label="Choose date"
-                  >
-                    {formatExpenseDateDisplay(date)}
-                  </button>
-                  {datePickerOpen && (
-                    <CalendarPickerPopup
-                      value={date}
-                      onChange={(dateStr) => {
-                        setDate(dateStr);
-                        setDatePickerOpen(false);
-                      }}
-                      onClose={() => setDatePickerOpen(false)}
-                      showToday
-                    />
-                  )}
-                </div>
-              </div>
-              <div className="expenses-field expenses-field-description">
-                <label htmlFor="expenses-description">Description</label>
-                <input
-                  id="expenses-description"
-                  ref={descriptionInputRef}
-                  type="text"
-                  value={description}
-                  onChange={(e) => {
-                    setDescription(e.target.value);
-                    setAddExpenseError("");
-                  }}
-                  placeholder="What was this for?"
-                  aria-label="Description"
-                  className="expenses-input"
-                />
-              </div>
-              <div className="expenses-field expenses-field-amount">
-                <label htmlFor="expenses-amount">Amount ($)</label>
-                <input
-                  id="expenses-amount"
-                  type="text"
-                  inputMode="decimal"
-                  value={amount}
-                  onChange={(e) => {
-                    const v = e.target.value;
-                    if (v === "" || /^-?\d*\.?\d*$/.test(v)) {
-                      setAmount(v);
-                      setAddExpenseError("");
-                    }
-                  }}
-                  placeholder="0.00"
-                  aria-label="Amount"
-                  className="expenses-input"
-                />
-              </div>
-              <div className="expenses-field expenses-field-category">
-                <label htmlFor="expenses-category-trigger">Category</label>
-                <ExpenseCategoryDropdown
-                  ref={categoryDropdownRef}
-                  value={category}
-                  onChange={setCategory}
-                  categories={EXPENSE_CATEGORIES}
-                  open={categoryDropdownOpen}
-                  onOpenChange={setCategoryDropdownOpen}
-                  variant="form"
-                  listboxId="expenses-category-listbox"
-                  triggerAriaLabel="Category"
-                  triggerId="expenses-category-trigger"
-                />
-              </div>
-              <button
-                type="submit"
-                className="project-nav-add expenses-add-btn"
-                aria-label="Add Expense"
-                title="Add Expense"
-                disabled={!canAddExpense}
-              >
-                <IconPlus />
-              </button>
-            </form>
-          </ProjectSectionGuard>
-          {listControls}
-          <ProjectSectionGuard
-            projectsLoaded={projectsLoaded}
-            selectedProjectId={selectedProjectId}
-            message="Select a project to see and manage expenses."
-            variant="list"
-          >
-            {expenses.length === 0 ? (
-              <p className="tests-page-section-desc finances-empty-state-msg">
-                It's dark in here...
-                <br />
-                Turn the lights on by adding something.
-              </p>
-            ) : filteredExpenses.length === 0 ? (
-              <p className="tests-page-section-desc finances-empty-state-msg">
-                No expenses match your filters.
-              </p>
-            ) : (
-              <>
-                <div className="expenses-list-table">
-                  <div className="expenses-list-header" role="presentation">
-                    <button
-                      type="button"
-                      className={
-                        "expenses-list-header-label" +
-                        (sortBy === "date" ? " is-active" : "")
-                      }
-                      onClick={() => handleSort("date")}
-                      aria-label={`Sort by date ${sortBy === "date" ? (sortDir === "asc" ? "ascending" : "descending") : ""}`}
-                      title="Sort by date"
-                    >
-                      Date
-                      {sortBy === "date" ? (sortDir === "asc" ? " ↑" : " ↓") : ""}
-                    </button>
-                    <button
-                      type="button"
-                      className={
-                        "expenses-list-header-label" +
-                        (sortBy === "description" ? " is-active" : "")
-                      }
-                      onClick={() => handleSort("description")}
-                      aria-label={`Sort by description ${sortBy === "description" ? (sortDir === "asc" ? "ascending" : "descending") : ""}`}
-                      title="Sort by description"
-                    >
-                      Description
-                      {sortBy === "description"
-                        ? sortDir === "asc"
-                          ? " ↑"
-                          : " ↓"
-                        : ""}
-                    </button>
-                    <button
-                      type="button"
-                      className={
-                        "expenses-list-header-label expenses-list-header-amount" +
-                        (sortBy === "amount" ? " is-active" : "")
-                      }
-                      onClick={() => handleSort("amount")}
-                      aria-label={`Sort by amount ${sortBy === "amount" ? (sortDir === "asc" ? "ascending" : "descending") : ""}`}
-                      title="Sort by amount"
-                    >
-                      Amount
-                      {sortBy === "amount"
-                        ? sortDir === "asc"
-                          ? " ↑"
-                          : " ↓"
-                        : ""}
-                    </button>
-                    <button
-                      type="button"
-                      className={
-                        "expenses-list-header-label expenses-list-header-category" +
-                        (sortBy === "category" ? " is-active" : "")
-                      }
-                      onClick={() => handleSort("category")}
-                      aria-label={`Sort by category ${sortBy === "category" ? (sortDir === "asc" ? "ascending" : "descending") : ""}`}
-                      title="Sort by category"
-                    >
-                      Category
-                      {sortBy === "category"
-                        ? sortDir === "asc"
-                          ? " ↑"
-                          : " ↓"
-                        : ""}
-                    </button>
-                    <span className="expenses-list-header-spacer" aria-hidden="true" />
-                  </div>
-                  <ul className="expenses-list" role="list">
-                    {filteredExpenses.map((item) => (
-                      <li key={item.id} className="expenses-item">
-                        <span className="expenses-item-date">
-                          {formatExpenseDateDisplay(item.date)}
-                        </span>
-                        {editingDescriptionId === item.id ? (
-                          <input
-                            type="text"
-                            value={editingDescriptionValue}
-                            onChange={(e) => setEditingDescriptionValue(e.target.value)}
-                            onBlur={() =>
-                              saveExpenseDescription(item.id, editingDescriptionValue)
-                            }
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter") {
-                                e.currentTarget.blur();
-                              } else if (e.key === "Escape") {
-                                cancelEditingDescription();
-                              }
-                            }}
-                            autoFocus
-                            aria-label="Edit description for expense"
-                            className="expenses-item-description-input"
-                          />
-                        ) : (
-                          <span
-                            className="expenses-item-description expenses-item-description-editable"
-                            role="button"
-                            tabIndex={0}
-                            onClick={() => startEditingDescription(item)}
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter" || e.key === " ") {
-                                e.preventDefault();
-                                startEditingDescription(item);
-                              }
-                            }}
-                            title="Click to edit description"
-                            aria-label={`Edit description: ${item.description ?? ""}`}
-                          >
-                            {item.description}
-                          </span>
-                        )}
-                        <span className="expenses-item-amount">
-                          {formatCurrency(item.amount)}
-                        </span>
-                        {editingCategoryId === item.id ? (
-                          <ExpenseCategoryDropdown
-                            ref={listCategoryDropdownRef}
-                            value={item.category}
-                            onChange={(c) => {
-                              updateExpenseCategory(item.id, c);
-                              setEditingCategoryId(null);
-                            }}
-                            categories={EXPENSE_CATEGORIES}
-                            open={true}
-                            onOpenChange={(open) => {
-                              if (!open) setEditingCategoryId(null);
-                            }}
-                            variant="inline"
-                            listboxId={`expenses-list-category-listbox-${item.id}`}
-                            triggerAriaLabel={`Edit category: ${item.category}`}
-                            title="Click to edit category"
-                          />
-                        ) : (
-                          <button
-                            type="button"
-                            className="expenses-category-btn"
-                            onClick={() => setEditingCategoryId(item.id)}
-                            title="Click to edit category"
-                            aria-label={`Edit category: ${item.category}`}
-                          >
-                            {item.category}
-                          </button>
-                        )}
-                        <button
-                          type="button"
-                          className="features-list-remove"
-                          onClick={() => removeExpense(item.id)}
-                          aria-label={`Remove ${item.description}`}
-                          title={`Remove "${item.description}"`}
-                        >
-                          <IconTrash />
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              </>
-            )}
-          </ProjectSectionGuard>
-        </CollapsibleSection>
-      );
-    }
-
-    return null;
-  };
+  ) => (
+    <FinancesSectionContent
+      sectionId={sectionId}
+      dragHandle={dragHandle}
+      projectsLoaded={projectsLoaded}
+      selectedProjectId={selectedProjectId}
+      dateFilterMode={dateFilterMode}
+      filterDay={filterDay}
+      filterDayOfMonth={filterDayOfMonth}
+      filterMonth={filterMonth}
+      filterYear={filterYear}
+      rangeStart={rangeStart}
+      rangeEnd={rangeEnd}
+      expenses={expenses}
+      expensesForSummary={expensesForSummary}
+      filteredExpenses={filteredExpenses}
+      categoryFilter={categoryFilter}
+      expenseSearchQuery={expenseSearchQuery}
+      sortBy={sortBy}
+      sortDir={sortDir}
+      total={total}
+      byCategory={byCategory}
+      canAddExpense={canAddExpense}
+      taxDocuments={taxDocuments}
+      taxChecklist={taxChecklist}
+      taxChecklistCompleted={taxChecklistCompleted}
+      taxReadinessScore={taxReadinessScore}
+      taxReadinessLabel={taxReadinessLabel}
+      missingTaxCoverageLabels={missingTaxCoverageLabels}
+      taxUploadError={taxUploadError}
+      taxUploading={taxUploading}
+      plaidError={plaidError}
+      plaidConnectButtonLoading={plaidConnectButtonLoading}
+      linkedAccounts={linkedAccounts}
+      linkedAccountsCollapsed={linkedAccountsCollapsed}
+      lastSyncedAt={lastSyncedAt}
+      syncLoading={syncLoading}
+      importedCount={importedCount}
+      deleteImportedConfirming={deleteImportedConfirming}
+      deleteImportedLoading={deleteImportedLoading}
+      editingLinkedAccountId={editingLinkedAccountId}
+      editingLinkedAccountName={editingLinkedAccountName}
+      renamingLinkedAccountId={renamingLinkedAccountId}
+      date={date}
+      description={description}
+      amount={amount}
+      category={category}
+      categoryDropdownOpen={categoryDropdownOpen}
+      datePickerOpen={datePickerOpen}
+      editingCategoryId={editingCategoryId}
+      editingDescriptionId={editingDescriptionId}
+      editingDescriptionValue={editingDescriptionValue}
+      dateFilterOpen={dateFilterOpen}
+      categoryDropdownRef={categoryDropdownRef}
+      listCategoryDropdownRef={listCategoryDropdownRef}
+      datePickerRef={datePickerRef}
+      descriptionInputRef={descriptionInputRef}
+      taxUploadInputRef={taxUploadInputRef}
+      isSectionCollapsed={isSectionCollapsed}
+      toggleSection={toggleSection}
+      setCategoryFilter={setCategoryFilter}
+      setLinkedAccountsCollapsed={setLinkedAccountsCollapsed}
+      setEditingLinkedAccountName={setEditingLinkedAccountName}
+      setTaxDocuments={setTaxDocuments}
+      setAddExpenseError={setAddExpenseError}
+      setDate={setDate}
+      setDatePickerOpen={setDatePickerOpen}
+      setDescription={setDescription}
+      setAmount={setAmount}
+      setCategory={setCategory}
+      setCategoryDropdownOpen={setCategoryDropdownOpen}
+      setExpenseSearchQuery={setExpenseSearchQuery}
+      setDateFilterMode={setDateFilterMode}
+      setFilterDay={setFilterDay}
+      setFilterDayOfMonth={setFilterDayOfMonth}
+      setFilterMonth={setFilterMonth}
+      setFilterYear={setFilterYear}
+      setRangeStart={setRangeStart}
+      setRangeEnd={setRangeEnd}
+      setDateFilterOpen={setDateFilterOpen}
+      setEditingCategoryId={setEditingCategoryId}
+      setEditingDescriptionValue={setEditingDescriptionValue}
+      openTaxFilePicker={openTaxFilePicker}
+      handleConnectPlaid={handleConnectPlaid}
+      prefetchPlaidLinkToken={prefetchPlaidLinkToken}
+      handleSyncPlaid={handleSyncPlaid}
+      startEditingLinkedAccount={startEditingLinkedAccount}
+      saveLinkedAccountName={saveLinkedAccountName}
+      cancelEditingLinkedAccount={cancelEditingLinkedAccount}
+      handleDisconnectPlaid={handleDisconnectPlaid}
+      handleDeleteAllImportedConfirm={handleDeleteAllImportedConfirm}
+      handleDeleteAllImportedCancel={handleDeleteAllImportedCancel}
+      handleDeleteAllImportedSubmit={handleDeleteAllImportedSubmit}
+      handleTaxUpload={handleTaxUpload}
+      handleTaxChecklistToggle={handleTaxChecklistToggle}
+      handleTaxDownload={handleTaxDownload}
+      removeTaxDocument={removeTaxDocument}
+      updateTaxDocumentNotes={updateTaxDocumentNotes}
+      addExpense={addExpense}
+      handleSort={handleSort}
+      startEditingDescription={startEditingDescription}
+      saveExpenseDescription={saveExpenseDescription}
+      cancelEditingDescription={cancelEditingDescription}
+      updateExpenseCategory={updateExpenseCategory}
+      removeExpense={removeExpense}
+    />
+  );
 
   return (
     <AppLayout

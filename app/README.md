@@ -1,3 +1,9 @@
+# App Copy Rules
+
+Use standard title case for built-in UI titles and headings in the native app: capitalize major words, keep short prepositions, articles, and conjunctions lowercase unless they are the first word, and leave user-entered names unchanged.
+
+Prefer the shared `toUiTitleCase` helper from `@ideahome/shared` for new built-in titles that are generated or centralized.
+
 This is a new [**React Native**](https://reactnative.dev) project, bootstrapped using [`@react-native-community/cli`](https://github.com/react-native-community/cli).
 
 # Getting Started

@@ -215,7 +215,7 @@ export function CheckableListPageShell({
                         className="tests-page-section-bulk-delete"
                         onClick={onBulkDelete}
                         aria-label="Delete all completed items"
-                        title="Delete all completed items"
+                        title="Delete All Completed Items"
                       >
                         <IconTrash />
                       </button>

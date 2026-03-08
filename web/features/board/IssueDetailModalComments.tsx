@@ -419,7 +419,7 @@ export function IssueDetailModalComments(props: IssueDetailModalCommentsProps) {
                   issueCommentSubmitting || commentAttachmentUploading
                 }
                 aria-label="Upload file (image, video, audio, PDF, or any file)"
-                title="Upload file (image, video, audio, PDF, or any file)"
+                title="Upload File (Image, Video, Audio, PDF, or Any File)"
               >
                 <IconUpload size={14} />
               </button>
@@ -535,7 +535,7 @@ export function IssueDetailModalComments(props: IssueDetailModalCommentsProps) {
                       recordingUploading
                     }
                     aria-label="Record with Camera"
-                    title="Record with Camera"
+                    title="Record With Camera"
                   >
                     <IconRecordCamera size={14} />
                   </button>
@@ -806,7 +806,7 @@ export function IssueDetailModalComments(props: IssueDetailModalCommentsProps) {
                                 updatingCommentId === c.id
                               }
                               aria-label="Upload file (image, video, audio, PDF, or any file)"
-                              title="Upload file (image, video, audio, PDF, or any file)"
+                              title="Upload File (Image, Video, Audio, PDF, or Any File)"
                             >
                               <IconUpload size={14} />
                             </button>
@@ -926,7 +926,7 @@ export function IssueDetailModalComments(props: IssueDetailModalCommentsProps) {
                                     updatingCommentId === c.id
                                   }
                                   aria-label="Record with Camera"
-                                  title="Record with Camera"
+                                  title="Record With Camera"
                                 >
                                   <IconRecordCamera size={14} />
                                 </button>
@@ -1059,7 +1059,7 @@ export function IssueDetailModalComments(props: IssueDetailModalCommentsProps) {
                                     commentAttachmentUploading
                                   }
                                   aria-label="Upload file (image, video, audio, PDF, or any file)"
-                                  title="Upload file (image, video, audio, PDF, or any file)"
+                                  title="Upload File (Image, Video, Audio, PDF, or Any File)"
                                 >
                                   <IconUpload size={14} />
                                 </button>
@@ -1169,7 +1169,7 @@ export function IssueDetailModalComments(props: IssueDetailModalCommentsProps) {
                                       }
                                       disabled={isRecording}
                                       aria-label="Record with Camera"
-                                      title="Record with Camera"
+                                      title="Record With Camera"
                                     >
                                       <IconRecordCamera size={14} />
                                     </button>
@@ -1220,7 +1220,7 @@ export function IssueDetailModalComments(props: IssueDetailModalCommentsProps) {
                                     commentHistoryOpenId === c.id
                                   }
                                   aria-label="Toggle edit history"
-                                  title="Edit history"
+                                  title="Edit History"
                                 >
                                   {commentHistoryOpenId === c.id
                                     ? "Hide history"
@@ -1303,7 +1303,7 @@ export function IssueDetailModalComments(props: IssueDetailModalCommentsProps) {
                           className="btn btn-icon"
                           onClick={() => handleStartEditComment(c)}
                           aria-label="Edit comment"
-                          title="Edit comment"
+                          title="Edit Comment"
                         >
                           <IconEdit size={14} />
                         </button>
@@ -1314,7 +1314,7 @@ export function IssueDetailModalComments(props: IssueDetailModalCommentsProps) {
                           onClick={() => handleDeleteComment(c.id)}
                           disabled={deletingCommentId === c.id}
                           aria-label={`Delete comment: ${c.body.slice(0, 30)}${c.body.length > 30 ? "…" : ""}`}
-                          title="Delete comment"
+                          title="Delete Comment"
                         >
                           <IconTrash />
                         </button>

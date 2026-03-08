@@ -36,7 +36,7 @@ export function IssueDetailModalActions({
         className="expenses-plaid-disconnect-btn issue-modal-delete-btn"
         onClick={() => setIssueToDelete(selectedIssue)}
         aria-label={`Delete ${selectedIssue.title || "issue"}`}
-        title="Delete issue"
+        title="Delete Issue"
       >
         <IconTrash />
       </button>

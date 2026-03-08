@@ -82,7 +82,7 @@ export default function ApiTestsPage() {
                                 className="test-run-control test-run-control--play"
                                 onClick={() => runTest(testName)}
                                 disabled={runningTest !== null}
-                                title="Run this test"
+                                title="Run This Test"
                                 aria-label={`Run ${testName}`}
                               />
                             )}

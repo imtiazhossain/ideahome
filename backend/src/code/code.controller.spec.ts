@@ -12,6 +12,9 @@ describe("CodeController", () => {
     createGithubRepositoryForProject: jest.fn(),
     getLatestAnalysisRun: jest.fn(),
     saveAnalysisRun: jest.fn(),
+    getProjectPromptUsageTrend: jest.fn(),
+    getMyPromptUsage: jest.fn(),
+    clearMyPromptUsage: jest.fn(),
   };
 
   beforeEach(async () => {
@@ -105,5 +108,41 @@ describe("CodeController", () => {
       "repo1",
       { score: 90 }
     );
+  });
+
+  it("getProjectPromptUsageTrend delegates to service", async () => {
+    const req = { user: { sub: "user1" } } as any;
+    mockSvc.getProjectPromptUsageTrend.mockResolvedValue({ points: [] });
+    const result = await controller.getProjectPromptUsageTrend(
+      "proj1",
+      "all",
+      req
+    );
+    expect(result).toEqual({ points: [] });
+    expect(mockSvc.getProjectPromptUsageTrend).toHaveBeenCalledWith(
+      "proj1",
+      "user1",
+      "all"
+    );
+  });
+
+  it("getMyPromptUsage delegates to service", async () => {
+    const req = { user: { sub: "user1" } } as any;
+    mockSvc.getMyPromptUsage.mockResolvedValue({ entries: [] });
+    const result = await controller.getMyPromptUsage("proj1", "all", req);
+    expect(result).toEqual({ entries: [] });
+    expect(mockSvc.getMyPromptUsage).toHaveBeenCalledWith(
+      "proj1",
+      "user1",
+      "all"
+    );
+  });
+
+  it("clearMyPromptUsage delegates to service", async () => {
+    const req = { user: { sub: "user1" } } as any;
+    mockSvc.clearMyPromptUsage.mockResolvedValue({ ok: true });
+    const result = await controller.clearMyPromptUsage("proj1", req);
+    expect(result).toEqual({ ok: true });
+    expect(mockSvc.clearMyPromptUsage).toHaveBeenCalledWith("proj1", "user1");
   });
 });

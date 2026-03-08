@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, NotFoundException } from "@nestjs/comm
 import type { Prisma } from "@prisma/client";
 import { verifyProjectForUser } from "../common/org-scope";
 import { ProjectScopedListService } from "../common/project-scoped-list.service";
+import { CodeService } from "../code/code.service";
 import { PrismaService } from "../prisma.service";
 import { IdeaPlanService } from "./idea-plan.service";
 import { WeatherService } from "./weather.service";
@@ -13,7 +14,8 @@ export class IdeasService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly ideaPlanService: IdeaPlanService,
-    private readonly weatherService: WeatherService
+    private readonly weatherService: WeatherService,
+    private readonly codeService: CodeService
   ) {
     this.listService = new ProjectScopedListService(prisma, "idea", "Idea");
   }
@@ -134,6 +136,12 @@ export class IdeasService {
       requesterEmail,
       includeWeb,
     });
+    await this.recordPromptUsage({
+      projectId: idea.project.id,
+      userId,
+      promptText: idea.name,
+      action,
+    });
     const previewGifUrl = this.resolvePreviewGifUrl(idea.name, context);
 
     return {
@@ -143,6 +151,7 @@ export class IdeasService {
       previewGifUrl,
       message: action.message,
       tokenUsage: action.tokenUsage ?? null,
+      tokenSource: action.tokenSource ?? null,
     };
   }
 
@@ -179,6 +188,12 @@ export class IdeasService {
       requesterEmail,
       includeWeb,
     });
+    await this.recordPromptUsage({
+      projectId: project.id,
+      userId,
+      promptText: itemName,
+      action,
+    });
     const previewGifUrl = this.resolvePreviewGifUrl(itemName, context);
 
     return {
@@ -188,7 +203,33 @@ export class IdeasService {
       previewGifUrl,
       message: action.message,
       tokenUsage: action.tokenUsage ?? null,
+      tokenSource: action.tokenSource ?? null,
     };
+  }
+
+  private async recordPromptUsage(input: {
+    projectId: string;
+    userId: string;
+    promptText: string;
+    action: {
+      tokenUsage?: {
+        promptTokens: number;
+        completionTokens: number;
+        totalTokens: number;
+      };
+      tokenSource?: string;
+    };
+  }) {
+    if (!input.action.tokenUsage) return;
+    await this.codeService.recordPromptUsage({
+      projectId: input.projectId,
+      userId: input.userId,
+      source: input.action.tokenSource,
+      promptText: input.promptText,
+      promptTokens: input.action.tokenUsage.promptTokens,
+      completionTokens: input.action.tokenUsage.completionTokens,
+      totalTokens: input.action.tokenUsage.totalTokens,
+    });
   }
 
   private resolvePreviewGifUrl(

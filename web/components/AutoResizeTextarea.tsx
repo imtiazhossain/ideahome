@@ -7,6 +7,7 @@ export interface AutoResizeTextareaProps {
   className?: string;
   rows?: number;
   id?: string;
+  name?: string;
 }
 
 export function AutoResizeTextarea({
@@ -16,6 +17,7 @@ export function AutoResizeTextarea({
   className,
   rows = 1,
   id,
+  name,
 }: AutoResizeTextareaProps) {
   const ref = useRef<HTMLTextAreaElement>(null);
   const adjustHeight = () => {
@@ -30,6 +32,7 @@ export function AutoResizeTextarea({
     <textarea
       ref={ref}
       id={id}
+      name={name}
       value={value}
       spellCheck
       onChange={(e) => {

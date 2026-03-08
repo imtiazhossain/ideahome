@@ -67,6 +67,12 @@ export function CreateIssueModal({
 }: CreateIssueModalProps) {
   if (!open) return null;
 
+  const titleFieldId = "create-deck-title";
+  const descriptionFieldId = "create-deck-description";
+  const acceptanceCriteriaFieldId = "create-deck-acceptance-criteria";
+  const databaseFieldId = "create-deck-database";
+  const apiFieldId = "create-deck-api";
+  const assigneeFieldId = "create-deck-assignee";
   const lines = parseTestCases(testCases);
   const qualityScore = computeQualityScore({
     title,
@@ -142,8 +148,10 @@ export function CreateIssueModal({
                 selectClassName="form-select expenses-input"
               />
               <div className="form-group issue-modal-field expenses-field">
-                <Text as="label" variant="label" tone="accent">Title</Text>
+                <Text as="label" variant="label" tone="accent" htmlFor={titleFieldId}>Title</Text>
                 <UiInput
+                  id={titleFieldId}
+                  name="title"
                   className="expenses-input"
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
@@ -152,8 +160,10 @@ export function CreateIssueModal({
                 />
               </div>
               <div className="form-group issue-modal-field expenses-field">
-                <Text as="label" variant="label" tone="accent">Description</Text>
+                <Text as="label" variant="label" tone="accent" htmlFor={descriptionFieldId}>Description</Text>
                 <textarea
+                  id={descriptionFieldId}
+                  name="description"
                   className="expenses-input"
                   value={description}
                   spellCheck
@@ -162,8 +172,10 @@ export function CreateIssueModal({
                 />
               </div>
               <div className="form-group issue-modal-field expenses-field">
-                <Text as="label" variant="label" tone="accent">Acceptance Criteria</Text>
+                <Text as="label" variant="label" tone="accent" htmlFor={acceptanceCriteriaFieldId}>Acceptance Criteria</Text>
                 <textarea
+                  id={acceptanceCriteriaFieldId}
+                  name="acceptanceCriteria"
                   className="expenses-input"
                   value={acceptanceCriteria}
                   spellCheck
@@ -172,8 +184,10 @@ export function CreateIssueModal({
                 />
               </div>
               <div className="form-group issue-modal-field expenses-field">
-                <Text as="label" variant="label" tone="accent">Database</Text>
+                <Text as="label" variant="label" tone="accent" htmlFor={databaseFieldId}>Database</Text>
                 <UiInput
+                  id={databaseFieldId}
+                  name="database"
                   className="expenses-input"
                   value={database}
                   onChange={(e) => setDatabase(e.target.value)}
@@ -181,8 +195,10 @@ export function CreateIssueModal({
                 />
               </div>
               <div className="form-group issue-modal-field expenses-field">
-                <Text as="label" variant="label" tone="accent">API</Text>
+                <Text as="label" variant="label" tone="accent" htmlFor={apiFieldId}>API</Text>
                 <UiInput
+                  id={apiFieldId}
+                  name="api"
                   className="expenses-input"
                   value={api}
                   onChange={(e) => setApi(e.target.value)}
@@ -190,12 +206,14 @@ export function CreateIssueModal({
                 />
               </div>
               <div className="form-group issue-modal-field expenses-field">
-                <Text as="label" variant="label" tone="accent">Test Cases</Text>
+                <Text as="label" variant="label" tone="accent" htmlFor="create-deck-test-case-0">Test Cases</Text>
                 <div className="test-cases-list">
                   {lines.map((line, idx) => (
                     <div key={idx} className="test-case-row">
                       <div className="test-case-field">
                         <AutoResizeTextarea
+                          id={`create-deck-test-case-${idx}`}
+                          name={`testCase${idx + 1}`}
                           value={line}
                           onChange={(e) => {
                             const next = [...lines];
@@ -214,7 +232,7 @@ export function CreateIssueModal({
                               updateCases(next.length ? next : [""]);
                             }}
                             aria-label="Remove test case"
-                            title="Remove test case"
+                            title="Remove Test Case"
                           />
                         )}
                       </div>
@@ -229,7 +247,7 @@ export function CreateIssueModal({
                           ])
                         }
                         aria-label="Add test case"
-                        title="Add test case"
+                        title="Add Test Case"
                       >
                         +
                       </button>
@@ -238,8 +256,10 @@ export function CreateIssueModal({
                 </div>
               </div>
               <div className="form-group issue-modal-field expenses-field">
-                <Text as="label" variant="label" tone="accent">Assigned To</Text>
+                <Text as="label" variant="label" tone="accent" htmlFor={assigneeFieldId}>Assigned To</Text>
                 <UiSelect
+                  id={assigneeFieldId}
+                  name="assigneeId"
                   className="form-select expenses-input"
                   value={assigneeId}
                   onChange={(e) => setAssigneeId(e.target.value)}

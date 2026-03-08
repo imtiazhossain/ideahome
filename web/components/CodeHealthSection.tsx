@@ -103,7 +103,7 @@ export function CodeHealthSection() {
           <iframe
             key={reportUrl}
             src={reportUrl}
-            title="Code coverage report"
+            title="Code Coverage Report"
             className="coverage-page-frame"
           />
         </div>

@@ -1,12 +1,12 @@
 import React, { useEffect, useState } from "react";
 import { useRouter } from "next/router";
 import {
-  getCustomListBySlug,
   getCustomListItems,
   setCustomListItems,
-  getCustomListTabId,
+  getCustomTabBySlug,
+  getCustomTabId,
   type CustomListItem,
-} from "../../lib/customLists";
+} from "../../lib/customTabs";
 import { useProjectLayout } from "../../lib/useProjectLayout";
 import { useTheme } from "../_app";
 import { useLocalCheckableList } from "../../lib/useLocalCheckableList";
@@ -17,24 +17,26 @@ export default function CustomListPage() {
   const slug = typeof router.query.slug === "string" ? router.query.slug : "";
   const layout = useProjectLayout();
   const theme = useTheme();
-  const list = slug ? getCustomListBySlug(slug) : null;
+  const projectId = layout.selectedProjectId ?? "";
+  const list =
+    slug && projectId ? getCustomTabBySlug(projectId, slug) : null;
 
   const [items, setItems] = useState<CustomListItem[]>([]);
   const [hydrated, setHydrated] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!slug) return;
-    const found = getCustomListBySlug(slug);
+    if (!slug || !projectId) return;
+    const found = getCustomTabBySlug(projectId, slug);
     if (!found) return;
-    setItems(getCustomListItems(slug));
+    setItems(getCustomListItems(projectId, slug));
     setHydrated(true);
-  }, [slug]);
+  }, [projectId, slug]);
 
   useEffect(() => {
-    if (!slug || !hydrated) return;
-    setCustomListItems(slug, items);
-  }, [slug, hydrated, items]);
+    if (!slug || !projectId || !hydrated) return;
+    setCustomListItems(projectId, slug, items);
+  }, [projectId, slug, hydrated, items]);
 
   useEffect(() => {
     if (!toastMessage) return;
@@ -49,27 +51,10 @@ export default function CustomListPage() {
     idPrefix: "local",
   });
 
-  if (!router.isReady) return null;
-  if (slug && !list) {
-    return (
-      <div className="app-layout">
-        <main className="main-content">
-          <div style={{ padding: 24 }}>
-            <h1>List not found</h1>
-            <p>The list &quot;{slug}&quot; does not exist.</p>
-            <a href="/">Go home</a>
-          </div>
-        </main>
-      </div>
-    );
-  }
-
-  if (!list) return null;
-
-  const activeTab = getCustomListTabId(list.slug);
-  const { theme: themeValue, toggleTheme } = theme;
-
   const handleCopyList = React.useCallback(() => {
+    if (!list) {
+      return;
+    }
     if (typeof navigator === "undefined" || !navigator.clipboard?.writeText) {
       setToastMessage("Copy is not supported in this browser.");
       return;
@@ -83,7 +68,27 @@ export default function CustomListPage() {
       .writeText(text)
       .then(() => setToastMessage("List copied."))
       .catch(() => setToastMessage("Could not copy list."));
-  }, [listState.items]);
+  }, [list, listState.items]);
+
+  if (!router.isReady) return null;
+  if (slug && !list) {
+    return (
+      <div className="app-layout">
+        <main className="main-content">
+          <div style={{ padding: 24 }}>
+            <h1>List Not Found</h1>
+            <p>The list &quot;{slug}&quot; does not exist.</p>
+            <a href="/">Go home</a>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
+  if (!list) return null;
+
+  const activeTab = getCustomTabId(list.slug);
+  const { theme: themeValue, toggleTheme } = theme;
 
   return (
     <CheckableListPageShell

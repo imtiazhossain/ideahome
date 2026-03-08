@@ -56,13 +56,6 @@ export interface AppDrawerProps {
   creatingProjectInputRef: React.RefObject<HTMLInputElement | null>;
   submitNewProject: () => void | Promise<void>;
   onCancelCreatingProject?: () => void;
-  /** Creating section inline */
-  creatingSection: boolean;
-  creatingSectionName: string;
-  setCreatingSectionName: (name: string) => void;
-  creatingSectionInputRef: React.RefObject<HTMLInputElement | null>;
-  submitNewSection: () => void;
-  onCancelCreatingSection?: () => void;
   /** Settings panel state (owned by parent) */
   drawerSettingsRef: React.RefObject<HTMLDivElement | null>;
   drawerSettingsOpen: boolean;
@@ -129,12 +122,6 @@ export function AppDrawer({
   creatingProjectInputRef,
   submitNewProject,
   onCancelCreatingProject,
-  creatingSection,
-  creatingSectionName,
-  setCreatingSectionName,
-  creatingSectionInputRef,
-  submitNewSection,
-  onCancelCreatingSection,
   drawerSettingsRef,
   drawerSettingsOpen,
   setDrawerSettingsOpen,
@@ -202,8 +189,8 @@ export function AppDrawer({
                 type="button"
                 className="drawer-toggle drawer-logo project-nav-drawer-toggle"
                 onClick={() => setDrawerOpen(false)}
-                aria-label="Close sidebar"
-                title="Close sidebar"
+                aria-label="Close Sidebar"
+                title="Close Sidebar"
               >
                 <span
                   className="drawer-logo-mark"
@@ -224,8 +211,8 @@ export function AppDrawer({
                   type="button"
                   className="drawer-nav-label-add-btn"
                   onClick={onAddProject}
-                  aria-label="Add project"
-                  title="Add project"
+                  aria-label="Add Project"
+                  title="Add Project"
                 >
                   +
                 </button>
@@ -278,7 +265,7 @@ export function AppDrawer({
                         moveProject(p.id, "up");
                       }}
                       aria-label={`Move ${p.name} up`}
-                      title="Move up"
+                      title="Move Up"
                       disabled={orderedProjects[0]?.id === p.id}
                     >
                       ▲
@@ -387,7 +374,7 @@ export function AppDrawer({
                     onClick={() => {
                       setDrawerVoicesOpen(false);
                     }}
-                    aria-label="Assistant voice"
+                    aria-label="Assistant Voice"
                     title={`Voice: ${selectedVoiceLabel}`}
                   >
                     <span
@@ -410,8 +397,8 @@ export function AppDrawer({
                     onClick={() => {
                       setDrawerFiltersOpen(false);
                     }}
-                    aria-label="Manage tabs"
-                    title="Manage tabs"
+                    aria-label="Manage Tabs"
+                    title="Manage Tabs"
                   >
                     <IconFilter />
                   </button>
@@ -423,8 +410,8 @@ export function AppDrawer({
                     onClick={() => {
                       setDrawerDeleteSectionsOpen(false);
                     }}
-                    aria-label="Delete sections"
-                    title="Delete sections"
+                    aria-label="Delete Sections"
+                    title="Delete Sections"
                   >
                     <IconTrash />
                   </button>
@@ -435,7 +422,7 @@ export function AppDrawer({
                         type="button"
                         className="drawer-bottom-settings-menu-item drawer-bottom-settings-voice"
                         role="menuitem"
-                        aria-label="Assistant voice"
+                        aria-label="Assistant Voice"
                         title={`Voice: ${selectedVoiceLabel}`}
                         onClick={() => {
                           setDrawerVoicesOpen((open) => !open);
@@ -487,8 +474,8 @@ export function AppDrawer({
                         setDrawerVoicesOpen(false);
                         setDrawerDeleteSectionsOpen(false);
                       }}
-                      aria-label="Manage tabs"
-                      title="Manage tabs"
+                      aria-label="Manage Tabs"
+                      title="Manage Tabs"
                     >
                       <IconFilter />
                     </button>
@@ -501,8 +488,8 @@ export function AppDrawer({
                         setDrawerFiltersOpen(false);
                         setDrawerVoicesOpen(false);
                       }}
-                      aria-label="Delete sections"
-                      title="Delete sections"
+                      aria-label="Delete Sections"
+                      title="Delete Sections"
                     >
                       <IconTrash />
                     </button>
@@ -515,13 +502,13 @@ export function AppDrawer({
                       }}
                       aria-label={
                         bulbyTriggerHidden
-                          ? "Show Bulby chat"
-                          : "Hide Bulby chat"
+                          ? "Show Bulby Chat"
+                          : "Hide Bulby Chat"
                       }
                       title={
                         bulbyTriggerHidden
-                          ? "Show Bulby chat"
-                          : "Hide Bulby chat"
+                          ? "Show Bulby Chat"
+                          : "Hide Bulby Chat"
                       }
                     >
                       {bulbyTriggerHidden ? (
@@ -541,8 +528,8 @@ export function AppDrawer({
                         setDrawerVoicesOpen(false);
                         setDrawerDeleteSectionsOpen(false);
                       }}
-                      aria-label="Open appearance settings"
-                      title="Open appearance settings"
+                      aria-label="Open Appearance Settings"
+                      title="Open Appearance Settings"
                     >
                       <IconSettings />
                     </button>

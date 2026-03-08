@@ -3,13 +3,23 @@ import Link from "next/link";
 import { useRouter } from "next/router";
 import { AUTH_CHANGE_EVENT } from "../../lib/api/auth";
 import {
+  getStoredSelectedProjectId,
+  SELECTED_PROJECT_CHANGE_EVENT,
+} from "../../lib/SelectedProjectContext";
+import {
   safeLocalStorageGet,
   safeLocalStorageGetJson,
   safeLocalStorageRemove,
   safeLocalStorageSet,
   safeLocalStorageSetJson,
 } from "../../lib/storage";
-import { getCustomListTabId, getCustomLists } from "../../lib/customLists";
+import {
+  CUSTOM_TABS_CHANGED_EVENT,
+  getCustomTabHref,
+  getCustomTabId,
+  getCustomTabs,
+} from "../../lib/customTabs";
+import { CustomTabIconPreview } from "../CustomTabIcon";
 import {
   IconBeaker,
   IconBoard,
@@ -253,8 +263,22 @@ export function TabOrderProvider({ children }: { children: React.ReactNode }) {
     };
     apply();
     const onAuthChange = () => apply();
+    const onCustomTabsChanged = () => apply();
+    const onSelectedProjectChange = () => apply();
     window.addEventListener(AUTH_CHANGE_EVENT, onAuthChange);
-    return () => window.removeEventListener(AUTH_CHANGE_EVENT, onAuthChange);
+    window.addEventListener(CUSTOM_TABS_CHANGED_EVENT, onCustomTabsChanged);
+    window.addEventListener(
+      SELECTED_PROJECT_CHANGE_EVENT,
+      onSelectedProjectChange
+    );
+    return () => {
+      window.removeEventListener(AUTH_CHANGE_EVENT, onAuthChange);
+      window.removeEventListener(CUSTOM_TABS_CHANGED_EVENT, onCustomTabsChanged);
+      window.removeEventListener(
+        SELECTED_PROJECT_CHANGE_EVENT,
+        onSelectedProjectChange
+      );
+    };
   }, []);
   const setTabOrder = useCallback((order: ProjectNavTabId[]) => {
     setTabOrderState(order);
@@ -297,10 +321,33 @@ export function DrawerCollapsedNav({
   const { tabOrder, hiddenTabIds } = useTabOrder();
   const isMobile = useIsMobile();
   const hiddenSet = new Set(hiddenTabIds);
+  const selectedProjectId = getStoredSelectedProjectId();
+  const customTabs = selectedProjectId ? getCustomTabs(selectedProjectId) : [];
   const drawerTabs = tabOrder
     .filter((id) => !hiddenSet.has(id))
-    .map((id) => TABS.find((t) => t.id === id))
-    .filter((t): t is (typeof TABS)[number] => Boolean(t && t.href))
+    .map((id) => {
+      const builtIn = TABS.find((t) => t.id === id);
+      if (builtIn) return builtIn;
+      const custom = customTabs.find((entry) => getCustomTabId(entry.slug) === id);
+      if (!custom) return null;
+      return {
+        id,
+        label: custom.name,
+        href: getCustomTabHref(custom),
+        icon: <CustomTabIconPreview icon={custom.icon} fallbackName={custom.name} />,
+      };
+    })
+    .filter(
+      (
+        tab
+      ): tab is {
+        id: ProjectNavTabId;
+        label: string;
+        href?: string;
+        icon: React.ReactNode;
+        desktopOnly?: boolean;
+      } => Boolean(tab && tab.href)
+    )
     .filter((t) => !(isMobile && t.desktopOnly));
   return (
     <div className="drawer-collapsed-inner">
@@ -309,7 +356,7 @@ export function DrawerCollapsedNav({
         className="drawer-toggle drawer-logo project-nav-drawer-toggle"
         onClick={onExpand}
         aria-label="Expand sidebar"
-        title="Expand sidebar"
+        title="Expand Sidebar"
       >
         <span className="drawer-logo-mark" role="img" aria-hidden="true">
           <IconHomeBulby />
@@ -374,10 +421,9 @@ export function loadTabOrder(
     }
     if (!raw) return DEFAULT_TAB_ORDER;
     const parsed = JSON.parse(raw) as string[];
-    const customLists = getCustomLists();
-    const customIds = new Set<string>(
-      customLists.map((l) => getCustomListTabId(l.slug))
-    );
+    const selectedProjectId = getStoredSelectedProjectId();
+    const customTabs = selectedProjectId ? getCustomTabs(selectedProjectId) : [];
+    const customIds = new Set<string>(customTabs.map((entry) => getCustomTabId(entry.slug)));
     const isValidId = (id: string): id is ProjectNavTabId =>
       TABS.some((t) => t.id === id) || customIds.has(id);
     const valid = parsed.filter(
@@ -386,8 +432,8 @@ export function loadTabOrder(
     const missingBuiltIn = TABS.filter(
       (t) => !valid.includes(t.id) && !deletedSet.has(t.id)
     ).map((t) => t.id);
-    const missingCustom = customLists
-      .map((l) => getCustomListTabId(l.slug))
+    const missingCustom = customTabs
+      .map((entry) => getCustomTabId(entry.slug))
       .filter((id) => !valid.includes(id) && !deletedSet.has(id));
     const merged = [...valid, ...missingBuiltIn, ...missingCustom];
     if (merged.length > 0) return merged;
@@ -411,15 +457,16 @@ export function getFirstVisibleTabHref(
   const tabOrder = loadTabOrder(deletedTabIds);
   const hiddenSet = new Set(loadHiddenTabIds());
   const excludeSet = new Set(excludeTabIds ?? []);
-  const customLists = getCustomLists();
+  const selectedProjectId = getStoredSelectedProjectId();
+  const customTabs = selectedProjectId ? getCustomTabs(selectedProjectId) : [];
   for (const id of tabOrder) {
     if (hiddenSet.has(id) || excludeSet.has(id)) continue;
     const builtIn = TABS.find((t) => t.id === id);
     if (builtIn?.href) return builtIn.href;
     if (typeof id === "string" && id.startsWith("custom-")) {
       const slug = id.slice(7);
-      const list = customLists.find((l) => l.slug === slug);
-      if (list) return `/list/${list.slug}`;
+      const custom = customTabs.find((entry) => entry.slug === slug);
+      if (custom) return getCustomTabHref(custom);
     }
   }
   return "/";

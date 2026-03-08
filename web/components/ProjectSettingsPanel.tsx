@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { toUiTitleCase } from "@ideahome/shared";
 import { Button } from "./Button";
 import { Text } from "./Text";
 import { UiInput } from "./UiInput";
@@ -233,7 +234,7 @@ export function ProjectSettingsPanel({
       <div className="settings-panel-heading">
         <p className="settings-panel-eyebrow">Management</p>
         <h2 className="settings-panel-title" id="project-settings-title">
-          Project details
+          {toUiTitleCase("project details")}
         </h2>
         <p className="settings-panel-description">
           Manage project name, team members, invites, and deletion.
@@ -242,7 +243,7 @@ export function ProjectSettingsPanel({
 
       {!projectId ? (
         <div className="settings-note-card">
-          <strong className="settings-note-title">No project selected.</strong>
+          <strong className="settings-note-title">No Project Selected.</strong>
           <p className="settings-note-copy">
             Select a project in the navigation to manage its settings.
           </p>
@@ -342,7 +343,7 @@ export function ProjectSettingsPanel({
                         disabled={
                           collabLoading || memberActionUserId === member.userId
                         }
-                        title="Remove member"
+                        title="Remove Member"
                       >
                         {memberActionUserId === member.userId
                           ? "Removing..."

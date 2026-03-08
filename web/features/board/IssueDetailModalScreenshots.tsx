@@ -157,7 +157,7 @@ export function IssueDetailModalScreenshots({
                           setEditingScreenshotId(shot.id);
                           setEditingScreenshotName(displayName);
                         }}
-                        title="Click to edit name"
+                        title="Click to Edit Name"
                         role="button"
                         tabIndex={0}
                         onKeyDown={(e) => {
@@ -182,7 +182,7 @@ export function IssueDetailModalScreenshots({
                     }}
                     onClick={() => handleDeleteScreenshot(shot.id)}
                     aria-label="Delete screenshot"
-                    title="Delete screenshot"
+                    title="Delete Screenshot"
                   >
                     <IconTrash />
                   </button>

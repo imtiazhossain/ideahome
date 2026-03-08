@@ -2,13 +2,8 @@ import { IconChevronUp, IconFilter, IconReorder, IconSettings } from "../icons";
 import { IconPlus } from "../IconPlus";
 import { IconTrash } from "../IconTrash";
 import { TABS, type ProjectNavTabId } from "./tab-order";
-import { getCustomListTabId } from "../../lib/customLists";
 import type { RefObject } from "react";
-
-interface CustomListEntry {
-  slug: string;
-  name: string;
-}
+import { getCustomTabId, type CustomTab } from "../../lib/customTabs";
 
 interface ProjectNavSettingsMenuProps {
   showSettingsButton: boolean;
@@ -38,9 +33,9 @@ interface ProjectNavSettingsMenuProps {
   deleteTab: (id: ProjectNavTabId) => void;
   moveTabVisible: (tabId: ProjectNavTabId, direction: "up" | "down") => void;
   isMobile: boolean;
-  customLists: CustomListEntry[];
+  customTabs: CustomTab[];
   onAddClick?: () => void;
-  onOpenCreateListModal: () => void;
+  onOpenCreateTabModal: () => void;
   onOpenAppearanceSettings?: () => void;
   onOpenSettingsRoute: () => void;
   onDeleteProjectClick?: () => void;
@@ -74,9 +69,9 @@ export function ProjectNavSettingsMenu({
   deleteTab,
   moveTabVisible,
   isMobile,
-  customLists,
+  customTabs,
   onAddClick,
-  onOpenCreateListModal,
+  onOpenCreateTabModal,
   onOpenAppearanceSettings,
   onOpenSettingsRoute,
   onDeleteProjectClick,
@@ -105,12 +100,12 @@ export function ProjectNavSettingsMenu({
               }}
               title={
                 deleteAllIssuesDisabled
-                  ? "No issues to delete"
-                  : "Delete all issues"
+                  ? "No Issues to Delete"
+                  : "Delete All Issues"
               }
-              aria-label="Delete all issues"
+              aria-label="Delete All Issues"
             >
-              Delete all issues
+              Delete All Issues
             </button>
           )}
           <button
@@ -118,8 +113,8 @@ export function ProjectNavSettingsMenu({
             className={`project-nav-settings-section-toggle${reorderSectionOpen ? " is-open" : ""}`}
             onClick={() => setReorderSectionOpen((o) => !o)}
             aria-expanded={reorderSectionOpen}
-            aria-label="Reorder tabs"
-            title="Reorder tabs"
+            aria-label="Reorder Tabs"
+            title="Reorder Tabs"
           >
             <IconReorder />
           </button>
@@ -136,7 +131,7 @@ export function ProjectNavSettingsMenu({
                   const label =
                     builtIn?.label ??
                     (typeof id === "string" && id.startsWith("custom-")
-                      ? (customLists.find((l) => getCustomListTabId(l.slug) === id)
+                      ? (customTabs.find((entry) => getCustomTabId(entry.slug) === id)
                           ?.name ?? id)
                       : id);
                   return (
@@ -149,7 +144,7 @@ export function ProjectNavSettingsMenu({
                           onClick={() => moveTabVisible(id, "up")}
                           disabled={visibleIdx === 0}
                           aria-label={`Move ${label} up`}
-                          title="Move up"
+                          title="Move Up"
                         >
                           <IconChevronUp />
                         </button>
@@ -180,7 +175,7 @@ export function ProjectNavSettingsMenu({
                   const label =
                     builtIn?.label ??
                     (typeof id === "string" && id.startsWith("custom-")
-                      ? (customLists.find((l) => getCustomListTabId(l.slug) === id)
+                      ? (customTabs.find((entry) => getCustomTabId(entry.slug) === id)
                           ?.name ?? id)
                       : id);
                   return { id, label };
@@ -235,12 +230,12 @@ export function ProjectNavSettingsMenu({
                   onClick={restoreDeletedTabs}
                   title={
                     deletedTabIds.length === 0
-                      ? "No deleted tabs to restore"
-                      : "Restore deleted tabs"
+                      ? "No Deleted Tabs to Restore"
+                      : "Restore Deleted Tabs"
                   }
-                  aria-label="Restore deleted tabs"
+                  aria-label="Restore Deleted Tabs"
                 >
-                  Restore deleted tabs
+                  Restore Deleted Tabs
                 </button>
               </li>
             </ul>
@@ -276,12 +271,12 @@ export function ProjectNavSettingsMenu({
                   type="button"
                   role="menuitem"
                   className="project-nav-add-menu-item"
-                  onClick={() => {
-                    closeSettingsMenu();
-                    onOpenCreateListModal();
-                  }}
+                    onClick={() => {
+                      closeSettingsMenu();
+                      onOpenCreateTabModal();
+                    }}
                 >
-                  New list…
+                  New tab…
                 </button>
               </li>
             </ul>
@@ -297,8 +292,8 @@ export function ProjectNavSettingsMenu({
                 onOpenSettingsRoute();
               }
             }}
-            aria-label="Open appearance settings"
-            title="Open appearance settings"
+            aria-label="Open Appearance Settings"
+            title="Open Appearance Settings"
           >
             <span className="project-nav-theme-icon" aria-hidden>
               <IconSettings />
@@ -311,8 +306,8 @@ export function ProjectNavSettingsMenu({
                 className={`project-nav-settings-section-toggle project-nav-settings-section-header${deleteProjectSectionOpen ? " is-open" : ""}`}
                 onClick={() => setDeleteProjectSectionOpen((o) => !o)}
                 aria-expanded={deleteProjectSectionOpen}
-                aria-label="Delete project"
-                title="Delete project"
+                aria-label="Delete Project"
+                title="Delete Project"
               >
                 <IconTrash />
               </button>
@@ -328,7 +323,7 @@ export function ProjectNavSettingsMenu({
                   }}
                   title={
                     !selectedProjectId || !projectsLength
-                      ? "No project to delete"
+                      ? "No Project to Delete"
                       : "Delete the Project"
                   }
                   aria-label="Delete the Project"

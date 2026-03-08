@@ -14,7 +14,9 @@ function getSelectedProjectStorageKey(): string {
   );
 }
 
-function getStoredSelectedProjectId(): string {
+export const SELECTED_PROJECT_CHANGE_EVENT = "ideahome-selected-project-change";
+
+export function getStoredSelectedProjectId(): string {
   if (typeof window === "undefined") return "";
   try {
     const stored = localStorage.getItem(getSelectedProjectStorageKey());
@@ -34,6 +36,11 @@ function setStoredSelectedProjectId(id: string) {
     }
   } catch {
     // ignore
+  }
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(
+      new CustomEvent(SELECTED_PROJECT_CHANGE_EVENT, { detail: { projectId: id } })
+    );
   }
 }
 

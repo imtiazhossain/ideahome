@@ -260,6 +260,54 @@ export function formatTextForSpeech(text: string): string {
     .join(" ");
 }
 
+export function splitTextForSpeech(
+  text: string,
+  maxChunkLength: number = 220
+): string[] {
+  const normalized = formatTextForSpeech(text);
+  if (!normalized) return [];
+  if (normalized.length <= maxChunkLength) return [normalized];
+
+  const chunks: string[] = [];
+
+  function pushSegment(segment: string) {
+    const trimmed = segment.trim();
+    if (!trimmed) return;
+    if (trimmed.length <= maxChunkLength) {
+      chunks.push(trimmed);
+      return;
+    }
+
+    const words = trimmed.split(/\s+/).filter(Boolean);
+    let current = "";
+    for (const word of words) {
+      const next = current ? `${current} ${word}` : word;
+      if (current && next.length > maxChunkLength) {
+        chunks.push(current);
+        current = word;
+        continue;
+      }
+      current = next;
+    }
+    if (current) chunks.push(current);
+  }
+
+  const sentences = normalized.split(/(?<=[.!?])\s+/).filter(Boolean);
+  let currentChunk = "";
+  for (const sentence of sentences) {
+    const nextChunk = currentChunk ? `${currentChunk} ${sentence}` : sentence;
+    if (currentChunk && nextChunk.length > maxChunkLength) {
+      pushSegment(currentChunk);
+      currentChunk = sentence;
+      continue;
+    }
+    currentChunk = nextChunk;
+  }
+  if (currentChunk) pushSegment(currentChunk);
+
+  return chunks.length > 0 ? chunks : [normalized];
+}
+
 /** Format an ISO date string as relative time (e.g. "2 min ago", "yesterday"). */
 export function formatRelativeTime(isoString: string): string {
   const date = new Date(isoString);

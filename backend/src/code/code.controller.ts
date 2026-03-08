@@ -1,9 +1,11 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   Post,
+  Query,
   Req,
   UseGuards,
 } from "@nestjs/common";
@@ -77,5 +79,50 @@ export class CodeController {
       payload
     );
   }
-}
 
+  @Get("projects/:projectId/prompt-usage/trend")
+  getProjectPromptUsageTrend(
+    @Param("projectId") projectId: string,
+    @Query("source") source: string | undefined,
+    @Req() req: AuthenticatedRequest
+  ) {
+    return this.svc.getProjectPromptUsageTrend(
+      projectId,
+      requireUserId(req),
+      source
+    );
+  }
+
+  @Get("projects/:projectId/prompt-usage/mine")
+  getMyPromptUsage(
+    @Param("projectId") projectId: string,
+    @Query("source") source: string | undefined,
+    @Req() req: AuthenticatedRequest
+  ) {
+    return this.svc.getMyPromptUsage(projectId, requireUserId(req), source);
+  }
+
+  @Delete("projects/:projectId/prompt-usage/mine")
+  clearMyPromptUsage(
+    @Param("projectId") projectId: string,
+    @Req() req: AuthenticatedRequest
+  ) {
+    return this.svc.clearMyPromptUsage(projectId, requireUserId(req));
+  }
+
+  @Post("projects/:projectId/prompt-optimize")
+  optimizePrompt(
+    @Param("projectId") projectId: string,
+    @Body()
+    body: {
+      prompt?: string;
+    },
+    @Req() req: AuthenticatedRequest
+  ) {
+    return this.svc.optimizePrompt({
+      projectId,
+      userId: requireUserId(req),
+      prompt: body?.prompt,
+    });
+  }
+}

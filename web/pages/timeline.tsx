@@ -405,7 +405,7 @@ export default function TimelinePage() {
           </div>
         ) : !selectedProjectId ? (
           <section className="timeline-empty-state" aria-live="polite">
-            <h2>No project selected</h2>
+            <h2>No Project Selected</h2>
             <p>Select a project to plan your timeline.</p>
           </section>
         ) : (

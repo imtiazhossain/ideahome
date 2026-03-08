@@ -196,7 +196,7 @@ export default function handler(
     if (apiClient && apiClient.lines >= thresholds.apiClientMax) {
       findings.push({
         id: "api-monolith",
-        title: "Web API client is oversized",
+        title: "Web API Client Is Oversized",
         severity: "medium",
         effort: "medium",
         why: `${apiClient.lines} lines mixes auth, storage, and domain APIs.`,
@@ -212,7 +212,7 @@ export default function handler(
     if (navBar && navBar.lines >= thresholds.navBarMax) {
       findings.push({
         id: "navbar-monolith",
-        title: "ProjectNavBar has too many responsibilities",
+        title: "ProjectNavBar Has Too Many Responsibilities",
         severity: "medium",
         effort: "medium",
         why: `${navBar.lines} lines combines nav, settings, persistence, and search.`,
@@ -228,7 +228,7 @@ export default function handler(
     if (appTsx && appTsx.lines >= thresholds.appTsxMax) {
       findings.push({
         id: "app-monolith",
-        title: "React Native App.tsx is too large",
+        title: "React Native App.tsx Is Too Large",
         severity: "high",
         effort: "large",
         why: `${appTsx.lines} lines in one file dominates context; extract screens, hooks, and shared components to app/src/.`,
@@ -244,7 +244,7 @@ export default function handler(
     if (homePage && homePage.lines >= thresholds.homePageMax) {
       findings.push({
         id: "homepage-monolith",
-        title: "Board HomePage is monolithic",
+        title: "Board HomePage Is Monolithic",
         severity: "high",
         effort: "large",
         why: `${homePage.lines} lines in one page increases prompt size and edit risk.`,
@@ -262,7 +262,7 @@ export default function handler(
     if (!hasArchitectureDoc) {
       findings.push({
         id: "missing-architecture-doc",
-        title: "Missing compact architecture reference",
+        title: "Missing Compact Architecture Reference",
         severity: "low",
         effort: "small",
         why: "Without a short architecture map, prompts repeatedly restate structure.",
@@ -279,7 +279,7 @@ export default function handler(
         .map((f) => `${f.relPath} (${f.lines})`);
       findings.push({
         id: "largest-files",
-        title: "Top large files dominate context budget",
+        title: "Top Large Files Dominate Context Budget",
         severity: "low",
         effort: "small",
         why: `Largest: ${topList.join(", ")}. Over ${thresholds.largestFileMax} lines increases prompt size.`,

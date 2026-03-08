@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   createGithubRepositoryForProject,
   fetchProjectCodeRepositories,
@@ -31,6 +31,18 @@ export const CODE_PAGE_SECTION_IDS = [
 const DEFAULT_CODE_SECTION_COLLAPSED: Record<string, boolean> = {
   "code-project-flow": false,
 };
+const CODE_PAGE_SECTION_IDS_LIST: string[] = [...CODE_PAGE_SECTION_IDS];
+
+function normalizeCodeSectionOrder(value: unknown): string[] {
+  if (!Array.isArray(value)) return [...CODE_PAGE_SECTION_IDS_LIST];
+  const ordered = value
+    .filter((id): id is string => typeof id === "string")
+    .filter((id) => CODE_PAGE_SECTION_IDS_LIST.includes(id));
+  const missing = CODE_PAGE_SECTION_IDS_LIST.filter(
+    (id) => !ordered.includes(id)
+  );
+  return [...ordered, ...missing];
+}
 
 export type CodePageState = {
   running: boolean;
@@ -97,11 +109,17 @@ export function useCodePageState(
   const sectionOrderStorageKey = `ideahome-code-section-order${selectedProjectId ? `-${selectedProjectId}` : ""}`;
   const sectionCollapsedStorageKey = `ideahome-code-section-collapsed${selectedProjectId ? `-${selectedProjectId}` : ""}`;
   const [sectionOrder, setSectionOrderState] = useState<string[]>([
-    ...CODE_PAGE_SECTION_IDS,
+    ...CODE_PAGE_SECTION_IDS_LIST,
   ]);
+  const hydratedSectionOrderKeyRef = useRef<string | null>(null);
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
+    if (
+      typeof window === "undefined" ||
+      hydratedSectionOrderKeyRef.current !== sectionOrderStorageKey
+    ) {
+      return;
+    }
     try {
       localStorage.setItem(
         sectionOrderStorageKey,
@@ -114,22 +132,20 @@ export function useCodePageState(
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const key = `ideahome-code-section-order${selectedProjectId ? `-${selectedProjectId}` : ""}`;
     try {
-      const raw = localStorage.getItem(key);
-      if (!raw) return;
-      const parsed = JSON.parse(raw) as unknown;
-      if (!Array.isArray(parsed) || parsed.length === 0) return;
-      const valid = CODE_PAGE_SECTION_IDS as unknown as string[];
-      const ordered = (parsed as string[]).filter((id) => valid.includes(id));
-      const missing = valid.filter((id) => !ordered.includes(id));
-      setSectionOrderState(
-        ordered.length ? [...ordered, ...missing] : [...CODE_PAGE_SECTION_IDS]
-      );
+      const raw = localStorage.getItem(sectionOrderStorageKey);
+      if (!raw) {
+        setSectionOrderState([...CODE_PAGE_SECTION_IDS_LIST]);
+      } else {
+        setSectionOrderState(
+          normalizeCodeSectionOrder(JSON.parse(raw) as unknown)
+        );
+      }
     } catch {
-      /* ignore */
+      setSectionOrderState([...CODE_PAGE_SECTION_IDS_LIST]);
     }
-  }, [selectedProjectId]);
+    hydratedSectionOrderKeyRef.current = sectionOrderStorageKey;
+  }, [sectionOrderStorageKey]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -172,7 +188,7 @@ export function useCodePageState(
   }, [sectionCollapsed, sectionCollapsedStorageKey]);
 
   const setSectionOrder = useCallback((order: string[]) => {
-    setSectionOrderState(order);
+    setSectionOrderState(normalizeCodeSectionOrder(order));
   }, []);
 
   useEffect(() => {

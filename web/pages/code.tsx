@@ -142,7 +142,7 @@ function SortableCodeSection({
       {...attributes}
       {...listeners}
       aria-label="Drag to reorder"
-      title="Drag to reorder"
+      title="Drag to Reorder"
     >
       <IconGrip />
     </span>
@@ -642,7 +642,7 @@ function renderCodeSectionInner(
     return (
       <CollapsibleSection
         sectionId="code-repos"
-        title="Project codebases"
+        title="Project Codebases"
         collapsed={isSectionCollapsed("code-repos")}
         onToggle={() => toggleSection("code-repos")}
         sectionClassName="code-page-repos-section code-page-body-section"
@@ -737,6 +737,7 @@ function renderCodeSectionInner(
         collapsed={isSectionCollapsed("code-token-usage")}
         onToggle={() => toggleSection("code-token-usage")}
         dragHandle={dragHandle}
+        projectId={selectedProjectId}
       />
     );
   }
@@ -744,7 +745,7 @@ function renderCodeSectionInner(
     return (
       <CollapsibleSection
         sectionId="code-audit"
-        title="Token audit"
+        title="Token Audit"
         collapsed={isSectionCollapsed("code-audit")}
         onToggle={() => toggleSection("code-audit")}
         sectionClassName="code-page-audit-section code-page-summary-section code-page-body-section"
@@ -803,7 +804,7 @@ function renderCodeSectionInner(
             className="code-page-summary"
             aria-labelledby="code-page-summary-heading"
           >
-            <h3 id="code-page-summary-heading">Audit summary</h3>
+            <h3 id="code-page-summary-heading">Audit Summary</h3>
             <div className="code-page-summary-grid">
               <div className="code-page-summary-item">
                 <span className="code-page-summary-label">Source Files</span>
@@ -935,7 +936,7 @@ function renderCodeSectionInner(
     return (
       <CollapsibleSection
         sectionId="code-rating"
-        title="Codebase rating"
+        title="Codebase Rating"
         collapsed={isSectionCollapsed("code-rating")}
         onToggle={() => toggleSection("code-rating")}
         sectionClassName="code-page-rating"
@@ -1071,7 +1072,7 @@ function renderCodeSectionInner(
         )}
         {securityAuditSummary && (
           <section className="code-page-summary">
-            <h3>Vulnerability summary</h3>
+            <h3>Vulnerability Summary</h3>
             <div className="code-page-summary-grid">
               <div className="code-page-summary-item">
                 <span className="code-page-summary-label">Critical</span>
@@ -1161,7 +1162,7 @@ function renderCodeSectionInner(
     return (
       <CollapsibleSection
         sectionId="code-wireframe"
-        title="Entire app flow wireframe"
+        title="Entire App Flow Wireframe"
         collapsed={isSectionCollapsed("code-wireframe")}
         onToggle={() => toggleSection("code-wireframe")}
         sectionClassName="code-page-wireframe-section code-wireframe-section"
@@ -1251,7 +1252,7 @@ function renderCodeSectionInner(
     return (
       <CollapsibleSection
         sectionId="code-project-flow"
-        title="Project flow diagram"
+        title="Project Flow Diagram"
         collapsed={isSectionCollapsed("code-project-flow")}
         onToggle={() => toggleSection("code-project-flow")}
         sectionClassName="code-page-project-flow-section code-page-body-section"

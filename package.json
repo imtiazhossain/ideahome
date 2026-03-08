@@ -78,6 +78,7 @@
     "build:web": "pnpm --filter web build",
     "dev:backend": "pnpm --filter backend dev",
     "dev:web": "pnpm --filter web dev",
+    "dev:restart": "bash ./scripts/restart-dev.sh",
     "web:restart": "bash ./scripts/restart-web.sh",
     "web:status": "bash ./scripts/status-web.sh",
     "backend:restart": "bash ./scripts/restart-backend.sh",
