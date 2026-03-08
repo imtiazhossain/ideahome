@@ -533,7 +533,7 @@ function extractPromptOutcomeCandidates(text: string): string[] {
             .trim()
         )
         .filter(Boolean)
-        .map((chunk) => rewriteIssueAsSuccessOutcome(chunk))
+        .map((chunk) => rewriteTextAsSuccessOutcome(chunk))
         .filter((chunk): chunk is string => Boolean(chunk))
         .map((chunk) => `${capitalizeSentence(chunk)}.`)
     )
@@ -548,8 +548,22 @@ function rewriteEditAsSuccessCriterion(text: string): string {
   if (!normalized) {
     return text;
   }
-  const rewritten = rewriteIssueAsSuccessOutcome(normalized);
+  const rewritten = rewriteTextAsSuccessOutcome(normalized);
   return `${capitalizeSentence(rewritten ?? normalized)}.`;
+}
+
+function rewriteTextAsSuccessOutcome(text: string): string | null {
+  const normalized = text
+    .trim()
+    .replace(/^[*-]\s*/, "")
+    .replace(/[.!?]+$/g, "");
+  if (!normalized) {
+    return null;
+  }
+  return (
+    rewriteIssueAsSuccessOutcome(normalized) ??
+    rewriteGenericTaskAsSuccessOutcome(normalized)
+  );
 }
 
 function rewritePromptTextAsTaskAction(text: string): string {
@@ -565,6 +579,11 @@ function rewritePromptTextAsTaskAction(text: string): string {
 }
 
 function rewriteIssueAsTaskAction(text: string): string | null {
+  const forcedBehaviorTask = rewriteForcedBehaviorAsTaskAction(text);
+  if (forcedBehaviorTask) {
+    return forcedBehaviorTask;
+  }
+
   const nonWorkingMatch = text.match(
     /^(.+?)\s+(?:is|isn't|is not|isnt|aren't|are not|doesn't|does not|don't|do not|can't|cannot|won't|will not)\s+working$/i
   );
@@ -597,6 +616,11 @@ function rewriteIssueAsTaskAction(text: string): string | null {
 }
 
 function rewriteIssueAsSuccessOutcome(text: string): string | null {
+  const forcedBehaviorOutcome = rewriteForcedBehaviorAsSuccessOutcome(text);
+  if (forcedBehaviorOutcome) {
+    return forcedBehaviorOutcome;
+  }
+
   const nonWorkingMatch = text.match(
     /^(.+?)\s+(?:is|isn't|is not|isnt|aren't|are not|doesn't|does not|don't|do not|can't|cannot|won't|will not)\s+working$/i
   );
@@ -626,6 +650,106 @@ function rewriteIssueAsSuccessOutcome(text: string): string | null {
   }
 
   return null;
+}
+
+function rewriteGenericTaskAsSuccessOutcome(text: string): string | null {
+  const normalized = text.trim().replace(/[.!?]+$/g, "");
+  if (!normalized) return null;
+
+  const updateToMatch = normalized.match(/^update\s+(.+?)\s+to\s+(.+)$/i);
+  if (updateToMatch?.[1] && updateToMatch?.[2]) {
+    return `${updateToMatch[1].trim()} is updated to ${updateToMatch[2].trim()}`;
+  }
+
+  const updateMatch = normalized.match(/^update\s+(.+)$/i);
+  if (updateMatch?.[1]) {
+    return `${updateMatch[1].trim()} is updated as requested`;
+  }
+
+  const addMatch = normalized.match(/^add\s+(.+)$/i);
+  if (addMatch?.[1]) {
+    return `${addMatch[1].trim()} is added`;
+  }
+
+  const removeMatch = normalized.match(/^remove\s+(.+)$/i);
+  if (removeMatch?.[1]) {
+    return `${removeMatch[1].trim()} is removed`;
+  }
+
+  const fixMatch = normalized.match(/^fix\s+(.+)$/i);
+  if (fixMatch?.[1]) {
+    return `${fixMatch[1].trim()} works as expected`;
+  }
+
+  const ensureMatch = normalized.match(/^ensure\s+(.+?)\s+can\s+(.+)$/i);
+  if (ensureMatch?.[1] && ensureMatch?.[2]) {
+    return `${ensureMatch[1].trim()} can ${ensureMatch[2].trim()}`;
+  }
+
+  const preventMatch = normalized.match(/^prevent\s+(.+?)\s+from\s+(.+)$/i);
+  if (preventMatch?.[1] && preventMatch?.[2]) {
+    return `${preventMatch[1].trim()} does not ${preventMatch[2].trim()}`;
+  }
+
+  const showMatch = normalized.match(/^(?:show|display)\s+(.+)$/i);
+  if (showMatch?.[1]) {
+    return `${showMatch[1].trim()} is shown`;
+  }
+
+  const returnMatch = normalized.match(/^return\s+only\s+(.+)$/i);
+  if (returnMatch?.[1]) {
+    return `The response returns only ${returnMatch[1].trim()}`;
+  }
+
+  return null;
+}
+
+function rewriteForcedBehaviorAsTaskAction(text: string): string | null {
+  const parsed = parseForcedBehaviorIssue(text);
+  if (!parsed) return null;
+  const conditionSuffix = parsed.condition ? ` when ${parsed.condition}` : "";
+  return `Prevent ${parsed.object} from being forced to ${parsed.behavior}${conditionSuffix}`;
+}
+
+function rewriteForcedBehaviorAsSuccessOutcome(text: string): string | null {
+  const parsed = parseForcedBehaviorIssue(text);
+  if (!parsed) return null;
+  const conditionSuffix = parsed.condition ? ` when ${parsed.condition}` : "";
+  return `${parsed.object} does not ${parsed.behavior}${conditionSuffix}`;
+}
+
+function parseForcedBehaviorIssue(text: string): {
+  condition: string | null;
+  object: string;
+  behavior: string;
+} | null {
+  const normalized = text
+    .trim()
+    .replace(/[.!?]+$/g, "")
+    .replace(/\s+/g, " ");
+  if (!normalized) return null;
+
+  const whenMatch = normalized.match(/^when\s+(.+?),\s*(.+)$/i);
+  const condition = whenMatch?.[1]?.trim() ?? null;
+  const remainder = whenMatch?.[2]?.trim() ?? normalized;
+
+  const forcedBehaviorMatch = remainder.match(
+    /^(?:(?:it|this|that|the [^,]+?)\s+)?(?:forces?|causes?)\s+(.+?)\s+to\s+(.+)$/i
+  );
+  if (!forcedBehaviorMatch?.[1] || !forcedBehaviorMatch?.[2]) {
+    return null;
+  }
+
+  const object = forcedBehaviorMatch[1].trim();
+  const behavior = forcedBehaviorMatch[2]
+    .trim()
+    .replace(/\s+after\s+it\s+loads?$/i, "")
+    .replace(/\s+after\s+loading$/i, "");
+  if (!object || !behavior) {
+    return null;
+  }
+
+  return { condition, object, behavior };
 }
 
 function capitalizeSentence(text: string): string {

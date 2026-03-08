@@ -123,7 +123,6 @@ export function TokenUsageGraph({
   const [showOutliers, setShowOutliers] = useState(true);
   const chartResizeRef = useRef<HTMLDivElement | null>(null);
   const chartViewportRef = useRef<HTMLDivElement | null>(null);
-  const hasInitializedScrollRef = useRef(false);
   const chartHeightStorageKey = useMemo(
     () =>
       `ideahome-code-token-usage-chart-height${projectId ? `-${projectId}` : ""}`,
@@ -739,39 +738,6 @@ export function TokenUsageGraph({
     }
     return (chartViewportWidth - padding * 2) / (MAX_VISIBLE_POINTS - 1);
   })();
-
-  const scrollChartToRight = useCallback(() => {
-    const node = chartViewportRef.current;
-    if (!node) return;
-    node.scrollLeft = Math.max(0, node.scrollWidth - node.clientWidth);
-  }, []);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    if (hasInitializedScrollRef.current) return;
-    if (visiblePoints.length === 0) return;
-    const markInitializedIfScrollable = () => {
-      const node = chartViewportRef.current;
-      if (!node) return;
-      if (node.scrollWidth > node.clientWidth) {
-        hasInitializedScrollRef.current = true;
-      }
-    };
-    scrollChartToRight();
-    const frame = window.requestAnimationFrame(scrollChartToRight);
-    const settleFrame = window.requestAnimationFrame(
-      markInitializedIfScrollable
-    );
-    const timeout = window.setTimeout(() => {
-      scrollChartToRight();
-      hasInitializedScrollRef.current = true;
-    }, 160);
-    return () => {
-      window.cancelAnimationFrame(frame);
-      window.cancelAnimationFrame(settleFrame);
-      window.clearTimeout(timeout);
-    };
-  }, [scrollChartToRight, chartViewportWidth, visiblePoints.length]);
 
   const chartPlotHeight = height - padding * 2;
   const toY = (value: number) =>

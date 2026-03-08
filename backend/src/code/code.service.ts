@@ -781,7 +781,13 @@ export class CodeService {
             : ["The request is clear, specific, and ready to paste into Codex."]),
         ].map((line) => this.ensureTrailingPeriod(line))
       )
-    ).slice(0, 4);
+    )
+      .slice(0, 4)
+      .map((line) =>
+        this.isMirroredSuccessCriterion(task, line)
+          ? this.buildFallbackSuccessCriterion(task)
+          : line
+      );
 
     const sections = [
       `Task: ${this.ensureTrailingPeriod(task)}`,
@@ -937,7 +943,7 @@ export class CodeService {
               .trim()
           )
           .filter(Boolean)
-          .map((chunk) => this.rewriteIssueAsSuccessOutcome(chunk))
+          .map((chunk) => this.rewriteTextAsSuccessOutcome(chunk))
           .filter((chunk): chunk is string => Boolean(chunk))
           .map((chunk) =>
             this.ensureTrailingPeriod(this.capitalizeSentence(chunk))
@@ -954,9 +960,23 @@ export class CodeService {
     if (!normalized) {
       return text;
     }
-    const rewritten = this.rewriteIssueAsSuccessOutcome(normalized);
+    const rewritten = this.rewriteTextAsSuccessOutcome(normalized);
     return this.ensureTrailingPeriod(
       this.capitalizeSentence(rewritten ?? normalized)
+    );
+  }
+
+  private rewriteTextAsSuccessOutcome(text: string): string | null {
+    const normalized = text
+      .trim()
+      .replace(/^[*-]\s*/, "")
+      .replace(/[.!?]+$/g, "");
+    if (!normalized) {
+      return null;
+    }
+    return (
+      this.rewriteIssueAsSuccessOutcome(normalized) ??
+      this.rewriteGenericTaskAsSuccessOutcome(normalized)
     );
   }
 
@@ -975,6 +995,11 @@ export class CodeService {
   }
 
   private rewriteIssueAsTaskAction(text: string): string | null {
+    const forcedBehaviorTask = this.rewriteForcedBehaviorAsTaskAction(text);
+    if (forcedBehaviorTask) {
+      return forcedBehaviorTask;
+    }
+
     const nonWorkingMatch = text.match(
       /^(.+?)\s+(?:is|isn't|is not|isnt|aren't|are not|doesn't|does not|don't|do not|can't|cannot|won't|will not)\s+working$/i
     );
@@ -1007,6 +1032,11 @@ export class CodeService {
   }
 
   private rewriteIssueAsSuccessOutcome(text: string): string | null {
+    const forcedBehaviorOutcome = this.rewriteForcedBehaviorAsSuccessOutcome(text);
+    if (forcedBehaviorOutcome) {
+      return forcedBehaviorOutcome;
+    }
+
     const nonWorkingMatch = text.match(
       /^(.+?)\s+(?:is|isn't|is not|isnt|aren't|are not|doesn't|does not|don't|do not|can't|cannot|won't|will not)\s+working$/i
     );
@@ -1036,6 +1066,142 @@ export class CodeService {
     }
 
     return null;
+  }
+
+  private rewriteGenericTaskAsSuccessOutcome(text: string): string | null {
+    const normalized = text.trim().replace(/[.!?]+$/g, "");
+    if (!normalized) return null;
+
+    const updateToMatch = normalized.match(/^update\s+(.+?)\s+to\s+(.+)$/i);
+    if (updateToMatch?.[1] && updateToMatch?.[2]) {
+      return `${updateToMatch[1].trim()} is updated to ${updateToMatch[2].trim()}`;
+    }
+
+    const updateMatch = normalized.match(/^update\s+(.+)$/i);
+    if (updateMatch?.[1]) {
+      return `${updateMatch[1].trim()} is updated as requested`;
+    }
+
+    const addMatch = normalized.match(/^add\s+(.+)$/i);
+    if (addMatch?.[1]) {
+      return `${addMatch[1].trim()} is added`;
+    }
+
+    const removeMatch = normalized.match(/^remove\s+(.+)$/i);
+    if (removeMatch?.[1]) {
+      return `${removeMatch[1].trim()} is removed`;
+    }
+
+    const fixMatch = normalized.match(/^fix\s+(.+)$/i);
+    if (fixMatch?.[1]) {
+      return `${fixMatch[1].trim()} works as expected`;
+    }
+
+    const ensureMatch = normalized.match(/^ensure\s+(.+?)\s+can\s+(.+)$/i);
+    if (ensureMatch?.[1] && ensureMatch?.[2]) {
+      return `${ensureMatch[1].trim()} can ${ensureMatch[2].trim()}`;
+    }
+
+    const preventMatch = normalized.match(/^prevent\s+(.+?)\s+from\s+(.+)$/i);
+    if (preventMatch?.[1] && preventMatch?.[2]) {
+      return `${preventMatch[1].trim()} does not ${preventMatch[2].trim()}`;
+    }
+
+    const showMatch = normalized.match(/^(?:show|display)\s+(.+)$/i);
+    if (showMatch?.[1]) {
+      return `${showMatch[1].trim()} is shown`;
+    }
+
+    const returnMatch = normalized.match(/^return\s+only\s+(.+)$/i);
+    if (returnMatch?.[1]) {
+      return `The response returns only ${returnMatch[1].trim()}`;
+    }
+
+    return null;
+  }
+
+  private buildFallbackSuccessCriterion(task: string): string {
+    const rewrittenTask = this.rewriteGenericTaskAsSuccessOutcome(task);
+    if (rewrittenTask) {
+      return this.ensureTrailingPeriod(this.capitalizeSentence(rewrittenTask));
+    }
+    return "The requested change is implemented and behaves as specified.";
+  }
+
+  private normalizeOptimizerSentenceForComparison(text: string): string {
+    return text
+      .toLowerCase()
+      .replace(/[.!?]/g, "")
+      .replace(
+        /\b(?:the|a|an|is|are|was|were|be|being|been|as|requested|result|success|criteria)\b/g,
+        " "
+      )
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  private isMirroredSuccessCriterion(task: string, criterion: string): boolean {
+    const normalizedTask = this.normalizeOptimizerSentenceForComparison(task);
+    const normalizedCriterion =
+      this.normalizeOptimizerSentenceForComparison(criterion);
+    if (!normalizedTask || !normalizedCriterion) {
+      return false;
+    }
+    if (normalizedTask === normalizedCriterion) {
+      return true;
+    }
+    return (
+      normalizedCriterion.includes(normalizedTask) ||
+      normalizedTask.includes(normalizedCriterion)
+    );
+  }
+
+  private rewriteForcedBehaviorAsTaskAction(text: string): string | null {
+    const parsed = this.parseForcedBehaviorIssue(text);
+    if (!parsed) return null;
+    const conditionSuffix = parsed.condition ? ` when ${parsed.condition}` : "";
+    return `Prevent ${parsed.object} from being forced to ${parsed.behavior}${conditionSuffix}`;
+  }
+
+  private rewriteForcedBehaviorAsSuccessOutcome(text: string): string | null {
+    const parsed = this.parseForcedBehaviorIssue(text);
+    if (!parsed) return null;
+    const conditionSuffix = parsed.condition ? ` when ${parsed.condition}` : "";
+    return `${parsed.object} does not ${parsed.behavior}${conditionSuffix}`;
+  }
+
+  private parseForcedBehaviorIssue(text: string): {
+    condition: string | null;
+    object: string;
+    behavior: string;
+  } | null {
+    const normalized = text
+      .trim()
+      .replace(/[.!?]+$/g, "")
+      .replace(/\s+/g, " ");
+    if (!normalized) return null;
+
+    const whenMatch = normalized.match(/^when\s+(.+?),\s*(.+)$/i);
+    const condition = whenMatch?.[1]?.trim() ?? null;
+    const remainder = whenMatch?.[2]?.trim() ?? normalized;
+
+    const forcedBehaviorMatch = remainder.match(
+      /^(?:(?:it|this|that|the [^,]+?)\s+)?(?:forces?|causes?)\s+(.+?)\s+to\s+(.+)$/i
+    );
+    if (!forcedBehaviorMatch?.[1] || !forcedBehaviorMatch?.[2]) {
+      return null;
+    }
+
+    const object = forcedBehaviorMatch[1].trim();
+    const behavior = forcedBehaviorMatch[2]
+      .trim()
+      .replace(/\s+after\s+it\s+loads?$/i, "")
+      .replace(/\s+after\s+loading$/i, "");
+    if (!object || !behavior) {
+      return null;
+    }
+
+    return { condition, object, behavior };
   }
 
   private capitalizeSentence(text: string): string {

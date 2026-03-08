@@ -245,5 +245,39 @@ describe("CodeService", () => {
         "Success criteria:\n- Bulby tends to glitch when too much talking."
       );
     });
+
+    it("rewrites forced-behavior complaints into verifiable success criteria", () => {
+      const prompt =
+        "When the tracker chart loads, it forces the page to jump to the chart after it loads.";
+
+      const result = (service as any).buildStructuredPromptFallback(prompt);
+
+      expect(result).toContain(
+        "Task: Prevent the page from being forced to jump to the chart when the tracker chart loads."
+      );
+      expect(result).toContain(
+        "- The page does not jump to the chart when the tracker chart loads."
+      );
+      expect(result).not.toContain(
+        "- When the tracker chart loads, it forces the page to jump to the chart after it loads."
+      );
+    });
+
+    it("rewrites neutral update tasks into outcome-based success criteria", () => {
+      const prompt =
+        "Update the Prompt Coach Prompt to encompass the recent enhancements to the prompt efficiency tool.";
+
+      const result = (service as any).buildStructuredPromptFallback(prompt);
+
+      expect(result).toContain(
+        "Task: Update the Prompt Coach Prompt to encompass the recent enhancements to the prompt efficiency tool."
+      );
+      expect(result).toContain(
+        "- The Prompt Coach Prompt is updated to encompass the recent enhancements to the prompt efficiency tool."
+      );
+      expect(result).not.toContain(
+        "- Update the Prompt Coach Prompt to encompass the recent enhancements to the prompt efficiency tool."
+      );
+    });
   });
 });

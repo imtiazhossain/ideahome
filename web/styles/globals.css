@@ -2229,10 +2229,17 @@ textarea {
 .project-nav-tab-loading {
   width: 12px;
   height: 12px;
+  flex: 0 0 12px;
   border: 2px solid transparent;
   border-top-color: currentColor;
   border-right-color: currentColor;
   border-radius: 999px;
+  opacity: 0;
+  animation: none;
+}
+
+.project-nav-tab-loading.is-visible {
+  opacity: 1;
   animation: project-nav-tab-loading-spin 0.7s linear infinite;
 }
 

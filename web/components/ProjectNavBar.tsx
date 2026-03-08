@@ -644,9 +644,10 @@ export function ProjectNavBar({
                               <span className="project-nav-tab-label">
                                 {getTabLabel(tab.id, tab.label)}
                               </span>
-                              {isTabLoading && (
-                                <span className="project-nav-tab-loading" aria-hidden="true" />
-                              )}
+                              <span
+                                className={`project-nav-tab-loading${isTabLoading ? " is-visible" : ""}`}
+                                aria-hidden="true"
+                              />
                             </button>
                           ) : (
                             <Link
@@ -680,9 +681,10 @@ export function ProjectNavBar({
                               <span className="project-nav-tab-label">
                                 {getTabLabel(tab.id, tab.label)}
                               </span>
-                              {isTabLoading && (
-                                <span className="project-nav-tab-loading" aria-hidden="true" />
-                              )}
+                              <span
+                                className={`project-nav-tab-loading${isTabLoading ? " is-visible" : ""}`}
+                                aria-hidden="true"
+                              />
                             </Link>
                           )
                         ) : (
@@ -724,9 +726,10 @@ export function ProjectNavBar({
                             <span className="project-nav-tab-label">
                               {getTabLabel(tab.id, tab.label)}
                             </span>
-                            {isTabLoading && (
-                              <span className="project-nav-tab-loading" aria-hidden="true" />
-                            )}
+                            <span
+                              className={`project-nav-tab-loading${isTabLoading ? " is-visible" : ""}`}
+                              aria-hidden="true"
+                            />
                             {tab.hasDropdown && (
                               <span
                                 className="project-nav-tab-chevron"
